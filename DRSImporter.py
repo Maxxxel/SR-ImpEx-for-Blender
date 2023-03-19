@@ -62,11 +62,11 @@ def InitSkeleton(SkeletonData: CSkSkeleton) -> list[DRSBone]:
 		BoneListItem.Identifier = BoneData.Identifier
 		BoneListItem.Name = BoneData.Name
 		BoneListItem.Scale: Vector = _BoneMatrix.to_scale()
-		BoneListItem.PositionOrigin = BoneMatrix.to_translation()
-		BoneListItem.Rotation = BoneMatrix.to_quaternion()
-		BoneListItem.Rotation = Quaternion((BoneListItem.Rotation.w, BoneListItem.Rotation.x, BoneListItem.Rotation.y, BoneListItem.Rotation.z))
+		BoneListItem.PositionOrigin: Vector = _BoneMatrix.to_translation()
+		BoneListItem.Rotation: Quaternion = _BoneMatrix.to_quaternion()
+		BoneListItem.Rotation: Quaternion = Quaternion((BoneListItem.Rotation.w, BoneListItem.Rotation.x, BoneListItem.Rotation.y, BoneListItem.Rotation.z))
 		# Transform the Bone Position
-		_Position = (NewBone.RotationOrigin @ Quaternion((0.0, NewBone.PositionOrigin.x, NewBone.PositionOrigin.y, NewBone.PositionOrigin.z)) @ NewBone.RotationOrigin.conjugated())
+		_Position = (BoneListItem.Rotation @ Quaternion((0.0, BoneListItem.PositionOrigin.x, BoneListItem.PositionOrigin.y, BoneListItem.PositionOrigin.z)) @ BoneListItem.Rotation.conjugated())
 		BoneListItem.Position = Vector((_Position.x, _Position.y, _Position.z))
 
 		# Set the Bone Children
@@ -135,8 +135,7 @@ def BuildSkeleton(BoneList: list[DRSBone], Armature: bpy.types.Armature, Armatur
 	bpy.ops.object.mode_set(mode='OBJECT')
 
 def InitSkin(MeshFile: CDspMeshFile, SkinData: CSkSkinInfo, GeoMeshData: CGeoMesh) -> np.ndarray:
-	# _vOff = 0
-	VertexIndexMap = {tuple(vector): i for i, vector in enumerate(GeoMeshData.Vertices)}
+	VertexIndexMap = {tuple(Vector((vector.x, vector.y, vector.z))): i for i, vector in enumerate(GeoMeshData.Vertices)}
 	BoneWeightsPerMesh = {}
 
 	for MeshIndex in range(MeshFile.MeshCount):
@@ -151,7 +150,7 @@ def InitSkin(MeshFile: CDspMeshFile, SkinData: CSkSkinInfo, GeoMeshData: CGeoMes
 			if tuple(_Vertex) in VertexIndexMap:
 				VertexIndexSkin = VertexIndexMap[tuple(_Vertex)]
 				VertexWeightData = SkinData.VertexData[VertexIndexSkin]
-				VertexIndexFinal = VertexIndex #+ vOff
+				VertexIndexFinal = VertexIndex
 				BoneIndices = VertexWeightData.BoneIndices
 				Weights = VertexWeightData.Weights
 
@@ -168,7 +167,6 @@ def InitSkin(MeshFile: CDspMeshFile, SkinData: CSkSkinInfo, GeoMeshData: CGeoMes
 					BoneWeights[BoneIndex][Weight].append(VertexIndexFinal)
 
 		BoneWeightsPerMesh[MeshIndex] = BoneWeights
-		# _vOff += Len
 
 	return BoneWeightsPerMesh
 
