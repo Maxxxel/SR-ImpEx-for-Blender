@@ -9,56 +9,6 @@ from bpy_extras.io_utils import unpack_list
 from .DRSFile import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, MeshData, Face, Vertex, BoneVertex
 from .SKAFile import SKA
 
-FPS: int = 24
-# def TransformVector(vector: Vector, matrix: Matrix):
-#     hom_vec = Vector( (vector[0], vector[1], vector[2], 1) )
-#     hom_vec = matrix @ hom_vec
-#     kath_vec = Vector( (hom_vec[0] / hom_vec[3], hom_vec[1] / hom_vec[3], hom_vec[2] / hom_vec[3]) )
-#     return kath_vec
-
-# def BoundingBox(cube_name: str, collection: bpy.types.Collection, empty: list()):
-#     empty.append(bpy.data.objects.new(cube_name, None))
-#     empty[-1].empty_display_type = 'CUBE'
-
-#     collection.objects.link(empty[-1])
-#     return empty[-1]
-
-# def GenerateBoundingBox(meshName, MeshCollection, i, BoundingBoxLowerLeftCorner, BoundingBoxUpperRightCorner, use_apply_transform, global_matrix):
-#     empty = list()
-#     MeshBB = BoundingBox(meshName + "_{}_BoundingBox".format(i), MeshCollection[i], empty)
-#     LowerBound = BoundingBoxLowerLeftCorner
-#     UpperBound = BoundingBoxUpperRightCorner
-
-#     if use_apply_transform:
-#         LowerBound = TransformVector(LowerBound, global_matrix)
-#         UpperBound = TransformVector(UpperBound, global_matrix)
-
-#     DifferenceVector = (LowerBound - UpperBound) * 0.5
-#     MeshBB.scale[0] = abs(DifferenceVector[0])
-#     MeshBB.scale[1] = abs(DifferenceVector[1])
-#     MeshBB.scale[2] = abs(DifferenceVector[2])
-
-#     Z = (LowerBound[1] + UpperBound[1]) * 0.5
-#     MeshBB.location = Vector((0, 0, Z))
-
-# def AddSceneBB(MainCollection, MeshFile, use_apply_transform, global_matrix):
-#     empty = list()
-#     SceneBB = BoundingBox("axisAlignedBoundingBox", MainCollection, empty)
-#     LowerBound = MeshFile.BoundingBoxLowerLeftCorner
-#     UpperBound = MeshFile.BoundingBoxUpperRightCorner
-
-#     if use_apply_transform:
-#         LowerBound = TransformVector(LowerBound, global_matrix)
-#         UpperBound = TransformVector(UpperBound, global_matrix)
-
-#     DifferenceVector = (LowerBound - UpperBound) * 0.5
-#     SceneBB.scale[0] = abs(DifferenceVector[0])
-#     SceneBB.scale[1] = abs(DifferenceVector[1])
-#     SceneBB.scale[2] = abs(DifferenceVector[2])
-
-#     Z = (LowerBound[1] + UpperBound[1]) * 0.5
-#     SceneBB.location = Vector((0, 0, Z))
-
 def ResetViewport() -> None:
 	for Area in bpy.context.screen.areas:
 		if Area.type in ['IMAGE_EDITOR', 'VIEW_3D']:
@@ -76,86 +26,6 @@ class DRSBone():
 		self.Position: Vector
 		self.PositionOrigin: Vector
 		self.Children: List[int]
-		self.EditBone: bpy.types.EditBone = None
-		self.PoseBone: bpy.types.PoseBone = None
-		self.FCurveLocationX: bpy.types.FCurve = None
-		self.FCurveLocationY: bpy.types.FCurve = None
-		self.FCurveLocationZ: bpy.types.FCurve = None
-		self.FCurveRotationX: bpy.types.FCurve = None
-		self.FCurveRotationY: bpy.types.FCurve = None
-		self.FCurveRotationZ: bpy.types.FCurve = None
-		self.FCurveRotationW: bpy.types.FCurve = None
-		self.Ignored: bool = False
-
-def LookRotation(Forward: Vector, Upwards: Vector) -> Quaternion:
-	_Forward = Forward.normalized()
-	_Vector = _Forward.normalized()
-	_Vector2 = Upwards.cross(_Vector).normalized()
-	_Vector3 = _Vector.cross(_Vector2)
-	_m00 = _Vector2.x
-	_m01 = _Vector2.y
-	_m02 = _Vector2.z
-	_m10 = _Vector3.x
-	_m11 = _Vector3.y
-	_m12 = _Vector3.z
-	_m20 = _Vector.x
-	_m21 = _Vector.y
-	_m22 = _Vector.z
-	_num8: float = (_m00 + _m11) + _m22
-	_quaternion: Quaternion = Quaternion()
-
-	if _num8 > 0.0:
-		_num: float = sqrt(_num8 + 1.0)
-		_quaternion.w = _num * 0.5
-		_num = 0.5 / _num
-		_quaternion.x = (_m12 - _m21) * _num
-		_quaternion.y = (_m20 - _m02) * _num
-		_quaternion.z = (_m01 - _m10) * _num
-		return _quaternion
-
-	if (_m00 >= _m11) and (_m00 >= _m22):
-		_num7: float = sqrt(((1.0 + _m00) - _m11) - _m22)
-		_num4 = 0.5 / _num7
-		_quaternion.x = 0.5 * _num7
-		_quaternion.y = (_m01 + _m10) * _num4
-		_quaternion.z = (_m02 + _m20) * _num4
-		_quaternion.w = (_m12 - _m21) * _num4
-		return _quaternion
-
-	if _m11 > _m22:
-		_num6: float = sqrt(((1.0 + _m11) - _m00) - _m22)
-		_num3 = 0.5 / _num6
-		_quaternion.x = (_m10 + _m01) * _num3
-		_quaternion.y = 0.5 * _num6
-		_quaternion.z = (_m21 + _m12) * _num3
-		_quaternion.w = (_m20 - _m02) * _num3
-		return _quaternion
-
-	_num5: float = sqrt(((1.0 + _m22) - _m00) - _m11)
-	_num2 = 0.5 / _num5
-	_quaternion.x = (_m20 + _m02) * _num2
-	_quaternion.y = (_m21 + _m12) * _num2
-	_quaternion.z = 0.5 * _num5
-	_quaternion.w = (_m01 - _m10) * _num2
-
-	return _quaternion
-
-def ExtractRotation(Mtrx: Matrix) -> Quaternion:
-	Forward = Vector((Mtrx[0][2], Mtrx[1][2], Mtrx[2][2]))
-	Upwards = Vector((Mtrx[0][1], Mtrx[1][1], Mtrx[2][1]))
-
-	return LookRotation(Forward, Upwards)
-
-def ExtractPosition(Mtrx: Matrix) -> Vector:
-	return Vector((Mtrx[0][3], Mtrx[1][3], Mtrx[2][3]))
-
-def Multiply(Quat1: Quaternion, Quat2: Quaternion) -> Quaternion:
-	Quat: Quaternion = Quaternion()
-	Quat.x =  Quat1.x * Quat2.w + Quat1.y * Quat2.z - Quat1.z * Quat2.y + Quat1.w * Quat2.x
-	Quat.y = -Quat1.x * Quat2.z + Quat1.y * Quat2.w + Quat1.z * Quat2.x + Quat1.w * Quat2.y
-	Quat.z =  Quat1.x * Quat2.y - Quat1.y * Quat2.x + Quat1.z * Quat2.w + Quat1.w * Quat2.z
-	Quat.w = -Quat1.x * Quat2.x - Quat1.y * Quat2.y - Quat1.z * Quat2.z + Quat1.w * Quat2.w
-	return Quat
 
 def InitSkeleton(SkeletonData: CSkSkeleton) -> list[DRSBone]:
 	BoneList: list[DRSBone] = []
@@ -192,11 +62,11 @@ def InitSkeleton(SkeletonData: CSkSkeleton) -> list[DRSBone]:
 		BoneListItem.Identifier = BoneData.Identifier
 		BoneListItem.Name = BoneData.Name
 		BoneListItem.Scale: Vector = _BoneMatrix.to_scale()
-		BoneListItem.PositionOrigin = ExtractPosition(_BoneMatrix)
-		BoneListItem.Rotation = ExtractRotation(_BoneMatrix)
+		BoneListItem.PositionOrigin = BoneMatrix.to_translation()
+		BoneListItem.Rotation = BoneMatrix.to_quaternion()
 		BoneListItem.Rotation = Quaternion((BoneListItem.Rotation.w, BoneListItem.Rotation.x, BoneListItem.Rotation.y, BoneListItem.Rotation.z))
 		# Transform the Bone Position
-		_Position = Multiply(Multiply(BoneList[BoneData.Identifier].Rotation, Quaternion((0.0, BoneListItem.PositionOrigin.x, BoneListItem.PositionOrigin.y, BoneListItem.PositionOrigin.z))), BoneListItem.Rotation.conjugated())
+		_Position = (NewBone.RotationOrigin @ Quaternion((0.0, NewBone.PositionOrigin.x, NewBone.PositionOrigin.y, NewBone.PositionOrigin.z)) @ NewBone.RotationOrigin.conjugated())
 		BoneListItem.Position = Vector((_Position.x, _Position.y, _Position.z))
 
 		# Set the Bone Children
@@ -406,7 +276,6 @@ def CreateMesh(MeshFile: CDspMeshFile, Collection: bpy.types.Collection, WeightL
 		NewMesh.from_pydata(Vertices, [], Faces)
 
 		# Add the Normals and UVs to the Mesh
-		NewMesh.use_auto_smooth = True
 		NewMesh.vertices.foreach_set('normal', unpack_list(Normals))
 		UVList = [i for poly in NewMeshObject.data.polygons for vidx in poly.vertices for i in UVList[vidx]]
 		NewMeshObject.data.uv_layers.new().data.foreach_set('uv', UVList)
