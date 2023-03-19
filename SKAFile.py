@@ -16,7 +16,7 @@ class SKAHeader:
 		self.Tick = Buffer.ReadUInt()
 		self.Interval = Buffer.ReadUInt()
 		self.FrameType = Buffer.ReadUInt()
-		self.BoneId = Buffer.ReadUInt()
+		self.BoneId = Buffer.ReadInt()
 		return self
 
 	def Write(self, Buffer: FileWriter) -> "SKAHeader":
@@ -24,7 +24,7 @@ class SKAHeader:
 		Buffer.WriteUInt(self.Tick)
 		Buffer.WriteUInt(self.Interval)
 		Buffer.WriteUInt(self.FrameType)
-		Buffer.WriteUInt(self.BoneId)
+		Buffer.WriteInt(self.BoneId)
 		return self
 
 class SKAKeyframe:
