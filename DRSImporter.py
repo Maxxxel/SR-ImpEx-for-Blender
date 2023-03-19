@@ -1,13 +1,14 @@
-from math import sqrt
 from typing import List
 import os
 import bpy
 import numpy as np
-from mathutils import Vector, Matrix, Quaternion, Euler
+from mathutils import Vector, Matrix, Quaternion
 from bpy_extras.image_utils import load_image
 from bpy_extras.io_utils import unpack_list
 from .DRSFile import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, MeshData, Face, Vertex, BoneVertex
 from .SKAFile import SKA
+
+FPS = bpy.context.scene.render.fps
 
 def ResetViewport() -> None:
 	for Area in bpy.context.screen.areas:
@@ -26,6 +27,7 @@ class DRSBone():
 		self.Position: Vector
 		self.PositionOrigin: Vector
 		self.Children: List[int]
+		self.EditBone: bpy.types.EditBone
 
 def InitSkeleton(SkeletonData: CSkSkeleton) -> list[DRSBone]:
 	BoneList: list[DRSBone] = []
@@ -306,7 +308,13 @@ def CreateAnimation(SkaFile: SKA, Armature: bpy.types.Armature, ArmatureObject, 
 	DurationInSeconds: float = SkaFile.AnimationData.Duration
 	Timings: List[float] = SkaFile.Times
 	AnimationFrames = SkaFile.KeyframeData
-	
+	AnimationTimeInFrames: int = round(DurationInSeconds * FPS)
+
+	# Set The Length of the Animation
+	bpy.context.scene.frame_start = 0
+	bpy.context.scene.frame_end = AnimationTimeInFrames
+
+	# Loop through the Header Data
 	for HeaderData in SkaFile.Headers:
 		SKABoneId: int = HeaderData.BoneId
 		AnimationType: int = HeaderData.FrameType
@@ -318,24 +326,30 @@ def CreateAnimation(SkaFile: SKA, Armature: bpy.types.Armature, ArmatureObject, 
 			# Animation files are used for multiple models, so some bones might not be used in the current model
 			continue
 
-		BoneFromArmature: bpy.types.Bone = ArmatureObject.pose.bones[BoneFromBoneList.Name]
+		PoseBoneFromArmature: bpy.types.PoseBone = ArmatureObject.pose.bones.get(BoneFromBoneList.Name)
 
-		if BoneFromArmature is None:
+		if PoseBoneFromArmature is None:
 			# Some Bones are duplicated in the Animation files, so we can skip them as Blender deletes them
 			continue
 
 		for Index in range(StartIndex, StartIndex + NumberOfSteps):
 			CurrentTimeInSeconds: float = Timings[Index] * DurationInSeconds
-			FrameData = AnimationFrames[Index]
+			FrameData = AnimationFrames[Index].VectorData
+			CurrentFrame: int = round(CurrentTimeInSeconds * FPS)
 
 			if AnimationType == 0:
 				# Translation
-				pass
-
-			if AnimationType == 1:
+				TranslationVector = Vector((FrameData.x, FrameData.y, FrameData.z)) # The Translation is the Difference to EditBones Position, so to get the correct location we need to add the EditBones Position	
+				PoseBoneFromArmature.matrix_basis.translation += TranslationVector
+				# Insert a Keyframe for the Translation
+				PoseBoneFromArmature.keyframe_insert(data_path='location', frame=CurrentFrame)
+			elif AnimationType == 1:
 				# Rotation
+				# RotationVector = Quaternion((FrameData.w, FrameData.x, FrameData.y, FrameData.z))
+				# PoseBoneFromArmature.rotation_quaternion = RotationVector
+				# Insert a Keyframe for the Rotation
+				# PoseBoneFromArmature.keyframe_insert(data_path='rotation_quaternion', frame=CurrentFrame)
 				pass
-
 
 def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix=None, ClearScene=True, EditModel=True):
 	BaseName = os.path.basename(filepath).split(".")[0]
@@ -380,14 +394,14 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 	CreateMesh(DRSFile.Mesh, Collection, WeightList, BoneList, ArmatureObject, Dirname)
 
 	# Create the Animations
-	Test = False
+	OnlyOne = False
 	for AnimationKey in DRSFile.AnimationSet.ModeAnimationKeys:
 		for Variant in AnimationKey.AnimationSetVariants:
-			if Test:
-				break
+			if OnlyOne:
+				continue
 			_SKAFile: SKA = SKA().Read(os.path.join(Dirname, Variant.File))
 			CreateAnimation(_SKAFile, Armature, ArmatureObject, BoneList, Variant.File)
-			Test = True
+			OnlyOne = True
 
 	# Set the Global Matrix
 	if UseApplyTransform:
