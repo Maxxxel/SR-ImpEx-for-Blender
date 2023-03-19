@@ -302,8 +302,40 @@ def CreateMesh(MeshFile: CDspMeshFile, Collection: bpy.types.Collection, WeightL
 		# Link the Object to the Collection
 		Collection.objects.link(NewMeshObject)
 
-def CreateAnimation(SkaFile: SKA, Armature: bpy.types.Armature, ArmatureObject, BoneList: list[DRSBone], SkeletonData: CSkSkeleton, AnimationFileName: str):
-	pass
+def CreateAnimation(SkaFile: SKA, Armature: bpy.types.Armature, ArmatureObject, BoneList: list[DRSBone], AnimationName: str):
+	DurationInSeconds: float = SkaFile.AnimationData.Duration
+	Timings: List[float] = SkaFile.Times
+	AnimationFrames = SkaFile.KeyframeData
+	
+	for HeaderData in SkaFile.Headers:
+		SKABoneId: int = HeaderData.BoneId
+		AnimationType: int = HeaderData.FrameType
+		StartIndex: int = HeaderData.Tick
+		NumberOfSteps: int = HeaderData.Interval
+		BoneFromBoneList: DRSBone = next((Bone for Bone in BoneList if Bone.SKAIdentifier == SKABoneId), None)
+
+		if BoneFromBoneList is None:
+			# Animation files are used for multiple models, so some bones might not be used in the current model
+			continue
+
+		BoneFromArmature: bpy.types.Bone = ArmatureObject.pose.bones[BoneFromBoneList.Name]
+
+		if BoneFromArmature is None:
+			# Some Bones are duplicated in the Animation files, so we can skip them as Blender deletes them
+			continue
+
+		for Index in range(StartIndex, StartIndex + NumberOfSteps):
+			CurrentTimeInSeconds: float = Timings[Index] * DurationInSeconds
+			FrameData = AnimationFrames[Index]
+
+			if AnimationType == 0:
+				# Translation
+				pass
+
+			if AnimationType == 1:
+				# Rotation
+				pass
+
 
 def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix=None, ClearScene=True, EditModel=True):
 	BaseName = os.path.basename(filepath).split(".")[0]
@@ -354,7 +386,7 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 			if Test:
 				break
 			_SKAFile: SKA = SKA().Read(os.path.join(Dirname, Variant.File))
-			CreateAnimation(_SKAFile, Armature, ArmatureObject, BoneList, DRSFile.CSkSkeleton, Variant.File)
+			CreateAnimation(_SKAFile, Armature, ArmatureObject, BoneList, Variant.File)
 			Test = True
 
 	# Set the Global Matrix
