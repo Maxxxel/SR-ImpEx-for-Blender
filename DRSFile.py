@@ -1067,7 +1067,7 @@ class CGeoMesh():
 		self.IndexCount = Buffer.ReadInt()
 		self.Faces = [Face().Read(Buffer) for _ in range(int(self.IndexCount / 3))]
 		self.VertexCount = Buffer.ReadInt()
-		self.Vertices = [Buffer.ReadVector3() for _ in range(self.VertexCount)]
+		self.Vertices = [Buffer.ReadVector4() for _ in range(self.VertexCount)]
 		self.Unknown = Buffer.ReadFloat()
 		return self
 
@@ -1079,7 +1079,7 @@ class CGeoMesh():
 			_Face.Write(Buffer)
 		Buffer.WriteInt(self.VertexCount)
 		for _Vertex in self.Vertices:
-			Buffer.WriteVector3(_Vertex)
+			Buffer.WriteVector4(_Vertex)
 		Buffer.WriteFloat(self.Unknown)
 		return self
 
