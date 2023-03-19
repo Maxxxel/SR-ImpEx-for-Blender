@@ -289,7 +289,7 @@ def CreateMesh(MeshFile: CDspMeshFile, Collection: bpy.types.Collection, WeightL
 			NewMeshObject.vertex_groups.new(name=GroupName)
 
 			for Weight, VertexIndices  in WeightData.items():
-				NewMeshObject.vertex_groups[GroupName].add(VertexIndices, Weight, 'ADD')
+				NewMeshObject.vertex_groups[GroupName].add(VertexIndices, Weight, 'REPLACE')
 
 		# Set the Material to the Mesh
 		NewMeshObject.data.materials.append(MaterialData)
