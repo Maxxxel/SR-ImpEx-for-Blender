@@ -15,7 +15,7 @@ bl_info = {
 	"name" : "Battleforge Tools",
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
-	"blender" : (3, 40, 0),
+	"blender" : (3, 4, 0),
 	"version" : (0, 0, 1),
 	"location" : "File > Import",
 	"warning" : "",
@@ -54,8 +54,8 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
 			return DRSImporter.LoadDRS(self, context, **keywords)
-		# elif self.filepath.endswith(".bmg"):
-		#     return DRSImporter.load_bmg(self, context, **keywords)
+		elif self.filepath.endswith(".bmg"):
+			return DRSImporter.LoadBMG(self, context, **keywords)
 		else:
 			self.report({'ERROR'}, "Unsupported file type")
 			return {'CANCELLED'}
