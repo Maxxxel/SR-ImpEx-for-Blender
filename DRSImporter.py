@@ -1,11 +1,9 @@
 from typing import List
 import os
 import bpy
-import numpy as np
 from mathutils import Vector, Matrix, Quaternion
 from bpy_extras.image_utils import load_image
-from bpy_extras.io_utils import unpack_list
-from .DRSFile import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, MeshData, Face, Vertex, BoneVertex, MeshSetGrid
+from .DRSFile import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, Face, Vertex, BoneVertex, MeshSetGrid
 from .SKAFile import SKA
 
 FPS = bpy.context.scene.render.fps
@@ -26,6 +24,11 @@ class DRSBone():
 		self.Children: List[int]
 		self.BindLoc: Vector
 		self.BindRot: Quaternion
+
+class BoneWeight:
+	def __init__(self, BoneIndices=None, BoneWeights=None):
+		self.BoneIndices: List[int] = BoneIndices
+		self.BoneWeights: List[float] = BoneWeights
 
 def InitSkeleton(SkeletonData: CSkSkeleton, Suffix: str = None) -> list[DRSBone]:
 	BoneList: list[DRSBone] = []
@@ -61,7 +64,7 @@ def InitSkeleton(SkeletonData: CSkSkeleton, Suffix: str = None) -> list[DRSBone]
 		BoneListItem.BoneMatrix = _BoneMatrix
 
 		# Set the Bone Children
-		BoneListItem.Children = BoneData.ChildCount
+		BoneListItem.Children = BoneData.Children
 
 		# Set the Bones Children's Parent ID
 		for j in range(BoneData.ChildCount):
@@ -90,9 +93,7 @@ def CreateBoneTree(Armature: bpy.types.Armature, BoneList: list[DRSBone], BoneDa
 		if ChildBone.Parent == BoneData.Identifier:
 			CreateBoneTree(Armature, BoneList, ChildBone)
 
-def BuildSkeleton(Coll: bpy.types.Collection, BoneList: list[DRSBone], Armature: bpy.types.Armature, ArmatureObject):
-	# Coll.objects.link(ArmatureObject)
-
+def BuildSkeleton(BoneList: list[DRSBone], Armature: bpy.types.Armature, ArmatureObject):
 	# Switch to edit mode
 	bpy.context.view_layer.objects.active = ArmatureObject
 	bpy.ops.object.mode_set(mode='EDIT')
@@ -113,41 +114,17 @@ def BuildSkeleton(Coll: bpy.types.Collection, BoneList: list[DRSBone], Armature:
 		BoneData.BindLoc = MatrixLocal.to_translation()
 		BoneData.BindRot = MatrixLocal.to_quaternion()
 
-def InitSkin(MeshFile: CDspMeshFile, SkinData: CSkSkinInfo, GeoMeshData: CGeoMesh) -> np.ndarray:
-	VertexIndexMap = {tuple(Vector((vector.x, vector.y, vector.z))): i for i, vector in enumerate(GeoMeshData.Vertices)}
-	BoneWeightsPerMesh = {}
+def InitSkin(MeshFile: CDspMeshFile, SkinData: CSkSkinInfo, GeoMeshData: CGeoMesh) -> list[BoneWeight]:
+	TotalVertexCount = sum(Mesh.VertexCount for Mesh in MeshFile.Meshes)
+	BoneWeights = [BoneWeight() for i in range(TotalVertexCount)]
+	VertexPositions = [Vertex.Position.xyz for Mesh in MeshFile.Meshes for Vertex in Mesh.MeshData[0].Vertices]
+	GeoMeshPositions = [Vertex.xyz for Vertex in GeoMeshData.Vertices]
 
-	for MeshIndex in range(MeshFile.MeshCount):
-		BoneWeightsPerMesh[MeshIndex] = {}
-		BoneWeights = {}
-		Mesh: MeshData = MeshFile.Meshes[MeshIndex].MeshData[0]
-		Len = len(Mesh.Vertices)
+	for VertexIndex, VectorToCheck in enumerate(VertexPositions):
+		j = GeoMeshPositions.index(VectorToCheck)
+		BoneWeights[VertexIndex] = BoneWeight(SkinData.VertexData[j].BoneIndices, SkinData.VertexData[j].Weights)
 
-		for VertexIndex in range(Len):
-			_Vertex = Mesh.Vertices[VertexIndex].Position
-
-			if tuple(_Vertex) in VertexIndexMap:
-				VertexIndexSkin = VertexIndexMap[tuple(_Vertex)]
-				VertexWeightData = SkinData.VertexData[VertexIndexSkin]
-				VertexIndexFinal = VertexIndex
-				BoneIndices = VertexWeightData.BoneIndices
-				Weights = VertexWeightData.Weights
-
-				for i in range(len(BoneIndices)):
-					BoneIndex = BoneIndices[i]
-					Weight = Weights[i]
-
-					if BoneIndex not in BoneWeights:
-						BoneWeights[BoneIndex] = {}
-
-					if Weight not in BoneWeights[BoneIndex]:
-						BoneWeights[BoneIndex][Weight] = []
-
-					BoneWeights[BoneIndex][Weight].append(VertexIndexFinal)
-
-		BoneWeightsPerMesh[MeshIndex] = BoneWeights
-
-	return BoneWeightsPerMesh
+	return BoneWeights
 
 def CreateMaterial(i: int, BattleforgeMeshData: BattleforgeMesh, Dirname: str):
 	NewMaterial = bpy.data.materials.new("Material_" + str(i))
@@ -225,11 +202,11 @@ def CreateMaterial(i: int, BattleforgeMeshData: BattleforgeMesh, Dirname: str):
 
 	return NewMaterial
 
-def CreateMesh(MeshFile: CDspMeshFile, Collection: bpy.types.Collection, Dirname: str, Armature: bpy.types.Armature = None, BoneList: list[DRSBone] = None, WeightList: np.ndarray = None, State: bool = False, OverrideName: str = None):
+def CreateMesh(MeshFile: CDspMeshFile, Collection: bpy.types.Collection, Dirname: str, Armature: bpy.types.Armature = None, BoneList: list[DRSBone] = None, WeightList: List[BoneWeight] = None, State: bool = False, OverrideName: str = None):
 	# Loop through the Meshes with an Index
 	for i in range(MeshFile.MeshCount):
 		# Set the Offset to 0 for the first Mesh and add the Mesh Size to the Offset for the next Mesh
-		Offset = 0 if i == 0 else Offset + MeshFile.Meshes[i - 1].VertexCount
+		Offset = 0 if i == 0 else Offset + MeshFile.Meshes[i - 1].VertexCount # Used for the WeightList
 
 		# Get the Mesh
 		BattleforgeMeshData: BattleforgeMesh = MeshFile.Meshes[i]
@@ -268,7 +245,11 @@ def CreateMesh(MeshFile: CDspMeshFile, Collection: bpy.types.Collection, Dirname
 		NewMesh.from_pydata(Vertices, [], Faces)
 
 		# Add the Normals and UVs to the Mesh
-		NewMesh.vertices.foreach_set('normal', unpack_list(Normals))
+		# NewMesh.vertices.foreach_set('normal', unpack_list(Normals))
+		NewMesh.polygons.foreach_set('use_smooth', [True] * len(NewMesh.polygons))
+		NewMesh.normals_split_custom_set_from_vertices(Normals)
+		NewMesh.use_auto_smooth = True
+
 		UVList = [i for poly in NewMeshObject.data.polygons for vidx in poly.vertices for i in UVList[vidx]]
 		NewMeshObject.data.uv_layers.new().data.foreach_set('uv', UVList)
 
@@ -278,12 +259,20 @@ def CreateMesh(MeshFile: CDspMeshFile, Collection: bpy.types.Collection, Dirname
 		if Armature is not None:
 			if WeightList is not None and BoneList is not None:
 				# Add the Skin
-				for GroupID, WeightData in WeightList[i].items():
-					GroupName = BoneList[GroupID].Name
-					NewMeshObject.vertex_groups.new(name=GroupName)
+				for VertexIndex in range(Offset, Offset + BattleforgeMeshData.VertexCount):
+					BoneWeightData = WeightList[VertexIndex]
 
-					for Weight, VertexIndices  in WeightData.items():
-						NewMeshObject.vertex_groups[GroupName].add(VertexIndices, Weight, 'REPLACE')
+					for _ in range(4):
+						GroupID = BoneWeightData.BoneIndices[_]
+						Weight = BoneWeightData.BoneWeights[_]
+						VertexGroup = None
+
+						if BoneList[GroupID].Name not in NewMeshObject.vertex_groups:
+							VertexGroup = NewMeshObject.vertex_groups.new(name=BoneList[GroupID].Name)
+						else:
+							VertexGroup = NewMeshObject.vertex_groups[BoneList[GroupID].Name]
+						
+						VertexGroup.add([VertexIndex - Offset], Weight, 'ADD')
 
 			# Link the Object to the armature
 			NewMeshObject.parent = Armature
@@ -417,7 +406,7 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 
 		# Load the Skeleton file and init the Bone List, then build the Skeleton
 		BoneList: list[DRSBone] = InitSkeleton(DRSFile.CSkSkeleton)
-		BuildSkeleton(Collection, BoneList, Armature, ArmatureObject)
+		BuildSkeleton(BoneList, Armature, ArmatureObject)
 
 		# Load the Skin and init the Weight List
 		WeightList = InitSkin(DRSFile.Mesh, DRSFile.CSkSkinInfo, DRSFile.CGeoMesh)
@@ -425,12 +414,12 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 	# Create the Meshes
 	CreateMesh(DRSFile.Mesh, Collection, Dirname, ArmatureObject, BoneList, WeightList)
 
+	# Read the Animations and Create a required Bones List
 	if DRSFile.AnimationSet is not None:
-		# Create the Animations
 		for AnimationKey in DRSFile.AnimationSet.ModeAnimationKeys:
 			for Variant in AnimationKey.AnimationSetVariants:
-				_SKAFile: SKA = SKA().Read(os.path.join(Dirname, Variant.File))
-				CreateAnimation(_SKAFile, ArmatureObject, BoneList, Variant.File)
+				SKAFile: SKA = SKA().Read(os.path.join(Dirname, Variant.File))
+				CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
 
 	# Set the Global Matrix
 	if UseApplyTransform:
@@ -439,10 +428,6 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 		else:
 			for Object in Collection.objects:
 				Object.matrix_world = GlobalMatrix
-
-	# if ArmatureObject is not None:
-		# Unlink the Armature from the Scene Collection
-		# bpy.context.scene.collection.objects.unlink(ArmatureObject)
 
 	# Reset the Viewport
 	ResetViewport()
@@ -517,7 +502,7 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 
 					# Load the Skeleton file and init the Bone List, then build the Skeleton
 					BoneList: list[DRSBone] = InitSkeleton(SourceFile.CSkSkeleton, StateName)
-					BuildSkeleton(StateCollection, BoneList, Armature, ArmatureObject)
+					BuildSkeleton(BoneList, Armature, ArmatureObject)
 
 					# Load the Skin and init the Weight List
 					WeightList = InitSkin(SourceFile.Mesh, SourceFile.CSkSkinInfo, SourceFile.CGeoMesh)
