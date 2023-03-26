@@ -7,6 +7,11 @@
     Import Skeleton
     Import Skin
     Import Animations
+    
+## Showcase
+Here is a quick demonstration of the Battleforge Model Importer/Exporter for Blender in action:
+
+![Demo]([https://i.gyazo.com/e1df80810269e2bb3544f27e174dcf93.mp4](https://i.gyazo.com/e1df80810269e2bb3544f27e174dcf93.gif))
 
 ## Installation
 1. Download Battleforge_Blender_3_4_0.zip from the Releases section of the repository.
