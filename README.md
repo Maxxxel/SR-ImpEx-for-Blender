@@ -8,6 +8,11 @@
     Import Skin
     Import Animations
     
+## What's up next?
+    Export Models
+    Create a Basic Model to start creating your own Battleforge Models from scratch
+    ... Suggestions?
+    
 ## Showcase
 Here is a quick demonstration of the Battleforge Model Importer/Exporter for Blender in action:
 
