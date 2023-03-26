@@ -59,6 +59,10 @@ class FileReader:
 		"""Reads 4 32-bit floats from the buffer and returns them as a Vector"""
 		return Vector((self.ReadFloat(), self.ReadFloat(), self.ReadFloat(), self.ReadFloat()))
 
+	def ReadMatrix3x3(self) -> Matrix:
+		"""Reads 9 32-bit floats from the buffer and returns them as a Matrix"""
+		return Matrix([self.ReadVector3(), self.ReadVector3(), self.ReadVector3()])
+	
 	def ReadMatrix4x4(self) -> Matrix:
 		"""Reads 16 32-bit floats from the buffer and returns them as a Matrix"""
 		return Matrix([self.ReadVector4(), self.ReadVector4(), self.ReadVector4(), self.ReadVector4()])

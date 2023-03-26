@@ -675,7 +675,7 @@ class CMatCoordinateSystem():
 
 	def Read(self, Buffer: FileReader) -> 'CMatCoordinateSystem':
 		"""Reads the CMatCoordinateSystem from the buffer"""
-		self.Matrix = Buffer.ReadMatrix4x4()
+		self.Matrix = Buffer.ReadMatrix3x3()
 		self.Position = Buffer.ReadVector3()
 		return self
 
