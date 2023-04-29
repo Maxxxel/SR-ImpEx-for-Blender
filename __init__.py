@@ -11,6 +11,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+import bpy
+from bpy.props import StringProperty, BoolProperty
+from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
+from .DRSImporter import LoadDRS, LoadBMG
+from .DRSExporter import SaveDRS
+
 bl_info = {
 	"name" : "Battleforge Tools",
 	"author" : "Maxxxel",
@@ -23,16 +29,7 @@ bl_info = {
 	"tracker_url": ""
 }
 
-if "bpy" in locals():
-	import importlib
-
-	if "DRSImporter" in locals():
-		importlib.reload(ImportBFModel)
-
-import bpy
-
-from bpy.props import StringProperty, BoolProperty
-from bpy_extras.io_utils import ImportHelper, orientation_helper, axis_conversion
+LOADEDDRSMODELS = []
 
 @orientation_helper(axis_forward='-X', axis_up='Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
@@ -43,22 +40,35 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255)
 	UseApplyTransform : BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True)
 	ClearScene : BoolProperty(name="Clear Scene", description="Clear the scene before importing", default=True)
-	EditModel : BoolProperty(name="Only Edit Model", description="Only edit the model and preserve the DRS Data", default=False)
 
 	def execute(self, context):
-		from . import DRSImporter
 		keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
 		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
 		keywords["GlobalMatrix"] = global_matrix
 
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
-			return DRSImporter.LoadDRS(self, context, **keywords)
+			LoadedModels = LoadDRS(self, context, **keywords)
+			LOADEDDRSMODELS.append(LoadedModels)
+			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"):
-			return DRSImporter.LoadBMG(self, context, **keywords)
+			return LoadBMG(self, context, **keywords)
 		else:
 			self.report({'ERROR'}, "Unsupported file type")
 			return {'CANCELLED'}
+
+class ExportBFModel(bpy.types.Operator, ExportHelper):
+	"""Export a Battleforge drs/bmg file"""
+	bl_idname = "export_scene.drs"
+	bl_label = "Export DRS/BMG"
+	filename_ext = ".drs;.bmg"
+	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255)
+	EditModel : BoolProperty(name="Save Edited Model", description="Only edit the model and preserve the DRS Data", default=False)
+
+	def execute(self, context):
+		Keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
+		Keywords["LoadedDRSModels"] = LOADEDDRSMODELS
+		return SaveDRS(self, context, **Keywords)
 
 class ErrorMessage(bpy.types.Operator):
 	bl_idname = 'ui.error_message'
@@ -72,15 +82,22 @@ class ErrorMessage(bpy.types.Operator):
 def menu_func_import(self, context):
 	self.layout.operator(ImportBFModel.bl_idname, text="Battleforge (.drs)")
 
+def menu_func_export(self, context):
+	self.layout.operator(ExportBFModel.bl_idname, text="Battleforge (.drs)")
+
 def register():
 	bpy.utils.register_class(ImportBFModel)
+	bpy.utils.register_class(ExportBFModel)
 	bpy.utils.register_class(ErrorMessage)
 	bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+	bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 def unregister():
 	bpy.utils.unregister_class(ImportBFModel)
+	bpy.utils.unregister_class(ExportBFModel)
 	bpy.utils.unregister_class(ErrorMessage)
 	bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+	bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
 
 if __name__ == "__main__":
 	register()

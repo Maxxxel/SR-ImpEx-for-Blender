@@ -126,15 +126,15 @@ class Face():
 
 class Vertex():
 	"""Vertex"""
-	def __init__(self) -> None:
+	def __init__(self, Position = None, Normal = None, Texture = None, Tangent = None, Bitangent = None, RawWeights = None, BoneIndices = None) -> None:
 		"""Vertex Constructor"""
-		self.Position: Vector
-		self.Normal: Vector
-		self.Texture: Vector
-		self.Tangent: Vector
-		self.Bitangent: Vector
-		self.RawWeights: List[int]
-		self.BoneIndices: List[int]
+		self.Position: Vector = Position
+		self.Normal: Vector = Normal
+		self.Texture: Vector = Texture
+		self.Tangent: Vector = Tangent
+		self.Bitangent: Vector = Bitangent
+		self.RawWeights: List[int] = RawWeights
+		self.BoneIndices: List[int] = BoneIndices
 
 	def Read(self, Buffer: FileReader, Revision: int) -> 'Vertex':
 		"""Reads the Vertex from the buffer"""
@@ -234,7 +234,7 @@ class Refraction():
 	def __init__(self) -> None:
 		"""Refraction Constructor"""
 		self.Length: int
-		self.Identifier: int
+		self.Identifier: int = 1668510769
 		self.RGB: List[float]
 
 	def Read(self, Buffer: FileReader) -> 'Refraction':
@@ -255,7 +255,7 @@ class Refraction():
 
 class Material():
 	"""Material"""
-	def __init__(self) -> None:
+	def __init__(self, index = None) -> None:
 		"""Material Constructor"""
 		self.Identifier: int
 		self.Smoothness: float
@@ -271,6 +271,44 @@ class Material():
 		self.DepthWriteThreshold: float
 		self.Saturation: float
 		self.Unknown: float
+
+		if index is not None:
+			if index == 0:
+				self.Identifier = 1668510769
+				self.Smoothness = 0
+			elif index == 1:
+				self.Identifier = 1668510770
+				self.Metalness = 0
+			elif index == 2:
+				self.Identifier = 1668510771
+				self.Reflectivity = 0
+			elif index == 3:
+				self.Identifier = 1668510772
+				self.Emissivity = 0
+			elif index == 4:
+				self.Identifier = 1668510773
+				self.RefractionScale = 1
+			elif index == 5:
+				self.Identifier = 1668510774
+				self.DistortionMeshScale = 0
+			elif index == 6:
+				self.Identifier = 1935897704
+				self.Scratch = 0
+			elif index == 7:
+				self.Identifier = 1668510775
+				self.SpecularScale = 1.5
+			elif index == 8:
+				self.Identifier = 1668510776
+				self.WindResponse = 0 # Needs to be updated
+			elif index == 9:
+				self.Identifier = 1668510777
+				self.WindHeight = 0 # Needs to be updated
+			elif index == 10:
+				self.Identifier = 1935893623
+				self.DepthWriteThreshold = 0.5
+			elif index == 11:
+				self.Identifier = 1668510785
+				self.Saturation = 1.0
 
 	def Read(self, Buffer: FileReader) -> 'Material':
 		"""Reads the Material from the buffer"""
@@ -342,8 +380,8 @@ class Materials():
 	"""Materials"""
 	def __init__(self) -> None:
 		"""Materials Constructor"""
-		self.Length: int
-		self.Materials: List[Material]
+		self.Length: int = 12
+		self.Materials: List[Material] = [Material(_) for _ in range(self.Length)]
 
 	def Read(self, Buffer: FileReader) -> 'Materials':
 		"""Reads the Materials from the buffer"""
@@ -362,8 +400,8 @@ class LevelOfDetail():
 	"""LevelOfDetail"""
 	def __init__(self) -> None:
 		"""LevelOfDetail Constructor"""
-		self.Length: int
-		self.LODLevel: int
+		self.Length: int = 1
+		self.LODLevel: int = 2
 
 	def Read(self, Buffer: FileReader) -> 'LevelOfDetail':
 		"""Reads the LevelOfDetail from the buffer"""
@@ -383,8 +421,8 @@ class EmptyString():
 	"""EmptyString"""
 	def __init__(self) -> None:
 		"""EmptyString Constructor"""
-		self.Length: int
-		self.UnknwonString: str
+		self.Length: int = 0
+		self.UnknwonString: str = ""
 
 	def Read(self, Buffer: FileReader) -> 'EmptyString':
 		"""Reads the EmptyString from the buffer"""
@@ -402,15 +440,15 @@ class Flow():
 	"""Flow"""
 	def __init__(self) -> None:
 		"""Flow Constructor"""
-		self.Length: int
-		self.MaxFlowSpeedIdentifier: int
-		self.MaxFlowSpeed: Vector
-		self.MinFlowSpeedIdentifier: int
-		self.MinFlowSpeed: Vector
-		self.FlowSpeedChangeIdentifier: int
-		self.FlowSpeedChange: Vector
-		self.FlowScaleIdentifier: int
-		self.FlowScale: Vector
+		self.Length: int = 4
+		self.MaxFlowSpeedIdentifier: int = 1668707377
+		self.MaxFlowSpeed: Vector = Vector((0, 0, 0, 0))
+		self.MinFlowSpeedIdentifier: int = 1668707378
+		self.MinFlowSpeed: Vector = Vector((0, 0, 0, 0))
+		self.FlowSpeedChangeIdentifier: int = 1668707379
+		self.FlowSpeedChange: Vector = Vector((0, 0, 0, 0))
+		self.FlowScaleIdentifier: int = 1668707380
+		self.FlowScale: Vector = Vector((0, 0, 0, 0))
 
 	def Read(self, Buffer: FileReader) -> 'Flow':
 		"""Reads the Flow from the buffer"""
@@ -516,13 +554,13 @@ class CDspMeshFile():
 	"""CDspMeshFile"""
 	def __init__(self) -> None:
 		"""CDspMeshFile Constructor"""
-		self.Magic: int
-		self.Zero: int
-		self.MeshCount: int
-		self.BoundingBoxLowerLeftCorner: Vector
-		self.BoundingBoxUpperRightCorner: Vector
-		self.Meshes: List[BattleforgeMesh]
-		self.SomePoints: List[Vector]
+		self.Magic: int = 1314189598
+		self.Zero: int = 0
+		self.MeshCount: int = 0
+		self.BoundingBoxLowerLeftCorner: Vector = Vector((0, 0, 0))
+		self.BoundingBoxUpperRightCorner: Vector = Vector((0, 0, 0))
+		self.Meshes: List[BattleforgeMesh] = []
+		self.SomePoints: List[Vector] = []
 
 	def Read(self, Buffer: FileReader) -> 'CDspMeshFile':
 		"""Reads the CDspMeshFile from the buffer"""
@@ -762,20 +800,20 @@ class CGeoAABox():
 		Buffer.WriteVector3(self.UpperRightCorner)
 		return self
 
-class Box():
+class BoxShape():
 	"""Box"""
 	def __init__(self) -> None:
 		"""Box Constructor"""
 		self.CoordSystem: CMatCoordinateSystem
 		self.CGeoAABox: CGeoAABox
 
-	def Read(self, Buffer: FileReader) -> 'Box':
+	def Read(self, Buffer: FileReader) -> 'BoxShape':
 		"""Reads the Box from the buffer"""
 		self.CoordSystem = CMatCoordinateSystem().Read(Buffer)
 		self.CGeoAABox = CGeoAABox().Read(Buffer)
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'Box':
+	def Write(self, Buffer: FileWriter) -> 'BoxShape':
 		"""Writes the Box to the buffer"""
 		self.CoordSystem.Write(Buffer)
 		self.CGeoAABox.Write(Buffer)
@@ -803,6 +841,25 @@ class CGeoCylinder():
 		Buffer.WriteFloat(self.Radius)
 		return self
 
+class CylinderShape():
+	"""Cylinder"""
+	def __init__(self) -> None:
+		"""Cylinder Constructor"""
+		self.CoordSystem: CMatCoordinateSystem
+		self.CGeoCylinder: CGeoCylinder
+
+	def Read(self, Buffer: FileReader) -> 'CylinderShape':
+		"""Reads the Cylinder from the buffer"""
+		self.CoordSystem = CMatCoordinateSystem().Read(Buffer)
+		self.CGeoCylinder = CGeoCylinder().Read(Buffer)
+		return self
+	
+	def Write(self, Buffer: FileWriter) -> 'CylinderShape':
+		"""Writes the Cylinder to the buffer"""
+		self.CoordSystem.Write(Buffer)
+		self.CGeoCylinder.Write(Buffer)
+		return self
+
 class CGeoSphere():
 	"""CGeoSphere"""
 	def __init__(self) -> None:
@@ -815,11 +872,30 @@ class CGeoSphere():
 		self.Radius = Buffer.ReadFloat()
 		self.Center = Buffer.ReadVector3()
 		return self
-
+	
 	def Write(self, Buffer: FileWriter) -> 'CGeoSphere':
 		"""Writes the CGeoSphere to the buffer"""
 		Buffer.WriteFloat(self.Radius)
 		Buffer.WriteVector3(self.Center)
+		return self
+
+class SphereShape():
+	"""CGeoSphere"""
+	def __init__(self) -> None:
+		"""CGeoSphere Constructor"""
+		self.CoordSystem: CMatCoordinateSystem
+		self.CGeoSphere: CGeoSphere
+
+	def Read(self, Buffer: FileReader) -> 'CGeoSphere':
+		"""Reads the CGeoSphere from the buffer"""
+		self.CoordSystem = CMatCoordinateSystem().Read(Buffer)
+		self.CGeoSphere = CGeoSphere().Read(Buffer)
+		return self
+
+	def Write(self, Buffer: FileWriter) -> 'CGeoSphere':
+		"""Writes the CGeoSphere to the buffer"""
+		self.CoordSystem.Write(Buffer)
+		self.CGeoSphere.Write(Buffer)
 		return self
 
 class CollisionShape():
@@ -828,21 +904,21 @@ class CollisionShape():
 		"""CollisionShape Constructor"""
 		self.Version: int
 		self.BoxCount: int
-		self.Boxes: List[Box]
+		self.Boxes: List[BoxShape]
 		self.SphereCount: int
-		self.Spheres: List[CGeoSphere]
+		self.Spheres: List[SphereShape]
 		self.CylinderCount: int
-		self.Cylinders: List[CGeoCylinder]
+		self.Cylinders: List[CylinderShape]
 
 	def Read(self, Buffer: FileReader) -> 'CollisionShape':
 		"""Reads the CollisionShape from the buffer"""
 		self.Version = Buffer.ReadByte()
 		self.BoxCount = Buffer.ReadInt()
-		self.Boxes = [Box().Read(Buffer) for _ in range(self.BoxCount)]
+		self.Boxes = [BoxShape().Read(Buffer) for _ in range(self.BoxCount)]
 		self.SphereCount = Buffer.ReadInt()
-		self.Spheres = [CGeoSphere().Read(Buffer) for _ in range(self.SphereCount)]
+		self.Spheres = [SphereShape().Read(Buffer) for _ in range(self.SphereCount)]
 		self.CylinderCount = Buffer.ReadInt()
-		self.Cylinders = [CGeoCylinder().Read(Buffer) for _ in range(self.CylinderCount)]
+		self.Cylinders = [CylinderShape().Read(Buffer) for _ in range(self.CylinderCount)]
 		return self
 
 	def Write(self, Buffer: FileWriter) -> 'CollisionShape':
@@ -987,9 +1063,9 @@ class CDspJointMap():
 	"""CDspJointMap"""
 	def __init__(self) -> None:
 		"""CDspJointMap Constructor"""
-		self.Version: int
-		self.JointGroupCount: int
-		self.JointGroups: List[JointGroup]
+		self.Version: int = 1
+		self.JointGroupCount: int = 0
+		self.JointGroups: List[JointGroup] = []
 
 	def Read(self, Buffer: FileReader) -> 'CDspJointMap':
 		"""Reads the CDspJointMap from the buffer"""
@@ -1054,12 +1130,11 @@ class CGeoMesh():
 	"""CGeoMesh"""
 	def __init__(self) -> None:
 		"""CGeoMesh Constructor"""
-		self.Magic: int
+		self.Magic: int = 1
 		self.IndexCount: int
 		self.Faces: List[Face]
 		self.VertexCount: int
 		self.Vertices: List[Vector]
-		self.Unknown: float
 
 	def Read(self, Buffer: FileReader) -> 'CGeoMesh':
 		"""Reads the CGeoMesh from the buffer"""
@@ -1068,7 +1143,7 @@ class CGeoMesh():
 		self.Faces = [Face().Read(Buffer) for _ in range(int(self.IndexCount / 3))]
 		self.VertexCount = Buffer.ReadInt()
 		self.Vertices = [Buffer.ReadVector4() for _ in range(self.VertexCount)]
-		self.Unknown = Buffer.ReadFloat()
+
 		return self
 
 	def Write(self, Buffer: FileWriter) -> 'CGeoMesh':
@@ -1080,7 +1155,7 @@ class CGeoMesh():
 		Buffer.WriteInt(self.VertexCount)
 		for _Vertex in self.Vertices:
 			Buffer.WriteVector4(_Vertex)
-		Buffer.WriteFloat(self.Unknown)
+
 		return self
 
 class AnimationSetVariant():
@@ -1554,14 +1629,115 @@ class MeshSetGrid():
 		for MeshModule in self.MeshModules: MeshModule.Write(Buffer)
 		return self
 
-class DRS:
+class OBBNode():
+	"""OBBNode class"""
+	def __init__(self) -> None:
+		"""Initializes the OBBNode"""
+		self.OrientedBoundingBox: CMatCoordinateSystem 
+		self.Unknown1: int
+		self.Unknown2: int
+		self.Unknown3: int
+		self.NodeDepth: int
+		self.CurrentTriangleCount: int
+		self.MinimumTrianglesFound: int
+
+	def Read(self, Buffer: FileReader) -> 'OBBNode':
+		"""Reads the OBBNode from the buffer"""
+		self.OrientedBoundingBox = CMatCoordinateSystem().Read(Buffer)
+		self.Unknown1 = Buffer.ReadInt()
+		self.Unknown2 = Buffer.ReadInt()
+		self.Unknown3 = Buffer.ReadInt()
+		self.NodeDepth = Buffer.ReadInt()
+		self.CurrentTriangleCount = Buffer.ReadInt()
+		self.MinimumTrianglesFound = Buffer.ReadInt()
+		return self
+	
+	def Write(self, Buffer: FileWriter) -> 'OBBNode':
+		"""Writes the OBBNode to the buffer"""
+		self.OrientedBoundingBox.Write(Buffer)
+		Buffer.WriteInt(self.Unknown1)
+		Buffer.WriteInt(self.Unknown2)
+		Buffer.WriteInt(self.Unknown3)
+		Buffer.WriteInt(self.NodeDepth)
+		Buffer.WriteInt(self.CurrentTriangleCount)
+		Buffer.WriteInt(self.MinimumTrianglesFound)
+		return self
+
+class CGeoOBBTree():
+	"""CGeoOBBTree class"""
+	def __init__(self) -> None:
+		"""Initializes the CGeoOBBTree"""
+		self.Magic: int = 1845540702
+		self.Version: int = 3
+		self.MatrixCount: int = 0
+		self.OBBNodes: List[OBBNode] = []
+		self.TriangleCount: int = 0
+		self.Faces: List[Face] = []
+
+	def Read(self, Buffer: FileReader) -> 'CGeoOBBTree':
+		"""Reads the CGeoOBBTree from the buffer"""
+		self.Magic = Buffer.ReadInt()
+		self.Version = Buffer.ReadInt()
+		self.MatrixCount = Buffer.ReadInt()
+		self.OBBNodes = [OBBNode().Read(Buffer) for _ in range(self.MatrixCount)]
+		self.TriangleCount = Buffer.ReadInt()
+		self.Faces = [Face().Read(Buffer) for _ in range(self.TriangleCount)]
+		return self
+	
+	def Write(self, Buffer: FileWriter) -> 'CGeoOBBTree':
+		"""Writes the CGeoOBBTree to the buffer"""
+		Buffer.WriteInt(self.Magic)
+		Buffer.WriteInt(self.Version)
+		Buffer.WriteInt(self.MatrixCount)
+		for _OBBNode in self.OBBNodes: _OBBNode.Write(Buffer)
+		Buffer.WriteInt(self.TriangleCount)
+		for _Face in self.Faces: _Face.Write(Buffer)
+		return self
+
+class DrwResourceMeta():
+	"""DrwResourceMeta class"""
+	def __init__(self) -> None:
+		"""Initializes the DrwResourceMeta"""
+		self.Unknown: List[int] = [0, 0]
+		self.Length: int = 0
+		self.Hash: str = ""
+
+	def Read(self, Buffer: FileReader) -> 'DrwResourceMeta':
+		"""Reads the DrwResourceMeta from the buffer"""
+		self.Unknown = [Buffer.ReadInt() for _ in range(2)]
+		self.Length = Buffer.ReadInt()
+		self.Hash = Buffer.ReadString(32)
+		return self
+	
+	def Write(self, Buffer: FileWriter) -> 'DrwResourceMeta':
+		"""Writes the DrwResourceMeta to the buffer"""
+		for _Unknown in self.Unknown: Buffer.WriteInt(_Unknown)
+		Buffer.WriteInt(self.Length)
+		Buffer.WriteString(self.Hash, 32)
+		return self
+
+class CGeoPrimitiveContainer():
+	"""CGeoPrimitiveContainer class"""
+	def __init__(self) -> None:
+		"""Initializes the CGeoPrimitiveContainer"""
+		pass
+
+	def Read(self, Buffer: FileReader) -> 'CGeoPrimitiveContainer':
+		"""Reads the CGeoPrimitiveContainer from the buffer"""
+		return self
+	
+	def Write(self, Buffer: FileWriter) -> 'CGeoPrimitiveContainer':
+		"""Writes the CGeoPrimitiveContainer to the buffer"""
+		return self
+
+class DRS():
 	"""DRS class"""
 	def __init__(self) -> None:
-		self.Magic: int = -1
-		self.NumberOfModels: int = -1
+		self.Magic: int = -981667554
+		self.NumberOfModels: int = 1
 		self.NodeInformationOffset: int = -1
 		self.NodeHierarchyOffset: int = -1
-		self.NodeCount: int = -1
+		self.NodeCount: int = 1
 		self.RootNodeInformation: RootNodeInformation = None
 		self.AnimationSetNodeInformation: NodeInformation = None
 		self.CDspMeshFileNodeInformation: NodeInformation = None
@@ -1576,9 +1752,10 @@ class DRS:
 		self.CollisionShapeNodeInformation: NodeInformation = None
 		self.EffectSetNodeInformation: NodeInformation = None
 		self.MeshSetGridNodeInformation: NodeInformation = None
+		self.CDrwLocatorListNodeInformation: NodeInformation = None
 		self.RootNode: RootNode = None
 		self.AnimationSetNode: Node = None
-		self.MeshNode: Node = None
+		self.CDspMeshFileNode: Node = None
 		self.CGeoMeshNode: Node = None
 		self.CSkSkinInfoNode: Node = None
 		self.CSkSkeletonNode: Node = None
@@ -1590,16 +1767,17 @@ class DRS:
 		self.CollisionShapeNode: Node = None
 		self.EffectSetNode: Node = None
 		self.MeshSetGridNode: Node = None
+		self.CDrwLocatorListNode: Node = None
 		self.AnimationSet: AnimationSet = None
-		self.Mesh: CDspMeshFile = None
+		self.CDspMeshFile: CDspMeshFile = None
 		self.CGeoMesh: CGeoMesh = None
 		self.CSkSkinInfo: CSkSkinInfo = None
 		self.CSkSkeleton: CSkSkeleton = None
 		# self.AnimationTimings: AnimationTimings = None
 		self.Joints: CDspJointMap = None
-		# self.CGeoOBBTree: CGeoOBBTree = None
-		# self.DrwResourceMeta: DrwResourceMeta = None
-		# self.CGeoPrimitiveContainer: CGeoPrimitiveContainer = None
+		self.CGeoOBBTree: CGeoOBBTree = None
+		self.DrwResourceMeta: DrwResourceMeta = None
+		self.CGeoPrimitiveContainer: CGeoPrimitiveContainer = None
 		self.CollisionShape: CollisionShape = None
 		# self.EffectSet: EffectSet = None
 		self.MeshSetGrid: MeshSetGrid = None
@@ -1648,6 +1826,8 @@ class DRS:
 				self.EffectSetNodeInformation = _NodeInformation
 			elif _NodeInformation.Magic == 154295579: # MeshSetgrid
 				self.MeshSetGridNodeInformation = _NodeInformation
+			elif _NodeInformation.Magic == 735146985: # CDrwLocatorList
+				self.CDrwLocatorListNodeInformation = _NodeInformation
 			else:
 				print("Unknown NodeInformation Magic: {}".format(_NodeInformation.Magic))
 
@@ -1661,7 +1841,7 @@ class DRS:
 			if _Node.Name == "AnimationSet":
 				self.AnimationSetNode = _Node
 			elif _Node.Name == "CDspMeshFile":
-				self.MeshNode = _Node
+				self.CDspMeshFileNode = _Node
 			elif _Node.Name == "CGeoMesh":
 				self.CGeoMeshNode = _Node
 			elif _Node.Name == "CSkSkinInfo":
@@ -1684,6 +1864,8 @@ class DRS:
 				self.EffectSetNode = _Node
 			elif _Node.Name == "MeshSetGrid":
 				self.MeshSetGridNode = _Node
+			elif _Node.Name == "CDrwLocatorList":
+				self.CDrwLocatorListNode = _Node
 			else:
 				print("Unknown node name: {}".format(_Node.Name))
 
@@ -1691,9 +1873,9 @@ class DRS:
 			Reader.Seek(self.AnimationSetNodeInformation.Offset)
 			self.AnimationSet = AnimationSet().Read(Reader)
 
-		if self.MeshNode is not None:
+		if self.CDspMeshFileNode is not None:
 			Reader.Seek(self.CDspMeshFileNodeInformation.Offset)
-			self.Mesh = CDspMeshFile().Read(Reader)
+			self.CDspMeshFile = CDspMeshFile().Read(Reader)
 
 		if self.CGeoMeshNode is not None:
 			Reader.Seek(self.CGeoMeshFileNodeInformation.Offset)
