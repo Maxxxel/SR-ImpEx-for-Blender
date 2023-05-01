@@ -1,8 +1,27 @@
 import bpy
 import bmesh
+import math
 from typing import List
-from mathutils import Vector, Matrix
-from .DRSFile import DRS, CDspMeshFile, BattleforgeMesh, Face, EmptyString, LevelOfDetail, MeshData, Refraction, Vertex, Materials, Flow, CGeoMesh, CGeoOBBTree, CDspJointMap, DrwResourceMeta, CGeoPrimitiveContainer
+from mathutils import Euler, Vector, Matrix
+from .DRSFile import DRS, CDspMeshFile, BattleforgeMesh, Face, EmptyString, LevelOfDetail, MeshData, Refraction, Vertex, Materials, Flow, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, JointGroup, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem
+
+def ShowMessageBox(Message: str, Title: str = "Message Box", Icon: str = "INFO"):
+	def DrawMessageBox(self, context):
+		self.layout.label(text=Message)
+
+	bpy.context.window_manager.popup_menu(DrawMessageBox, title=Title, icon=Icon)
+
+def SearchForObject(ObjectName: str, Collection: bpy.types.Collection):
+	for Object in Collection.objects:
+		if Object.name.find(ObjectName) != -1:
+			return Object
+
+	for Coll in Collection.children:
+		FoundObject = SearchForObject(ObjectName, Coll)
+		if FoundObject is not None:
+			return FoundObject
+
+	return None
 
 def GetBB(Object):
 	BBMin = Vector((0, 0, 0))
@@ -162,15 +181,63 @@ def UpdateCDspMeshfile(SourceFile: DRS, SourceCollection: bpy.types.Collection):
 	# Update the DRS File
 	SourceFile.Mesh = NewMeshData
 
-def CreateUniqueMesh(SourceCollection: bpy.types.Collection, ExportCollection: bpy.types.Collection) -> bpy.types.Mesh:
-	BM: bmesh.types.BMesh = bmesh.new()
-	DEBUG_TOTAL_VERTICES = 0
+def CreateCylinder(Mesh: bpy.types.Mesh) -> CylinderShape:
+	_CylinderShape = CylinderShape()
+	_CylinderShape.CoordSystem = CMatCoordinateSystem()
+	_CylinderShape.CoordSystem.Position = Vector((Mesh.location.x, Mesh.location.y - (Mesh.dimensions.z / 2), Mesh.location.z))
+	Rotation = Mesh.rotation_euler.copy()
+	Rotation.x -= math.pi / 2
+	_CylinderShape.CoordSystem.Matrix = Matrix.LocRotScale(None, Rotation, None).to_3x3()
+	_CylinderShape.CGeoCylinder = CGeoCylinder()
+	_CylinderShape.CGeoCylinder.Radius = Mesh.dimensions.x / 2
+	_CylinderShape.CGeoCylinder.Height = Mesh.dimensions.z
+	_CylinderShape.CGeoCylinder.Center = Vector((0, 0, 0))
 
-	# Loop through all Objects and find the Meshes
-	for Object in SourceCollection.objects:
-		if Object.type == "MESH":
-			BM.from_mesh(Object.data)
-			DEBUG_TOTAL_VERTICES += len(Object.data.vertices)
+	return _CylinderShape
+
+def CreateBox(Mesh: bpy.types.Mesh) -> BoxShape:
+	_BoxShape = BoxShape()
+	_BoxShape.CoordSystem = CMatCoordinateSystem()
+	_BoxShape.CoordSystem.Position = Vector((Mesh.location.x, Mesh.location.y, Mesh.location.z))
+	Rotation = Mesh.rotation_euler.copy()
+	Rotation.x = -Rotation.x
+	Rotation.y = -Rotation.y
+	Rotation.z = -Rotation.z
+	_BoxShape.CoordSystem.Matrix = Matrix.LocRotScale(None, Rotation, None).to_3x3()
+	_BoxShape.CGeoAABox = CGeoAABox()
+	_BoxShape.CGeoAABox.UpperRightCorner = Vector((Mesh.dimensions.x / 2, Mesh.dimensions.y / 2, Mesh.dimensions.z / 2))
+	_BoxShape.CGeoAABox.LowerLeftCorner = Vector((-Mesh.dimensions.x / 2, -Mesh.dimensions.y / 2, -Mesh.dimensions.z / 2))
+
+	return _BoxShape
+
+def CreateSphere(Mesh: bpy.types.Mesh) -> SphereShape:
+	_SphereShape = SphereShape()
+	_SphereShape.CoordSystem = CMatCoordinateSystem()
+	_SphereShape.CoordSystem.Position = Vector((Mesh.location.x, Mesh.location.y, Mesh.location.z))
+	_SphereShape.CoordSystem.Matrix = Matrix.Identity(3)
+	_SphereShape.CGeoSphere = CGeoSphere()
+	_SphereShape.CGeoSphere.Center = Vector((0, 0, 0))
+	_SphereShape.CGeoSphere.Radius = Mesh.dimensions.x / 2
+
+	return _SphereShape
+
+def CreateUniqueMesh(SourceCollection: bpy.types.Collection) -> bpy.types.Mesh:
+	BM: bmesh.types.BMesh = bmesh.new()
+
+	# As we have a defined structure we need to find the CDspMeshFile Object first
+	if SourceCollection.objects is None:
+		return None
+
+	CDspMeshFileObject = SearchForObject("CDspMeshFile", SourceCollection)
+
+
+	if CDspMeshFileObject is None:
+		return None
+
+	# Now we can iterate over the Meshes
+	for Child in CDspMeshFileObject.children:
+		if Child.type == "MESH":
+			BM.from_mesh(Child.data)
 
 	# Remove Duplicates
 	bmesh.ops.remove_doubles(BM, verts=BM.verts, dist=0.0001)
@@ -179,10 +246,6 @@ def CreateUniqueMesh(SourceCollection: bpy.types.Collection, ExportCollection: b
 	UniqueMesh = bpy.data.meshes.new("UniqueMesh")
 	BM.to_mesh(UniqueMesh)
 	BM.free()
-
-	# Link the new Mesh to the Collection
-	NewMeshObject = bpy.data.objects.new("UniqueMesh", UniqueMesh)
-	ExportCollection.objects.link(NewMeshObject)
 
 	return UniqueMesh
 
@@ -203,100 +266,169 @@ def CreateCGeoMesh(UniqueMesh: bpy.types.Mesh) -> CGeoMesh:
 
 	return _CGeoMesh
 
-def SaveDRS(operator, context, filepath="", LoadedDRSModels=None, EditModel=True):
-	if EditModel is False:
-		# Create a new Export Collection we will delete later
-		ExportCollection: bpy.types.Collection = bpy.data.collections.new("ExportCollection")
-		bpy.context.scene.collection.children.link(ExportCollection)
+def CreateCGeoOBBTree() -> CGeoOBBTree:
+	return CGeoOBBTree()
 
-		NewFile: DRS = DRS()
+def CreateCDspMeshFile() -> CDspMeshFile:
+	pass
 
-		# What we need in every DRS File: CGeoMesh, CGeoOBBTree (empty), CDspJointMap, CDspMeshFile, DrwResourceMeta
-		# What we need in skinned DRS Files: CSkSkinInfo, CSkSkeleton, AnimationSet, AnimationTimings
-		# Models with Effects: EffectSet
-		# Static Objects need: CGeoPrimitiveContainer (empty), CollisionShape
-		# Destructable Objects need: StateBasedMeshSet, MeshSetGrid
-
-		# Get Selected Colelction
-		SourceCollection: bpy.types.Collection = bpy.context.view_layer.active_layer_collection.collection
-
-		# Unique Mesh
-		UniqueMesh = CreateUniqueMesh(SourceCollection, ExportCollection)
-
-		# CGeoMesh
-		_CGeoMesh = CreateCGeoMesh(UniqueMesh)
-		NewFile.CGeoMesh = _CGeoMesh
-
-		# CGeoOBBTree
-		# Find out if needed and if so how its created
-		NewFile.CGeoOBBTree = CGeoOBBTree()
-
-		# CDspJointMap
-		# Find out if needed and if so how its created
-		NewFile.CDspJointMap = CDspJointMap()
-
-		# CSkSkinInfo
-		# Ignore for now
-
-		# CSkSkeleton
-		# Ignore for now
-
-		# CDspMeshFile
-		_CDspMeshFile = CDspMeshFile()
-
-		# CDrwLocatorList if skinned unit
-		# Ignore for now
-
-		# DrwResourceMeta if static
-		_DrwResourceMeta = DrwResourceMeta()
-
-		# AnimationSet if skinned
-		# Ignore for now
-
-		# AnimationTimings if skinned
-		# Ignore for now
-
-		# EffectSet if skinned
-		# Ignore for now
-
-		# CGeoPrimitiveContainer if static
-		_CGeoPrimitiveContainer = CGeoPrimitiveContainer()
-
-		# CollisionShape if static
-	elif LoadedDRSModels is not None:
-		# If we only Edit the Model(s) we keep the whole structures and only update the neccecary parts
-		for LoadedDRSModel in LoadedDRSModels:
-			LoadedDRSModel = LoadedDRSModel[0]
-			SourceFile: DRS = LoadedDRSModel[1]
-			SourceCollection: bpy.types.Collection = LoadedDRSModel[2]
-			SourceUsedTransform: bool = LoadedDRSModel[3]
-
-			# Set the current Collection as Active
-			bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[SourceCollection.name]
-
-			# Set the Active Object to the first Object in the Collection
-			bpy.context.view_layer.objects.active = SourceCollection.objects[0]
-
-			# Switch to Edit Mode
-			bpy.ops.object.mode_set(mode='EDIT')
-
-			# If the Source Mesh has been transformed, we need to revert the transformation before we can export it
-			# Set the Global Matrix
-			if SourceUsedTransform:
-				# Get the Armature Object if it exists
-				ArmatureObject = None
-
-				for Object in SourceCollection.objects:
-					if Object.type == "ARMATURE":
-						ArmatureObject = Object
-						break
-				if ArmatureObject is not None:
-					ArmatureObject.matrix_world = Matrix.Identity(4)
-				else:
-					for Object in SourceCollection.objects:
-						Object.matrix_world = Matrix.Identity(4)
-
-			# Update the Meshes
-			UpdateCDspMeshfile(SourceFile, SourceCollection)
+def CreateJointGroup(Empty = True) -> JointGroup:
+	if Empty:
+		return JointGroup()
 	else:
-		return {'CANCELLED'}
+		pass
+
+def CreateDrwResourceMeta() -> DrwResourceMeta:
+	return DrwResourceMeta()
+
+def CreateCGeoPrimitiveContainer() -> CGeoPrimitiveContainer:
+	return CGeoPrimitiveContainer()
+
+def CreateCollisionShape(SourceCollection: bpy.types.Collection) -> CollisionShape:
+	_CollisionShape = CollisionShape()
+	CollisionShapeObject = SearchForObject("CollisionShape", SourceCollection)
+
+	if CollisionShapeObject is None:
+		return None
+
+	for Child in CollisionShapeObject.children:
+		if Child.type == "MESH":
+			if Child.name.find("Cylinder") != -1:
+				_CollisionShape.CylinderCount += 1
+				_CollisionShape.Cylinders.append(CreateCylinder(Child))
+			elif Child.name.find("Sphere") != -1:
+				_CollisionShape.SphereCount += 1
+				_CollisionShape.Spheres.append(CreateSphere(Child))
+			elif Child.name.find("Box") != -1:
+				_CollisionShape.BoxCount += 1
+				_CollisionShape.Boxes.append(CreateBox(Child))
+
+def ExportSkinnedMesh(operator, context, filepath: str, SourceCollection: bpy.types.Collection):
+	pass
+
+def ExportStaticObject(operator, context, filepath: str, SourceCollection: bpy.types.Collection):
+	# We need to set the world matrix correctly for Battleforge Game Engine -> Matrix.Identity(4)
+	# To do....
+
+	# Create the DRS File
+	NewDRSFile: DRS = DRS()
+	# CGeoMesh
+	_UniqueMesh = CreateUniqueMesh(SourceCollection) # Works perfectly fine
+	if _UniqueMesh is None:
+		ShowMessageBox("Could not create Unique Mesh from Collection, as no CDspMeshFile was found!", "Error", "ERROR")
+		return {"CANCELLED"}
+
+	_CGeoMesh: CGeoMesh = CreateCGeoMesh(_UniqueMesh) # Works perfectly fine
+	# CGeoOBBTree
+	_CGeoOBBTree: CGeoOBBTree = CreateCGeoOBBTree() # Maybe not needed
+	# CDspMeshFile
+	_CDspMeshFile: CDspMeshFile = CreateCDspMeshFile()
+	# JointGroup
+	_JointGroup: JointGroup = CreateJointGroup() # Not needed for static objects
+	# drwResourceMeta
+	_DrwResourceMeta: DrwResourceMeta = CreateDrwResourceMeta() # Dunno if needed
+	# CGeoPrimitiveContainer
+	_CGeoPrimitiveContainer: CGeoPrimitiveContainer = CreateCGeoPrimitiveContainer() # Always empty
+	# CollisionShape
+	_CollisionShape: CollisionShape = CreateCollisionShape(SourceCollection)
+	if _CollisionShape is None:
+		ShowMessageBox("Could not create CollisionShape from Collection, as no CollisionShape was found!", "Error", "ERROR")
+		return {"CANCELLED"}
+
+	# Update the DRS File
+	NewDRSFile.CGeoMesh = _CGeoMesh
+	NewDRSFile.CGeoOBBTree = _CGeoOBBTree
+	NewDRSFile.CDspMeshFile = _CDspMeshFile
+	NewDRSFile.Joints = _JointGroup
+	NewDRSFile.DrwResourceMeta = _DrwResourceMeta
+	NewDRSFile.CGeoPrimitiveContainer = _CGeoPrimitiveContainer
+	NewDRSFile.CollisionShape = _CollisionShape
+
+def VerifyModels(SourceCollection: bpy.types.Collection):
+	UnifiedMesh: bmesh.types.BMesh = bmesh.new()
+
+	for Object in SourceCollection.objects:
+		if Object.type == "MESH":
+			if len(Object.data.vertices) > 32767:
+				ShowMessageBox("Mesh {} has more than 32767 Vertices. This is not supported by the game.".format(Object.name), "Error", "ERROR")
+				return False
+			UnifiedMesh.from_mesh(Object.data)
+
+	UnifiedMesh.verts.ensure_lookup_table()
+	UnifiedMesh.verts.index_update()
+	bmesh.ops.remove_doubles(UnifiedMesh, verts=UnifiedMesh.verts, dist=0.0001)
+
+	if len(UnifiedMesh.verts) > 32767:
+		ShowMessageBox("The unified Mesh has more than 32767 Vertices. This is not supported by the game.", "Error", "ERROR")
+		return False
+
+	UnifiedMesh.free()
+
+	return True
+
+def SaveDRS(operator, context, filepath="", ExportSelection: bool = True):
+	# Get the right Collection
+	SourceCollection: bpy.types.Collection = None
+
+	if ExportSelection:
+		SourceCollection: bpy.types.Collection = context.collection
+	else:
+		SourceCollection: bpy.types.Collection = context.view_layer.active_layer_collection.collection
+
+	if not VerifyModels(SourceCollection):
+		return {"CANCELLED"}
+
+	IsStateBased: bool = False # Also means save as *.bmg file
+	IsSkinnedMesh: bool = False
+
+	for Object in SourceCollection.objects:
+		if Object.type == "ARMATURE":
+			IsSkinnedMesh = True
+		if Object.type == "MESH" and Object.name.startswith("MeshGridModule_"):
+			IsStateBased = True
+
+	if not IsSkinnedMesh and not IsStateBased:
+		ExportStaticObject(operator, context, filepath, SourceCollection)
+
+	# 	# What we need in every DRS File: CGeoMesh, CGeoOBBTree (empty), CDspJointMap, CDspMeshFile, DrwResourceMeta
+	# 	# What we need in skinned DRS Files: CSkSkinInfo, CSkSkeleton, AnimationSet, AnimationTimings
+	# 	# Models with Effects: EffectSet
+	# 	# Static Objects need: CGeoPrimitiveContainer (empty), CollisionShape
+	# 	# Destructable Objects need: StateBasedMeshSet, MeshSetGrid
+
+	# 	# CollisionShape if static
+	# elif LoadedDRSModels is not None:
+	# 	# If we only Edit the Model(s) we keep the whole structures and only update the neccecary parts
+	# 	for LoadedDRSModel in LoadedDRSModels:
+	# 		LoadedDRSModel = LoadedDRSModel[0]
+	# 		SourceFile: DRS = LoadedDRSModel[1]
+	# 		SourceCollection: bpy.types.Collection = LoadedDRSModel[2]
+	# 		SourceUsedTransform: bool = LoadedDRSModel[3]
+
+	# 		# Set the current Collection as Active
+	# 		bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[SourceCollection.name]
+
+	# 		# Set the Active Object to the first Object in the Collection
+	# 		bpy.context.view_layer.objects.active = SourceCollection.objects[0]
+
+	# 		# Switch to Edit Mode
+	# 		bpy.ops.object.mode_set(mode='EDIT')
+
+	# 		# If the Source Mesh has been transformed, we need to revert the transformation before we can export it
+	# 		# Set the Global Matrix
+	# 		if SourceUsedTransform:
+	# 			# Get the Armature Object if it exists
+	# 			ArmatureObject = None
+
+	# 			for Object in SourceCollection.objects:
+	# 				if Object.type == "ARMATURE":
+	# 					ArmatureObject = Object
+	# 					break
+	# 			if ArmatureObject is not None:
+	# 				ArmatureObject.matrix_world = Matrix.Identity(4)
+	# 			else:
+	# 				for Object in SourceCollection.objects:
+	# 					Object.matrix_world = Matrix.Identity(4)
+
+	# 		# Update the Meshes
+	# 		UpdateCDspMeshfile(SourceFile, SourceCollection)

@@ -902,13 +902,13 @@ class CollisionShape():
 	"""CollisionShape"""
 	def __init__(self) -> None:
 		"""CollisionShape Constructor"""
-		self.Version: int
-		self.BoxCount: int
-		self.Boxes: List[BoxShape]
-		self.SphereCount: int
-		self.Spheres: List[SphereShape]
-		self.CylinderCount: int
-		self.Cylinders: List[CylinderShape]
+		self.Version: int = 1
+		self.BoxCount: int = 0
+		self.Boxes: List[BoxShape] = []
+		self.SphereCount: int = 0
+		self.Spheres: List[SphereShape] = []
+		self.CylinderCount: int = 0
+		self.Cylinders: List[CylinderShape] = []
 
 	def Read(self, Buffer: FileReader) -> 'CollisionShape':
 		"""Reads the CollisionShape from the buffer"""
@@ -1043,8 +1043,8 @@ class JointGroup():
 	"""JointGroup"""
 	def __init__(self) -> None:
 		"""JointGroup Constructor"""
-		self.JointCount: int
-		self.Joints: List[int]
+		self.JointCount: int = 0
+		self.Joints: List[int] = []
 
 	def Read(self, Buffer: FileReader) -> 'JointGroup':
 		"""Reads the JointGroup from the buffer"""

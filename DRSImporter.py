@@ -10,7 +10,6 @@ from bpy_extras.image_utils import load_image
 from .DRSFile import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, Face, Vertex, BoneVertex, MeshSetGrid, BoxShape, SphereShape, CylinderShape
 from .SKAFile import SKA
 
-LOADEDMODELS = []
 SCENECREATED = False
 
 def ResetViewport() -> None:
@@ -454,7 +453,7 @@ def CreateCollisionSpheres(_Sphere: SphereShape, Parent: bpy.types.Object):
 	Mat4x4.translation = Pos
 	Radius = _Sphere.CGeoSphere.Radius
 	Center = _Sphere.CGeoSphere.Center # Always Zero vector!
-	bpy.ops.mesh.primitive_uv_sphere_add(radius=Radius, location=Center, rotation=Mat4x4.to_euler(), scale=Mat4x4.to_scale())
+	bpy.ops.mesh.primitive_uv_sphere_add(radius=Radius, location=Center, rotation=Mat4x4.to_euler())
 	Sphere = bpy.context.active_object
 	Sphere.name = "CollisionShape Sphere"
 	Sphere.data.name = "Sphere"
@@ -462,26 +461,28 @@ def CreateCollisionSpheres(_Sphere: SphereShape, Parent: bpy.types.Object):
 	Sphere.location = Pos
 	Sphere.display_type = 'WIRE'
 
-def CreateCollisionCylinders(_Cylinder: CylinderShape, Parent: bpy.types.Object):
-	# Contains rotation and scale. Is a row major 3x3 matrix
+def CreateCollisionCylinders(_Cylinder: CylinderShape, Index: int, Parent: bpy.types.Object):
 	Mat = _Cylinder.CoordSystem.Matrix
 	# Rotate the cylinder 90 degrees around the x axis
-	Mat.rotate(Euler((pi / 2, 0, 0), 'XYZ'))
+	# Mat.rotate(Euler((pi / 2, 0, 0), 'XYZ'))
 	Pos = _Cylinder.CoordSystem.Position
 	Mat4x4 = Mat.to_4x4()
 	Mat4x4.translation = Pos
 	Rotation = Mat4x4.to_euler()
+	Rotation.x += pi / 2
 	Radius = _Cylinder.CGeoCylinder.Radius
 	Center = _Cylinder.CGeoCylinder.Center
 
-	bpy.ops.mesh.primitive_cylinder_add(radius=Radius, location=Center, rotation=Rotation, scale=Mat4x4.to_scale(), align="VIEW")
+	bpy.ops.mesh.primitive_cylinder_add(radius=Radius, location=Center, rotation=Rotation, scale=Mat4x4.to_scale())
 	Cylinder = bpy.context.active_object
-	Cylinder.name = "CollisionShape Cylinder"
-	Cylinder.data.name = "Cylinder"
-	Cylinder.dimensions.z = _Cylinder.CGeoCylinder.Height
+	Cylinder.name = "CollisionShape Cylinder #" + str(Index)
+	Cylinder.data.name = "Cylinder #" + str(Index)
 	Cylinder.location = Vector((Pos.x, Pos.y + _Cylinder.CGeoCylinder.Height / 2, Pos.z ))
+	Cylinder.dimensions.z = _Cylinder.CGeoCylinder.Height
 	Cylinder.parent = Parent
 	Cylinder.display_type = 'WIRE'
+	# Deselct the cylinder
+	bpy.ops.object.select_all(action='DESELECT')
 
 def CreateCollisionShapes(CollisionShapes, Parent: bpy.types.Object):
 	for _ in range(CollisionShapes.BoxCount):
@@ -491,7 +492,7 @@ def CreateCollisionShapes(CollisionShapes, Parent: bpy.types.Object):
 		CreateCollisionSpheres(CollisionShapes.Spheres[_], Parent)
 
 	for _ in range(CollisionShapes.CylinderCount):
-		CreateCollisionCylinders(CollisionShapes.Cylinders[_], Parent)
+		CreateCollisionCylinders(CollisionShapes.Cylinders[_], _, Parent)
 
 def CreateVert(column, row, size):
 	""" Create a single vert """
@@ -510,6 +511,25 @@ def CreateGrid(MeshGrid: MeshSetGrid, Collection: bpy.types.LayerCollection):
 	GridObject = SetObject("MeshGrid", "Data", Collection, _Mesh)
 	# Rotate the grid 90 degrees around the x axis
 	GridObject.rotation_euler = Euler((pi / 2, 0, 0), 'XYZ')
+
+def CreateCGeoMesh(GeoMesh: CGeoMesh, GeoMeshObject: bpy.types.Object, Collection: bpy.types.LayerCollection):
+	NewMesh = bpy.data.meshes.new("Mesh_CGeo")
+	NewMeshObject = bpy.data.objects.new("Mesh_CGeo", NewMesh)
+
+	Faces = list()
+	Vertices = list()
+
+	for _ in range(int(GeoMesh.IndexCount / 3)):
+		_Face: Face = GeoMesh.Faces[_].Indices
+		Faces.append((_Face[0], _Face[1], _Face[2]))
+
+	for _ in range(GeoMesh.VertexCount):
+		_Vertex: Vector = GeoMesh.Vertices[_]
+		Vertices.append((_Vertex.x, _Vertex.y, _Vertex.z))
+
+	NewMesh.from_pydata(Vertices, [], Faces)
+	NewMeshObject.parent = GeoMeshObject
+	Collection.collection.objects.link(NewMeshObject)
 
 def ClearBlenderScene():
 	global SCENECREATED
@@ -562,6 +582,8 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 		if UseApplyTransform:
 			ArmatureObject.matrix_world = GlobalMatrix @ ArmatureObject.matrix_world
 	else:
+		CGeoMeshObject = SetObject("CGeoMesh", HashOf5Letters, ModelDataCollection)
+		CreateCGeoMesh(DRSFile.CGeoMesh, CGeoMeshObject, ModelDataCollection)
 		MeshObjectObject = SetObject("CDspMeshFile", HashOf5Letters, ModelDataCollection)
 		CreateStaticMesh(DRSFile.CDspMeshFile, DirName, MeshObjectObject, ModelDataCollection)
 		CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
