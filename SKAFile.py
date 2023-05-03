@@ -63,7 +63,7 @@ class SKAAnimationData:
 		self.Repeat = Buffer.ReadInt()
 		self.StutterMode = Buffer.ReadInt()
 		self.UnusedItSeems = Buffer.ReadInt()
-		if Type == 6:
+		if Type == 7:
 			self.UnusedItTwo = Buffer.ReadInt()
 		self.Zeroes = Buffer.ReadInt(3)
 		return self

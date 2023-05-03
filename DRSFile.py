@@ -1644,10 +1644,10 @@ class OBBNode():
 	def Read(self, Buffer: FileReader) -> 'OBBNode':
 		"""Reads the OBBNode from the buffer"""
 		self.OrientedBoundingBox = CMatCoordinateSystem().Read(Buffer)
-		self.Unknown1 = Buffer.ReadInt()
-		self.Unknown2 = Buffer.ReadInt()
-		self.Unknown3 = Buffer.ReadInt()
-		self.NodeDepth = Buffer.ReadInt()
+		self.Unknown1 = Buffer.ReadUShort()
+		self.Unknown2 = Buffer.ReadUShort()
+		self.Unknown3 = Buffer.ReadUShort()
+		self.NodeDepth = Buffer.ReadUShort()
 		self.CurrentTriangleCount = Buffer.ReadInt()
 		self.MinimumTrianglesFound = Buffer.ReadInt()
 		return self
@@ -1897,9 +1897,9 @@ class DRS():
 		# 	Reader.Seek(self.JointNodeInformation.Offset)
 		# 	self.Joints = CDspJointMap().Read(Reader)
 
-		# if self.CGeoOBBTreeNode is not None:
-		# 	Reader.Seek(self.CGeoOBBTreeInformation.Offset)
-		# 	self.CGeoOBBTree = CGeoOBBTree().Read(Reader)
+		if self.CGeoOBBTreeNode is not None:
+			Reader.Seek(self.CGeoOBBTreeInformation.Offset)
+			self.CGeoOBBTree = CGeoOBBTree().Read(Reader)
 
 		# if self.DrwResourceMetaNode is not None:
 		# 	Reader.Seek(self.DrwResourceMetaInformation.Offset)

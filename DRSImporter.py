@@ -7,7 +7,7 @@ import bmesh
 import hashlib
 from mathutils import Euler, Vector, Matrix, Quaternion
 from bpy_extras.image_utils import load_image
-from .DRSFile import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, Face, Vertex, BoneVertex, MeshSetGrid, BoxShape, SphereShape, CylinderShape
+from .DRSFile import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, Face, Vertex, BoneVertex, MeshSetGrid, BoxShape, SphereShape, CylinderShape, CGeoOBBTree, OBBNode
 from .SKAFile import SKA
 
 SCENECREATED = False
@@ -266,7 +266,7 @@ def CreateSkinnedMesh(MeshFile: CDspMeshFile, DirName:str, MeshObjectObject: bpy
 			Vertices.append(_Vertex.Position)
 			Normals.append(_Vertex.Normal)
 			# Negate the UVs Y Axis before adding them
-			UVList.append((_Vertex.Texture[0], -1 * _Vertex.Texture[1]))
+			UVList.append((_Vertex.Texture[0], -_Vertex.Texture[1]))
 
 		NewMesh.from_pydata(Vertices, [], Faces)
 		NewMesh.polygons.foreach_set('use_smooth', [True] * len(NewMesh.polygons))
@@ -320,7 +320,7 @@ def CreateStaticMesh(MeshFile: CDspMeshFile, DirName:str, MeshObjectObject: bpy.
 			Vertices.append(_Vertex.Position)
 			Normals.append(_Vertex.Normal)
 			# Negate the UVs Y Axis before adding them
-			UVList.append((_Vertex.Texture[0], -1 * _Vertex.Texture[1]))
+			UVList.append((_Vertex.Texture[0], -_Vertex.Texture[1]))
 
 		NewMesh.from_pydata(Vertices, [], Faces)
 		NewMesh.polygons.foreach_set('use_smooth', [True] * len(NewMesh.polygons))
@@ -419,7 +419,7 @@ def CreateBattleforgeScene():
 
 	if SCENECREATED is False:
 		SetCollection("ShaderData", "AllModels", bpy.context.view_layer.layer_collection)
-		bpy.ops.object.light_add(type='SUN', location=(1500, 2700, 1000), radius=10, rotation=(0.5, 0, 1.5))
+		bpy.ops.object.light_add(type='SUN', location=(1500, 2700, 1000), radius=10)
 		Sun = bpy.context.active_object
 		Sun.data.color = (1, 0.9, 0.7)
 		Sun.data.energy = 3
@@ -435,7 +435,10 @@ def CreateCollisionBoxes(_Box: BoxShape, Parent: bpy.types.Object):
 	CornerA = _Box.CGeoAABox.LowerLeftCorner
 	CornerB = _Box.CGeoAABox.UpperRightCorner
 	Rotation = Mat4x4.to_euler()
-	Rotation = Vector((-Rotation.x, -Rotation.y, -Rotation.z)) # Blender uses a different rotation order?
+	Rotation = Vector((Rotation.x, Rotation.y, Rotation.z)) # Blender uses a different rotation order?
+	ScaleTest = Mat4x4.to_scale()
+	if ScaleTest != Vector((1, 1, 1)):
+		print("Warning: Scale is not 1 for Box Collision Shape!")
 	Scale = Vector((abs(CornerA.x - CornerB.x), abs(CornerA.y - CornerB.y), abs(CornerA.z - CornerB.z)))
 
 	bpy.ops.mesh.primitive_cube_add(size=1, enter_editmode=False, location=Pos, rotation=Rotation, scale=Scale)
@@ -463,13 +466,11 @@ def CreateCollisionSpheres(_Sphere: SphereShape, Parent: bpy.types.Object):
 
 def CreateCollisionCylinders(_Cylinder: CylinderShape, Index: int, Parent: bpy.types.Object):
 	Mat = _Cylinder.CoordSystem.Matrix
-	# Rotate the cylinder 90 degrees around the x axis
-	# Mat.rotate(Euler((pi / 2, 0, 0), 'XYZ'))
 	Pos = _Cylinder.CoordSystem.Position
 	Mat4x4 = Mat.to_4x4()
 	Mat4x4.translation = Pos
 	Rotation = Mat4x4.to_euler()
-	Rotation.x += pi / 2
+	Rotation.x += pi / 2 # We need to rotate the cylinder by 90 degrees cause the cylinder is always created along the z axis, but we need it along the y axis for imported models
 	Radius = _Cylinder.CGeoCylinder.Radius
 	Center = _Cylinder.CGeoCylinder.Center
 
@@ -477,11 +478,10 @@ def CreateCollisionCylinders(_Cylinder: CylinderShape, Index: int, Parent: bpy.t
 	Cylinder = bpy.context.active_object
 	Cylinder.name = "CollisionShape Cylinder #" + str(Index)
 	Cylinder.data.name = "Cylinder #" + str(Index)
-	Cylinder.location = Vector((Pos.x, Pos.y + _Cylinder.CGeoCylinder.Height / 2, Pos.z ))
+	Cylinder.location = Vector((Pos.x, Pos.y + (_Cylinder.CGeoCylinder.Height / 2), Pos.z ))
 	Cylinder.dimensions.z = _Cylinder.CGeoCylinder.Height
 	Cylinder.parent = Parent
 	Cylinder.display_type = 'WIRE'
-	# Deselct the cylinder
 	bpy.ops.object.select_all(action='DESELECT')
 
 def CreateCollisionShapes(CollisionShapes, Parent: bpy.types.Object):
@@ -529,7 +529,48 @@ def CreateCGeoMesh(GeoMesh: CGeoMesh, GeoMeshObject: bpy.types.Object, Collectio
 
 	NewMesh.from_pydata(Vertices, [], Faces)
 	NewMeshObject.parent = GeoMeshObject
+	NewMeshObject.display_type = 'WIRE'
 	Collection.collection.objects.link(NewMeshObject)
+
+def CreateCGeoOBBTree(GeoOBB: CGeoOBBTree, GeoMesh: CGeoMesh, GeoOBBObject: bpy.types.Object, Collection: bpy.types.LayerCollection):
+	for _ in range(GeoOBB.MatrixCount):
+		_OBBNode: OBBNode = GeoOBB.OBBNodes[_]
+		NewOBBMesh = bpy.data.meshes.new("Mesh_OBB_" + str(_OBBNode.NodeDepth))
+		OBBDepthNodeObject = SetObject("OBB_" + str(_OBBNode.NodeDepth), "", Collection, NewOBBMesh)
+
+		Faces = list()
+		Vertices = list()
+
+		for _ in range(_OBBNode.CurrentTriangleCount, _OBBNode.CurrentTriangleCount + _OBBNode.MinimumTrianglesFound):
+			_Face: Face = GeoOBB.Faces[_].Indices
+			Faces.append((_Face[0], _Face[1], _Face[2]))
+
+		for _ in range(GeoMesh.VertexCount):
+			_Vertex: Vector = GeoMesh.Vertices[_]
+			Vertices.append((_Vertex.x, _Vertex.y, _Vertex.z))
+
+		NewOBBMesh.from_pydata(Vertices, [], Faces)
+		OBBDepthNodeObject.parent = GeoOBBObject
+		OBBDepthNodeObject.display_type = 'WIRE'
+
+		# Now the 1x1x1 cube
+		Mat = _OBBNode.OrientedBoundingBox.Matrix
+		Pos = _OBBNode.OrientedBoundingBox.Position
+		Mat4x4 = Mat.to_4x4()
+		Mat4x4.translation = Pos
+		Rotation = Mat4x4.to_euler()
+		Rotation.y += pi / 2
+		# Rotation = Vector((-Rotation.x, -Rotation.y, -Rotation.z)) # Blender uses a different rotation order?
+		Scale = Mat4x4.to_scale()
+		Scale.x *= 2
+		Scale.y *= 2
+		Scale.z *= 2
+
+		bpy.ops.mesh.primitive_cube_add(size=1, enter_editmode=False, location=Pos, rotation=Rotation, scale=Scale)
+		Box = bpy.context.active_object
+		Box.name = "OBB Box" + str(_OBBNode.NodeDepth)
+		Box.data.name = "OBB Box Mesh" + str(_OBBNode.NodeDepth)
+		Box.parent = OBBDepthNodeObject
 
 def ClearBlenderScene():
 	global SCENECREATED
@@ -584,14 +625,28 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 	else:
 		CGeoMeshObject = SetObject("CGeoMesh", HashOf5Letters, ModelDataCollection)
 		CreateCGeoMesh(DRSFile.CGeoMesh, CGeoMeshObject, ModelDataCollection)
+		# CGeoOBBTreeMeshObject = SetObject("CGeoOBBTreeMesh", HashOf5Letters, ModelDataCollection)
+		# CreateCGeoOBBTree(DRSFile.CGeoOBBTree, DRSFile.CGeoMesh, CGeoOBBTreeMeshObject, ModelDataCollection)
 		MeshObjectObject = SetObject("CDspMeshFile", HashOf5Letters, ModelDataCollection)
 		CreateStaticMesh(DRSFile.CDspMeshFile, DirName, MeshObjectObject, ModelDataCollection)
-		CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
-		CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
+
+		if DRSFile.CollisionShape is not None:
+			CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
+			CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
 		if UseApplyTransform:
-			for Object in ModelDataCollection.collection.objects:
-				Object.matrix_world = GlobalMatrix @ Object.matrix_world
+			MeshObjectObject.matrix_world = GlobalMatrix @ MeshObjectObject.matrix_world
+			for Child in MeshObjectObject.children:
+				Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+
+			CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
+			for Child in CGeoMeshObject.children:
+				Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+
+			if DRSFile.CollisionShape is not None:
+				CollisionShapeObjectObject.matrix_world = GlobalMatrix @ CollisionShapeObjectObject.matrix_world
+				for Child in CollisionShapeObjectObject.children:
+					Child.location.y *= -1
 
 	ResetViewport()
 
@@ -614,7 +669,7 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 	MeshGrid: MeshSetGrid = DRSFile.MeshSetGrid
 
 	# Create new Grid Object
-	CreateGrid(MeshGrid, MeshSetGridCollection)
+	# CreateGrid(MeshGrid, MeshSetGridCollection)
 
 	if MeshGrid.GroundDecalLength > 0:
 		GroundDecal: CDspMeshFile = DRS().Read(DirName + "\\" + MeshGrid.GroundDecal).CDspMeshFile
@@ -626,8 +681,15 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 		CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
 	if UseApplyTransform:
-		for Object in MeshSetGridCollection.collection.objects:
-			Object.matrix_world = GlobalMatrix @ Object.matrix_world
+		if MeshGrid.GroundDecalLength > 0:
+			GroundDecalObject.matrix_world = GlobalMatrix @ GroundDecalObject.matrix_world
+			for Child in GroundDecalObject.children:
+				Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+
+		if DRSFile.CollisionShape is not None:
+			CollisionShapeObjectObject.matrix_world = GlobalMatrix @ CollisionShapeObjectObject.matrix_world
+			for Child in CollisionShapeObjectObject.children:
+				Child.location.y *= -1
 
 	MeshCounter = 0
 	for MeshModule in MeshGrid.MeshModules:
@@ -652,11 +714,12 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 					MeshObjectObject.parent = ArmatureObject
 					CreateSkinnedMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection, ArmatureObject, BoneList, WeightList)
 
-					if DRSFile.AnimationSet is not None:
-						for AnimationKey in DRSFile.AnimationSet.ModeAnimationKeys:
-							for Variant in AnimationKey.AnimationSetVariants:
-								SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
-								CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
+					# Seems like the MeshSetGrid holds some animations too... but why?
+					# if DRSFile.AnimationSet is not None:
+					# 	for AnimationKey in DRSFile.AnimationSet.ModeAnimationKeys:
+					# 		for Variant in AnimationKey.AnimationSetVariants:
+					# 			SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
+								# CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
 
 					if MeshStateDRSFile.AnimationSet is not None:
 						for AnimationKey in MeshStateDRSFile.AnimationSet.ModeAnimationKeys:
@@ -668,12 +731,22 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 					CreateStaticMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection)
 
 				if MeshStateDRSFile.CollisionShape is not None:
-					CollisionShapeObjectObject = SetObject("CollisionShape" + "_" + StateName, HashOf5Letters, StateCollection)
-					CreateCollisionShapes(MeshStateDRSFile.CollisionShape, CollisionShapeObjectObject)
+					StateCollisionShapeObjectObject = SetObject("CollisionShape" + "_" + StateName, HashOf5Letters, StateCollection)
+					CreateCollisionShapes(MeshStateDRSFile.CollisionShape, StateCollisionShapeObjectObject)
 
 				if UseApplyTransform:
-					for Object in StateCollection.collection.objects:
-						Object.matrix_world = GlobalMatrix @ Object.matrix_world
+					MeshObjectObject.matrix_world = GlobalMatrix @ MeshObjectObject.matrix_world
+					for Child in MeshObjectObject.children:
+						Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+
+					# CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
+					# for Child in CGeoMeshObject.children:
+					# 	Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+
+					if MeshStateDRSFile.CollisionShape is not None:
+						StateCollisionShapeObjectObject.matrix_world = GlobalMatrix @ StateCollisionShapeObjectObject.matrix_world
+						for Child in StateCollisionShapeObjectObject.children:
+							Child.location.y *= -1
 
 	ResetViewport()
 

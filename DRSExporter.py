@@ -1,9 +1,8 @@
+import math
 import bpy
 import bmesh
-import math
-from typing import List
-from mathutils import Euler, Vector, Matrix
-from .DRSFile import DRS, CDspMeshFile, BattleforgeMesh, Face, EmptyString, LevelOfDetail, MeshData, Refraction, Vertex, Materials, Flow, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, JointGroup, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem
+from mathutils import Vector, Matrix
+from .DRSFile import DRS, CDspMeshFile, BattleforgeMesh, Face, EmptyString, LevelOfDetail, MeshData, Refraction, Vertex, Materials, Flow, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, JointGroup, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem, OBBNode
 
 def ShowMessageBox(Message: str, Title: str = "Message Box", Icon: str = "INFO"):
 	def DrawMessageBox(self, context):
@@ -221,6 +220,20 @@ def CreateSphere(Mesh: bpy.types.Mesh) -> SphereShape:
 
 	return _SphereShape
 
+def CreateOBBNode(UniqueMesh: bpy.types.Mesh) -> OBBNode:
+	_OBBNode = OBBNode()
+	_OBBNode.NodeDepth = 0
+	_OBBNode.CurrentTriangleCount = 0
+	_OBBNode.MinimumTrianglesFound = len(UniqueMesh.polygons)
+	_OBBNode.Unknown1 = 0
+	_OBBNode.Unknown2 = 0
+	_OBBNode.Unknown3 = 0
+	_OBBNode.OrientedBoundingBox = CMatCoordinateSystem()
+	_OBBNode.OrientedBoundingBox.Position = Vector((0, 0, 0)) # We need to update this later as we need to calculate the center of the mesh
+	_OBBNode.OrientedBoundingBox.Matrix = Matrix.Identity(3) # We need to update this later as we need to calculate the rotation of the mesh
+
+	return _OBBNode
+
 def CreateUniqueMesh(SourceCollection: bpy.types.Collection) -> bpy.types.Mesh:
 	BM: bmesh.types.BMesh = bmesh.new()
 
@@ -229,7 +242,6 @@ def CreateUniqueMesh(SourceCollection: bpy.types.Collection) -> bpy.types.Mesh:
 		return None
 
 	CDspMeshFileObject = SearchForObject("CDspMeshFile", SourceCollection)
-
 
 	if CDspMeshFileObject is None:
 		return None
@@ -249,6 +261,69 @@ def CreateUniqueMesh(SourceCollection: bpy.types.Collection) -> bpy.types.Mesh:
 
 	return UniqueMesh
 
+def CreateMesh(Mesh: bpy.types.Mesh) -> BattleforgeMesh:
+	Mesh.data.calc_tangents()
+	NewMesh = BattleforgeMesh()
+	NewMesh.VertexCount = len(Mesh.data.vertices)
+	NewMesh.FaceCount = len(Mesh.data.polygons)
+	NewMesh.Faces = []
+
+	NewMesh.MeshCount = 2
+	NewMesh.MeshData = []
+
+	_Mesh0Data = MeshData()
+	_Mesh0Data.Vertices = [Vertex() for i in range(NewMesh.VertexCount)]
+	_Mesh0Data.Revision = 133121
+	_Mesh0Data.VertexSize = 32
+
+	_Mesh1Data = MeshData()
+	_Mesh1Data.Vertices = [Vertex() for i in range(NewMesh.VertexCount)]
+	_Mesh1Data.Revision = 12288
+	_Mesh1Data.VertexSize = 24
+
+	for _Face in Mesh.data.polygons:
+		NewFace = Face()
+		NewFace.Indices = []
+
+		for LoopIndex in _Face.loop_indices:
+			_Vertex = Mesh.data.loops[LoopIndex]
+			Position = Mesh.data.vertices[_Vertex.vertex_index].co
+			Normal = _Vertex.normal
+			_UV = Mesh.data.uv_layers.active.data[LoopIndex].uv
+			_UV.y = -_UV.y
+			_Mesh0Data.Vertices[_Vertex.vertex_index] = Vertex(Position=Position, Normal=Normal, Texture=_UV)
+
+			if NewMesh.MeshCount > 1:
+				Tangent = _Vertex.tangent
+				Bitangent = _Vertex.bitangent_sign * Normal.cross(Tangent)
+				# Switch X and Y as the Tangent is flipped
+				Tangent = Vector((Tangent.y, Tangent.x, Tangent.z))
+				_Mesh1Data.Vertices[_Vertex.vertex_index] = Vertex(Tangent=Tangent, Bitangent=Bitangent)
+
+			NewFace.Indices.append(_Vertex.vertex_index)
+
+		NewMesh.Faces.append(NewFace)
+
+	NewMesh.MeshData.append(_Mesh0Data)
+	NewMesh.MeshData.append(_Mesh1Data)
+
+	# We need to investigate the Bounding Box further, as it seems to be wrong
+	NewMesh.BoundingBoxLowerLeftCorner, NewMesh.BoundingBoxUpperRightCorner = GetBB(Mesh)
+	NewMesh.MaterialID = 25702
+	NewMesh.MaterialParameters = -86061050
+	NewMesh.MaterialStuff = 0
+	# Textures
+	Ref = Refraction()
+	Ref.Length = 1
+	Ref.RGB = [0.0, 0.0, 0.0] # This value could've been edited in Blender so we need to update it
+	NewMesh.Refraction = Ref
+	NewMesh.Materials = Materials() # We cant edit that in Blender, so we set it to default
+	NewMesh.LevelOfDetail = LevelOfDetail() # We don't need to update the LOD
+	NewMesh.EmptyString = EmptyString() # We don't need to update the Empty String
+	NewMesh.Flow = Flow() # We cant edit that in Blender, so we set it to default
+
+	return NewMesh
+
 def CreateCGeoMesh(UniqueMesh: bpy.types.Mesh) -> CGeoMesh:
 	_CGeoMesh = CGeoMesh()
 	_CGeoMesh.IndexCount = len(UniqueMesh.polygons) * 3
@@ -266,11 +341,54 @@ def CreateCGeoMesh(UniqueMesh: bpy.types.Mesh) -> CGeoMesh:
 
 	return _CGeoMesh
 
-def CreateCGeoOBBTree() -> CGeoOBBTree:
-	return CGeoOBBTree()
+def CreateCGeoOBBTree(UniqueMesh: bpy.types.Mesh) -> CGeoOBBTree:
+	_CGeoOBBTree = CGeoOBBTree()
+	_CGeoOBBTree.TriangleCount = len(UniqueMesh.polygons)
+	_CGeoOBBTree.Faces = []
 
-def CreateCDspMeshFile() -> CDspMeshFile:
-	pass
+	for _Face in UniqueMesh.polygons:
+		NewFace = Face()
+		NewFace.Indices = [_Face.vertices[0], _Face.vertices[1], _Face.vertices[2]]
+		_CGeoOBBTree.Faces.append(NewFace)
+
+	_CGeoOBBTree.MatrixCount = 1
+	_CGeoOBBTree.OBBNodes = []
+
+	for _ in range(_CGeoOBBTree.MatrixCount):
+		_CGeoOBBTree.OBBNodes.append(CreateOBBNode(UniqueMesh))
+
+	return _CGeoOBBTree
+
+def CreateCDspMeshFile(SourceCollection: bpy.types.Collection) -> CDspMeshFile:
+	if SourceCollection.objects is None:
+		return None
+
+	CDspMeshFileObject = SearchForObject("CDspMeshFile", SourceCollection)
+
+	if CDspMeshFileObject is None:
+		return None
+
+	_CDspMeshFile = CDspMeshFile()
+	_CDspMeshFile.MeshCount = 0
+
+	for Child in CDspMeshFileObject.children:
+		if Child.type == "MESH":
+			_CDspMeshFile.MeshCount += 1
+			_CDspMeshFile.Meshes.append(CreateMesh(Child))
+
+	_CDspMeshFile.BoundingBoxLowerLeftCorner = Vector((0, 0, 0))
+	_CDspMeshFile.BoundingBoxUpperRightCorner = Vector((0, 0, 0))
+
+	for _Mesh in _CDspMeshFile.Meshes:
+		_CDspMeshFile.BoundingBoxLowerLeftCorner.x = min(_CDspMeshFile.BoundingBoxLowerLeftCorner.x, _Mesh.BoundingBoxLowerLeftCorner.x)
+		_CDspMeshFile.BoundingBoxLowerLeftCorner.y = min(_CDspMeshFile.BoundingBoxLowerLeftCorner.y, _Mesh.BoundingBoxLowerLeftCorner.y)
+		_CDspMeshFile.BoundingBoxLowerLeftCorner.z = min(_CDspMeshFile.BoundingBoxLowerLeftCorner.z, _Mesh.BoundingBoxLowerLeftCorner.z)
+
+		_CDspMeshFile.BoundingBoxUpperRightCorner.x = max(_CDspMeshFile.BoundingBoxUpperRightCorner.x, _Mesh.BoundingBoxUpperRightCorner.x)
+		_CDspMeshFile.BoundingBoxUpperRightCorner.y = max(_CDspMeshFile.BoundingBoxUpperRightCorner.y, _Mesh.BoundingBoxUpperRightCorner.y)
+		_CDspMeshFile.BoundingBoxUpperRightCorner.z = max(_CDspMeshFile.BoundingBoxUpperRightCorner.z, _Mesh.BoundingBoxUpperRightCorner.z)
+
+	return _CDspMeshFile
 
 def CreateJointGroup(Empty = True) -> JointGroup:
 	if Empty:
@@ -317,20 +435,22 @@ def ExportStaticObject(operator, context, filepath: str, SourceCollection: bpy.t
 	if _UniqueMesh is None:
 		ShowMessageBox("Could not create Unique Mesh from Collection, as no CDspMeshFile was found!", "Error", "ERROR")
 		return {"CANCELLED"}
-
 	_CGeoMesh: CGeoMesh = CreateCGeoMesh(_UniqueMesh) # Works perfectly fine
 	# CGeoOBBTree
-	_CGeoOBBTree: CGeoOBBTree = CreateCGeoOBBTree() # Maybe not needed
+	_CGeoOBBTree: CGeoOBBTree = CreateCGeoOBBTree(_UniqueMesh) # Maybe not needed??? We use a simple apporach for now with just one OBBNode, which is the whole mesh
 	# CDspMeshFile
-	_CDspMeshFile: CDspMeshFile = CreateCDspMeshFile()
+	_CDspMeshFile: CDspMeshFile = CreateCDspMeshFile(SourceCollection)
+	if _CDspMeshFile is None:
+		ShowMessageBox("Could not create CDspMeshFile from Collection, as no CDspMeshFile was found!", "Error", "ERROR")
+		return {"CANCELLED"}
 	# JointGroup
-	_JointGroup: JointGroup = CreateJointGroup() # Not needed for static objects
+	_JointGroup: JointGroup = CreateJointGroup() # Not needed for static objects, means we can leave it empty
 	# drwResourceMeta
-	_DrwResourceMeta: DrwResourceMeta = CreateDrwResourceMeta() # Dunno if needed
+	_DrwResourceMeta: DrwResourceMeta = CreateDrwResourceMeta() # Dunno if needed or how to create it
 	# CGeoPrimitiveContainer
-	_CGeoPrimitiveContainer: CGeoPrimitiveContainer = CreateCGeoPrimitiveContainer() # Always empty
+	_CGeoPrimitiveContainer: CGeoPrimitiveContainer = CreateCGeoPrimitiveContainer() # Always empty, weird
 	# CollisionShape
-	_CollisionShape: CollisionShape = CreateCollisionShape(SourceCollection)
+	_CollisionShape: CollisionShape = CreateCollisionShape(SourceCollection) # Works perfectly fine
 	if _CollisionShape is None:
 		ShowMessageBox("Could not create CollisionShape from Collection, as no CollisionShape was found!", "Error", "ERROR")
 		return {"CANCELLED"}

@@ -29,7 +29,7 @@ bl_info = {
 	"tracker_url": ""
 }
 
-@orientation_helper(axis_forward='-X', axis_up='Y')
+@orientation_helper(axis_forward='X', axis_up='-Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
 	"""Import a Battleforge drs/bmg file"""
 	bl_idname = "import_scene.drs"
