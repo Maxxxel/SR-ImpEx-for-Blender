@@ -22,16 +22,14 @@ bl_info = {
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
 	"blender" : (3, 4, 0),
-	"version" : (0, 0, 1),
+	"version" : (0, 0, 3),
 	"location" : "File > Import",
 	"warning" : "",
 	"category" : "Import-Export",
 	"tracker_url": ""
 }
 
-LOADEDDRSMODELS = []
-
-@orientation_helper(axis_forward='-X', axis_up='Y')
+@orientation_helper(axis_forward='X', axis_up='-Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
 	"""Import a Battleforge drs/bmg file"""
 	bl_idname = "import_scene.drs"
@@ -42,17 +40,16 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	ClearScene : BoolProperty(name="Clear Scene", description="Clear the scene before importing", default=True)
 
 	def execute(self, context):
-		keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
-		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
-		keywords["GlobalMatrix"] = global_matrix
+		Keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
+		GlobalMatrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
+		Keywords["GlobalMatrix"] = GlobalMatrix
 
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
-			LoadedModels = LoadDRS(self, context, **keywords)
-			LOADEDDRSMODELS.append(LoadedModels)
+			LoadDRS(self, context, **Keywords)
 			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"):
-			return LoadBMG(self, context, **keywords)
+			return LoadBMG(self, context, **Keywords)
 		else:
 			self.report({'ERROR'}, "Unsupported file type")
 			return {'CANCELLED'}
@@ -63,11 +60,11 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	bl_label = "Export DRS/BMG"
 	filename_ext = ".drs;.bmg"
 	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255)
-	EditModel : BoolProperty(name="Save Edited Model", description="Only edit the model and preserve the DRS Data", default=False)
+	# EditModel : BoolProperty(name="Save Edited Model", description="Only edit the model and preserve the DRS Data", default=False)
+	ExportSelection : BoolProperty(name="Export Selection", description="Only export selected objects", default=True)
 
 	def execute(self, context):
-		Keywords = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
-		Keywords["LoadedDRSModels"] = LOADEDDRSMODELS
+		Keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
 		return SaveDRS(self, context, **Keywords)
 
 class ErrorMessage(bpy.types.Operator):
