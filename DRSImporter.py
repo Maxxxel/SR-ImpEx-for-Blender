@@ -704,13 +704,16 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 				StateName = MeshGridModuleName + "_State_" + str(MeshState.StateNum)
 				StateCollection = SetCollection(StateName, HashOf5Letters, MeshGridModuleCollection)
 
+				CGeoMeshObject = SetObject("CGeoMesh", HashOf5Letters, StateCollection)
+				CreateCGeoMesh(MeshStateDRSFile.CGeoMesh, CGeoMeshObject, StateCollection)
+				MeshObjectObject = SetObject("CDspMeshFile" + "_" + StateName, HashOf5Letters, StateCollection)
+
 				if MeshStateDRSFile.CSkSkeleton is not None:
 					Armature = bpy.data.armatures.new("CSkSkeleton" + "_" + StateName)
 					ArmatureObject = SetObject("Armature" + "_" + StateName, HashOf5Letters, StateCollection, Armature)
 					BoneList: list[DRSBone] = InitSkeleton(MeshStateDRSFile.CSkSkeleton)
 					BuildSkeleton(BoneList, Armature, ArmatureObject)
 					WeightList = InitSkin(MeshStateDRSFile.CDspMeshFile, MeshStateDRSFile.CSkSkinInfo, MeshStateDRSFile.CGeoMesh)
-					MeshObjectObject = SetObject("CDspMeshFile" + "_" + StateName, HashOf5Letters, StateCollection)
 					MeshObjectObject.parent = ArmatureObject
 					CreateSkinnedMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection, ArmatureObject, BoneList, WeightList)
 
@@ -727,7 +730,7 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 								SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
 								CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
 				else:
-					MeshObjectObject = SetObject("CDspMeshFile" + "_" + StateName, HashOf5Letters, StateCollection)
+					# MeshObjectObject = SetObject("CDspMeshFile" + "_" + StateName, HashOf5Letters, StateCollection)
 					CreateStaticMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection)
 
 				if MeshStateDRSFile.CollisionShape is not None:
@@ -739,9 +742,9 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 					for Child in MeshObjectObject.children:
 						Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
 
-					# CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
-					# for Child in CGeoMeshObject.children:
-					# 	Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+					CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
+					for Child in CGeoMeshObject.children:
+						Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
 
 					if MeshStateDRSFile.CollisionShape is not None:
 						StateCollisionShapeObjectObject.matrix_world = GlobalMatrix @ StateCollisionShapeObjectObject.matrix_world
