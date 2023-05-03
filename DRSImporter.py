@@ -603,6 +603,9 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 
 	UnitCollection = SetCollection(BaseName, HashOf5Letters, bpy.context.view_layer.layer_collection)
 	ModelDataCollection = SetCollection("ModelData", HashOf5Letters, UnitCollection)
+	CGeoMeshObject = SetObject("CGeoMesh", HashOf5Letters, ModelDataCollection)
+	CreateCGeoMesh(DRSFile.CGeoMesh, CGeoMeshObject, ModelDataCollection)
+	MeshObjectObject = SetObject("CDspMeshFile", HashOf5Letters, ModelDataCollection)
 
 	if DRSFile.CSkSkeleton is not None:
 		Armature = bpy.data.armatures.new("CSkSkeleton")
@@ -610,7 +613,6 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 		BoneList: list[DRSBone] = InitSkeleton(DRSFile.CSkSkeleton)
 		BuildSkeleton(BoneList, Armature, ArmatureObject)
 		WeightList = InitSkin(DRSFile.CDspMeshFile, DRSFile.CSkSkinInfo, DRSFile.CGeoMesh)
-		MeshObjectObject = SetObject("CDspMeshFile", HashOf5Letters, ModelDataCollection)
 		MeshObjectObject.parent = ArmatureObject
 		CreateSkinnedMesh(DRSFile.CDspMeshFile, DirName, MeshObjectObject, ModelDataCollection, ArmatureObject, BoneList, WeightList)
 
@@ -619,34 +621,29 @@ def LoadDRS(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 				for Variant in AnimationKey.AnimationSetVariants:
 					SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
 					CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
-
-		if UseApplyTransform:
-			ArmatureObject.matrix_world = GlobalMatrix @ ArmatureObject.matrix_world
 	else:
-		CGeoMeshObject = SetObject("CGeoMesh", HashOf5Letters, ModelDataCollection)
-		CreateCGeoMesh(DRSFile.CGeoMesh, CGeoMeshObject, ModelDataCollection)
 		# CGeoOBBTreeMeshObject = SetObject("CGeoOBBTreeMesh", HashOf5Letters, ModelDataCollection)
 		# CreateCGeoOBBTree(DRSFile.CGeoOBBTree, DRSFile.CGeoMesh, CGeoOBBTreeMeshObject, ModelDataCollection)
-		MeshObjectObject = SetObject("CDspMeshFile", HashOf5Letters, ModelDataCollection)
 		CreateStaticMesh(DRSFile.CDspMeshFile, DirName, MeshObjectObject, ModelDataCollection)
 
-		if DRSFile.CollisionShape is not None:
-			CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
-			CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
+	if DRSFile.CollisionShape is not None:
+		CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
+		CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
-		if UseApplyTransform:
+	if UseApplyTransform:
+		if DRSFile.CSkSkeleton is not None:
+			ArmatureObject.matrix_world = GlobalMatrix @ ArmatureObject.matrix_world
+			ArmatureObject.scale = (1, -1, 1)
+		else:
 			MeshObjectObject.matrix_world = GlobalMatrix @ MeshObjectObject.matrix_world
-			for Child in MeshObjectObject.children:
-				Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+			MeshObjectObject.scale = (1, -1, 1)
 
-			CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
-			for Child in CGeoMeshObject.children:
-				Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+		CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
+		CGeoMeshObject.scale = (1, -1, 1)
 
-			if DRSFile.CollisionShape is not None:
-				CollisionShapeObjectObject.matrix_world = GlobalMatrix @ CollisionShapeObjectObject.matrix_world
-				for Child in CollisionShapeObjectObject.children:
-					Child.location.y *= -1
+		if DRSFile.CollisionShape is not None:
+			CollisionShapeObjectObject.matrix_world = GlobalMatrix @ CollisionShapeObjectObject.matrix_world
+			CollisionShapeObjectObject.scale = (1, -1, 1)
 
 	ResetViewport()
 
@@ -683,13 +680,11 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 	if UseApplyTransform:
 		if MeshGrid.GroundDecalLength > 0:
 			GroundDecalObject.matrix_world = GlobalMatrix @ GroundDecalObject.matrix_world
-			for Child in GroundDecalObject.children:
-				Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+			GroundDecalObject.scale = (1, -1, 1)
 
 		if DRSFile.CollisionShape is not None:
 			CollisionShapeObjectObject.matrix_world = GlobalMatrix @ CollisionShapeObjectObject.matrix_world
-			for Child in CollisionShapeObjectObject.children:
-				Child.location.y *= -1
+			CollisionShapeObjectObject.scale = (1, -1, 1)
 
 	MeshCounter = 0
 	for MeshModule in MeshGrid.MeshModules:
@@ -730,7 +725,6 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 								SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
 								CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
 				else:
-					# MeshObjectObject = SetObject("CDspMeshFile" + "_" + StateName, HashOf5Letters, StateCollection)
 					CreateStaticMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection)
 
 				if MeshStateDRSFile.CollisionShape is not None:
@@ -738,18 +732,19 @@ def LoadBMG(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix
 					CreateCollisionShapes(MeshStateDRSFile.CollisionShape, StateCollisionShapeObjectObject)
 
 				if UseApplyTransform:
-					MeshObjectObject.matrix_world = GlobalMatrix @ MeshObjectObject.matrix_world
-					for Child in MeshObjectObject.children:
-						Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+					if MeshStateDRSFile.CSkSkeleton is not None:
+						ArmatureObject.matrix_world = GlobalMatrix @ ArmatureObject.matrix_world
+						ArmatureObject.scale = (1, -1, 1)
+					else:
+						MeshObjectObject.matrix_world = GlobalMatrix @ MeshObjectObject.matrix_world
+						MeshObjectObject.scale = (1, -1, 1)
 
 					CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
-					for Child in CGeoMeshObject.children:
-						Child.data.transform(Matrix.Scale(-1, 4, Vector((0, 1, 0))))
+					CGeoMeshObject.scale = (1, -1, 1)
 
 					if MeshStateDRSFile.CollisionShape is not None:
 						StateCollisionShapeObjectObject.matrix_world = GlobalMatrix @ StateCollisionShapeObjectObject.matrix_world
-						for Child in StateCollisionShapeObjectObject.children:
-							Child.location.y *= -1
+						StateCollisionShapeObjectObject.scale = (1, -1, 1)
 
 	ResetViewport()
 
