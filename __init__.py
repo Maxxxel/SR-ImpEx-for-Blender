@@ -22,7 +22,7 @@ bl_info = {
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
 	"blender" : (3, 4, 0),
-	"version" : (0, 0, 3),
+	"version" : (1, 0, 0),
 	"location" : "File > Import",
 	"warning" : "",
 	"category" : "Import-Export",
@@ -62,19 +62,11 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255)
 	# EditModel : BoolProperty(name="Save Edited Model", description="Only edit the model and preserve the DRS Data", default=False)
 	ExportSelection : BoolProperty(name="Export Selection", description="Only export selected objects", default=True)
+	UseApplyTransform : BoolProperty(name="Apply Transform", description="Apply a transformation on export. Dont use that if you imported the file without transformation!", default=True)
 
 	def execute(self, context):
 		Keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
 		return SaveDRS(self, context, **Keywords)
-
-class ErrorMessage(bpy.types.Operator):
-	bl_idname = 'ui.error_message'
-	bl_label = "Test error"
-	bl_description = "Some useless text"
-
-	def execute(self, context):
-		self.report({'INFO'}, message="ERROR: SOME STUPID  MESSAGE")
-		return {'CANCELLED'}
 
 def menu_func_import(self, context):
 	self.layout.operator(ImportBFModel.bl_idname, text="Battleforge (.drs)")
@@ -85,14 +77,12 @@ def menu_func_export(self, context):
 def register():
 	bpy.utils.register_class(ImportBFModel)
 	bpy.utils.register_class(ExportBFModel)
-	bpy.utils.register_class(ErrorMessage)
 	bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 def unregister():
 	bpy.utils.unregister_class(ImportBFModel)
 	bpy.utils.unregister_class(ExportBFModel)
-	bpy.utils.unregister_class(ErrorMessage)
 	bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
 
