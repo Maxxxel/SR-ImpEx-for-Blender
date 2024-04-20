@@ -6,6 +6,7 @@ from typing import List, Tuple
 import bpy
 import bmesh
 from mathutils import Vector, Matrix
+from numpy import mat
 from .drs_file import DRS, CDspMeshFile, BattleforgeMesh, Face, EmptyString, LevelOfDetail, MeshData, Refraction, Textures, Texture, Vertex, Materials, Flow, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, CDspJointMap, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem, OBBNode
 
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -15,6 +16,13 @@ def show_message_box(msg: str, Title: str = "Message Box", Icon: str = "INFO") -
 		self.layout.label(text=msg)
 
 	bpy.context.window_manager.popup_menu(DrawMessageBox, title=Title, icon=Icon)
+
+def ResetViewport() -> None:
+	for Area in bpy.context.screen.areas:
+		if Area.type in ['IMAGE_EDITOR', 'VIEW_3D']:
+			Area.tag_redraw()
+
+	bpy.context.view_layer.update()
 
 def search_for_object(object_name: str, collection: bpy.types.Collection) -> bpy.types.Object | None:
 	'''Search for an object in a collection and its children by name. Returns the object if found, otherwise None.'''
@@ -28,6 +36,43 @@ def search_for_object(object_name: str, collection: bpy.types.Collection) -> bpy
 			return found_object
 
 	return None
+
+def apply_mirror_transform_to_mesh(mesh_obj, mirror_matrix):
+	bm = bmesh.new()
+	bm.from_mesh(mesh_obj.data)
+	
+	# Apply the mirror transformation
+	bmesh.ops.transform(bm, matrix=mirror_matrix, verts=bm.verts)
+	
+	# Recalculate normals
+	# bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+	
+	# Write the changes back to the mesh
+	bm.to_mesh(mesh_obj.data)
+	mesh_obj.data.update()
+	bm.free()
+
+def mirror_collection_objects(collection, axis='Y'):
+	# Mapping from axis character to the matrix index
+	axis_dict = {'X': 0, 'Y': 1, 'Z': 2}
+	axis_index = axis_dict[axis.upper()]
+
+	# Create the mirror matrix
+	mirror_matrix = Matrix.Scale(1, 4)
+	mirror_matrix[axis_index][axis_index] = -1
+	
+	# Ingame i need to apply x: 90, y: 270, z: 0. FIX THAT so i dont need to apply it in the game
+	mirror_matrix = Matrix.Rotation(math.radians(90), 4, 'X') @ Matrix.Rotation(math.radians(270), 4, 'Y') @ Matrix.Rotation(math.radians(0), 4, 'Z') @ mirror_matrix
+ 
+	# Recursively apply the mirror transformation to all mesh objects in the collection
+	def recurse_and_apply(obj):
+		if obj.type == 'MESH':
+			apply_mirror_transform_to_mesh(obj, mirror_matrix)
+		for child in obj.children:
+			recurse_and_apply(child)
+			
+	for obj in collection.objects:
+		recurse_and_apply(obj)
 
 def get_bb(obj) -> Tuple[Vector, Vector]:
 	'''Get the Bounding Box of an Object. Returns the minimum and maximum Vector of the Bounding Box.'''
@@ -76,118 +121,6 @@ def get_scene_bb(collection: bpy.types.Collection) -> Tuple[Vector, Vector]:
 				bb_max.z = BBMaxObject.z
 
 	return bb_min, bb_max
-
-# def update_cdspmeshfile(source_file: DRS, source_collection: bpy.types.Collection) -> None:
-# 	# We override the DRS Data with the Blender Data
-# 	# As the Meshdata in the DRS File is well known, we can just use the Blender Data to recreate the Mesh(es)
-# 	new_mesh_data = CDspMeshFile()
-# 	new_mesh_data.Magic = 1314189598
-# 	new_mesh_data.Zero = 0
-# 	new_mesh_data.MeshCount = len([True for obj in source_collection.objects if obj.type == "MESH"])
-# 	new_mesh_data.SomePoints = [Vector((0, 0, 0, 0)) for i in range(3)]
-# 	# We need to investigate the Bounding Box further, as it seems to be wrong
-# 	new_mesh_data.BoundingBoxLowerLeftCorner, new_mesh_data.BoundingBoxUpperRightCorner = get_scene_bb(source_collection)
-# 	print("Old BB: ", source_file.Mesh.BoundingBoxLowerLeftCorner, source_file.Mesh.BoundingBoxUpperRightCorner)
-# 	print("New BB: ", new_mesh_data.BoundingBoxLowerLeftCorner, new_mesh_data.BoundingBoxUpperRightCorner)
-
-# 	# Create the new Mesh Data
-# 	new_mesh_data.Meshes = []
-
-# 	for obj in source_collection.objects:
-# 		if obj.type == "MESH":
-# 			# Set the Mesh active
-# 			bpy.context.view_layer.objects.active = obj
-# 			group_names = []
-# 			if obj.vertex_groups is not None:
-# 				for group in obj.vertex_groups:
-# 					group_names.append(group.name)
-
-# 			Mesh = obj.data
-# 			Mesh.calc_tangents()
-
-# 			new_mesh = BattleforgeMesh()
-# 			new_mesh.VertexCount = len(Mesh.vertices)
-# 			new_mesh.FaceCount = len(Mesh.polygons)
-# 			new_mesh.Faces = []
-
-# 			new_mesh.MeshCount = 3 if source_collection.objects[0].data.keys is not None else 2
-# 			new_mesh.MeshData = []
-
-# 			_mesh_0_data = MeshData()
-# 			_mesh_0_data.Vertices = [Vertex() for i in range(new_mesh.VertexCount)]
-# 			_mesh_0_data.Revision = 133121
-# 			_mesh_0_data.VertexSize = 32
-
-# 			_mesh_1_data = MeshData()
-# 			_mesh_1_data.Vertices = [Vertex() for i in range(new_mesh.VertexCount)]
-# 			_mesh_1_data.Revision = 12288
-# 			_mesh_1_data.VertexSize = 24
-
-# 			_Mesh2Data = MeshData()
-# 			_Mesh2Data.Vertices = [Vertex() for i in range(new_mesh.VertexCount)]
-# 			_Mesh2Data.Revision = 12
-# 			_Mesh2Data.VertexSize = 8
-
-# 			for _face in Mesh.polygons:
-# 				new_face = Face()
-# 				new_face.Indices = []
-
-# 				for LoopIndex in _face.loop_indices:
-# 					_vertex = Mesh.loops[LoopIndex]
-# 					Position = Mesh.vertices[_vertex.vertex_index].co
-# 					Normal = _vertex.normal
-# 					_UV = Mesh.uv_layers.active.data[LoopIndex].uv
-# 					_UV.y = -_UV.y
-# 					_mesh_0_data.Vertices[_vertex.vertex_index] = (Vertex(Position=Position, Normal=Normal, Texture=_UV))
-
-# 					if new_mesh.MeshCount > 1:
-# 						Tangent = _vertex.tangent
-# 						Bitangent = _vertex.bitangent_sign * Normal.cross(Tangent)
-# 						_mesh_1_data.Vertices[_vertex.vertex_index] = (Vertex(Tangent=Tangent, Bitangent=Bitangent))
-
-# 						_BoneIndices = []
-# 						_BoneWeights = []
-# 						for GroupIndex, _ in enumerate(group_names):
-# 							Weight = 0.0
-# 							try:
-# 								Weight = Mesh.vertices[_vertex.vertex_index].groups[GroupIndex].weight
-# 								Weight = int(Weight * 255)
-# 								_BoneIndices.append(GroupIndex)
-# 								_BoneWeights.append(Weight)
-# 							except IndexError:
-# 								while len(_BoneIndices) < 4:
-# 									_BoneIndices.append(1)
-# 									_BoneWeights.append(0)
-# 								break
-
-# 						_Mesh2Data.Vertices[_vertex.vertex_index] = (Vertex(BoneIndices=_BoneIndices, RawWeights=_BoneWeights))
-
-# 					new_face.Indices.append(_vertex.vertex_index)
-
-# 				new_mesh.Faces.append(new_face)
-
-# 			new_mesh.MeshData.append(_mesh_0_data)
-# 			new_mesh.MeshData.append(_mesh_1_data)
-# 			new_mesh.MeshData.append(_Mesh2Data)
-
-# 			# We need to investigate the Bounding Box further, as it seems to be wrong
-# 			new_mesh.BoundingBoxLowerLeftCorner, new_mesh.BoundingBoxUpperRightCorner = get_bb(object)
-# 			new_mesh.MaterialID = 25702
-# 			new_mesh.MaterialParameters = -86061050
-# 			new_mesh.MaterialStuff = 0
-# 			# Textures
-# 			Ref = Refraction()
-# 			Ref.Length = 1
-# 			Ref.RGB = [0.0, 0.0, 0.0] # This value could've been edited in Blender so we need to update it
-# 			new_mesh.Refraction = Ref
-# 			new_mesh.Materials = Materials() # We cant edit that in Blender, so we set it to default
-# 			new_mesh.LevelOfDetail = LevelOfDetail() # We don't need to update the LOD
-# 			new_mesh.EmptyString = EmptyString() # We don't need to update the Empty String
-# 			new_mesh.Flow = Flow() # We cant edit that in Blender, so we set it to default
-# 			new_mesh_data.Meshes.append(new_mesh)
-
-# 	# Update the DRS File
-# 	source_file.Mesh = new_mesh_data
 
 def create_cylinder(mesh: bpy.types.Mesh) -> CylinderShape:
 	'''Create a Cylinder Shape from a Mesh Object.'''
@@ -305,7 +238,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 			position = mesh.data.vertices[vertex.vertex_index].co
 			normal = vertex.normal
 			#TODO: Maybe we need to flip the Y value of the Normal as we convert from OpenGL to DirectX
-			uv = mesh.data.uv_layers.active.data[index].uv
+			uv = mesh.data.uv_layers.active.data[index].uv.copy()
 			uv.y = -uv.y
 			_mesh_0_data.Vertices[vertex.vertex_index] = Vertex(Position=position, Normal=normal, Texture=uv)
 
@@ -409,6 +342,8 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 
 			# Remove the Image
 			bpy.data.images.remove(_Img)
+		else:
+			ValueError("The NormalMap Texture is not an Image or the Image is None!")
 
 	if MetallicMap.is_linked or RoughnessMap.is_linked or FluMap.is_linked or EmissionMap.is_linked:
 		new_mesh.Textures.Length+=1
@@ -424,7 +359,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 
 		if MetallicMap.is_linked:
 			# This can either be a Map or a Separate RGB Node
-			if MetallicMap.links[0].from_node.type == "SEPRGB":
+			if MetallicMap.links[0].from_node.type == "SEPRGB" or MetallicMap.links[0].from_node.type == "SEPARATE_COLOR":
 				# We ned to get the Input
 				img_R = MetallicMap.links[0].from_node.inputs[0].links[0].from_node.image
 				assert img_R is not None and img_R.type == "IMAGE"
@@ -435,9 +370,9 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 				pixels_R = img_R.pixels[:]
 		if RoughnessMap.is_linked:
 			# This can either be a Map or a Separate RGB Node
-			if RoughnessMap.links[0].from_node.type == "SEPRGB":
+			if RoughnessMap.links[0].from_node.type == "SEPRGB" or RoughnessMap.links[0].from_node.type == "SEPARATE_COLOR":
 				# We ned to get the Input
-				img_G = RoughnessMap.links[0].from_node.image
+				img_G = RoughnessMap.links[0].from_node.inputs[0].links[0].from_node.image
 				assert img_G is not None and img_G.type == "IMAGE"
 				pixels_G = img_G.pixels[:]
 			else:
@@ -448,7 +383,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 			pass
 		if EmissionMap.is_linked:
 			# This can either be a Map or a Separate RGB Node
-			if EmissionMap.links[0].from_node.type == "SEPRGB":
+			if EmissionMap.links[0].from_node.type == "SEPRGB" or EmissionMap.links[0].from_node.type == "SEPARATE_COLOR":
 				# We ned to get the Input
 				img_A = EmissionMap.links[0].from_node.inputs[0].links[0].from_node.image
 				assert img_A is not None and img_A.type == "IMAGE"
@@ -470,6 +405,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 			Height = img_A.size[1]
 		else:
 			ValueError("No Image found for the Metallic Map!")
+
 		# Combine the Images
 		new_img = bpy.data.images.new(name=MetMapTexture.Name, width=Width, height=Height, alpha=True, float_buffer=False)
 		new_pixels = []
@@ -618,12 +554,16 @@ def create_collision_shape(source_collection: bpy.types.Collection) -> Collision
 
 	return _collision_shape
 
-def export_static_object(operator, context, filepath: str, source_collection: bpy.types.Collection) -> None:
+def export_static_object(operator, context, filepath: str, source_collection: bpy.types.Collection, use_apply_transform: bool, global_matrix: Matrix) -> None:
 	'''Export a Static Object to a DRS File.'''
 	# TODO: We need to set the world matrix correctly for Battleforge Game Engine -> Matrix.Identity(4)
 	model_name = source_collection.name.split("_")[1]
 	# Create an empty DRS File
 	new_drs_file: DRS = DRS()
+
+	if use_apply_transform:
+		mirror_collection_objects(source_collection, axis='Y')
+
 	unique_mesh = create_unique_mesh(source_collection) # Works perfectly fine
 	if unique_mesh is None:
 		show_message_box("Could not create Unique Mesh from Collection, as no CDspMeshFile was found!", "Error", "ERROR")
@@ -639,7 +579,7 @@ def export_static_object(operator, context, filepath: str, source_collection: bp
 	_cdsp_jointmap: CDspJointMap = create_cdsp_jointmap() # Not needed for static objects, means we can leave it empty
 	new_drs_file.PushNode("CDspJointMap", _cdsp_jointmap)
 	# CDspMeshFile
-	_cdsp_meshfile: CDspMeshFile = create_cdsp_meshfile(source_collection, model_name, filepath)
+	_cdsp_meshfile: CDspMeshFile = create_cdsp_meshfile(source_collection, model_name, filepath) # Works perfectly fine
 	new_drs_file.PushNode("CDspMeshFile", _cdsp_meshfile)
 	# drwResourceMeta
 	_drw_resource_meta: DrwResourceMeta = create_drw_resource_meta() # Dunno if needed or how to create it
@@ -679,7 +619,7 @@ def verify_models(source_collection: bpy.types.Collection):
 
 	return True
 
-def save_drs(operator, context, filepath=""):
+def save_drs(operator, context, filepath="", use_apply_transform=True, global_matrix=None):
 	'''Save the DRS File.'''
 	# Get the right Collection
 	source_collection: bpy.types.Collection = None
@@ -706,7 +646,7 @@ def save_drs(operator, context, filepath=""):
 	# Check the model's type, based on the Collection's name: DRSModel_Name_Type
 	# Type can be: Static for now (later we can add Skinned, Destructable, Effect, etc.)
 	if source_collection.name.find("Static") != -1:
-		export_static_object(operator, context, filepath, source_collection)
+		export_static_object(operator, context, filepath, source_collection, use_apply_transform, global_matrix)
 
 	# 	# CollisionShape if static
 	# elif LoadedDRSModels is not None:
