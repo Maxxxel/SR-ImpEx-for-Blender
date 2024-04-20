@@ -24,7 +24,7 @@ bl_info = {
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
 	"blender" : (4, 0, 0),
-	"version" : (2, 0, 0),
+	"version" : (2, 0, 1),
 	"location" : "File > Import",
 	"warning" : "",
 	"category" : "Import-Export",
@@ -47,7 +47,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	def execute(self, context):
 		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
 		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
-		keywords["GlobalMatrix"] = global_matrix
+		keywords["global_matrix"] = global_matrix
 
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
@@ -59,15 +59,19 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 			self.report({'ERROR'}, "Unsupported file type")
 			return {'CANCELLED'}
 
+@orientation_helper(axis_forward='-X', axis_up='Y')
 class ExportBFModel(bpy.types.Operator, ExportHelper):
 	"""Export a Battleforge drs/bmg file"""
 	bl_idname = "export_scene.drs"
 	bl_label = "Export DRS"
 	filename_ext = ".drs"
 	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255) # type: ignore # ignore
+	use_apply_transform : BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True) # type: ignore # ignore
 
 	def execute(self, context):
 		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
+		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
+		keywords["global_matrix"] = global_matrix
 		return save_drs(self, context, **keywords)
 
 class NewBFScene(bpy.types.Operator):

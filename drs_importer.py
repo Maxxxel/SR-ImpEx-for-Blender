@@ -590,13 +590,13 @@ def ClearBlenderScene():
 
 	SCENECREATED = False
 
-def load_drs(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix=None, ClearScene=True):
+def load_drs(operator, context, filepath="", use_apply_transform=True, global_matrix=None, clear_scene=True):
 	BaseName = os.path.basename(filepath).split(".")[0]
 	HashOf5Letters = hashlib.shake_256(BaseName.encode()).hexdigest(5)
 	HashOf5Letters = ''.join(random.sample(HashOf5Letters, len(HashOf5Letters)))
 	DirName = os.path.dirname(filepath)
 
-	if ClearScene:
+	if clear_scene:
 		ClearBlenderScene()
 
 	CreateBattleforgeScene()
@@ -631,30 +631,30 @@ def load_drs(operator, context, filepath="", UseApplyTransform=True, GlobalMatri
 		CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
 		CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
-	if UseApplyTransform:
+	if use_apply_transform:
 		if DRSFile.CSkSkeleton is not None:
-			ArmatureObject.matrix_world = GlobalMatrix @ ArmatureObject.matrix_world
+			ArmatureObject.matrix_world = global_matrix @ ArmatureObject.matrix_world
 			ArmatureObject.scale = (1, -1, 1)
 		else:
-			MeshObjectObject.matrix_world = GlobalMatrix @ MeshObjectObject.matrix_world
+			MeshObjectObject.matrix_world = global_matrix @ MeshObjectObject.matrix_world
 			MeshObjectObject.scale = (1, -1, 1)
 
-		CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
+		CGeoMeshObject.matrix_world = global_matrix @ CGeoMeshObject.matrix_world
 		CGeoMeshObject.scale = (1, -1, 1)
 
 		if DRSFile.CollisionShape is not None:
-			CollisionShapeObjectObject.matrix_world = GlobalMatrix @ CollisionShapeObjectObject.matrix_world
+			CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
 			CollisionShapeObjectObject.scale = (1, -1, 1)
 
 	ResetViewport()
 
-def load_bmg(operator, context, filepath="", UseApplyTransform=True, GlobalMatrix=None, ClearScene=True):
+def load_bmg(operator, context, filepath="", use_apply_transform=True, global_matrix=None, clear_scene=True):
 	BaseName = os.path.basename(filepath).split(".")[0]
 	HashOf5Letters = hashlib.shake_256(BaseName.encode()).hexdigest(5)
 	HashOf5Letters = ''.join(random.sample(HashOf5Letters, len(HashOf5Letters)))
 	DirName = os.path.dirname(filepath)
 
-	if ClearScene:
+	if clear_scene:
 		ClearBlenderScene()
 
 	CreateBattleforgeScene()
@@ -678,13 +678,13 @@ def load_bmg(operator, context, filepath="", UseApplyTransform=True, GlobalMatri
 		CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, MeshSetGridCollection)
 		CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
-	if UseApplyTransform:
+	if use_apply_transform:
 		if MeshGrid.GroundDecalLength > 0:
-			GroundDecalObject.matrix_world = GlobalMatrix @ GroundDecalObject.matrix_world
+			GroundDecalObject.matrix_world = global_matrix @ GroundDecalObject.matrix_world
 			GroundDecalObject.scale = (1, -1, 1)
 
 		if DRSFile.CollisionShape is not None:
-			CollisionShapeObjectObject.matrix_world = GlobalMatrix @ CollisionShapeObjectObject.matrix_world
+			CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
 			CollisionShapeObjectObject.scale = (1, -1, 1)
 
 	MeshCounter = 0
@@ -732,19 +732,19 @@ def load_bmg(operator, context, filepath="", UseApplyTransform=True, GlobalMatri
 					StateCollisionShapeObjectObject = SetObject("CollisionShape" + "_" + StateName, HashOf5Letters, StateCollection)
 					CreateCollisionShapes(MeshStateDRSFile.CollisionShape, StateCollisionShapeObjectObject)
 
-				if UseApplyTransform:
+				if use_apply_transform:
 					if MeshStateDRSFile.CSkSkeleton is not None:
-						ArmatureObject.matrix_world = GlobalMatrix @ ArmatureObject.matrix_world
+						ArmatureObject.matrix_world = global_matrix @ ArmatureObject.matrix_world
 						ArmatureObject.scale = (1, -1, 1)
 					else:
-						MeshObjectObject.matrix_world = GlobalMatrix @ MeshObjectObject.matrix_world
+						MeshObjectObject.matrix_world = global_matrix @ MeshObjectObject.matrix_world
 						MeshObjectObject.scale = (1, -1, 1)
 
-					CGeoMeshObject.matrix_world = GlobalMatrix @ CGeoMeshObject.matrix_world
+					CGeoMeshObject.matrix_world = global_matrix @ CGeoMeshObject.matrix_world
 					CGeoMeshObject.scale = (1, -1, 1)
 
 					if MeshStateDRSFile.CollisionShape is not None:
-						StateCollisionShapeObjectObject.matrix_world = GlobalMatrix @ StateCollisionShapeObjectObject.matrix_world
+						StateCollisionShapeObjectObject.matrix_world = global_matrix @ StateCollisionShapeObjectObject.matrix_world
 						StateCollisionShapeObjectObject.scale = (1, -1, 1)
 
 	ResetViewport()
