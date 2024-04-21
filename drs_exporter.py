@@ -37,42 +37,50 @@ def search_for_object(object_name: str, collection: bpy.types.Collection) -> bpy
 
 	return None
 
-def apply_mirror_transform_to_mesh(mesh_obj, mirror_matrix):
-	bm = bmesh.new()
-	bm.from_mesh(mesh_obj.data)
+def mirror_mesh_on_axis(obj, axis='y'):
+	"""
+	Mirror a mesh along a specified axis and correctly handle normals.
 	
-	# Apply the mirror transformation
-	bmesh.ops.transform(bm, matrix=mirror_matrix, verts=bm.verts)
+	Parameters:
+	obj (bpy.types.Object): The object to mirror.
+	axis (str): Axis to mirror along, should be 'x', 'y', or 'z'.
+	"""
+	# Validate axis
+	axis = axis.lower()
+	if axis not in ['x', 'y', 'z']:
+		raise ValueError("Invalid axis. Use 'x', 'y', or 'z'.")
 	
-	# Recalculate normals
-	# bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+	# Get the mesh from the object
+	me = obj.data
+	# Calculate split normals
+	me.calc_normals_split()
+	me.use_auto_smooth = True
 	
-	# Write the changes back to the mesh
-	bm.to_mesh(mesh_obj.data)
-	mesh_obj.data.update()
-	bm.free()
-
-def mirror_collection_objects(collection, axis='Y'):
-	# Mapping from axis character to the matrix index
-	axis_dict = {'X': 0, 'Y': 1, 'Z': 2}
-	axis_index = axis_dict[axis.upper()]
-
-	# Create the mirror matrix
-	mirror_matrix = Matrix.Scale(1, 4)
-	mirror_matrix[axis_index][axis_index] = -1
+	# Axis indices map to coordinates (x, y, z) -> (0, 1, 2)
+	axis_idx = {'x': 0, 'y': 1, 'z': 2}[axis]
 	
-	# Ingame i need to apply x: 90, y: 270, z: 0. FIX THAT so i dont need to apply it in the game
-	mirror_matrix = Matrix.Rotation(math.radians(90), 4, 'X') @ Matrix.Rotation(math.radians(270), 4, 'Y') @ Matrix.Rotation(math.radians(0), 4, 'Z') @ mirror_matrix
- 
-	# Recursively apply the mirror transformation to all mesh objects in the collection
-	def recurse_and_apply(obj):
-		if obj.type == 'MESH':
-			apply_mirror_transform_to_mesh(obj, mirror_matrix)
-		for child in obj.children:
-			recurse_and_apply(child)
-			
-	for obj in collection.objects:
-		recurse_and_apply(obj)
+	# Prepare to store mirrored split normals
+	mirror_split_normals = []
+	
+	# Iterate over polygons to modify normals
+	for poly in me.polygons:
+		reverse_normals_indices = [poly.loop_indices[0]] + [i for i in reversed(poly.loop_indices[1:])]
+		for i in reverse_normals_indices:
+			loop = me.loops[i]
+			normal = list(loop.normal)
+			normal[axis_idx] *= -1  # Mirror normal on the specified axis
+			mirror_split_normals.append(tuple(normal))
+	
+	# Mirror vertices along the specified axis
+	for v in me.vertices:
+		co = list(v.co)
+		co[axis_idx] *= -1  # Multiply coordinate on axis by -1
+		v.co = tuple(co)
+	
+	# Apply the mirrored normals
+	me.flip_normals()
+	me.normals_split_custom_set(mirror_split_normals)
+	me.update()
 
 def get_bb(obj) -> Tuple[Vector, Vector]:
 	'''Get the Bounding Box of an Object. Returns the minimum and maximum Vector of the Bounding Box.'''
@@ -560,9 +568,11 @@ def export_static_object(operator, context, filepath: str, source_collection: bp
 	model_name = source_collection.name.split("_")[1]
 	# Create an empty DRS File
 	new_drs_file: DRS = DRS()
-
+ 
 	if use_apply_transform:
-		mirror_collection_objects(source_collection, axis='Y')
+		for obj in source_collection.objects:
+			if obj.type == "MESH":
+				mirror_mesh_on_axis(obj, axis='y')
 
 	unique_mesh = create_unique_mesh(source_collection) # Works perfectly fine
 	if unique_mesh is None:
