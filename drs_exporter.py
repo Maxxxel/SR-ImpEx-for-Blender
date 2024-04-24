@@ -317,9 +317,9 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 
 				# convert the image to dds dxt3 by using texconv.exe in the resources folder
 				output_folder = os.path.dirname(filepath)
-				args = ["-ft", "dds", "-f", "DXT3", "-dx9", "-pow2", "-y", ColMapTexture.Name + ".dds", "-o", output_folder]
+				# TODO: If Alpha is connected, we need to use DXT5 instead of DXT1
+				args = ["-ft", "dds", "-f", "DXT1", "-dx9", "-pow2", "-srgbo", "-dx9", "-y", ColMapTexture.Name + ".dds", "-o", output_folder]
 				subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
-
 				# Remove the Temp File
 				os.remove(_TempPath)
 
@@ -346,7 +346,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 
 			# convert the image to dds dxt1 by using texconv.exe in the resources folder
 			output_folder = os.path.dirname(filepath)
-			args = ["-ft", "dds", "-f", "DXT1", "-dx9", "-pow2", "-y", NorMapTexture.Name + ".dds", "-o", output_folder]
+			args = ["-ft", "dds", "-f", "DXT1", "-dx9", "-pow2", "-srgbo", "-at", "0.0", "-y", NorMapTexture.Name + ".dds", "-o", output_folder]
 			subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
 
 			# Remove the Temp File
