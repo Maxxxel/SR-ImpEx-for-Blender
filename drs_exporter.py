@@ -298,6 +298,10 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 				break
 	# Textures
 	new_mesh.Textures = Textures()
+	# Check if the ColorMap exists
+	if ColorMap is None:
+		ValueError("The ColorMap Node is unset!")
+
 	if ColorMap.is_linked:
 		new_mesh.Textures.Length+=1
 		ColMapTexture = Texture()
@@ -313,12 +317,13 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 			
 			if _Img is not None:
 				_TempPath = bpy.path.abspath("//") + ColMapTexture.Name + ".png"
-				_Img.save_render(filepath=_TempPath)
+				_Img.file_format = "PNG"
+				_Img.save(filepath=_TempPath)
 
 				# convert the image to dds dxt3 by using texconv.exe in the resources folder
 				output_folder = os.path.dirname(filepath)
 				# TODO: If Alpha is connected, we need to use DXT5 instead of DXT1
-				args = ["-ft", "dds", "-f", "DXT1", "-dx9", "-pow2", "-srgbo", "-dx9", "-y", ColMapTexture.Name + ".dds", "-o", output_folder]
+				args = ["-ft", "dds", "-f", "DXT5", "-dx9", "-pow2", "-srgb", "-y", ColMapTexture.Name + ".dds", "-o", output_folder]
 				subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
 				# Remove the Temp File
 				os.remove(_TempPath)
@@ -341,21 +346,23 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 		if NormalMap.links[0].from_node.type == "TEX_IMAGE":
 			# Export the Image as a DDS File (DXT1)
 			_Img = NormalMap.links[0].from_node.image
-			_TempPath = bpy.path.abspath("//") + NorMapTexture.Name + ".png"
-			_Img.save_render(filepath=_TempPath)
+			if _Img is not None:
+				_TempPath = bpy.path.abspath("//") + NorMapTexture.Name + ".png"
+				_Img.file_format = "PNG"
+				_Img.save(filepath=_TempPath)
 
-			# convert the image to dds dxt1 by using texconv.exe in the resources folder
-			output_folder = os.path.dirname(filepath)
-			args = ["-ft", "dds", "-f", "DXT1", "-dx9", "-pow2", "-srgbo", "-at", "0.0", "-y", NorMapTexture.Name + ".dds", "-o", output_folder]
-			subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
+				# convert the image to dds dxt1 by using texconv.exe in the resources folder
+				output_folder = os.path.dirname(filepath)
+				args = ["-ft", "dds", "-f", "DXT1", "-dx9", "-pow2", "-srgb", "-at", "0.0", "-y", NorMapTexture.Name + ".dds", "-o", output_folder]
+				subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
 
-			# Remove the Temp File
-			os.remove(_TempPath)
+				# Remove the Temp File
+				os.remove(_TempPath)
 
-			# Remove the Image
-			bpy.data.images.remove(_Img)
-		else:
-			ValueError("The NormalMap Texture is not an Image or the Image is None!")
+				# Remove the Image
+				bpy.data.images.remove(_Img)
+			else:
+				ValueError("The NormalMap Texture is not an Image or the Image is None!")
 
 	if MetallicMap.is_linked or RoughnessMap.is_linked or FluMap.is_linked or EmissionMap.is_linked:
 		new_mesh.Textures.Length+=1
