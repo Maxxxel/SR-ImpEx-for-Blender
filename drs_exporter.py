@@ -200,11 +200,15 @@ def create_unique_mesh(source_collection: bpy.types.Collection) -> bpy.types.Mes
 
 	if cdspmeshfile_object is None:
 		return None
-
-	# Now we can iterate over the Meshes
-	for child in cdspmeshfile_object.children:
-		if child.type == "MESH":
-			bm.from_mesh(child.data)
+	
+	# Fix if the object is the Mesh itself
+	if cdspmeshfile_object.type == "MESH":
+		bm.from_mesh(cdspmeshfile_object.data)
+	else:
+		# Now we can iterate over the Meshes
+		for child in cdspmeshfile_object.children:
+			if child.type == "MESH":
+				bm.from_mesh(child.data)
 
 	# Remove Duplicates
 	bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
@@ -506,10 +510,15 @@ def create_cdsp_meshfile(source_collection: bpy.types.Collection, model_name: st
 	_cdsp_meshfile = CDspMeshFile()
 	_cdsp_meshfile.MeshCount = 0
 
-	for child in cdspmeshfile_object.children:
-		if child.type == "MESH":
-			_cdsp_meshfile.MeshCount += 1
-			_cdsp_meshfile.Meshes.append(create_mesh(child, _cdsp_meshfile.MeshCount, model_name, filepath))
+	# Check if the CDspMeshFile Object is a Mesh Object
+	if cdspmeshfile_object.type == "MESH":
+		_cdsp_meshfile.MeshCount += 1
+		_cdsp_meshfile.Meshes.append(create_mesh(cdspmeshfile_object, _cdsp_meshfile.MeshCount, model_name, filepath))
+	else:
+		for child in cdspmeshfile_object.children:
+			if child.type == "MESH":
+				_cdsp_meshfile.MeshCount += 1
+				_cdsp_meshfile.Meshes.append(create_mesh(child, _cdsp_meshfile.MeshCount, model_name, filepath))
 
 	_cdsp_meshfile.BoundingBoxLowerLeftCorner = Vector((0, 0, 0))
 	_cdsp_meshfile.BoundingBoxUpperRightCorner = Vector((0, 0, 0))
@@ -565,7 +574,9 @@ def create_collision_shape(source_collection: bpy.types.Collection) -> Collision
 def export_static_object(operator, context, filepath: str, source_collection: bpy.types.Collection, use_apply_transform: bool, global_matrix: Matrix) -> None:
 	'''Export a Static Object to a DRS File.'''
 	# TODO: We need to set the world matrix correctly for Battleforge Game Engine -> Matrix.Identity(4)
-	model_name = source_collection.name.split("_")[1]
+ 
+	# Model Name COmes right after the DRSModel_ Prefix and before the _Static Suffix
+	model_name = source_collection.name[source_collection.name.find("DRSModel_") + 9:source_collection.name.find("_Static")]
 	# Create an empty DRS File
 	new_drs_file: DRS = DRS()
  
