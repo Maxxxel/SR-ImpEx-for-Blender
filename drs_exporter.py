@@ -228,7 +228,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	new_mesh.FaceCount = len(mesh.data.polygons)
 	new_mesh.Faces = []
 
-	new_mesh.MeshCount = 2
+	new_mesh.MeshCount = 1
 	new_mesh.MeshData = []
 
 	_mesh_0_data = MeshData()
@@ -236,10 +236,10 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	_mesh_0_data.Revision = 133121
 	_mesh_0_data.VertexSize = 32
 
-	_mesh_1_data = MeshData()
-	_mesh_1_data.Vertices = [Vertex() for _ in range(new_mesh.VertexCount)]
-	_mesh_1_data.Revision = 12288
-	_mesh_1_data.VertexSize = 24
+	# _mesh_1_data = MeshData()
+	# _mesh_1_data.Vertices = [Vertex() for _ in range(new_mesh.VertexCount)]
+	# _mesh_1_data.Revision = 12288
+	# _mesh_1_data.VertexSize = 24
 
 	for _face in mesh.data.polygons:
 		new_face = Face()
@@ -266,7 +266,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 		new_mesh.Faces.append(new_face)
 
 	new_mesh.MeshData.append(_mesh_0_data)
-	new_mesh.MeshData.append(_mesh_1_data)
+	# new_mesh.MeshData.append(_mesh_1_data)
 
 	# We need to investigate the Bounding Box further, as it seems to be wrong
 	new_mesh.BoundingBoxLowerLeftCorner, new_mesh.BoundingBoxUpperRightCorner = get_bb(mesh)
