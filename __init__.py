@@ -31,7 +31,7 @@ bl_info = {
 	"tracker_url": ""
 }
 
-is_dev_version = True
+is_dev_version = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
 @orientation_helper(axis_forward='X', axis_up='-Y')
