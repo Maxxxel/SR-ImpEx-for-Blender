@@ -613,6 +613,7 @@ def export_static_object(operator, context, filepath: str, source_collection: bp
 	_drw_resource_meta: DrwResourceMeta = create_drw_resource_meta() # Dunno if needed or how to create it
 	new_drs_file.PushNode("DrwResourceMeta", _drw_resource_meta)
 	# CollisionShape
+ 	# TODO: check if it is exported correctly
 	_collision_shape: CollisionShape = create_collision_shape(source_collection) # Works perfectly fine
 	if _collision_shape is not None:
 		new_drs_file.PushNode("collisionShape", _collision_shape)
