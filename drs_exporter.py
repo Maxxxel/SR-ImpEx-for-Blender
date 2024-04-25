@@ -614,10 +614,12 @@ def export_static_object(operator, context, filepath: str, source_collection: bp
 
 		# Get the CollisionShape Object
 		collision_shape_object = search_for_object("CollisionShape", source_collection)
-		# Apply the Transformation to the CollisionShape Object
-		for child in collision_shape_object.children:
-			if child.type == "MESH":
-				mirror_mesh_on_axis(child, axis='y')
+		
+		if collision_shape_object is not None:
+			# Apply the Transformation to the CollisionShape Object
+			for child in collision_shape_object.children:
+				if child.type == "MESH":
+					mirror_mesh_on_axis(child, axis='y')
 
 	unique_mesh = create_unique_mesh(source_collection) # Works perfectly fine
 	if unique_mesh is None:
