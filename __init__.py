@@ -24,7 +24,7 @@ bl_info = {
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
 	"blender" : (4, 0, 0),
-	"version" : (2, 3, 0),
+	"version" : (2, 4, 0),
 	"location" : "File > Import",
 	"warning" : "",
 	"category" : "Import-Export",
@@ -59,7 +59,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 			self.report({'ERROR'}, "Unsupported file type")
 			return {'CANCELLED'}
 
-@orientation_helper(axis_forward='-X', axis_up='Y')
 class ExportBFModel(bpy.types.Operator, ExportHelper):
 	"""Export a Battleforge drs/bmg file"""
 	bl_idname = "export_scene.drs"
@@ -70,9 +69,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	keep_debug_collections : BoolProperty(name="Keep Debug Collection", description="Keep debug collection in the scene", default=False) # type: ignore # ignore
 
 	def execute(self, context):
-		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
-		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
-		keywords["global_matrix"] = global_matrix
+		keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
 		return save_drs(self, context, **keywords)
 
 class NewBFScene(bpy.types.Operator):

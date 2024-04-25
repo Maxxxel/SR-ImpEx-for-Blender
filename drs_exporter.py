@@ -39,48 +39,40 @@ def search_for_object(object_name: str, collection: bpy.types.Collection) -> bpy
 
 def mirror_mesh_on_axis(obj, axis='y'):
 	"""
-	Mirror a mesh along a specified axis and correctly handle normals.
-	
+	Mirror a mesh along a specified global axis using Blender's built-in operations and
+	correctly handle normals.
+
 	Parameters:
 	obj (bpy.types.Object): The object to mirror.
-	axis (str): Axis to mirror along, should be 'x', 'y', or 'z'.
+	axis (str): Global axis to mirror along, should be 'x', 'y', or 'z'.
 	"""
 	# Validate axis
 	axis = axis.lower()
 	if axis not in ['x', 'y', 'z']:
 		raise ValueError("Invalid axis. Use 'x', 'y', or 'z'.")
-	
-	# Get the mesh from the object
-	me = obj.data
-	# Calculate split normals
-	me.calc_normals_split()
-	me.use_auto_smooth = True
-	
-	# Axis indices map to coordinates (x, y, z) -> (0, 1, 2)
-	axis_idx = {'x': 0, 'y': 1, 'z': 2}[axis]
-	
-	# Prepare to store mirrored split normals
-	mirror_split_normals = []
-	
-	# Iterate over polygons to modify normals
-	for poly in me.polygons:
-		reverse_normals_indices = [poly.loop_indices[0]] + [i for i in reversed(poly.loop_indices[1:])]
-		for i in reverse_normals_indices:
-			loop = me.loops[i]
-			normal = list(loop.normal)
-			normal[axis_idx] *= -1  # Mirror normal on the specified axis
-			mirror_split_normals.append(tuple(normal))
-	
-	# Mirror vertices along the specified axis
-	for v in me.vertices:
-		co = list(v.co)
-		co[axis_idx] *= -1  # Multiply coordinate on axis by -1
-		v.co = tuple(co)
-	
-	# Apply the mirrored normals
-	me.flip_normals()
-	me.normals_split_custom_set(mirror_split_normals)
-	me.update()
+
+	# Select the object
+	bpy.context.view_layer.objects.active = obj
+	obj.select_set(True)
+
+	# Determine the constraint axis
+	constraint_axis = {
+		'x': (True, False, False),
+		'y': (False, True, False),
+		'z': (False, False, True)
+	}[axis]
+
+	# Apply the mirror transformation
+	bpy.ops.object.mode_set(mode='OBJECT')  # Ensure in object mode
+	bpy.ops.transform.mirror(
+		orient_type='GLOBAL',
+		orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+		orient_matrix_type='GLOBAL',
+		constraint_axis=constraint_axis
+	)
+
+	# Optional: update mesh data
+	obj.data.update()
 
 def get_bb(obj) -> Tuple[Vector, Vector]:
 	'''Get the Bounding Box of an Object. Returns the minimum and maximum Vector of the Bounding Box.'''
@@ -271,10 +263,6 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	# We need to investigate the Bounding Box further, as it seems to be wrong
 	new_mesh.BoundingBoxLowerLeftCorner, new_mesh.BoundingBoxUpperRightCorner = get_bb(mesh)
 	new_mesh.MaterialID = 25702
-	new_mesh.MaterialParameters = -86061050
-	new_mesh.MaterialStuff = 0
-	new_mesh.BoolParameter = 0
-	BoolParamBitFlag = 0
 	# Node Group for Access the Data
 	MeshMaterial: bpy.types.Material = mesh.material_slots[0].material
 	MaterialNodes: List[bpy.types.Node] = MeshMaterial.node_tree.nodes
@@ -296,6 +284,23 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 				FluMap = Node.inputs[11]
 				# FluAlpha = Node.inputs[12] # We don't need this
 				break
+	if FluMap is None or FluMap.is_linked is False:
+		# -86061055: no MaterialStuff, no Fluid, no String, no LOD
+		new_mesh.MaterialParameters = -86061055
+	else:
+		# -86061050: All Materials
+		new_mesh.MaterialParameters = -86061050
+		new_mesh.MaterialStuff = 0
+		# Level of Detail
+		new_mesh.LevelOfDetail = LevelOfDetail() # We don't need to update the LOD
+		# Empty String
+		new_mesh.EmptyString = EmptyString() # We don't need to update the Empty String
+		# Flow
+		new_mesh.Flow = Flow() # Maybe later we can add some flow data in blender
+
+	# Individual Material Parameters depending on the MaterialID:
+	new_mesh.BoolParameter = 0
+	BoolParamBitFlag = 0
 	# Textures
 	new_mesh.Textures = Textures()
 	# Check if the ColorMap exists
@@ -447,7 +452,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 
 		# convert the image to dds dxt5 by using texconv.exe in the resources folder
 		output_folder = os.path.dirname(filepath)
-		args = ["-ft", "dds", "-f", "BC3_UNORM_SRGB", "-dx9", "-bc", "d", "-pow2", "-y", MetMapTexture.Name + ".dds", "-o", output_folder]
+		args = ["-ft", "dds", "-f", "DXT5", "-dx9", "-bc", "d", "-pow2", "-y", MetMapTexture.Name + ".dds", "-o", output_folder]
 		subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
 
 		# Remove the Temp File
@@ -465,12 +470,6 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	new_mesh.Refraction = Ref
 	# Materials
 	new_mesh.Materials = Materials() # Almost no material data is used in the game, so we set it to defaults
-	# Level of Detail
-	new_mesh.LevelOfDetail = LevelOfDetail() # We don't need to update the LOD
-	# Empty String
-	new_mesh.EmptyString = EmptyString() # We don't need to update the Empty String
-	# Flow
-	new_mesh.Flow = Flow() # Maybe later we can add some flow data in blender
 
 	return new_mesh
 
@@ -592,7 +591,7 @@ def set_origin_to_world_origin(source_collection: bpy.types.Collection) -> None:
 	# Move the cursor back to the world origin
 	bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
 
-def export_static_object(operator, context, filepath: str, source_collection: bpy.types.Collection, use_apply_transform: bool, global_matrix: Matrix) -> None:
+def export_static_object(operator, context, filepath: str, source_collection: bpy.types.Collection, use_apply_transform: bool) -> None:
 	'''Export a Static Object to a DRS File.'''
 	# TODO: We need to set the world matrix correctly for Battleforge Game Engine -> Matrix.Identity(4)
  
@@ -614,10 +613,12 @@ def export_static_object(operator, context, filepath: str, source_collection: bp
 
 		# Get the CollisionShape Object
 		collision_shape_object = search_for_object("CollisionShape", source_collection)
-		# Apply the Transformation to the CollisionShape Object
-		for child in collision_shape_object.children:
-			if child.type == "MESH":
-				mirror_mesh_on_axis(child, axis='y')
+		
+		if collision_shape_object is not None:
+			# Apply the Transformation to the CollisionShape Object
+			for child in collision_shape_object.children:
+				if child.type == "MESH":
+					mirror_mesh_on_axis(child, axis='y')
 
 	unique_mesh = create_unique_mesh(source_collection) # Works perfectly fine
 	if unique_mesh is None:
@@ -745,7 +746,7 @@ def duplicate_collection_hierarchy(source_collection, parent_collection=None, li
 
 	return new_collection
 
-def save_drs(operator, context, filepath="", use_apply_transform=True, keep_debug_collections=False, global_matrix=None):
+def save_drs(operator, context, filepath="", use_apply_transform=True, keep_debug_collections=False):
 	'''Save the DRS File.'''
 	# Get the right Collection
 	source_collection: bpy.types.Collection = None
@@ -778,7 +779,7 @@ def save_drs(operator, context, filepath="", use_apply_transform=True, keep_debu
 	# Check the model's type, based on the Collection's name: DRSModel_Name_Type
 	# Type can be: Static for now (later we can add Skinned, Destructable, Effect, etc.)
 	if source_collection.name.find("Static") != -1:
-		export_static_object(operator, context, filepath, source_collection, use_apply_transform, global_matrix)
+		export_static_object(operator, context, filepath, source_collection, use_apply_transform)
 
 	# Remove the copied Collection
 	if not keep_debug_collections:
