@@ -1,3 +1,4 @@
+from hmac import new
 import math
 import os
 import subprocess
@@ -259,7 +260,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 				bitangent = vertex.bitangent_sign * normal.cross(tangent)
 				# Switch X and Y as the Tangent is flipped
 				tangent = Vector((tangent.y, tangent.x, tangent.z))
-				_mesh_1_data.Vertices[vertex.vertex_index] = Vertex(Tangent=tangent, Bitangent=bitangent)
+				# _mesh_1_data.Vertices[vertex.vertex_index] = Vertex(Tangent=tangent, Bitangent=bitangent)
 
 			new_face.Indices.append(vertex.vertex_index)
 
@@ -334,7 +335,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 			else:
 				ValueError("The ColorMap Texture is not an Image or the Image is None!")
 
-	if NormalMap.is_linked:
+	if NormalMap is not None and NormalMap.is_linked:
 		new_mesh.Textures.Length+=1
 		NorMapTexture = Texture()
 		NorMapTexture.Name = model_name + "_" + str(mesh_index) + "_nor"
@@ -364,7 +365,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 			else:
 				ValueError("The NormalMap Texture is not an Image or the Image is None!")
 
-	if MetallicMap.is_linked or RoughnessMap.is_linked or FluMap.is_linked or EmissionMap.is_linked:
+	if (MetallicMap is not None and MetallicMap.is_linked) or (RoughnessMap is not None and RoughnessMap.is_linked) or (EmissionMap is not None and EmissionMap.is_linked):
 		new_mesh.Textures.Length+=1
 		MetMapTexture = Texture()
 		MetMapTexture.Name = model_name + "_" + str(mesh_index) + "_par"
@@ -376,7 +377,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 		img_R, img_G, img_A = None, None, None
 		pixels_R, pixels_G, pixels_A = None, None, None
 
-		if MetallicMap.is_linked:
+		if MetallicMap is not None and MetallicMap.is_linked:
 			# This can either be a Map or a Separate RGB Node
 			if MetallicMap.links[0].from_node.type == "SEPRGB" or MetallicMap.links[0].from_node.type == "SEPARATE_COLOR":
 				# We ned to get the Input
@@ -387,7 +388,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 				img_R = MetallicMap.links[0].from_node.image
 				assert img_R is not None and img_R.pixels[:].__len__() > 0
 				pixels_R = img_R.pixels[:]
-		if RoughnessMap.is_linked:
+		if RoughnessMap is not None and RoughnessMap.is_linked:
 			# This can either be a Map or a Separate RGB Node
 			if RoughnessMap.links[0].from_node.type == "SEPRGB" or RoughnessMap.links[0].from_node.type == "SEPARATE_COLOR":
 				# We ned to get the Input
@@ -398,9 +399,9 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 				img_G = RoughnessMap.links[0].from_node.image
 				assert img_G is not None and img_G.pixels[:].__len__() > 0
 				pixels_G = img_G.pixels[:]
-		if FluMap.is_linked:
+		if EmissionMap is not None and EmissionMap.is_linked:
 			pass
-		if EmissionMap.is_linked:
+		if EmissionMap is not None and EmissionMap.is_linked:
 			# This can either be a Map or a Separate RGB Node
 			if EmissionMap.links[0].from_node.type == "SEPRGB" or EmissionMap.links[0].from_node.type == "SEPARATE_COLOR":
 				# We ned to get the Input
@@ -430,7 +431,6 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 		new_pixels = []
 
 		for i in range(0, Width * Height * 4, 4):
-			# Use the value from the second position (which appears to be the relevant intensity value in your source images)
 			red_value = pixels_R[i] if pixels_R is not None else 0
 			green_value = pixels_G[i + 1] if pixels_G is not None else 0
 			# TODO: Fluid
@@ -439,11 +439,12 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 			new_pixels.extend([red_value, green_value, blue_value, alpha_value])
 
 		new_img.pixels = new_pixels
+		new_img.file_format = "PNG"
 		new_img.update()
 
 		# Export the Image as a DDS File (DXT5)
 		_TempPath = bpy.path.abspath("//") + MetMapTexture.Name + ".png"
-		new_img.save_render(filepath=_TempPath)
+		new_img.save(filepath=_TempPath)
 
 		# convert the image to dds dxt5 by using texconv.exe in the resources folder
 		output_folder = os.path.dirname(filepath)
