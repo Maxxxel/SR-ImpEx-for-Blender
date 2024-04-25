@@ -67,6 +67,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	filename_ext = ".drs"
 	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255) # type: ignore # ignore
 	use_apply_transform : BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True) # type: ignore # ignore
+	keep_debug_collections : BoolProperty(name="Keep Debug Collection", description="Keep debug collection in the scene", default=False) # type: ignore # ignore
 
 	def execute(self, context):
 		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "check_existing"))
