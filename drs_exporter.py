@@ -229,7 +229,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	new_mesh.FaceCount = len(mesh.data.polygons)
 	new_mesh.Faces = []
 
-	new_mesh.MeshCount = 1
+	new_mesh.MeshCount = 2
 	new_mesh.MeshData = []
 
 	_mesh_0_data = MeshData()
@@ -237,10 +237,10 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	_mesh_0_data.Revision = 133121
 	_mesh_0_data.VertexSize = 32
 
-	# _mesh_1_data = MeshData()
-	# _mesh_1_data.Vertices = [Vertex() for _ in range(new_mesh.VertexCount)]
-	# _mesh_1_data.Revision = 12288
-	# _mesh_1_data.VertexSize = 24
+	_mesh_1_data = MeshData()
+	_mesh_1_data.Vertices = [Vertex() for _ in range(new_mesh.VertexCount)]
+	_mesh_1_data.Revision = 12288
+	_mesh_1_data.VertexSize = 24
 
 	for _face in mesh.data.polygons:
 		new_face = Face()
@@ -260,14 +260,14 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 				bitangent = vertex.bitangent_sign * normal.cross(tangent)
 				# Switch X and Y as the Tangent is flipped
 				tangent = Vector((tangent.y, tangent.x, tangent.z))
-				# _mesh_1_data.Vertices[vertex.vertex_index] = Vertex(Tangent=tangent, Bitangent=bitangent)
+				_mesh_1_data.Vertices[vertex.vertex_index] = Vertex(Tangent=tangent, Bitangent=bitangent)
 
 			new_face.Indices.append(vertex.vertex_index)
 
 		new_mesh.Faces.append(new_face)
 
 	new_mesh.MeshData.append(_mesh_0_data)
-	# new_mesh.MeshData.append(_mesh_1_data)
+	new_mesh.MeshData.append(_mesh_1_data)
 
 	# We need to investigate the Bounding Box further, as it seems to be wrong
 	new_mesh.BoundingBoxLowerLeftCorner, new_mesh.BoundingBoxUpperRightCorner = get_bb(mesh)
@@ -424,7 +424,7 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 			Width = img_A.size[0]
 			Height = img_A.size[1]
 		else:
-			ValueError("No Image found for the Metallic Map!")
+			ValueError("No Image found for the Parameter Map!")
 
 		# Combine the Images
 		new_img = bpy.data.images.new(name=MetMapTexture.Name, width=Width, height=Height, alpha=True, float_buffer=False)
@@ -649,6 +649,20 @@ def verify_models(source_collection: bpy.types.Collection):
 
 	return True
 
+def triangulate(source_collection: bpy.types.Collection) -> None:
+	for obj in source_collection.objects:
+		if obj.type == "MESH":
+			bpy.context.view_layer.objects.active = obj
+			bpy.ops.object.mode_set(mode='EDIT')
+			bm = bmesh.from_edit_mesh(obj.data)
+
+			non_tri_faces = [f for f in bm.faces if len(f.verts) > 3]
+			if non_tri_faces:
+				bmesh.ops.triangulate(bm, faces=non_tri_faces)
+				bmesh.update_edit_mesh(obj.data)
+
+			bpy.ops.object.mode_set(mode='OBJECT')
+
 def save_drs(operator, context, filepath="", use_apply_transform=True, global_matrix=None):
 	'''Save the DRS File.'''
 	# Get the right Collection
@@ -662,6 +676,17 @@ def save_drs(operator, context, filepath="", use_apply_transform=True, global_ma
 	if source_collection is None:
 		show_message_box("No DRSModel Collection found!", "Error", "ERROR")
 		return {"CANCELLED"}
+	
+	# We dont want to modify the original Collection so we create a copy
+	source_collection = source_collection.copy()
+	source_collection.name += "_Copy"
+	bpy.context.scene.collection.children.link(source_collection)
+
+	# Set the current Collection as Active
+	bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[source_collection.name]
+	
+	# Be sure that there are only triangles in the Meshes
+	triangulate(source_collection)
 
 	# Verify the Models
 	if not verify_models(source_collection):
