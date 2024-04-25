@@ -538,12 +538,12 @@ class BattleforgeMesh():
 		self.MaterialParameters: int # 4
 		self.MaterialStuff: int # 4
 		self.BoolParameter: int # 4
-		self.Textures: Textures
+		self.Textures: Textures # Individual Length
 		self.Refraction: Refraction # 20
 		self.Materials: Materials # 100
-		self.LevelOfDetail: LevelOfDetail # 8
-		self.EmptyString: EmptyString # 4
-		self.Flow: Flow # 84
+		self.LevelOfDetail: LevelOfDetail # 8 Only if MaterialParameters == -86061050
+		self.EmptyString: EmptyString # 4 Only if MaterialParameters == -86061050
+		self.Flow: Flow # 84 Only if MaterialParameters == -86061050
 
 	def Read(self, Buffer: FileReader) -> 'BattleforgeMesh':
 		"""Reads the BattleforgeMesh from the buffer"""
@@ -599,6 +599,11 @@ class BattleforgeMesh():
 			self.LevelOfDetail.Write(Buffer)
 			self.EmptyString.Write(Buffer)
 			self.Flow.Write(Buffer)
+		elif self.MaterialParameters == -86061055:
+			Buffer.WriteInt(self.BoolParameter)
+			self.Textures.Write(Buffer)
+			self.Refraction.Write(Buffer)
+			self.Materials.Write(Buffer)
 		else:
 			raise TypeError("Unknown MaterialParameters {}".format(self.MaterialParameters))
 		return self
@@ -611,10 +616,10 @@ class BattleforgeMesh():
 		Size += 1 # MeshCount
 		for Mesh in self.MeshData:
 			Size += Mesh.Size()
-		Size += 12 + 12 + 2 + 4 + 4 + 4 + 4
+		Size += 12 + 12 + 2 + 4 + 4 + 4
 		for T in self.Textures.Textures:
 			Size += 12 + T.Length
-		Size += 20 + 100 + 8 + 4 + 84
+		Size += 20 + 100 + (self.MaterialParameters == -86061050 and 8 + 4 + 84 + 4 or 0)
 		return Size
 
 class CDspMeshFile():
@@ -627,7 +632,7 @@ class CDspMeshFile():
 		self.BoundingBoxLowerLeftCorner: Vector = Vector((0, 0, 0)) # 12
 		self.BoundingBoxUpperRightCorner: Vector = Vector((0, 0, 0)) # 12
 		self.Meshes: List[BattleforgeMesh] = []
-		self.SomePoints: List[Vector] = [(0,0,0,1),(0,0,0,1),(0,0,0,1)] # 48
+		self.SomePoints: List[Vector] = [(0,0,0,1),(1,1,0,1),(0,0,1,1)] # 48
 
 	def Read(self, Buffer: FileReader) -> 'CDspMeshFile':
 		"""Reads the CDspMeshFile from the buffer"""

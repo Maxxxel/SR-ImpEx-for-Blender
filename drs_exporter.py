@@ -271,10 +271,6 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	# We need to investigate the Bounding Box further, as it seems to be wrong
 	new_mesh.BoundingBoxLowerLeftCorner, new_mesh.BoundingBoxUpperRightCorner = get_bb(mesh)
 	new_mesh.MaterialID = 25702
-	new_mesh.MaterialParameters = -86061050
-	new_mesh.MaterialStuff = 0
-	new_mesh.BoolParameter = 0
-	BoolParamBitFlag = 0
 	# Node Group for Access the Data
 	MeshMaterial: bpy.types.Material = mesh.material_slots[0].material
 	MaterialNodes: List[bpy.types.Node] = MeshMaterial.node_tree.nodes
@@ -296,6 +292,23 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 				FluMap = Node.inputs[11]
 				# FluAlpha = Node.inputs[12] # We don't need this
 				break
+	if FluMap is None or FluMap.is_linked is False:
+		# -86061055: no MaterialStuff, no Fluid, no String, no LOD
+		new_mesh.MaterialParameters = -86061055
+	else:
+		# -86061050: All Materials
+		new_mesh.MaterialParameters = -86061050
+		new_mesh.MaterialStuff = 0
+		# Level of Detail
+		new_mesh.LevelOfDetail = LevelOfDetail() # We don't need to update the LOD
+		# Empty String
+		new_mesh.EmptyString = EmptyString() # We don't need to update the Empty String
+		# Flow
+		new_mesh.Flow = Flow() # Maybe later we can add some flow data in blender
+
+	# Individual Material Parameters depending on the MaterialID:
+	new_mesh.BoolParameter = 0
+	BoolParamBitFlag = 0
 	# Textures
 	new_mesh.Textures = Textures()
 	# Check if the ColorMap exists
@@ -465,12 +478,6 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	new_mesh.Refraction = Ref
 	# Materials
 	new_mesh.Materials = Materials() # Almost no material data is used in the game, so we set it to defaults
-	# Level of Detail
-	new_mesh.LevelOfDetail = LevelOfDetail() # We don't need to update the LOD
-	# Empty String
-	new_mesh.EmptyString = EmptyString() # We don't need to update the Empty String
-	# Flow
-	new_mesh.Flow = Flow() # Maybe later we can add some flow data in blender
 
 	return new_mesh
 
