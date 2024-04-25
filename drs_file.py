@@ -573,6 +573,11 @@ class BattleforgeMesh():
 			self.Materials = Materials().Read(Buffer)
 			self.LevelOfDetail = LevelOfDetail().Read(Buffer)
 			self.EmptyString = EmptyString().Read(Buffer)
+		elif self.MaterialParameters == -86061055:
+			self.BoolParameter = Buffer.ReadInt()
+			self.Textures = Textures().Read(Buffer)
+			self.Refraction = Refraction().Read(Buffer)
+			self.Materials = Materials().Read(Buffer)
 		else:
 			raise TypeError("Unknown MaterialParameters {}".format(self.MaterialParameters))
 		return self
