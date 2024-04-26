@@ -315,6 +315,8 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 	if ColorMap is None:
 		ValueError("The ColorMap Node is unset!")
 
+	output_folder = os.path.dirname(filepath)
+
 	if ColorMap.is_linked:
 		new_mesh.Textures.Length+=1
 		ColMapTexture = Texture()
@@ -326,24 +328,14 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 		if ColorMap.links[0].from_node.type == "TEX_IMAGE":
 			# Export the Image as a DDS File (DXT3)
 			_Img = ColorMap.links[0].from_node.image
-			created = False
 			
 			if _Img is not None:
 				_TempPath = bpy.path.abspath("//") + ColMapTexture.Name + ".png"
 				_Img.file_format = "PNG"
 				_Img.save(filepath=_TempPath)
-
-				# convert the image to dds dxt3 by using texconv.exe in the resources folder
-				output_folder = os.path.dirname(filepath)
-				# TODO: If Alpha is connected, we need to use DXT5 instead of DXT1
 				args = ["-ft", "dds", "-f", "DXT5", "-dx9", "-pow2", "-srgb", "-y", ColMapTexture.Name + ".dds", "-o", output_folder]
 				subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
-				# Remove the Temp File
 				os.remove(_TempPath)
-
-				# Remove the Image
-				if created:
-					bpy.data.images.remove(_Img)
 			else:
 				ValueError("The ColorMap Texture is not an Image or the Image is None!")
 
@@ -359,21 +351,14 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 		if NormalMap.links[0].from_node.type == "TEX_IMAGE":
 			# Export the Image as a DDS File (DXT1)
 			_Img = NormalMap.links[0].from_node.image
+
 			if _Img is not None:
 				_TempPath = bpy.path.abspath("//") + NorMapTexture.Name + ".png"
 				_Img.file_format = "PNG"
 				_Img.save(filepath=_TempPath)
-
-				# convert the image to dds dxt1 by using texconv.exe in the resources folder
-				output_folder = os.path.dirname(filepath)
 				args = ["-ft", "dds", "-f", "DXT1", "-dx9", "-pow2", "-srgb", "-at", "0.0", "-y", NorMapTexture.Name + ".dds", "-o", output_folder]
 				subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
-
-				# Remove the Temp File
 				os.remove(_TempPath)
-
-				# Remove the Image
-				bpy.data.images.remove(_Img)
 			else:
 				ValueError("The NormalMap Texture is not an Image or the Image is None!")
 
@@ -459,15 +444,11 @@ def create_mesh(mesh: bpy.types.Mesh, mesh_index: int, model_name: str, filepath
 		new_img.save(filepath=_TempPath)
 
 		# convert the image to dds dxt5 by using texconv.exe in the resources folder
-		output_folder = os.path.dirname(filepath)
 		args = ["-ft", "dds", "-f", "DXT5", "-dx9", "-bc", "d", "-pow2", "-y", MetMapTexture.Name + ".dds", "-o", output_folder]
 		subprocess.run([resource_dir + "/texconv.exe", _TempPath] + args, check=False)
 
 		# Remove the Temp File
 		os.remove(_TempPath)
-
-		# Remove the Image
-		bpy.data.images.remove(new_img)
 
 	# Set the Bool Parameter by a bin -> dec conversion
 	new_mesh.BoolParameter = int(str(BoolParamBitFlag), 2)
@@ -702,76 +683,101 @@ def triangulate(source_collection: bpy.types.Collection) -> None:
 			bpy.ops.object.mode_set(mode='OBJECT')
 
 def duplicate_collection_hierarchy(source_collection, parent_collection=None, link_to_scene=True):
-    # Create a new collection with a modified name
-    new_collection = bpy.data.collections.new(name=source_collection.name + "_Copy")
-    if link_to_scene:
-        bpy.context.scene.collection.children.link(new_collection)
-    if parent_collection:
-        parent_collection.children.link(new_collection)
+	# Create a new collection with a modified name
+	new_collection = bpy.data.collections.new(name=source_collection.name + "_Copy")
+	if link_to_scene:
+		bpy.context.scene.collection.children.link(new_collection)
+	if parent_collection:
+		parent_collection.children.link(new_collection)
 
-    # Dictionary to keep track of old to new object mappings
-    old_to_new_objs = {}
+	# Dictionary to keep track of old to new object mappings
+	old_to_new_objs = {}
 
-    # Function to duplicate object with hierarchy
-    def duplicate_obj(obj, parent_obj):
-        # Duplicate the object and its data
-        new_obj = obj.copy()
-        if obj.data:
-            new_obj.data = obj.data.copy()
+	# Function to duplicate object with hierarchy
+	def duplicate_obj(obj, parent_obj):
+		# Duplicate the object and its data
+		new_obj = obj.copy()
+		if obj.data:
+			new_obj.data = obj.data.copy()
 
-        # Append '_copy' to the duplicated object's name
-        new_obj.name += "_Copy"
-        if new_obj.data and hasattr(new_obj.data, 'name'):
-            new_obj.data.name += "_Copy"
+		# Append '_copy' to the duplicated object's name
+		new_obj.name += "_Copy"
+		if new_obj.data and hasattr(new_obj.data, 'name'):
+			new_obj.data.name += "_Copy"
 
-        # Unlink the new object from all current collections it's linked to
-        for col in new_obj.users_collection:
-            col.objects.unlink(new_obj)
-        
-        # Link the new object only to the new collection
-        new_collection.objects.link(new_obj)
-        old_to_new_objs[obj] = new_obj
+		# Unlink the new object from all current collections it's linked to
+		for col in new_obj.users_collection:
+			col.objects.unlink(new_obj)
+		
+		# Link the new object only to the new collection
+		new_collection.objects.link(new_obj)
+		old_to_new_objs[obj] = new_obj
 
-        # Set the parent if it's already duplicated
-        if parent_obj is not None and parent_obj in old_to_new_objs:
-            new_obj.parent = old_to_new_objs[parent_obj]
+		# Set the parent if it's already duplicated
+		if parent_obj is not None and parent_obj in old_to_new_objs:
+			new_obj.parent = old_to_new_objs[parent_obj]
 
-    # Sort objects by their depth in the hierarchy
-    def sort_objects_by_hierarchy(objects):
-        obj_depth = {}
-        def assign_depth(obj, depth=0):
-            if obj in obj_depth:
-                return obj_depth[obj]
-            if obj.parent is None or obj.parent not in objects:
-                obj_depth[obj] = depth
-                return depth
-            obj_depth[obj] = assign_depth(obj.parent, depth + 1) + 1
-            return obj_depth[obj]
+	# Sort objects by their depth in the hierarchy
+	def sort_objects_by_hierarchy(objects):
+		obj_depth = {}
+		def assign_depth(obj, depth=0):
+			if obj in obj_depth:
+				return obj_depth[obj]
+			if obj.parent is None or obj.parent not in objects:
+				obj_depth[obj] = depth
+				return depth
+			obj_depth[obj] = assign_depth(obj.parent, depth + 1) + 1
+			return obj_depth[obj]
 
-        # Assign depth to all objects
-        for obj in objects:
-            if obj not in obj_depth:
-                assign_depth(obj)
+		# Assign depth to all objects
+		for obj in objects:
+			if obj not in obj_depth:
+				assign_depth(obj)
 
-        # Return objects sorted by their depth
-        return sorted(objects, key=lambda o: obj_depth[o])
+		# Return objects sorted by their depth
+		return sorted(objects, key=lambda o: obj_depth[o])
 
-    # Sort and then duplicate objects
-    sorted_objects = sort_objects_by_hierarchy(list(source_collection.objects))
-    for obj in sorted_objects:
-        duplicate_obj(obj, obj.parent)
+	# Sort and then duplicate objects
+	sorted_objects = sort_objects_by_hierarchy(list(source_collection.objects))
+	for obj in sorted_objects:
+		duplicate_obj(obj, obj.parent)
 
-    # Set the new collection as active if linking to the scene
-    if link_to_scene:
-        bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[new_collection.name]
+	# Set the new collection as active if linking to the scene
+	if link_to_scene:
+		bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[new_collection.name]
 
-    # Recursively duplicate child collections and their objects
-    for child_col in source_collection.children:
-        duplicate_collection_hierarchy(child_col, parent_collection=new_collection, link_to_scene=False)
+	# Recursively duplicate child collections and their objects
+	for child_col in source_collection.children:
+		duplicate_collection_hierarchy(child_col, parent_collection=new_collection, link_to_scene=False)
 
-    return new_collection
+	return new_collection
 
-def save_drs(operator, context, filepath="", use_apply_transform=True, keep_debug_collections=False):
+def split_meshes_by_uv_islands(source_collection: bpy.types.Collection) -> None:
+	'''Split the Meshes by UV Islands.'''
+	for obj in source_collection.objects:
+		if obj.type == "MESH":
+			bpy.context.view_layer.objects.active = obj
+			bpy.ops.object.mode_set(mode='EDIT')
+			bm = bmesh.from_edit_mesh(obj.data)
+			# old seams
+			old_seams = [e for e in bm.edges if e.seam]
+			# unmark
+			for e in old_seams:
+				e.seam = False
+			# mark seams from uv islands
+			bpy.ops.mesh.select_all(action='SELECT')
+			bpy.ops.uv.select_all(action='SELECT')
+			bpy.ops.uv.seams_from_islands()
+			seams = [e for e in bm.edges if e.seam]
+			# split on seams
+			bmesh.ops.split_edges(bm, edges=seams)
+			# re instate old seams.. could clear new seams.
+			for e in old_seams:
+				e.seam = True
+			bmesh.update_edit_mesh(obj.data)
+			bpy.ops.object.mode_set(mode='OBJECT')
+
+def save_drs(operator, context, filepath="", use_apply_transform=True, split_mesh_by_uv_islands=False, keep_debug_collections=False):
 	'''Save the DRS File.'''
 	# Get the right Collection
 	source_collection: bpy.types.Collection = None
@@ -794,6 +800,10 @@ def save_drs(operator, context, filepath="", use_apply_transform=True, keep_debu
 	# Verify the Models
 	if not verify_models(source_collection):
 		return {"CANCELLED"}
+	
+	# Split the Meshes by UV Islands
+	if split_mesh_by_uv_islands:
+		split_meshes_by_uv_islands(source_collection)
 
 	# What we need in every DRS File (*created by this sript): CGeoMesh*, CGeoOBBTree (empty)*, CDspJointMap*, CDspMeshFile, DrwResourceMeta*
 	# What we need in skinned DRS Files: CSkSkinInfo, CSkSkeleton, AnimationSet, AnimationTimings
