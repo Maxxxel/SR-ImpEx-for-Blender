@@ -46,14 +46,22 @@ def mirror_mesh_on_axis(obj, axis='y'):
 	obj (bpy.types.Object): The object to mirror.
 	axis (str): Global axis to mirror along, should be 'x', 'y', or 'z'.
 	"""
+	print(f"Mirroring object {obj.name} along axis {axis}...")
 	# Validate axis
 	axis = axis.lower()
 	if axis not in ['x', 'y', 'z']:
 		raise ValueError("Invalid axis. Use 'x', 'y', or 'z'.")
 
+	# Deselect all objects
+	bpy.ops.object.select_all(action='DESELECT')
+
 	# Select the object
 	bpy.context.view_layer.objects.active = obj
 	obj.select_set(True)
+
+	# Ensure the object is selected
+	if not obj.select_get():
+		raise ValueError(f"Object {obj.name} could not be selected.")
 
 	# Determine the constraint axis
 	constraint_axis = {
@@ -694,57 +702,74 @@ def triangulate(source_collection: bpy.types.Collection) -> None:
 			bpy.ops.object.mode_set(mode='OBJECT')
 
 def duplicate_collection_hierarchy(source_collection, parent_collection=None, link_to_scene=True):
-	# Create a new collection with a modified name
-	new_collection = bpy.data.collections.new(name=source_collection.name + "_Copy")
-	if link_to_scene:
-		bpy.context.scene.collection.children.link(new_collection)
-	if parent_collection:
-		parent_collection.children.link(new_collection)
+    # Create a new collection with a modified name
+    new_collection = bpy.data.collections.new(name=source_collection.name + "_Copy")
+    if link_to_scene:
+        bpy.context.scene.collection.children.link(new_collection)
+    if parent_collection:
+        parent_collection.children.link(new_collection)
 
-	# Dictionary to keep track of old to new object mappings
-	old_to_new_objs = {}
+    # Dictionary to keep track of old to new object mappings
+    old_to_new_objs = {}
 
-	# Function to duplicate object with hierarchy
-	def duplicate_obj(obj, parent_obj):
-		# Duplicate the object and its data
-		new_obj = obj.copy()
-		if obj.data:
-			new_obj.data = obj.data.copy()
+    # Function to duplicate object with hierarchy
+    def duplicate_obj(obj, parent_obj):
+        # Duplicate the object and its data
+        new_obj = obj.copy()
+        if obj.data:
+            new_obj.data = obj.data.copy()
 
-		# Append '_copy' to the duplicated object's name
-		new_obj.name += "_Copy"
-		if new_obj.data and hasattr(new_obj.data, 'name'):
-			new_obj.data.name += "_Copy"
+        # Append '_copy' to the duplicated object's name
+        new_obj.name += "_Copy"
+        if new_obj.data and hasattr(new_obj.data, 'name'):
+            new_obj.data.name += "_Copy"
 
-		# Unlink the new object from all current collections it's linked to
-		for col in new_obj.users_collection:
-			col.objects.unlink(new_obj)
-		
-		# Keep track of the object's parent (if it has one)
-		if parent_obj is not None and parent_obj in old_to_new_objs:
-			new_obj.parent = old_to_new_objs[parent_obj]
+        # Unlink the new object from all current collections it's linked to
+        for col in new_obj.users_collection:
+            col.objects.unlink(new_obj)
+        
+        # Link the new object only to the new collection
+        new_collection.objects.link(new_obj)
+        old_to_new_objs[obj] = new_obj
 
-		# Link the new object only to the new collection
-		new_collection.objects.link(new_obj)
-		old_to_new_objs[obj] = new_obj
+        # Set the parent if it's already duplicated
+        if parent_obj is not None and parent_obj in old_to_new_objs:
+            new_obj.parent = old_to_new_objs[parent_obj]
 
-	# Check if the parent is in the same source collection
-	def is_parent_in_source_collection(obj):
-		return obj.parent.name in [o.name for o in source_collection.objects] if obj.parent else False
+    # Sort objects by their depth in the hierarchy
+    def sort_objects_by_hierarchy(objects):
+        obj_depth = {}
+        def assign_depth(obj, depth=0):
+            if obj in obj_depth:
+                return obj_depth[obj]
+            if obj.parent is None or obj.parent not in objects:
+                obj_depth[obj] = depth
+                return depth
+            obj_depth[obj] = assign_depth(obj.parent, depth + 1) + 1
+            return obj_depth[obj]
 
-	# Iterate through all objects in the collection and duplicate them
-	for obj in source_collection.objects:
-		duplicate_obj(obj, obj.parent if is_parent_in_source_collection(obj) else None)
+        # Assign depth to all objects
+        for obj in objects:
+            if obj not in obj_depth:
+                assign_depth(obj)
 
-	# Set the new collection as active if linking to the scene
-	if link_to_scene:
-		bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[new_collection.name]
+        # Return objects sorted by their depth
+        return sorted(objects, key=lambda o: obj_depth[o])
 
-	# Recursively duplicate child collections and their objects
-	for child_col in source_collection.children:
-		duplicate_collection_hierarchy(child_col, parent_collection=new_collection, link_to_scene=False)
+    # Sort and then duplicate objects
+    sorted_objects = sort_objects_by_hierarchy(list(source_collection.objects))
+    for obj in sorted_objects:
+        duplicate_obj(obj, obj.parent)
 
-	return new_collection
+    # Set the new collection as active if linking to the scene
+    if link_to_scene:
+        bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[new_collection.name]
+
+    # Recursively duplicate child collections and their objects
+    for child_col in source_collection.children:
+        duplicate_collection_hierarchy(child_col, parent_collection=new_collection, link_to_scene=False)
+
+    return new_collection
 
 def save_drs(operator, context, filepath="", use_apply_transform=True, keep_debug_collections=False):
 	'''Save the DRS File.'''
