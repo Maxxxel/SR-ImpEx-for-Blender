@@ -24,14 +24,14 @@ bl_info = {
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
 	"blender" : (4, 0, 0),
-	"version" : (2, 4, 1),
+	"version" : (2, 4, 2),
 	"location" : "File > Import",
 	"warning" : "",
 	"category" : "Import-Export",
 	"tracker_url": ""
 }
 
-is_dev_version = True
+is_dev_version = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
 @orientation_helper(axis_forward='X', axis_up='-Y')
@@ -66,6 +66,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	filename_ext = ".drs"
 	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255) # type: ignore # ignore
 	use_apply_transform : BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True) # type: ignore # ignore
+	split_mesh_by_uv_islands : BoolProperty(name="Split Mesh by UV Islands", description="Split mesh by UV islands", default=False) # type: ignore # ignore
 	keep_debug_collections : BoolProperty(name="Keep Debug Collection", description="Keep debug collection in the scene", default=False) # type: ignore # ignore
 
 	def execute(self, context):
