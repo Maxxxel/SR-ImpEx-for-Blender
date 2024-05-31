@@ -14,6 +14,15 @@ MagicValues = {
 	"CGeoPrimitiveContainer": 1396683476
 }
 
+AnimationType = {
+	"CastResolve": 0,
+	"Spawn": 1,
+	"Melee": 2,
+	"Channel": 3,
+	"ModeSwitch": 4, 
+	"WormMovement": 5,
+}
+
 class RootNodeInformation():
 	"""Root Node Information"""
 	def __init__(self) -> None:
@@ -1095,13 +1104,13 @@ class CSkSkeleton():
 	"""CSkSkeleton"""
 	def __init__(self) -> None:
 		"""CSkSkeleton Constructor"""
-		self.Magic: int
-		self.Version: int
+		self.Magic: int = 1558308612
+		self.Version: int = 3
 		self.BoneMatrixCount: int
 		self.BoneMatrices: List[BoneMatrix]
 		self.BoneCount: int
 		self.Bones: List[Bone]
-		self.SuperParent: Vector
+		self.SuperParent: Matrix = Matrix(((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)))
 
 	def Read(self, Buffer: FileReader) -> 'CSkSkeleton':
 		"""Reads the CSkSkeleton from the buffer"""
@@ -1127,12 +1136,19 @@ class CSkSkeleton():
 		Buffer.WriteVector4(self.SuperParent)
 		return self
 
+	def Size(self) -> int:
+		"""Returns the size of the CSkSkeleton"""
+		add = 0
+		for bone in self.Bones:
+			add += 16 + 4 * bone.ChildCount + bone.NameLength
+		return 80 + 64 * self.BoneMatrixCount + add
+
 class JointGroup():
 	"""JointGroup"""
 	def __init__(self) -> None:
 		"""JointGroup Constructor"""
 		self.JointCount: int = 0
-		self.Joints: List[int] = []
+		self.Joints: List[int] = [] # Sorted by Bone Identifier Appearance in the Skeleton.Bones List
 
 	def Read(self, Buffer: FileReader) -> 'JointGroup':
 		"""Reads the JointGroup from the buffer"""
@@ -1199,7 +1215,7 @@ class CSkSkinInfo():
 	"""CSkSkinInfo"""
 	def __init__(self) -> None:
 		"""CSkSkinInfo Constructor"""
-		self.Version: int
+		self.Version: int = 1
 		self.VertexCount: int
 		self.VertexData: List[VertexData]
 
@@ -1217,6 +1233,10 @@ class CSkSkinInfo():
 		for _VertexData in self.VertexData:
 			_VertexData.Write(Buffer)
 		return self
+	
+	def Size(self) -> int:
+		"""Returns the size of the CSkSkinInfo"""
+		return 8 + 32 * self.VertexCount
 
 class CGeoMesh():
 	"""CGeoMesh"""
@@ -1256,39 +1276,39 @@ class CGeoMesh():
 
 class AnimationSetVariant():
 	"""AnimationSetVariant"""
-	def __init__(self) -> None:
+	def __init__(self, weight: int = 100, animation_file_name: str = "") -> None:
 		"""AnimationSetVariant Constructor"""
-		self.Unknown: int
-		self.Weight: int
-		self.Length: int
-		self.File: str
-		self.Start: float
-		self.End: float
-		self.AllowsIK: bool
-		self.Unknown2: bool
+		self.Version: int = 7 # 6 or 7
+		self.Weight: int = weight # Maximum 100 in sum for all Variants
+		self.Length: int = len(animation_file_name)
+		self.File: str = animation_file_name
+		self.Start: float = 0 # TODO: Sometimes it isnt 0, why?
+		self.End: float = 1 # TODO: always 1?
+		self.AllowsIK: int = 1 # TODO: Most of the time 1?
+		self.Unknown2: int = 0 # TODO: Most of the time 0?
 
 	def Read(self, Buffer: FileReader) -> 'AnimationSetVariant':
 		"""Reads the AnimationSetVariant from the buffer"""
-		self.Unknown = Buffer.ReadInt()
+		self.Version = Buffer.ReadInt()
 		self.Weight = Buffer.ReadInt()
 		self.Length = Buffer.ReadInt()
 		self.File = Buffer.ReadString(self.Length)
 
-		if self.Unknown >= 4:
+		if self.Version >= 4:
 			self.Start = Buffer.ReadFloat()
 			self.End = Buffer.ReadFloat()
 
-		if self.Unknown >= 5:
+		if self.Version >= 5:
 			self.AllowsIK = Buffer.ReadByte()
 
-		if self.Unknown >= 7:
+		if self.Version >= 7:
 			self.Unknown2 = Buffer.ReadByte()
 
 		return self
 
 	def Write(self, Buffer: FileWriter) -> 'AnimationSetVariant':
 		"""Writes the AnimationSetVariant to the buffer"""
-		Buffer.WriteInt(self.Unknown)
+		Buffer.WriteInt(self.Version)
 		Buffer.WriteInt(self.Weight)
 		Buffer.WriteInt(self.Length)
 		Buffer.WriteString(self.File)
@@ -1298,17 +1318,27 @@ class AnimationSetVariant():
 		Buffer.WriteByte(self.Unknown2)
 		return self
 
+	def Size(self) -> int:
+		"""Returns the size of the AnimationSetVariant"""
+		return 21 + self.Length
+
 class ModeAnimationKey():
 	"""ModeAnimationKey"""
-	def __init__(self) -> None:
+	def __init__(self, animation_file_name: str = "") -> None:
 		"""ModeAnimationKey Constructor"""
-		self.Type: int
-		self.Length: int
-		self.File: str
-		self.Unknown: int
-		self.Unknown2: List[int]
-		self.VariantCount: int
-		self.AnimationSetVariants: List[AnimationSetVariant]
+		self.Type: int = 6 # TODO: Is this always 6?
+		self.Length: int = 11
+		self.File: str = "Battleforge"
+		self.Unknown: int = 2 # TODO: Is this always 2?
+		self.Unknown2: int = 3 # TODO: Is this always 3?
+		self.VisJob: int = 0 # Short. 0 for Animated Objects else it can be used to link this animation key to an animation tag ID from the AnimationTimings
+		self.Unknown3: int = 3 # TODO: Is this always 3?
+		self.Unknown4: int = 0 # Short. TODO: Is this always 0?
+		self.VariantCount: int = 1 # 1 for animated objects, units can have more variants per animation if needed.
+		self.AnimationSetVariants: List[AnimationSetVariant] = []
+		if animation_file_name != "":
+			for _ in range(self.VariantCount):
+				self.AnimationSetVariants.append(AnimationSetVariant(animation_file_name=animation_file_name))
 
 	def Read(self, Buffer: FileReader, UK: int) -> 'ModeAnimationKey':
 		"""Reads the ModeAnimationKey from the buffer"""
@@ -1324,7 +1354,10 @@ class ModeAnimationKey():
 		elif self.Type <= 5:
 			self.Unknown2 = [Buffer.ReadByte() for _ in range(6)]
 		elif self.Type == 6:
-			self.Unknown2 = [Buffer.ReadByte() for _ in range(12)]
+			self.Unknown2 = Buffer.ReadInt()
+			self.VisJob = Buffer.ReadShort()
+			self.Unknown3 = Buffer.ReadInt()
+			self.Unknown4 = Buffer.ReadShort()
 		self.VariantCount = Buffer.ReadInt()
 		self.AnimationSetVariants = [AnimationSetVariant().Read(Buffer) for _ in range(self.VariantCount)]
 		return self
@@ -1335,12 +1368,21 @@ class ModeAnimationKey():
 		Buffer.WriteInt(self.Length)
 		Buffer.WriteString(self.File)
 		Buffer.WriteInt(self.Unknown)
-		for Unknown2 in self.Unknown2:
-			Buffer.WriteByte(Unknown2)
+		Buffer.WriteInt(self.Unknown2)
+		Buffer.WriteShort(self.VisJob)
+		Buffer.WriteInt(self.Unknown3)
+		Buffer.WriteShort(self.Unknown4)
 		Buffer.WriteInt(self.VariantCount)
 		for _AnimationSetVariant in self.AnimationSetVariants:
 			_AnimationSetVariant.Write(Buffer)
 		return self
+	
+	def Size(self) -> int:
+		"""Returns the size of the ModeAnimationKey"""
+		add = 0
+		for Variant in self.AnimationSetVariants:
+			add += Variant.Size()
+		return 39 + add
 
 class Constraint():
 	"""Constraint"""
@@ -1516,32 +1558,41 @@ class UnknownStruct():
 
 class AnimationSet():
 	"""AnimationSet"""
-	def __init__(self) -> None:
+	def __init__(self, animation_file_name: str = "") -> None:
 		"""AnimationSet Constructor"""
-		self.Length: int
-		self.Magic: str
-		self.Version: int
-		self.DefaultRunSpeed: float
-		self.DefaultWalkSpeed: float
-		self.ModeAnimationKeyCount: int
-		self.Revision: int
-		self.ModeChangeType: int
-		self.HoveringGround: int
-		self.FlyBankScale: float
-		self.FlyAccelScale: float
-		self.FlyHitScale: float
-		self.AllignToTerrain: int
-		self.ModeAnimationKeys: List[ModeAnimationKey]
-		self.HasAtlas: int
-		self.AtlasCount: int
-		self.IKAtlases: List[IKAtlas]
-		self.UKLen: int
-		self.UKInts: List[int]
-		self.Subversion: int
-		self.AnimationMarkerCount: int
-		self.AnimationMarkerSets: List[AnimationMarkerSet]
-		self.Unknown: int
-		self.UnknownStructs: List[UnknownStruct]
+		self.Length: int = 11
+		self.Magic: str = "Battleforge"
+		self.Version: int = 6
+		# Is used by the game to determine the animation speed when walking/running
+		self.DefaultRunSpeed: float = 4.8 # TODO: Add a way to show/edit this value in Blender
+		self.DefaultWalkSpeed: float = 2.4 # TODO: Add a way to show/edit this value in Blender
+		self.Revision: int = 6 # TODO: Is it all the time?
+		self.ModeAnimationKeyCount: int = 1 # How many different animations are there?
+		# TODO find out how often these values are used and for which object/unit/building types
+		self.ModeChangeType: int = 0
+		self.HoveringGround: int = 0
+		self.FlyBankScale: float = 1 # Changes for flying units
+		self.FlyAccelScale: float = 0 # Changes for flying units
+		self.FlyHitScale: float = 1 # Changes for flying units
+		self.AllignToTerrain: int = 0
+		# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+		self.ModeAnimationKeys: List[ModeAnimationKey] = []
+		if animation_file_name != "": # So we can still import original drs files
+			# Assure the name end with '.ska'
+			if not animation_file_name.endswith(".ska"):
+				animation_file_name += ".ska"
+			for _ in range(self.ModeAnimationKeyCount):
+				self.ModeAnimationKeys.append(ModeAnimationKey(animation_file_name))
+		self.HasAtlas: int = 1 # 1 or 2
+		self.AtlasCount: int = 0 # Animated Objects: 0
+		self.IKAtlases: List[IKAtlas] = []
+		self.UKLen: int = 0 # TODO: Always 0?
+		self.UKInts: List[int] = []
+		self.Subversion: int = 2 # TODO: Always 2?
+		self.AnimationMarkerCount: int = 0 # Animated Objects: 0
+		self.AnimationMarkerSets: List[AnimationMarkerSet] = []
+		self.Unknown: int # Not needed
+		self.UnknownStructs: List[UnknownStruct] # Not needed
 
 	def Read(self, Buffer: FileReader) -> 'AnimationSet':
 		"""Reads the AnimationSet from the buffer"""
@@ -1661,6 +1712,131 @@ class AnimationSet():
 					_UnknownStruct.Write(Buffer)
 
 		return self
+
+	def Size(self) -> int:
+		"""Returns the size of the AnimationSet"""
+		add = 0
+		for Key in self.ModeAnimationKeys:
+			add += Key.Size()
+		return 62 + add
+
+class Timing():
+	'''Timing'''
+	def __init__(self) -> None:
+		'''Timing Constructor'''
+		self.CastMs: int # Int
+		self.ResolveMs: int # Int
+		self.UK1: float # Float
+		self.UK2: float # Float
+		self.UK3: float # Float
+		self.AnimationMarkerID: int # Int
+		# NOTICE:
+		# When tying the visual animation to the game logic,
+		# the castMs/resolveMs seem to get converted into game ticks by simply dividing them by 100.
+		# So while the visual part of the animation is handled in milliseconds,
+		# the maximum precision for the game logic is in deciseconds/game ticks.
+		#
+		# Meaning of the variables below:
+		# For type Spawn:
+		# castMs is the duration it will take until the unit can be issued commands or lose damage immunity
+		# If castMs is for zero game ticks (< 100), then the animation is skipped entirely.
+		# If castMs is for exactly one game tick (100-199), it seems to bug out.
+		# Therefore the minimum value here should be 200, if you wish to play a spawn animation.
+		# resolveMs is the duration the spawn animation will play out for in total.
+		# This should match the total time from the .ska file, otherwise it looks weird.
+		# If you wish to slow down/speed up the animation, you can change the total time in the .ska file.
+		#
+		# For type CastResolve:
+		# castMs is the duration it will take the unit to start casting its ability (can still be aborted)
+		# If castMs is for zero game ticks (< 100), then the ability skips the cast stage
+		# and instantly moves onto the resolve stage.
+		# resolveMs is the duration it will take the unit to finish casting its ability (cannot be aborted)
+		# It seems the stage cannot be skipped and uses a minimum duration of 1 game tick,
+		# even if a value < 100 is specified.
+		# The animation is automatically slowed down/sped up based on these timings.
+		# The total time from the .ska file is ignored.
+		#
+		# For type ModeSwitch:
+		# castMs is the duration it will take the unit to start its mode switch animation.
+		# If castMs is for zero game ticks (< 100), then the mode switch is done instantly
+		# and also does not interrupt movement. During castMs, any commands are blocked.
+		# resolveMs seems to be ignored here. The unit can be issued new commands after the cast time.
+		# If you wish to slow down/speed up the animation, you can change the total time in the .ska file.
+		#
+		# For type Melee/WormMovement No experiments conducted yet.
+		#  castMs;
+		#  resolveMs;
+		# at uk1;
+		# at uk2;
+		# 
+		# Can be used to link an AnimationMarkerSet to a timing.
+		# Relevant field: AnimationMarkerSet.animationMarkerID
+		#
+		# Seems to be often used for Spawn animations.
+		# In cases where e.g. the animationTagID is used,
+		# the animationMarkerID usually not referenced anywhere.
+
+class TimingVariant():
+	'''TimingVariant'''
+	def __init__(self) -> None:
+		'''TimingVariant Constructor'''
+		self.Weight: int # Byte. The weight of this variant. The higher the weight, the more likely it is to be chosen.
+		self.VariantIndex: int # Byte.
+		self.TimingCount: int # Short. The number of Timings for this Variant. Most of the time, this is 1.
+		self.Timings: List[Timing]
+
+class AnimationTiming():
+	'''AnimationTiming'''
+	def __init__(self) -> None:
+		'''AnimationTiming Constructor'''
+		self.AnimationType: int = AnimationType['CastResolve']
+		self.AnimationTagID: int = 0
+		self.IsEnterModeAnimation: int = 0 # Short. This is 1 most of the time.
+		self.VariantCount: int # Short. The number of Animations for this Type/TagID combination.
+		self.TimingVariants: List[TimingVariant]
+
+class StructV3():
+	'''StructV3'''
+	def __init__(self) -> None:
+		'''StructV3 Constructor'''
+		self.Length: int = 1
+		self.Unknown: List[int] = [0, 0]
+
+	def Write(self, Buffer: FileWriter) -> 'StructV3':
+		'''Writes the StructV3 to the buffer'''
+		Buffer.WriteInt(self.Length)
+		for Unknown in self.Unknown:
+			Buffer.WriteInt(Unknown)
+		return self
+	
+	def Size(self) -> int:
+		'''Returns the size of the StructV3'''
+		return 12
+
+class AnimationTimings():
+	"""AnimationTimings"""
+	def __init__(self):
+		"""AnimationTimings Constructor"""
+		self.Magic: int = 1650881127
+		self.Version: int = 4 # Short. 3 or 4
+		self.AnimationTimingCount: int = 0 # Short. Only used if there are multiple Animations.
+		self.AnimationTimings: List[AnimationTiming]
+		self.StructV3: StructV3 = StructV3()
+
+	def Write(self, Buffer: FileWriter) -> 'AnimationTimings':
+		"""Writes the AnimationTimings to the buffer"""
+		Buffer.WriteInt(self.Magic)
+		Buffer.WriteShort(self.Version)
+		Buffer.WriteShort(self.AnimationTimingCount)
+		if self.AnimationTimingCount > 0:
+			# TODO
+			pass
+		self.StructV3.Write(Buffer)
+		return self
+	
+	def Size(self) -> int:
+		"""Returns the size of the AnimationTimings"""
+		return 8 + self.StructV3.Size()
 
 class MeshSetGrid():
 	"""MeshSetGrid class"""
@@ -1843,6 +2019,9 @@ class CGeoPrimitiveContainer():
 class DRS():
 	"""DRS class"""
 	def __init__(self) -> None:
+		self.operator = None
+		self.context = None
+		self.keywords = None
 		self.Magic: int = -981667554
 		self.NumberOfModels: int = 1
 		self.NodeInformationOffset: int = 41 # 20 cause of the header + 21 cause of the root node

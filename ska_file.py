@@ -2,14 +2,16 @@ from typing import List
 from mathutils import Vector
 from .file_io import FileReader, FileWriter
 
+STUTTER_MODE = ["Stutters", "Smooth", "Smooth"]
+
 class SKAHeader:
 	"""A class for storing keyframe data"""
 	def __init__(self) -> None:
 		"""Initializes the SKAHeader class"""
 		self.Tick: int
 		self.Interval: int
-		self.FrameType: int
-		self.BoneId: int
+		self.FrameType: int # 0 = Position, 1 = Rotation
+		self.BoneId: int # same as the bone id in the CSkSkeleton.Bones array
 
 	def Read(self, Buffer: FileReader) -> "SKAHeader":
 		"""Reads the SKAHeader class"""
@@ -31,8 +33,8 @@ class SKAKeyframe:
 	"""A class for storing keyframe data"""
 	def __init__(self) -> None:
 		"""Initializes the SKAKeyframe class"""
-		self.VectorData: Vector
-		self.CurveData: Vector
+		self.VectorData: Vector = Vector((0, 0, 0, 1))
+		self.CurveData: Vector = Vector((0, 0, 0, 0))
 
 	def Read(self, Buffer: FileReader) -> "SKAKeyframe":
 		"""Reads the SKAKeyframe class"""
@@ -50,12 +52,12 @@ class SKAAnimationData:
 	"""A class for storing animation data"""
 	def __init__(self) -> None:
 		"""Initializes the SKAAnimationData class"""
-		self.Duration: float
-		self.Repeat: int
-		self.StutterMode: int
-		self.UnusedItSeems: int
-		self.UnusedItTwo: int
-		self.Zeroes: List[int]
+		self.Duration: float # Duration of the animation in seconds
+		self.Repeat: int = 1 # 0 = No repeat, 1 = Repeat
+		self.StutterMode: int = 2 # 0 = Stutters, 1 = Smooth, 2 = Smooth
+		self.UnusedItSeems: int = 0 # In Type 7, this is not really used
+		self.UnusedItTwo: int = 0 # Only for Type 7, not really used
+		self.Zeroes: List[int] = [0, 0, 0]
 
 	def Read(self, Buffer: FileReader, Type: int) -> "SKAAnimationData":
 		"""Reads the SKAAnimationData class"""
@@ -68,13 +70,14 @@ class SKAAnimationData:
 		self.Zeroes = Buffer.ReadInt(3)
 		return self
 
-	def Write(self, Buffer: FileWriter) -> "SKAAnimationData":
+	def Write(self, Buffer: FileWriter, Type: int) -> "SKAAnimationData":
 		"""Writes the SKAAnimationData class"""
 		Buffer.WriteFloat(self.Duration)
 		Buffer.WriteInt(self.Repeat)
 		Buffer.WriteInt(self.StutterMode)
 		Buffer.WriteInt(self.UnusedItSeems)
-		Buffer.WriteInt(self.UnusedItTwo)
+		if Type == 7:
+			Buffer.WriteInt(self.UnusedItTwo)
 		Buffer.WriteInt(self.Zeroes)
 		return self
 
@@ -82,11 +85,11 @@ class SKA:
 	"""A class for parsing SKA files"""
 	def __init__(self) -> None:
 		"""Initializes the SKA class"""
-		self.Magic: int
-		self.Type: int
+		self.Magic: int = 0xA7148107
+		self.Type: int = 7
 		self.Length: int
 		self.Headers: List[SKAHeader]
-		self.Length6: int
+		self.TimeCount: int
 		self.Times: List[float]
 		self.KeyframeData: List[SKAKeyframe]
 		self.AnimationData: SKAAnimationData
@@ -101,9 +104,9 @@ class SKA:
 			return
 		self.Length = Reader.ReadInt()
 		self.Headers: List[SKAHeader] = [SKAHeader().Read(Reader) for _ in range(self.Length)]
-		self.Length6 = Reader.ReadInt()
-		self.Times = Reader.ReadFloat(self.Length6)
-		self.KeyframeData: List[SKAKeyframe] = [SKAKeyframe().Read(Reader) for _ in range(self.Length6)]
+		self.TimeCount = Reader.ReadInt()
+		self.Times = Reader.ReadFloat(self.TimeCount)
+		self.KeyframeData: List[SKAKeyframe] = [SKAKeyframe().Read(Reader) for _ in range(self.TimeCount)]
 		self.AnimationData: SKAAnimationData = SKAAnimationData().Read(Reader, self.Type)
 		if self.AnimationData is None:
 			print("SKAParser: Invalid SKA file type ({}).".format(self.Type))
@@ -118,7 +121,7 @@ class SKA:
 		Writer.WriteInt(self.Length)
 		for Header in self.Headers:
 			Header.Write(Writer)
-		Writer.WriteInt(self.Length6)
+		Writer.WriteInt(self.TimeCount)
 		Writer.WriteFloat(self.Times)
 		for Keyframe in self.KeyframeData:
 			Keyframe.Write(Writer)

@@ -2,12 +2,15 @@ import math
 import os
 import subprocess
 from os.path import dirname, realpath
-from typing import List, Tuple
+from typing import List, Tuple, Dict
+from uu import Error
 import bpy
 import bmesh
 from mathutils import Vector, Matrix
-from numpy import mat, rot90
-from .drs_file import DRS, CDspMeshFile, BattleforgeMesh, Face, EmptyString, LevelOfDetail, MeshData, Refraction, Textures, Texture, Vertex, Materials, Flow, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, CDspJointMap, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem, OBBNode
+import re
+
+from .ska_file import SKA, SKAHeader, SKAKeyframe, SKAAnimationData
+from .drs_file import DRS, CDspMeshFile, BattleforgeMesh, Face, EmptyString, LevelOfDetail, MeshData, Refraction, Textures, Texture, Vertex, Materials, Flow, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, CDspJointMap, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem, OBBNode, AnimationTimings, AnimationSet, CSkSkinInfo, VertexData, CSkSkeleton, Bone, BoneMatrix, BoneVertex
 
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
@@ -16,13 +19,6 @@ def show_message_box(msg: str, Title: str = "Message Box", Icon: str = "INFO") -
 		self.layout.label(text=msg)
 
 	bpy.context.window_manager.popup_menu(DrawMessageBox, title=Title, icon=Icon)
-
-def ResetViewport() -> None:
-	for Area in bpy.context.screen.areas:
-		if Area.type in ['IMAGE_EDITOR', 'VIEW_3D']:
-			Area.tag_redraw()
-
-	bpy.context.view_layer.update()
 
 def search_for_object(object_name: str, collection: bpy.types.Collection) -> bpy.types.Object | None:
 	'''Search for an object in a collection and its children by name. Returns the object if found, otherwise None.'''
@@ -529,12 +525,101 @@ def create_cdsp_meshfile(source_collection: bpy.types.Collection, model_name: st
 
 	return _cdsp_meshfile
 
-def create_cdsp_jointmap(empty = True) -> CDspJointMap:
+def create_cdsp_jointmap(source_collection: bpy.types.Collection) -> Tuple[CDspJointMap, dict]:
 	'''Create a CDspJointMap. If empty is True, the CDspJointMap will be empty.'''
-	if empty:
-		return CDspJointMap()
+	if source_collection is None:
+		return CDspJointMap(), {}
 	else:
-		pass
+		_bone_map = {}
+		_joint_map = CDspJointMap()
+		# Get the CDspMeshFile Object
+		cdspmeshfile_object = search_for_object("CDspMeshFile", source_collection)
+		# Loop the MeshData
+		for child in cdspmeshfile_object.children:
+			if child.type == "MESH":
+				_joint_map.JointGroupCount += 1
+				# Get the Vertex Groups
+				_vertex_groups = child.vertex_groups
+				# Init the Bone ID Counter
+				_bone_id = 0
+				# Init the temp JointGroups List
+				_temp_joint_group = []
+				# Loop the Vertex Groups
+				for _vertex_group in _vertex_groups:
+					# Get the Bone from the Vertex Group
+					_bone_Name = _vertex_group.name
+					_temp_joint_group.append(_bone_id)
+					_bone_map[_bone_Name] = _bone_id
+					_bone_id += 1
+				_joint_map.JointGroups.append(_temp_joint_group)
+		return _joint_map, _bone_map
+
+def create_csk_skin_info(source_collection: bpy.types.Collection, unique_mesh: bpy.types.Mesh) -> CSkSkinInfo:
+	_csk_skin_info = CSkSkinInfo()
+	
+	_csk_skin_info.VertexCount = len(unique_mesh.vertices)
+	# Each Vertex has 4 Weights and 4 Bone Indices
+	_csk_skin_info.VertexData = []
+	for _ in range(_csk_skin_info.VertexCount):
+		_vertex = unique_mesh.vertices[_]
+		_vertex_data = VertexData()
+		_vertex_data.BoneIndices = [0, 0, 0, 0]
+		_vertex_data.Weights = [0.0, 0.0, 0.0, 0.0]
+		for i, _group in enumerate(_vertex.groups):
+			_vertex_data.BoneIndices[i] = _group.group
+			_vertex_data.Weights[i] = _group.weight
+		_csk_skin_info.VertexData.append(_vertex_data)
+	return _csk_skin_info
+
+def create_csk_skeleton(source_collection: bpy.types.Collection, bone_map: dict) -> CSkSkeleton:
+	_csk_skeleton = CSkSkeleton()
+	armature_object = search_for_object("CSkSkeleton", source_collection)
+	_csk_skeleton.BoneCount = len(armature_object.data.bones)
+	_csk_skeleton.BoneMatrixCount = len(armature_object.data.bones)
+	_csk_skeleton.BoneMatrices = []
+	_csk_skeleton.Bones = []
+
+	for blender_bone in armature_object.data.bones:
+		_bone = Bone()
+		_bone.Name = blender_bone.name
+		_bone.NameLength = blender_bone.name.__len__()
+		_bone.Identifier = bone_map.get(blender_bone.name)
+		_bone.Version = hash(blender_bone.name)
+		_bone.ChildCount = len(blender_bone.children)
+		_bone.Children = []
+		for _child in blender_bone.children:
+			_bone.Children.append(bone_map.get(_child.name))
+		_csk_skeleton.Bones.append(_bone)
+
+		_bone_matrix = BoneMatrix()
+		_bone_matrix.BoneVertices = []
+		_bone_parent = blender_bone.parent
+		_blender_bone_matrix = blender_bone.matrix_local
+		_Rot = _blender_bone_matrix.to_3x3()
+		_Loc = _blender_bone_matrix.to_translation()
+		_Vector3 = -(_Rot.inverted() @ _Loc)
+		_Vector0 = _Rot.col[0]
+		_Vector1 = _Rot.col[1]
+		_Vector2 = _Rot.col[2]
+
+		for _ in range(4):
+			_bone_vertex = BoneVertex()
+			if _ == 0:
+				_bone_vertex.Parent = bone_map.get(_bone_parent.name) if _bone_parent is not None else -1
+				_bone_vertex.Position = Vector((_Vector0.x, _Vector1.x, _Vector2.x))
+			elif _ == 1:
+				_bone_vertex.Parent = bone_map.get(blender_bone.name)
+				_bone_vertex.Position = Vector((_Vector0.y, _Vector1.y, _Vector2.y))
+			elif _ == 2:
+				_bone_vertex.Parent = 0
+				_bone_vertex.Position = Vector((_Vector0.z, _Vector1.z, _Vector2.z))
+			elif _ == 3:
+				_bone_vertex.Parent = 0
+				_bone_vertex.Position = Vector((_Vector3.x, _Vector3.y, _Vector3.z))
+			_bone_matrix.BoneVertices.append(_bone_vertex)
+		_csk_skeleton.BoneMatrices.append(_bone_matrix)
+
+	return _csk_skeleton
 
 def create_drw_resource_meta() -> DrwResourceMeta:
 	'''Create a DrwResourceMeta.'''
@@ -565,6 +650,175 @@ def create_collision_shape(source_collection: bpy.types.Collection) -> Collision
 				_collision_shape.Boxes.append(create_box(child))
 
 	return _collision_shape
+
+def get_bone_keyframe_data(nla_strip: bpy.types.NlaStrip) -> Dict:
+	action = nla_strip.action
+	if not action:
+		raise ValueError("No action associated with the NLA strip")
+	
+	bone_keyframes = {}
+	max_frame = max(keyframe.co[0] for fcurve in action.fcurves for keyframe in fcurve.keyframe_points)
+	
+	for fcurve in action.fcurves:
+		data_path = fcurve.data_path
+		if 'pose.bones' not in data_path:
+			continue
+		
+		# Extract the bone name and the property (location, rotation)
+		path_elements = data_path.split('"')
+		bone_name = path_elements[1]
+		property_name = path_elements[2].split('.')[-1]
+		
+		if bone_name not in bone_keyframes:
+			bone_keyframes[bone_name] = {
+				'frames': set(),
+				'location': {},
+				'rotation': {}
+			}
+		
+		# Get the keyframe points
+		for keyframe in fcurve.keyframe_points:
+			frame = keyframe.co[0]
+			value = keyframe.co[1]
+			bone_keyframes[bone_name]['frames'].add(frame)
+			
+			if 'location' in property_name:
+				if frame not in bone_keyframes[bone_name]['location']:
+					bone_keyframes[bone_name]['location'][frame] = [None, None, None]
+				index = fcurve.array_index
+				bone_keyframes[bone_name]['location'][frame][index] = value
+			
+			if 'rotation' in property_name:
+				if frame not in bone_keyframes[bone_name]['rotation']:
+					bone_keyframes[bone_name]['rotation'][frame] = [None, None, None, None]
+				index = fcurve.array_index
+				bone_keyframes[bone_name]['rotation'][frame][index] = value
+	
+	# Convert the sets to sorted lists and normalize frame times
+	result = {}
+	for bone_name, data in bone_keyframes.items():
+		frames = sorted(list(data['frames']))
+		result[bone_name] = {
+			'number_of_frames_affecting_this_bone': len(frames),
+			'affected_times': [frame / max_frame for frame in frames],
+			'location': [data['location'][frame] for frame in frames if frame in data['location']],
+			'rotation': [data['rotation'][frame] for frame in frames if frame in data['rotation']]
+		}
+	
+	return result
+
+def get_bone_keyframe_data2(action_name: str) -> Dict:
+	action: bpy.types.Action = bpy.data.actions.get(action_name)
+	if not action:
+		raise ValueError(f"Action '{action_name}' not found")
+	
+	bone_keyframes = {}
+	max_frame = max(keyframe.co[0] for fcurve in action.fcurves for keyframe in fcurve.keyframe_points)
+	test = bpy.data.actions[action_name].groups
+	print(test)
+	for g in test:
+		print(f"Group: {g.name}")
+	group: bpy.types.ActionGroup
+	for group in action.groups:
+		bone_name = group.name
+		bone_keyframes[bone_name] = {
+			'frames': set(),
+			'location': {},
+			'rotation': {}
+		}
+
+		for channel in group.channels:
+			data_path = channel.data_path
+			property_name = data_path.split('.')[-1]
+
+			for keyframe in channel.keyframe_points:
+				frame = keyframe.co[0]
+				value = keyframe.co[1]
+				bone_keyframes[bone_name]['frames'].add(frame)
+
+				if 'location' in property_name:
+					if frame not in bone_keyframes[bone_name]['location']:
+						bone_keyframes[bone_name]['location'][frame] = [None, None, None]
+					index = channel.array_index
+					bone_keyframes[bone_name]['location'][frame][index] = value
+
+				if 'rotation' in property_name:
+					if frame not in bone_keyframes[bone_name]['rotation']:
+						bone_keyframes[bone_name]['rotation'][frame] = [None, None, None, None]
+					index = channel.array_index
+					bone_keyframes[bone_name]['rotation'][frame][index] = value
+
+	# Convert the sets to sorted lists and normalize frame times
+	result = {}
+	for bone_name, data in bone_keyframes.items():
+		frames = sorted(list(data['frames']))
+		result[bone_name] = {
+			'number_of_frames_affecting_this_bone': len(frames),
+			'affected_times': [frame / max_frame for frame in frames],
+			'location': [data['location'][frame] for frame in frames if frame in data['location']],
+			'rotation': [data['rotation'][frame] for frame in frames if frame in data['rotation']]
+		}
+	
+	return result
+
+def create_new_ska_animation(animation: bpy.types.NlaTrack) -> SKA:
+	nla_strip: bpy.types.NlaStrip = animation.strips[0]
+	fps = bpy.context.scene.render.fps
+	ska_animation = SKA()
+	# Setup the Animation Data
+	ska_animation.AnimationData = SKAAnimationData()
+	ska_animation.AnimationData.Duration = (nla_strip.frame_end - nla_strip.frame_start) / fps
+	# ska_animation.AnimationData.UnusedItTwo = 0 # by default, but maybe we need to change it?
+
+	ska_animation.Times = []
+	ska_animation.KeyframeData = []
+	ska_animation.Headers = []
+
+	# Get Keyframes
+	keyframes = get_bone_keyframe_data(nla_strip)
+	keyframes_2 = get_bone_keyframe_data2(nla_strip.action.name)
+	current_frame = 0
+
+	# Loop over the Keyframes
+	for bone_name, data in keyframes.items():
+		# Create two new SKAHeader Objects for the Location and Rotation
+		header_location = SKAHeader()
+		header_location.FrameType = 0
+		header_location.BoneId = hash(bone_name)
+		header_location.Tick = current_frame
+		header_location.Interval = max(len(data['location']), 1)
+		current_frame += header_location.Interval
+		# Loop the Location Data
+		if len(data['location']) > 0:
+			for location_data in data['location']:
+				header_location_keyyframe = SKAKeyframe()
+				header_location_keyyframe.VectorData = location_data
+				ska_animation.KeyframeData.append(header_location_keyyframe)
+		else:
+			Error("No Location Data found for Bone: " + bone_name)
+
+		header_rotation = SKAHeader()
+		header_rotation.FrameType = 1
+		header_rotation.BoneId = hash(bone_name)
+		header_rotation.Tick = current_frame
+		header_rotation.Interval = max(len(data['rotation']), 1)
+		current_frame += header_rotation.Interval
+		# Loop the Rotation Data
+		if len(data['rotation']) > 0:
+			for rotation_data in data['rotation']:
+				header_rotation_keyframe = SKAKeyframe()
+				header_rotation_keyframe.CurveData = rotation_data
+				ska_animation.KeyframeData.append(header_rotation_keyframe)
+		else:
+			Error("No Rotation Data found for Bone: " + bone_name)
+
+		# Add the Headers to the SKA Object
+		ska_animation.Headers.append(header_location)
+		ska_animation.Headers.append(header_rotation)
+
+	ska_animation.Length = current_frame
+		
+	return ska_animation
 
 def set_origin_to_world_origin(source_collection: bpy.types.Collection) -> None:
 	for obj in source_collection.objects:
@@ -621,7 +875,7 @@ def export_static_object(operator, context, filepath: str, source_collection: bp
 	_cgeo_obb_tree: CGeoOBBTree = create_cgeo_obb_tree(unique_mesh) # Maybe not needed??? We use a simple apporach for now with just one OBBNode, which is the whole mesh
 	new_drs_file.PushNode("CGeoOBBTree", _cgeo_obb_tree)
 	# CDspJointMap
-	_cdsp_jointmap: CDspJointMap = create_cdsp_jointmap() # Not needed for static objects, means we can leave it empty
+	_cdsp_jointmap, _ = create_cdsp_jointmap() # Not needed for static objects, means we can leave it empty
 	new_drs_file.PushNode("CDspJointMap", _cdsp_jointmap)
 	# CDspMeshFile
 	_cdsp_meshfile: CDspMeshFile = create_cdsp_meshfile(source_collection, model_name, filepath) # Works perfectly fine
@@ -637,6 +891,94 @@ def export_static_object(operator, context, filepath: str, source_collection: bp
 	# CGeoPrimitiveContainer
 	_cgeo_primitive_container: CGeoPrimitiveContainer = create_cgeo_primitive_container() # Always empty
 	new_drs_file.PushNode("CGeoPrimitiveContainer", _cgeo_primitive_container)
+
+	# Save the DRS File
+	new_drs_file.Save(filepath)
+
+def export_skinned_object(operator, context, filepath: str, source_collection: bpy.types.Collection, use_apply_transform: bool) -> None:
+	# TODO: We need to set the world matrix correctly for Battleforge Game Engine -> Matrix.Identity(4)
+ 
+	# Model Name COmes right after the DRSModel_ Prefix and before the _Static Suffix
+	model_name = source_collection.name[source_collection.name.find("DRSModel_") + 9:source_collection.name.find("_Skinned")]
+	# Create an empty DRS File
+	new_drs_file: DRS = DRS()
+
+	# First we need to set the origin of all meshes to the center of the scene
+	set_origin_to_world_origin(source_collection)
+ 
+	if use_apply_transform:
+		# Get CDspMeshFile Object
+		cdspmeshfile_object = search_for_object("CDspMeshFile", source_collection)
+		# Apply the Transformation to the CDspMeshFile Object
+		for child in cdspmeshfile_object.children:
+			if child.type == "MESH":
+				mirror_mesh_on_axis(child, axis='y')
+
+		# Get the CollisionShape Object
+		collision_shape_object = search_for_object("CollisionShape", source_collection)
+		
+		if collision_shape_object is not None:
+			# Apply the Transformation to the CollisionShape Object
+			for child in collision_shape_object.children:
+				if child.type == "MESH":
+					mirror_mesh_on_axis(child, axis='y')
+
+	unique_mesh = create_unique_mesh(source_collection) # Works perfectly fine
+	if unique_mesh is None:
+		show_message_box("Could not create Unique Mesh from Collection, as no CDspMeshFile was found!", "Error", "ERROR")
+		return {"CANCELLED"}
+
+	# CGeoMesh
+	_cgeo_mesh: CGeoMesh = create_cgeo_mesh(unique_mesh) # Works perfectly fine
+	new_drs_file.PushNode("CGeoMesh", _cgeo_mesh)
+	# CGeoOBBTree
+	_cgeo_obb_tree: CGeoOBBTree = create_cgeo_obb_tree(unique_mesh) # Maybe not needed??? We use a simple apporach for now with just one OBBNode, which is the whole mesh
+	new_drs_file.PushNode("CGeoOBBTree", _cgeo_obb_tree)
+	# CDspJointMap
+	_cdsp_jointmap, bone_map = create_cdsp_jointmap(source_collection)
+	new_drs_file.PushNode("CDspJointMap", _cdsp_jointmap)
+	# CSkSkinInfo
+	_csk_skin_info: CSkSkinInfo = create_csk_skin_info(source_collection, unique_mesh)
+	new_drs_file.PushNode("CSkSkinInfo", _csk_skin_info)
+	# CSkSkeleton
+	_csk_skeleton: CSkSkeleton = create_csk_skeleton(source_collection, bone_map)
+	new_drs_file.PushNode("CSkSkeleton", _csk_skeleton)
+	# CDspMeshFile
+	_cdsp_meshfile: CDspMeshFile = create_cdsp_meshfile(source_collection, model_name, filepath) # Works perfectly fine
+	new_drs_file.PushNode("CDspMeshFile", _cdsp_meshfile)
+	# drwResourceMeta
+	_drw_resource_meta: DrwResourceMeta = create_drw_resource_meta() # Dunno if needed or how to create it
+	new_drs_file.PushNode("DrwResourceMeta", _drw_resource_meta)
+	# CollisionShape
+ 	# TODO: check if it is exported correctly
+	_collision_shape: CollisionShape = create_collision_shape(source_collection) # Works perfectly fine
+	if _collision_shape is not None:
+		new_drs_file.PushNode("collisionShape", _collision_shape)
+	# CGeoPrimitiveContainer
+	_cgeo_primitive_container: CGeoPrimitiveContainer = create_cgeo_primitive_container() # Always empty
+	new_drs_file.PushNode("CGeoPrimitiveContainer", _cgeo_primitive_container)
+	
+	# Should work for single-animated objects/props
+	_animation_timings: AnimationTimings = AnimationTimings()
+	new_drs_file.PushNode("AnimationTimings", _animation_timings)
+
+	# Get the Animation Data
+	animations = []
+	armature_object = search_for_object("CSkSkeleton", source_collection)
+	if armature_object is not None:
+		animations = armature_object.animation_data.nla_tracks
+
+	# For now only one animation is supported
+	if len(animations) > 1:
+		show_message_box("Currently only one animation is supported!", "Error", "ERROR")
+		return {"CANCELLED"}
+	# Should work for animated objects
+	_animation_set: AnimationSet = AnimationSet(animations[0].name)
+	new_drs_file.PushNode("AnimationSet", _animation_set)
+	
+	# Save the animation as SKA File
+	ska_animation: SKA = create_new_ska_animation(animations[0])
+	ska_animation.Save(filepath)
 
 	# Save the DRS File
 	new_drs_file.Save(filepath)
@@ -815,6 +1157,8 @@ def save_drs(operator, context, filepath="", use_apply_transform=True, split_mes
 	# Type can be: Static for now (later we can add Skinned, Destructable, Effect, etc.)
 	if source_collection.name.find("Static") != -1:
 		export_static_object(operator, context, filepath, source_collection, use_apply_transform)
+	elif source_collection.name.find("Skinned") != -1:
+		export_skinned_object(operator, context, filepath, source_collection, use_apply_transform)
 
 	# Remove the copied Collection
 	if not keep_debug_collections:
