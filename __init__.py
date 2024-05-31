@@ -15,8 +15,9 @@ import bpy
 import os
 from os.path import dirname, realpath
 from bpy.props import StringProperty, BoolProperty
+from bpy.app.handlers import persistent
 from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
-from .drs_importer import load_drs, load_bmg
+from .drs_importer import load_drs, load_bmg, DRS
 from .drs_exporter import save_drs
 
 bl_info = {
@@ -24,15 +25,19 @@ bl_info = {
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
 	"blender" : (4, 0, 0),
-	"version" : (2, 4, 2),
+	"version" : (2, 4, 3),
 	"location" : "File > Import",
 	"warning" : "",
 	"category" : "Import-Export",
 	"tracker_url": ""
 }
 
-is_dev_version = False
+is_dev_version = True
 resource_dir = dirname(realpath(__file__)) + "/resources"
+
+@bpy.app.handlers.persistent
+def do_stuff(dummy):
+    load_drs(DRS.operator, DRS.context, **DRS.keywords)
 
 @orientation_helper(axis_forward='X', axis_up='-Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
@@ -51,7 +56,15 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
-			load_drs(self, context, **keywords)
+			bpy.app.handlers.load_post.append(do_stuff)
+			DRS.operator = self
+			DRS.keywords = keywords
+			DRS.context = context
+			
+			if keywords["clear_scene"]:
+				bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
+
+			bpy.app.handlers.load_post.remove(do_stuff)
 			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"):
 			return load_bmg(self, context, **keywords)

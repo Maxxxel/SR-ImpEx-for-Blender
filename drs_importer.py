@@ -1,21 +1,22 @@
 from math import pi
 import random
-from typing import List
+from typing import Collection, List
 import os
+from os.path import dirname, realpath
 import bpy
 import bmesh
 import hashlib
 from mathutils import Euler, Vector, Matrix, Quaternion
 from bpy_extras.image_utils import load_image
 from .drs_file import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, Face, Vertex, BoneVertex, MeshSetGrid, BoxShape, SphereShape, CylinderShape, CGeoOBBTree, OBBNode
-from .ska_file import SKA
-
-SCENECREATED = False
+from .ska_file import SKA, SKAHeader
 
 def ResetViewport() -> None:
 	for Area in bpy.context.screen.areas:
 		if Area.type in ['IMAGE_EDITOR', 'VIEW_3D']:
 			Area.tag_redraw()
+
+	bpy.context.view_layer.update()
 
 class DRSBone():
 	"""docstring for DRSBone"""
@@ -68,20 +69,19 @@ def SetObject(Name: str, SuffixHash: str, Collection: bpy.types.LayerCollection,
 	Collection.collection.objects.link(NewObject)
 	return NewObject
 
-def InitSkeleton(SkeletonData: CSkSkeleton, Suffix: str = None) -> list[DRSBone]:
+def init_skeleton(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
 	BoneList: list[DRSBone] = []
 
 	# Init the Bone List
-	for i in range(SkeletonData.BoneCount):
+	for i in range(skeleton_data.BoneCount):
 		BoneList.append(DRSBone())
 
-	# Set the Bone Datap
-
-	for i in range(SkeletonData.BoneCount):
-		BoneData: Bone = SkeletonData.Bones[i]
+	# Set the Bone Datapoints
+	for i in range(skeleton_data.BoneCount):
+		BoneData: Bone = skeleton_data.Bones[i]
 
 		# Get the RootBone Vertices
-		BoneVertices: List[BoneVertex] = SkeletonData.BoneMatrices[BoneData.Identifier].BoneVertices
+		BoneVertices: List[BoneVertex] = skeleton_data.BoneMatrices[BoneData.Identifier].BoneVertices
 
 		_Vector0 = Vector((BoneVertices[0].Position.x, BoneVertices[0].Position.y, BoneVertices[0].Position.z, BoneVertices[0].Parent))
 		_Vector1 = Vector((BoneVertices[1].Position.x, BoneVertices[1].Position.y, BoneVertices[1].Position.z, BoneVertices[1].Parent))
@@ -98,7 +98,7 @@ def InitSkeleton(SkeletonData: CSkSkeleton, Suffix: str = None) -> list[DRSBone]
 		BoneListItem: DRSBone = BoneList[BoneData.Identifier]
 		BoneListItem.SKAIdentifier = BoneData.Version
 		BoneListItem.Identifier = BoneData.Identifier
-		BoneListItem.Name = BoneData.Name + (f"_{Suffix}" if Suffix else "")
+		BoneListItem.Name = BoneData.Name + (f"_{suffix}" if suffix else "")
 		BoneListItem.BoneMatrix = _BoneMatrix
 
 		# Set the Bone Children
@@ -115,35 +115,35 @@ def InitSkeleton(SkeletonData: CSkSkeleton, Suffix: str = None) -> list[DRSBone]
 	# Return the BoneList
 	return BoneList
 
-def CreateBoneTree(Armature: bpy.types.Armature, BoneList: list[DRSBone], BoneData: DRSBone):
-	EditBone = Armature.edit_bones.new(BoneData.Name)
-	EditBone.head = BoneData.BoneMatrix @ Vector((0, 0, 0))
-	EditBone.tail = BoneData.BoneMatrix @ Vector((0, 1, 0))
-	EditBone.length = 1 # TODO
-	EditBone.align_roll(BoneData.BoneMatrix.to_3x3() @ Vector((0, 0, 1)))
+def create_bone_tree(armature: bpy.types.Armature, bone_list: list[DRSBone], bone_data: DRSBone):
+	EditBone = armature.edit_bones.new(bone_data.Name)
+	EditBone.head = bone_data.BoneMatrix @ Vector((0, 0, 0))
+	EditBone.tail = bone_data.BoneMatrix @ Vector((0, 1, 0))
+	EditBone.length = 0.1
+	EditBone.align_roll(bone_data.BoneMatrix.to_3x3() @ Vector((0, 0, 1)))
 
 	# Set the Parent
-	if BoneData.Parent != -1:
-		ParentBoneData: DRSBone = BoneList[BoneData.Parent]
-		EditBone.parent = Armature.edit_bones[ParentBoneData.Name]
+	if bone_data.Parent != -1:
+		ParentBoneData: DRSBone = bone_list[bone_data.Parent]
+		EditBone.parent = armature.edit_bones[ParentBoneData.Name]
 
-	for ChildBone in BoneList:
-		if ChildBone.Parent == BoneData.Identifier:
-			CreateBoneTree(Armature, BoneList, ChildBone)
+	for ChildBone in bone_list:
+		if ChildBone.Parent == bone_data.Identifier:
+			create_bone_tree(armature, bone_list, ChildBone)
 
-def BuildSkeleton(BoneList: list[DRSBone], Armature: bpy.types.Armature, ArmatureObject):
+def build_skeleton(bone_list: list[DRSBone], armature: bpy.types.Armature, armature_object: bpy.types.Object) -> None:
 	# Switch to edit mode
-	bpy.context.view_layer.objects.active = ArmatureObject
+	bpy.context.view_layer.objects.active = armature_object
 	bpy.ops.object.mode_set(mode='EDIT')
 
-	CreateBoneTree(Armature, BoneList, BoneList[0])
+	create_bone_tree(armature, bone_list, bone_list[0])
 
 	bpy.ops.object.mode_set(mode='OBJECT')
 
 	# Record bind pose transform to parent space
 	# Used to set pose bones for animation
-	for BoneData in BoneList:
-		ArmaBone = Armature.bones[BoneData.Name]
+	for BoneData in bone_list:
+		ArmaBone = armature.bones[BoneData.Name]
 		MatrixLocal = ArmaBone.matrix_local
 
 		if ArmaBone.parent:
@@ -152,60 +152,78 @@ def BuildSkeleton(BoneList: list[DRSBone], Armature: bpy.types.Armature, Armatur
 		BoneData.BindLoc = MatrixLocal.to_translation()
 		BoneData.BindRot = MatrixLocal.to_quaternion()
 
-def InitSkin(MeshFile: CDspMeshFile, SkinData: CSkSkinInfo, GeoMeshData: CGeoMesh) -> list[BoneWeight]:
-	TotalVertexCount = sum(Mesh.VertexCount for Mesh in MeshFile.Meshes)
-	BoneWeights = [BoneWeight() for i in range(TotalVertexCount)]
-	VertexPositions = [Vertex.Position.xyz for Mesh in MeshFile.Meshes for Vertex in Mesh.MeshData[0].Vertices]
-	GeoMeshPositions = [Vertex.xyz for Vertex in GeoMeshData.Vertices]
+def init_skin(mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mesh_data: CGeoMesh) -> list[BoneWeight]:
+	TotalVertexCount = sum(Mesh.VertexCount for Mesh in mesh_file.Meshes)
+	BoneWeights = [BoneWeight() for _ in range(TotalVertexCount)]
+	VertexPositions = [Vertex.Position.xyz for Mesh in mesh_file.Meshes for Vertex in Mesh.MeshData[0].Vertices]
+	GeoMeshPositions = [Vertex.xyz for Vertex in geo_mesh_data.Vertices]
 
 	for VertexIndex, VectorToCheck in enumerate(VertexPositions):
 		j = GeoMeshPositions.index(VectorToCheck)
-		BoneWeights[VertexIndex] = BoneWeight(SkinData.VertexData[j].BoneIndices, SkinData.VertexData[j].Weights)
+		BoneWeights[VertexIndex] = BoneWeight(skin_data.VertexData[j].BoneIndices, skin_data.VertexData[j].Weights)
 
 	return BoneWeights
 
-def CreateMaterial(i: int, BattleforgeMeshData: BattleforgeMesh, Dirname: str):
-	NewMaterial = bpy.data.materials.new("Material_" + str(i))
-	NewMaterial.blend_method = 'CLIP'
-	NewMaterial.alpha_threshold = 0.6
-	NewMaterial.show_transparent_back = False
+def create_material(mesh_index: int, mesh_data: BattleforgeMesh, dir_name: str, base_name: str) -> bpy.types.Material:
+	NewMaterial = bpy.data.materials.new("Material_" + base_name + "_" + str(mesh_index))
+
+	# We need to create a new "DRS" Group Node for the Material. In Blender we would go to Shading, press Shift + A and add the Group 'DRS' Node
 	NewMaterial.use_nodes = True
-	NewMaterial.node_tree.nodes['Material Output'].location = Vector((400.0, 0.0))	
-	BSDF = NewMaterial.node_tree.nodes["Principled BSDF"]
-	BSDF.location = Vector((0.0, 0.0))
-	ColorMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-	ColorMapNode.location = Vector((-700.0, 0.0))
+	NewMaterial.node_tree.nodes.clear()
+
+	# Create the DRS Group Node
+	DRSGroupNode = NewMaterial.node_tree.nodes.new('ShaderNodeGroup')
+	DRSGroupNode.node_tree = bpy.data.node_groups['DRS']
+
+	# Create the Output Node
+	MaterialOutputNode = NewMaterial.node_tree.nodes.new('ShaderNodeOutputMaterial')
+	MaterialOutputNode.location = Vector((400.0, 0.0))
+	NewMaterial.node_tree.links.new(DRSGroupNode.outputs['BSDF'], MaterialOutputNode.inputs['Surface'])
+
+	# NewMaterial.blend_method = 'CLIP'
+	# NewMaterial.alpha_threshold = 0.6
+	# NewMaterial.show_transparent_back = False
+	# NewMaterial.use_nodes = True
+	# NewMaterial.node_tree.nodes['Material Output'].location = Vector((400.0, 0.0))	
+	# BSDF = NewMaterial.node_tree.nodes["Principled BSDF"]
+	# BSDF.location = Vector((0.0, 0.0))
+	# ColorMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
+	# ColorMapNode.location = Vector((-700.0, 0.0))
 
 	# Add BaseColor Texture
-	for Tex in BattleforgeMeshData.Textures.Textures:
-		if Tex.Identifier == 1684432499:
-			ColorMapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), Dirname, check_existing=True, place_holder=False, recursive=False)
-			NewMaterial.node_tree.links.new(BSDF.inputs['Base Color'], ColorMapNode.outputs['Color'])
+	for Tex in mesh_data.Textures.Textures:
+		if Tex.Identifier == 1684432499 and Tex.Length > 0:
+			col_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+			col_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
+			col_node.location = Vector((-700.0, 0.0))
+			col_node.image = col_image
+			NewMaterial.node_tree.links.new(col_node.outputs['Color'], DRSGroupNode.inputs['Color Map'])
+			NewMaterial.node_tree.links.new(col_node.outputs['Alpha'], DRSGroupNode.inputs['Color Alpha'])
 
 	# Add ParameterMap if present
-	for Tex in BattleforgeMeshData.Textures.Textures:
-		if Tex.Identifier == 1936745324:
-			ParameterMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-			ParameterMapNode.location = Vector((-700.0, -300.0))
-			ParameterMapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), Dirname, check_existing=True, place_holder=False, recursive=False)
-			ParameterMapSeparateNode = NewMaterial.node_tree.nodes.new('ShaderNodeSeparateRGB')
-			ParameterMapSeparateNode.location = Vector((-250.0, -450.0))
-			NewMaterial.node_tree.links.new(ParameterMapNode.outputs['Color'], ParameterMapSeparateNode.inputs['Image'])
-			NewMaterial.node_tree.links.new(ParameterMapSeparateNode.outputs['R'], BSDF.inputs['Metallic'])
-			NewMaterial.node_tree.links.new(ParameterMapSeparateNode.outputs['G'], BSDF.inputs['Roughness'])
-			# TODO: Fix Specular from Blender 3.4.0
-			# NewMaterial.node_tree.links.new(ParameterMapNode.outputs['Alpha'], BSDF.inputs['Specular'])
+	for Tex in mesh_data.Textures.Textures:
+		if Tex.Identifier == 1936745324 and Tex.Length > 0:
+			param_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+			param_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
+			param_node.location = Vector((-700.0, -100.0))
+			param_node.image = param_image
+			# Create a Separate RGB Node between the ParameterMap and the DRS Group Node
+			sep_rgb_node = NewMaterial.node_tree.nodes.new('ShaderNodeSeparateRGB')
+			sep_rgb_node.location = Vector((-400.0, -100.0))
+			NewMaterial.node_tree.links.new(param_node.outputs['Color'], sep_rgb_node.inputs['Image'])
+			NewMaterial.node_tree.links.new(sep_rgb_node.outputs['R'], DRSGroupNode.inputs['Metallic (Red)'])
+			NewMaterial.node_tree.links.new(sep_rgb_node.outputs['G'], DRSGroupNode.inputs['Roughness (Green)'])
+			# Skip B
+			NewMaterial.node_tree.links.new(param_node.outputs['Alpha'], DRSGroupNode.inputs['Emission (Alpha)'])
 
 	# Add NormalMap Texture if present
-	for Tex in BattleforgeMeshData.Textures.Textures:
-		if Tex.Identifier == 1852992883:
-			NormalMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-			NormalMapNode.location = Vector((-700.0, -600.0))
-			NormalMapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), Dirname, check_existing=True, place_holder=False, recursive=False)
-			NormalMapConvertNode = NewMaterial.node_tree.nodes.new('ShaderNodeNormalMap')
-			NormalMapConvertNode.location = Vector((-250.0, -600.0))
-			NewMaterial.node_tree.links.new(NormalMapNode.outputs['Color'], NormalMapConvertNode.inputs['Color'])
-			NewMaterial.node_tree.links.new(NormalMapConvertNode.outputs['Normal'], BSDF.inputs['Normal'])
+	for Tex in mesh_data.Textures.Textures:
+		if Tex.Identifier == 1852992883 and Tex.Length > 0:
+			nor_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+			nor_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
+			nor_node.location = Vector((-700.0, -300.0))
+			nor_node.image = nor_image
+			NewMaterial.node_tree.links.new(nor_node.outputs['Color'], DRSGroupNode.inputs['Normal Map'])
 
 	# Fluid is hard to add, prolly only as an hardcoded animation, there is no GIF support
 
@@ -214,42 +232,42 @@ def CreateMaterial(i: int, BattleforgeMeshData: BattleforgeMesh, Dirname: str):
 	# Environment can be ignored, its only used for Rendering
 
 	# Refraction
-	for Tex in BattleforgeMeshData.Textures.Textures:
-		if Tex.Identifier == 1919116143 and Tex.Length > 0:
-			RefractionMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-			RefractionMapNode.location = Vector((-700.0, -900.0))
-			RefractionMapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), Dirname, check_existing=True, place_holder=False, recursive=False)
-			RefBSDF = NewMaterial.node_tree.nodes.new('ShaderNodeBsdfRefraction')
-			RefBSDF.location = Vector((-250.0, -770.0))
-			NewMaterial.node_tree.links.new(RefBSDF.inputs['Color'], RefractionMapNode.outputs['Color'])
-			MixNode = NewMaterial.node_tree.nodes.new('ShaderNodeMixShader')
-			MixNode.location = Vector((0.0, 200.0))
-			NewMaterial.node_tree.links.new(MixNode.inputs[1], RefBSDF.outputs[0])
-			NewMaterial.node_tree.links.new(MixNode.inputs[2], BSDF.outputs[0])
-			NewMaterial.node_tree.links.new(MixNode.outputs[0], NewMaterial.node_tree.nodes['Material Output'].inputs[0])
-			MixNodeAlpha = NewMaterial.node_tree.nodes.new('ShaderNodeMixRGB')
-			MixNodeAlpha.location = Vector((-250.0, -1120.0))
-			MixNodeAlpha.use_alpha = True
-			MixNodeAlpha.blend_type = 'SUBTRACT'
-			# Set the Factor to 0.2, so the Refraction is not too strong
-			MixNodeAlpha.inputs[0].default_value = 0.2
-			NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[1], ColorMapNode.outputs['Alpha'])
-			NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[2], RefractionMapNode.outputs['Alpha'])
-			NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], MixNodeAlpha.outputs[0])
-		else:
-			NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], ColorMapNode.outputs['Alpha'])
+	# for Tex in mesh_data.Textures.Textures:
+	# 	if Tex.Identifier == 1919116143 and Tex.Length > 0:
+	# 		RefractionMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
+	# 		RefractionMapNode.location = Vector((-700.0, -900.0))
+	# 		RefractionMapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+	# 		RefBSDF = NewMaterial.node_tree.nodes.new('ShaderNodeBsdfRefraction')
+	# 		RefBSDF.location = Vector((-250.0, -770.0))
+	# 		NewMaterial.node_tree.links.new(RefBSDF.inputs['Color'], RefractionMapNode.outputs['Color'])
+	# 		MixNode = NewMaterial.node_tree.nodes.new('ShaderNodeMixShader')
+	# 		MixNode.location = Vector((0.0, 200.0))
+	# 		NewMaterial.node_tree.links.new(MixNode.inputs[1], RefBSDF.outputs[0])
+	# 		NewMaterial.node_tree.links.new(MixNode.inputs[2], BSDF.outputs[0])
+	# 		NewMaterial.node_tree.links.new(MixNode.outputs[0], NewMaterial.node_tree.nodes['Material Output'].inputs[0])
+	# 		MixNodeAlpha = NewMaterial.node_tree.nodes.new('ShaderNodeMixRGB')
+	# 		MixNodeAlpha.location = Vector((-250.0, -1120.0))
+	# 		MixNodeAlpha.use_alpha = True
+	# 		MixNodeAlpha.blend_type = 'SUBTRACT'
+	# 		# Set the Factor to 0.2, so the Refraction is not too strong
+	# 		MixNodeAlpha.inputs[0].default_value = 0.2
+	# 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[1], ColorMapNode.outputs['Alpha'])
+	# 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[2], RefractionMapNode.outputs['Alpha'])
+	# 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], MixNodeAlpha.outputs[0])
+	# 	else:
+	# 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], ColorMapNode.outputs['Alpha'])
 
-	if BattleforgeMeshData.Refraction.Length == 1:
-		_RGB = BattleforgeMeshData.Refraction.RGB
+	# if mesh_data.Refraction.Length == 1:
+	# 	_RGB = mesh_data.Refraction.RGB
 		# What to do here?
 
 	return NewMaterial
 
-def CreateSkinnedMesh(MeshFile: CDspMeshFile, DirName:str, MeshObjectObject: bpy.types.Object, Collection: bpy.types.LayerCollection, Armature: object, BoneList: list[DRSBone], WeightList: List[BoneWeight], State: bool = False, OverrideName: str = None):
-	for i in range(MeshFile.MeshCount):
-		Offset = 0 if i == 0 else Offset + MeshFile.Meshes[i - 1].VertexCount
-		BattleforgeMeshData: BattleforgeMesh = MeshFile.Meshes[i]
-		MeshName = "Mesh_" + (OverrideName if OverrideName else (("State_" if State else "") + str(i)))
+def create_skinned_mesh(mesh_file: CDspMeshFile, dir_name:str, base_name: str, mesh_object: bpy.types.Object, armature: object, bone_list: list[DRSBone], weight_list: List[BoneWeight], state: bool = False, override_name: str = None):
+	for i in range(mesh_file.MeshCount):
+		Offset = 0 if i == 0 else Offset + mesh_file.Meshes[i - 1].VertexCount
+		BattleforgeMeshData: BattleforgeMesh = mesh_file.Meshes[i]
+		MeshName = "MeshData_" + (override_name if override_name else (("State_" if state else "") + str(i)))
 		NewMesh = bpy.data.meshes.new(MeshName)
 		NewMeshObject = bpy.data.objects.new(MeshName, NewMesh)
 
@@ -277,33 +295,33 @@ def CreateSkinnedMesh(MeshFile: CDspMeshFile, DirName:str, MeshObjectObject: bpy
 		UVList = [i for poly in NewMeshObject.data.polygons for vidx in poly.vertices for i in UVList[vidx]]
 		NewMeshObject.data.uv_layers.new().data.foreach_set('uv', UVList)
 
-		MaterialData = CreateMaterial(i, BattleforgeMeshData, DirName)
+		MaterialData = create_material(i, BattleforgeMeshData, dir_name, base_name)
 		NewMeshObject.data.materials.append(MaterialData)
-		NewMeshObject.parent = MeshObjectObject
+		NewMeshObject.parent = mesh_object
 
 		for VertexIndex in range(Offset, Offset + BattleforgeMeshData.VertexCount):
-			BoneWeightData = WeightList[VertexIndex]
+			BoneWeightData = weight_list[VertexIndex]
 
 			for _ in range(4):
 				GroupID = BoneWeightData.BoneIndices[_]
 				Weight = BoneWeightData.BoneWeights[_]
 				VertexGroup = None
 
-				if BoneList[GroupID].Name not in NewMeshObject.vertex_groups:
-					VertexGroup = NewMeshObject.vertex_groups.new(name=BoneList[GroupID].Name)
+				if bone_list[GroupID].Name not in NewMeshObject.vertex_groups:
+					VertexGroup = NewMeshObject.vertex_groups.new(name=bone_list[GroupID].Name)
 				else:
-					VertexGroup = NewMeshObject.vertex_groups[BoneList[GroupID].Name]
+					VertexGroup = NewMeshObject.vertex_groups[bone_list[GroupID].Name]
 
 				VertexGroup.add([VertexIndex - Offset], Weight, 'ADD')
 
 		Modifier = NewMeshObject.modifiers.new(type="ARMATURE", name='Armature')
-		Modifier.object = Armature
-		Collection.collection.objects.link(NewMeshObject)
+		Modifier.object = armature
+		bpy.context.collection.objects.link(NewMeshObject)
 
-def CreateStaticMesh(MeshFile: CDspMeshFile, DirName:str, MeshObjectObject: bpy.types.Object, Collection: bpy.types.LayerCollection, State: bool = False, OverrideName: str = None):
-	for i in range(MeshFile.MeshCount):
-		BattleforgeMeshData: BattleforgeMesh = MeshFile.Meshes[i]
-		MeshName = "Mesh_" + (OverrideName if OverrideName else (("State_" if State else "") + str(i)))
+def create_static_mesh(mesh_file: CDspMeshFile, base_name: str, dir_name:str, mesh_object: bpy.types.Object, state: bool = False, override_name: str = None):
+	for i in range(mesh_file.MeshCount):
+		BattleforgeMeshData: BattleforgeMesh = mesh_file.Meshes[i]
+		MeshName = "MeshData_" + (override_name if override_name else (("State_" if state else "") + str(i)))
 		NewMesh = bpy.data.meshes.new(MeshName)
 		NewMeshObject = bpy.data.objects.new(MeshName, NewMesh)
 
@@ -331,101 +349,13 @@ def CreateStaticMesh(MeshFile: CDspMeshFile, DirName:str, MeshObjectObject: bpy.
 		UVList = [i for poly in NewMeshObject.data.polygons for vidx in poly.vertices for i in UVList[vidx]]
 		NewMeshObject.data.uv_layers.new().data.foreach_set('uv', UVList)
 
-		MaterialData = CreateMaterial(i, BattleforgeMeshData, DirName)
+		MaterialData = create_material(i, BattleforgeMeshData, dir_name, base_name)
 		NewMeshObject.data.materials.append(MaterialData)
-		NewMeshObject.parent = MeshObjectObject
-		Collection.collection.objects.link(NewMeshObject)
+		NewMeshObject.parent = mesh_object
+		bpy.context.collection.objects.link(NewMeshObject)
 
-def CreateAnimation(SkaFile: SKA, ArmatureObject, BoneList: list[DRSBone], AnimationName: str):
-	FPS = bpy.context.scene.render.fps
-	DurationInSeconds: float = SkaFile.AnimationData.Duration
-	Timings: List[float] = SkaFile.Times
-	AnimationFrames = SkaFile.KeyframeData
-	AnimationTimeInFrames: int = round(DurationInSeconds * FPS)
-
-	# Create the Animation Data
-	ArmatureObject.animation_data_create()
-
-	# Create the Action
-	NewAction = bpy.data.actions.new(name=AnimationName)
-
-	# Set the Length of the Action
-	NewAction.use_frame_range = True
-
-	NewAction.frame_range = (0, AnimationTimeInFrames)
-	NewAction.frame_start = 0
-	NewAction.frame_end = AnimationTimeInFrames
-	NewAction.use_cyclic = SkaFile.AnimationData.Repeat == 1
-	bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, AnimationTimeInFrames)
-
-	# Link the Action to the Armature
-	ArmatureObject.animation_data.action = NewAction
-
-	# Go into Pose Mode
-	bpy.ops.object.mode_set(mode='POSE')
-
-	# Set the Start of the Animation
-	bpy.context.scene.frame_start = 0
-
-	# Loop through the Header Data
-	for HeaderData in SkaFile.Headers:
-		SKABoneId: int = HeaderData.BoneId
-		AnimationType: int = HeaderData.FrameType
-		StartIndex: int = HeaderData.Tick
-		NumberOfSteps: int = HeaderData.Interval
-		BoneFromBoneList: DRSBone = next((Bone for Bone in BoneList if Bone.SKAIdentifier == SKABoneId), None)
-
-		if BoneFromBoneList is None:
-			# Animation files are used for multiple models, so some bones might not be used in the current model
-			continue
-
-		PoseBoneFromArmature: bpy.types.PoseBone = ArmatureObject.pose.bones.get(BoneFromBoneList.Name)
-
-		if PoseBoneFromArmature is None:
-			# Some Bones are duplicated in the Animation files, so we can skip them as Blender deletes them
-			continue
-
-		for Index in range(StartIndex, StartIndex + NumberOfSteps):
-			CurrentTimeInSeconds: float = Timings[Index] * DurationInSeconds
-			FrameData = AnimationFrames[Index].VectorData
-			CurrentFrame: int = round(CurrentTimeInSeconds * FPS)
-
-			if AnimationType == 0:
-				# Translation
-				TranslationVector = Vector((FrameData.x, FrameData.y, FrameData.z))
-				# Relative to the bind pose
-				TranslationVector = BoneFromBoneList.BindRot.conjugated() @ (TranslationVector - BoneFromBoneList.BindLoc)
-				PoseBoneFromArmature.location = TranslationVector
-				PoseBoneFromArmature.keyframe_insert(data_path='location', frame=CurrentFrame)
-			elif AnimationType == 1:
-				# Rotation
-				RotationVector = Quaternion((-FrameData.w, FrameData.x, FrameData.y, FrameData.z))
-				# Relative to the bind pose
-				RotationVector = BoneFromBoneList.BindRot.conjugated() @ RotationVector
-				PoseBoneFromArmature.rotation_quaternion = RotationVector
-				PoseBoneFromArmature.keyframe_insert(data_path='rotation_quaternion', frame=CurrentFrame)
-
-	# Go back to Object Mode
-	bpy.ops.object.mode_set(mode='OBJECT')
-
-	# Push action to an NLA track to save it
-	NewTrack = ArmatureObject.animation_data.nla_tracks.new(prev=None)
-	NewTrack.name = NewAction.name
-	NewTrack.strips.new(NewAction.name, 1, NewAction)
-	NewTrack.lock = True
-	NewTrack.mute = True
-
-def CreateBattleforgeScene():
-	global SCENECREATED
-
-	if SCENECREATED is False:
-		SetCollection("ShaderData", "AllModels", bpy.context.view_layer.layer_collection)
-		bpy.ops.object.light_add(type='SUN', location=(1500, 2700, 1000), radius=10)
-		Sun = bpy.context.active_object
-		Sun.data.color = (1, 0.9, 0.7)
-		Sun.data.energy = 3
-
-		SCENECREATED = True
+		# Ensure the parent-child relationship is established
+		# NewMeshObject.matrix_parent_inverse = mesh_object.matrix_world.inverted()
 
 def CreateCollisionBoxes(_Box: BoxShape, Parent: bpy.types.Object):
 	# Contains rotation and scale. Is a row major 3x3 matrix
@@ -495,11 +425,11 @@ def CreateCollisionShapes(CollisionShapes, Parent: bpy.types.Object):
 	for _ in range(CollisionShapes.CylinderCount):
 		CreateCollisionCylinders(CollisionShapes.Cylinders[_], _, Parent)
 
-def CreateVert(column, row, size):
+def CreateVert(column, row, size) -> tuple:
 	""" Create a single vert """
 	return (column * size, row * size, 0)
 
-def CreateFace(column, row, rows):
+def CreateFace(column, row, rows) -> tuple:
 	""" Create a single face """
 	return (column* rows + row, (column + 1) * rows + row, (column + 1) * rows + 1 + row, column * rows + 1 + row)
 
@@ -513,240 +443,215 @@ def CreateGrid(MeshGrid: MeshSetGrid, Collection: bpy.types.LayerCollection):
 	# Rotate the grid 90 degrees around the x axis
 	GridObject.rotation_euler = Euler((pi / 2, 0, 0), 'XYZ')
 
-def CreateCGeoMesh(GeoMesh: CGeoMesh, GeoMeshObject: bpy.types.Object, Collection: bpy.types.LayerCollection):
-	NewMesh = bpy.data.meshes.new("Mesh_CGeo")
-	NewMeshObject = bpy.data.objects.new("Mesh_CGeo", NewMesh)
+def create_action(armature_object, animation_name, animation_time_in_frames: float, repeat):
+	new_action = bpy.data.actions.new(name=animation_name)
+	new_action.use_frame_range = True
+	new_action.frame_range = (0, animation_time_in_frames)
+	new_action.frame_start = 0
+	new_action.frame_end = animation_time_in_frames
+	new_action.use_cyclic = repeat == 1
+	int_duration = int(animation_time_in_frames + 1)
+	bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, int_duration)
+	armature_object.animation_data.action = new_action
+	return new_action
 
-	Faces = list()
-	Vertices = list()
+def insert_keyframes(pose_bone: bpy.types.PoseBone, frame_data, frame: float, animation_type: int, bind_rot: Quaternion, bind_loc: Vector) -> None:
+	if animation_type == 0:
+		translation_vector = Vector((frame_data.x, frame_data.y, frame_data.z))
+		translation_vector = bind_rot.conjugated() @ (translation_vector - bind_loc)
+		pose_bone.location = translation_vector
+		pose_bone.keyframe_insert(data_path='location', frame=frame)
+	elif animation_type == 1:
+		rotation_vector = Quaternion((-frame_data.w, frame_data.x, frame_data.y, frame_data.z))
+		rotation_vector = bind_rot.conjugated() @ rotation_vector
+		pose_bone.rotation_quaternion = rotation_vector
+		pose_bone.keyframe_insert(data_path='rotation_quaternion', frame=frame)
 
-	for _ in range(int(GeoMesh.IndexCount / 3)):
-		_Face: Face = GeoMesh.Faces[_].Indices
-		Faces.append((_Face[0], _Face[1], _Face[2]))
+def add_animation_to_nla_track(armature_object, action):
+	nla_tracks = armature_object.animation_data.nla_tracks
+	new_track = nla_tracks.new()
+	new_track.name = action.name
+	new_strip = new_track.strips.new(action.name, 1, action)
+	new_strip.name = action.name
+	new_track.lock = True
+	new_track.mute = False  # Set to False to enable playback
 
-	for _ in range(GeoMesh.VertexCount):
-		_Vertex: Vector = GeoMesh.Vertices[_]
-		Vertices.append((_Vertex.x, _Vertex.y, _Vertex.z))
+def create_animation(ska_file: SKA, armature_object, bone_list: list[DRSBone], animation_name: str):
+	# Set the FPS to 60
+	# bpy.context.scene.render.fps = 60
+	fps = bpy.context.scene.render.fps
+	duration_in_seconds = ska_file.AnimationData.Duration
+	timings = ska_file.Times
+	animation_frames = ska_file.KeyframeData
+	animation_time_in_frames = duration_in_seconds * fps
+	
+	armature_object.animation_data_create()
+	new_action = create_action(armature_object, animation_name, animation_time_in_frames, ska_file.AnimationData.Repeat)
+	
+	bpy.ops.object.mode_set(mode='POSE')
+	bpy.context.scene.frame_start = 0
+	
+	for header_data in ska_file.Headers:
+		bone_from_bone_list = next((bone for bone in bone_list if bone.SKAIdentifier == header_data.BoneId), None)
+		if bone_from_bone_list is None:
+			continue
+	
+		pose_bone = armature_object.pose.bones.get(bone_from_bone_list.Name)
+		if pose_bone is None:
+			continue
+		
+		for index in range(header_data.Tick, header_data.Tick + header_data.Interval):
+			current_time_in_seconds = timings[index] * duration_in_seconds
+			frame_data = animation_frames[index].VectorData
+			current_frame = current_time_in_seconds * fps
+			insert_keyframes(pose_bone, frame_data, current_frame, header_data.FrameType, bone_from_bone_list.BindRot, bone_from_bone_list.BindLoc)
 
-	NewMesh.from_pydata(Vertices, [], Faces)
-	NewMeshObject.parent = GeoMeshObject
-	NewMeshObject.display_type = 'WIRE'
-	Collection.collection.objects.link(NewMeshObject)
-
-def CreateCGeoOBBTree(GeoOBB: CGeoOBBTree, GeoMesh: CGeoMesh, GeoOBBObject: bpy.types.Object, Collection: bpy.types.LayerCollection):
-	for _ in range(GeoOBB.MatrixCount):
-		_OBBNode: OBBNode = GeoOBB.OBBNodes[_]
-		NewOBBMesh = bpy.data.meshes.new("Mesh_OBB_" + str(_OBBNode.NodeDepth))
-		OBBDepthNodeObject = SetObject("OBB_" + str(_OBBNode.NodeDepth), "", Collection, NewOBBMesh)
-
-		Faces = list()
-		Vertices = list()
-
-		for _ in range(_OBBNode.CurrentTriangleCount, _OBBNode.CurrentTriangleCount + _OBBNode.MinimumTrianglesFound):
-			_Face: Face = GeoOBB.Faces[_].Indices
-			Faces.append((_Face[0], _Face[1], _Face[2]))
-
-		for _ in range(GeoMesh.VertexCount):
-			_Vertex: Vector = GeoMesh.Vertices[_]
-			Vertices.append((_Vertex.x, _Vertex.y, _Vertex.z))
-
-		NewOBBMesh.from_pydata(Vertices, [], Faces)
-		OBBDepthNodeObject.parent = GeoOBBObject
-		OBBDepthNodeObject.display_type = 'WIRE'
-
-		# Now the 1x1x1 cube
-		Mat = _OBBNode.OrientedBoundingBox.Matrix
-		Pos = _OBBNode.OrientedBoundingBox.Position
-		Mat4x4 = Mat.to_4x4()
-		Mat4x4.translation = Pos
-		Rotation = Mat4x4.to_euler()
-		Rotation.y += pi / 2
-		# Rotation = Vector((-Rotation.x, -Rotation.y, -Rotation.z)) # Blender uses a different rotation order?
-		Scale = Mat4x4.to_scale()
-		Scale.x *= 2
-		Scale.y *= 2
-		Scale.z *= 2
-
-		bpy.ops.mesh.primitive_cube_add(size=1, enter_editmode=False, location=Pos, rotation=Rotation, scale=Scale)
-		Box = bpy.context.active_object
-		Box.name = "OBB Box" + str(_OBBNode.NodeDepth)
-		Box.data.name = "OBB Box Mesh" + str(_OBBNode.NodeDepth)
-		Box.parent = OBBDepthNodeObject
-
-def ClearBlenderScene():
-	global SCENECREATED
-	# Set the Active Object to None
-	bpy.context.view_layer.objects.active = None
-
-	# Clear the Scene
-	bpy.ops.object.select_all(action='SELECT')
-
-	# Remove all Objects
-	bpy.ops.object.delete(use_global=False)
-
-	# Remove all Collections
-	for Collection in bpy.data.collections:
-		bpy.data.collections.remove(Collection)
-
-	SCENECREATED = False
+	bpy.ops.object.mode_set(mode='OBJECT')
+	add_animation_to_nla_track(armature_object, new_action)
 
 def load_drs(operator, context, filepath="", use_apply_transform=True, global_matrix=None, clear_scene=True):
-	BaseName = os.path.basename(filepath).split(".")[0]
-	HashOf5Letters = hashlib.shake_256(BaseName.encode()).hexdigest(5)
-	HashOf5Letters = ''.join(random.sample(HashOf5Letters, len(HashOf5Letters)))
-	DirName = os.path.dirname(filepath)
+	base_name = os.path.basename(filepath).split(".")[0]
+	dir_name = os.path.dirname(filepath)
+	drs_file: DRS = DRS().Read(filepath)
 
-	if clear_scene:
-		ClearBlenderScene()
+	# source_collection = SetCollection("DRSModel_" + base_name + "_Type", "", bpy.context.view_layer.layer_collection)
+	source_collection = SetCollection("New COllection", "", bpy.context.view_layer.layer_collection)
 
-	CreateBattleforgeScene()
-	DRSFile: DRS = DRS().Read(filepath)
+	if drs_file.CSkSkeleton is not None:
+		armature = bpy.data.armatures.new("Bones")
+		armature_object: bpy.types.Object = bpy.data.objects.new("CSkSkeleton", armature)
+		bpy.context.collection.objects.link(armature_object)
+		bpy.context.view_layer.objects.active = armature_object
+		bone_list = init_skeleton(drs_file.CSkSkeleton)
+		build_skeleton(bone_list, armature, armature_object)
+		
+		weight_list = init_skin(drs_file.CDspMeshFile, drs_file.CSkSkinInfo, drs_file.CGeoMesh)
+		mesh_object: bpy.types.Object = SetObject("CDspMeshFile_" + base_name, "", source_collection) #, armature)
+		mesh_object.parent = armature_object
+		create_skinned_mesh(drs_file.CDspMeshFile, dir_name, base_name, mesh_object, armature_object, bone_list, weight_list)
 
-	UnitCollection = SetCollection(BaseName, HashOf5Letters, bpy.context.view_layer.layer_collection)
-	ModelDataCollection = SetCollection("ModelData", HashOf5Letters, UnitCollection)
-	CGeoMeshObject = SetObject("CGeoMesh", HashOf5Letters, ModelDataCollection)
-	CreateCGeoMesh(DRSFile.CGeoMesh, CGeoMeshObject, ModelDataCollection)
-	MeshObjectObject = SetObject("CDspMeshFile", HashOf5Letters, ModelDataCollection)
-
-	if DRSFile.CSkSkeleton is not None:
-		Armature = bpy.data.armatures.new("CSkSkeleton")
-		ArmatureObject = SetObject("Armature", HashOf5Letters, ModelDataCollection, Armature)
-		BoneList: list[DRSBone] = InitSkeleton(DRSFile.CSkSkeleton)
-		BuildSkeleton(BoneList, Armature, ArmatureObject)
-		WeightList = InitSkin(DRSFile.CDspMeshFile, DRSFile.CSkSkinInfo, DRSFile.CGeoMesh)
-		MeshObjectObject.parent = ArmatureObject
-		CreateSkinnedMesh(DRSFile.CDspMeshFile, DirName, MeshObjectObject, ModelDataCollection, ArmatureObject, BoneList, WeightList)
-
-		if DRSFile.AnimationSet is not None:
-			for AnimationKey in DRSFile.AnimationSet.ModeAnimationKeys:
+		if drs_file.AnimationSet is not None:
+			for AnimationKey in drs_file.AnimationSet.ModeAnimationKeys:
 				for Variant in AnimationKey.AnimationSetVariants:
-					SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
-					CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
+					SKAFile: SKA = SKA().Read(os.path.join(dir_name, Variant.File))
+					create_animation(SKAFile, armature_object, bone_list, Variant.File)
 	else:
-		# CGeoOBBTreeMeshObject = SetObject("CGeoOBBTreeMesh", HashOf5Letters, ModelDataCollection)
-		# CreateCGeoOBBTree(DRSFile.CGeoOBBTree, DRSFile.CGeoMesh, CGeoOBBTreeMeshObject, ModelDataCollection)
-		CreateStaticMesh(DRSFile.CDspMeshFile, DirName, MeshObjectObject, ModelDataCollection)
+		mesh_object: bpy.types.Object = SetObject("CDspMeshFile_" + base_name, "", source_collection)
+		create_static_mesh(drs_file.CDspMeshFile, base_name, dir_name, mesh_object, override_name=base_name)
 
-	if DRSFile.CollisionShape is not None:
-		CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
-		CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
+	# if DRSFile.CollisionShape is not None:
+	# 	CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
+	# 	CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
 	if use_apply_transform:
-		if DRSFile.CSkSkeleton is not None:
-			ArmatureObject.matrix_world = global_matrix @ ArmatureObject.matrix_world
-			ArmatureObject.scale = (1, -1, 1)
+		if drs_file.CSkSkeleton is not None:
+			armature_object.matrix_world = global_matrix @ armature_object.matrix_world
+			armature_object.scale = (1, -1, 1)
 		else:
-			MeshObjectObject.matrix_world = global_matrix @ MeshObjectObject.matrix_world
-			MeshObjectObject.scale = (1, -1, 1)
+			mesh_object.matrix_world = global_matrix @ mesh_object.matrix_world
+			mesh_object.scale = (1, -1, 1)
 
-		CGeoMeshObject.matrix_world = global_matrix @ CGeoMeshObject.matrix_world
-		CGeoMeshObject.scale = (1, -1, 1)
-
-		if DRSFile.CollisionShape is not None:
-			CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
-			CollisionShapeObjectObject.scale = (1, -1, 1)
+	# 	if DRSFile.CollisionShape is not None:
+	# 		CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
+	# 		CollisionShapeObjectObject.scale = (1, -1, 1)
 
 	ResetViewport()
 
 def load_bmg(operator, context, filepath="", use_apply_transform=True, global_matrix=None, clear_scene=True):
-	BaseName = os.path.basename(filepath).split(".")[0]
-	HashOf5Letters = hashlib.shake_256(BaseName.encode()).hexdigest(5)
-	HashOf5Letters = ''.join(random.sample(HashOf5Letters, len(HashOf5Letters)))
-	DirName = os.path.dirname(filepath)
+	pass
+# 	BaseName = os.path.basename(filepath).split(".")[0]
+# 	HashOf5Letters = hashlib.shake_256(BaseName.encode()).hexdigest(5)
+# 	HashOf5Letters = ''.join(random.sample(HashOf5Letters, len(HashOf5Letters)))
+# 	DirName = os.path.dirname(filepath)
+# 	DRSFile: DRS = DRS().Read(filepath)
 
-	if clear_scene:
-		ClearBlenderScene()
+# 	UnitCollection = SetCollection(BaseName, HashOf5Letters, bpy.context.view_layer.layer_collection)
+# 	ModelDataCollection = SetCollection("ModelData", HashOf5Letters, UnitCollection)
+# 	MeshSetGridCollection = SetCollection("MeshSetGrid", HashOf5Letters, ModelDataCollection)
 
-	CreateBattleforgeScene()
-	DRSFile: DRS = DRS().Read(filepath)
+# 	MeshGrid: MeshSetGrid = DRSFile.MeshSetGrid
 
-	UnitCollection = SetCollection(BaseName, HashOf5Letters, bpy.context.view_layer.layer_collection)
-	ModelDataCollection = SetCollection("ModelData", HashOf5Letters, UnitCollection)
-	MeshSetGridCollection = SetCollection("MeshSetGrid", HashOf5Letters, ModelDataCollection)
+# 	# Create new Grid Object
+# 	# CreateGrid(MeshGrid, MeshSetGridCollection)
 
-	MeshGrid: MeshSetGrid = DRSFile.MeshSetGrid
+# 	if MeshGrid.GroundDecalLength > 0:
+# 		GroundDecal: CDspMeshFile = DRS().Read(DirName + "\\" + MeshGrid.GroundDecal).CDspMeshFile
+# 		GroundDecalObject = SetObject("GroundDecal", HashOf5Letters, MeshSetGridCollection)
+# 		CreateStaticMesh(GroundDecal, DirName, GroundDecalObject, MeshSetGridCollection, State=False, OverrideName="GroundDecal")
 
-	# Create new Grid Object
-	# CreateGrid(MeshGrid, MeshSetGridCollection)
+# 	if DRSFile.CollisionShape is not None:
+# 		CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, MeshSetGridCollection)
+# 		CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
-	if MeshGrid.GroundDecalLength > 0:
-		GroundDecal: CDspMeshFile = DRS().Read(DirName + "\\" + MeshGrid.GroundDecal).CDspMeshFile
-		GroundDecalObject = SetObject("GroundDecal", HashOf5Letters, MeshSetGridCollection)
-		CreateStaticMesh(GroundDecal, DirName, GroundDecalObject, MeshSetGridCollection, State=False, OverrideName="GroundDecal")
+# 	if use_apply_transform:
+# 		if MeshGrid.GroundDecalLength > 0:
+# 			GroundDecalObject.matrix_world = global_matrix @ GroundDecalObject.matrix_world
+# 			GroundDecalObject.scale = (1, -1, 1)
 
-	if DRSFile.CollisionShape is not None:
-		CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, MeshSetGridCollection)
-		CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
+# 		if DRSFile.CollisionShape is not None:
+# 			CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
+# 			CollisionShapeObjectObject.scale = (1, -1, 1)
 
-	if use_apply_transform:
-		if MeshGrid.GroundDecalLength > 0:
-			GroundDecalObject.matrix_world = global_matrix @ GroundDecalObject.matrix_world
-			GroundDecalObject.scale = (1, -1, 1)
+# 	MeshCounter = 0
+# 	for MeshModule in MeshGrid.MeshModules:
+# 		if MeshModule.HasMeshSet == 1:
+# 			MeshGridModuleName = "MeshGridModule_" + str(MeshCounter)
+# 			MeshGridModuleCollection = SetCollection(MeshGridModuleName, HashOf5Letters, ModelDataCollection)
+# 			MeshCounter += 1
 
-		if DRSFile.CollisionShape is not None:
-			CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
-			CollisionShapeObjectObject.scale = (1, -1, 1)
+# 			for _ in range(MeshModule.StateBasedMeshSet.NumMeshStates):
+# 				MeshState = MeshModule.StateBasedMeshSet.SMeshStates[_]
+# 				MeshStateDRSFile: DRS = DRS().Read(DirName + "\\" + MeshState.DRSFile)
+# 				StateName = MeshGridModuleName + "_State_" + str(MeshState.StateNum)
+# 				StateCollection = SetCollection(StateName, HashOf5Letters, MeshGridModuleCollection)
 
-	MeshCounter = 0
-	for MeshModule in MeshGrid.MeshModules:
-		if MeshModule.HasMeshSet == 1:
-			MeshGridModuleName = "MeshGridModule_" + str(MeshCounter)
-			MeshGridModuleCollection = SetCollection(MeshGridModuleName, HashOf5Letters, ModelDataCollection)
-			MeshCounter += 1
+# 				CGeoMeshObject = SetObject("CGeoMesh", HashOf5Letters, StateCollection)
+# 				CreateCGeoMesh(MeshStateDRSFile.CGeoMesh, CGeoMeshObject, StateCollection)
+# 				MeshObjectObject = SetObject("CDspMeshFile" + "_" + StateName, HashOf5Letters, StateCollection)
 
-			for _ in range(MeshModule.StateBasedMeshSet.NumMeshStates):
-				MeshState = MeshModule.StateBasedMeshSet.SMeshStates[_]
-				MeshStateDRSFile: DRS = DRS().Read(DirName + "\\" + MeshState.DRSFile)
-				StateName = MeshGridModuleName + "_State_" + str(MeshState.StateNum)
-				StateCollection = SetCollection(StateName, HashOf5Letters, MeshGridModuleCollection)
+# 				if MeshStateDRSFile.CSkSkeleton is not None:
+# 					Armature = bpy.data.armatures.new("CSkSkeleton" + "_" + StateName)
+# 					ArmatureObject = SetObject("Armature" + "_" + StateName, HashOf5Letters, StateCollection, Armature)
+# 					BoneList: list[DRSBone] = InitSkeleton(MeshStateDRSFile.CSkSkeleton)
+# 					BuildSkeleton(BoneList, Armature, ArmatureObject)
+# 					WeightList = InitSkin(MeshStateDRSFile.CDspMeshFile, MeshStateDRSFile.CSkSkinInfo, MeshStateDRSFile.CGeoMesh)
+# 					MeshObjectObject.parent = ArmatureObject
+# 					CreateSkinnedMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection, ArmatureObject, BoneList, WeightList)
 
-				CGeoMeshObject = SetObject("CGeoMesh", HashOf5Letters, StateCollection)
-				CreateCGeoMesh(MeshStateDRSFile.CGeoMesh, CGeoMeshObject, StateCollection)
-				MeshObjectObject = SetObject("CDspMeshFile" + "_" + StateName, HashOf5Letters, StateCollection)
+# 					# Seems like the MeshSetGrid holds some animations too... but why?
+# 					# if DRSFile.AnimationSet is not None:
+# 					# 	for AnimationKey in DRSFile.AnimationSet.ModeAnimationKeys:
+# 					# 		for Variant in AnimationKey.AnimationSetVariants:
+# 					# 			SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
+# 								# CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
 
-				if MeshStateDRSFile.CSkSkeleton is not None:
-					Armature = bpy.data.armatures.new("CSkSkeleton" + "_" + StateName)
-					ArmatureObject = SetObject("Armature" + "_" + StateName, HashOf5Letters, StateCollection, Armature)
-					BoneList: list[DRSBone] = InitSkeleton(MeshStateDRSFile.CSkSkeleton)
-					BuildSkeleton(BoneList, Armature, ArmatureObject)
-					WeightList = InitSkin(MeshStateDRSFile.CDspMeshFile, MeshStateDRSFile.CSkSkinInfo, MeshStateDRSFile.CGeoMesh)
-					MeshObjectObject.parent = ArmatureObject
-					CreateSkinnedMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection, ArmatureObject, BoneList, WeightList)
+# 					if MeshStateDRSFile.AnimationSet is not None:
+# 						for AnimationKey in MeshStateDRSFile.AnimationSet.ModeAnimationKeys:
+# 							for Variant in AnimationKey.AnimationSetVariants:
+# 								SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
+# 								CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
+# 				else:
+# 					CreateStaticMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection)
 
-					# Seems like the MeshSetGrid holds some animations too... but why?
-					# if DRSFile.AnimationSet is not None:
-					# 	for AnimationKey in DRSFile.AnimationSet.ModeAnimationKeys:
-					# 		for Variant in AnimationKey.AnimationSetVariants:
-					# 			SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
-								# CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
+# 				if MeshStateDRSFile.CollisionShape is not None:
+# 					StateCollisionShapeObjectObject = SetObject("CollisionShape" + "_" + StateName, HashOf5Letters, StateCollection)
+# 					CreateCollisionShapes(MeshStateDRSFile.CollisionShape, StateCollisionShapeObjectObject)
 
-					if MeshStateDRSFile.AnimationSet is not None:
-						for AnimationKey in MeshStateDRSFile.AnimationSet.ModeAnimationKeys:
-							for Variant in AnimationKey.AnimationSetVariants:
-								SKAFile: SKA = SKA().Read(os.path.join(DirName, Variant.File))
-								CreateAnimation(SKAFile, ArmatureObject, BoneList, Variant.File)
-				else:
-					CreateStaticMesh(MeshStateDRSFile.CDspMeshFile, DirName, MeshObjectObject, StateCollection)
+# 				if use_apply_transform:
+# 					if MeshStateDRSFile.CSkSkeleton is not None:
+# 						ArmatureObject.matrix_world = global_matrix @ ArmatureObject.matrix_world
+# 						ArmatureObject.scale = (1, -1, 1)
+# 					else:
+# 						MeshObjectObject.matrix_world = global_matrix @ MeshObjectObject.matrix_world
+# 						MeshObjectObject.scale = (1, -1, 1)
 
-				if MeshStateDRSFile.CollisionShape is not None:
-					StateCollisionShapeObjectObject = SetObject("CollisionShape" + "_" + StateName, HashOf5Letters, StateCollection)
-					CreateCollisionShapes(MeshStateDRSFile.CollisionShape, StateCollisionShapeObjectObject)
+# 					CGeoMeshObject.matrix_world = global_matrix @ CGeoMeshObject.matrix_world
+# 					CGeoMeshObject.scale = (1, -1, 1)
 
-				if use_apply_transform:
-					if MeshStateDRSFile.CSkSkeleton is not None:
-						ArmatureObject.matrix_world = global_matrix @ ArmatureObject.matrix_world
-						ArmatureObject.scale = (1, -1, 1)
-					else:
-						MeshObjectObject.matrix_world = global_matrix @ MeshObjectObject.matrix_world
-						MeshObjectObject.scale = (1, -1, 1)
+# 					if MeshStateDRSFile.CollisionShape is not None:
+# 						StateCollisionShapeObjectObject.matrix_world = global_matrix @ StateCollisionShapeObjectObject.matrix_world
+# 						StateCollisionShapeObjectObject.scale = (1, -1, 1)
 
-					CGeoMeshObject.matrix_world = global_matrix @ CGeoMeshObject.matrix_world
-					CGeoMeshObject.scale = (1, -1, 1)
+# 	ResetViewport()
 
-					if MeshStateDRSFile.CollisionShape is not None:
-						StateCollisionShapeObjectObject.matrix_world = global_matrix @ StateCollisionShapeObjectObject.matrix_world
-						StateCollisionShapeObjectObject.scale = (1, -1, 1)
-
-	ResetViewport()
-
-	return {'FINISHED'}
+# 	return {'FINISHED'}
