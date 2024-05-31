@@ -413,12 +413,12 @@ def CreateGrid(MeshGrid: MeshSetGrid, Collection: bpy.types.LayerCollection):
 	GridObject.rotation_euler = Euler((pi / 2, 0, 0), 'XYZ')
 
 
-def create_action(armature_object: bpy.types.Object, animation_name: str, animation_time_in_frames: int, force_new: bool, repeat: bool):
+def create_action(armature_object: bpy.types.Object, animation_name: str, animation_time_in_frames: int, force_new: bool = False, repeat: bool = False):
 	armature_action = None
 	if (force_new == False):
 		armature_action = bpy.data.actions.new(name=animation_name)
 	else:
-		action = bpy.data.get(animation_name)
+		action = bpy.data.actions.get(animation_name)
 		if (action is not None):
 			armature_action = (bpy.data.get(animation_name) is None)
 
