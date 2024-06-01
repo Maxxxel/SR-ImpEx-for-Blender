@@ -7,7 +7,7 @@ import bpy
 import bmesh
 import hashlib
 from mathutils import Euler, Vector, Matrix, Quaternion
-from bpy_extras.image_utils import load_image
+
 
 from .drs_utility import create_static_mesh
 from .drs_file import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, BattleforgeMesh, Bone, CGeoMesh, Face, Vertex, BoneVertex, MeshSetGrid, BoxShape, SphereShape, CylinderShape, CGeoOBBTree, OBBNode
@@ -168,104 +168,7 @@ def init_skin(mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mesh_data: CG
 
 	return BoneWeights
 
-def create_material(mesh_index: int, mesh_data: BattleforgeMesh, dir_name: str, base_name: str) -> bpy.types.Material:
-	NewMaterial = bpy.data.materials.new("Material_" + base_name + "_" + str(mesh_index))
 
-	# We need to create a new "DRS" Group Node for the Material. In Blender we would go to Shading, press Shift + A and add the Group 'DRS' Node
-	NewMaterial.use_nodes = True
-	NewMaterial.node_tree.nodes.clear()
-
-	# Create the DRS Group Node
-	DRSGroupNode = NewMaterial.node_tree.nodes.new('ShaderNodeGroup')
-	DRSGroupNode.node_tree = bpy.data.node_groups['DRS']
-
-	# Create the Output Node
-	MaterialOutputNode = NewMaterial.node_tree.nodes.new('ShaderNodeOutputMaterial')
-	MaterialOutputNode.location = Vector((400.0, 0.0))
-	NewMaterial.node_tree.links.new(DRSGroupNode.outputs['BSDF'], MaterialOutputNode.inputs['Surface'])
-
-	# NewMaterial.blend_method = 'CLIP'
-	# NewMaterial.alpha_threshold = 0.6
-	# NewMaterial.show_transparent_back = False
-	# NewMaterial.use_nodes = True
-	# NewMaterial.node_tree.nodes['Material Output'].location = Vector((400.0, 0.0))	
-	# BSDF = NewMaterial.node_tree.nodes["Principled BSDF"]
-	# BSDF.location = Vector((0.0, 0.0))
-	# ColorMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-	# ColorMapNode.location = Vector((-700.0, 0.0))
-
-	# Add BaseColor Texture
-	for Tex in mesh_data.Textures.Textures:
-		if Tex.Identifier == 1684432499 and Tex.Length > 0:
-			col_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-			col_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-			col_node.location = Vector((-700.0, 0.0))
-			col_node.image = col_image
-			NewMaterial.node_tree.links.new(col_node.outputs['Color'], DRSGroupNode.inputs['Color Map'])
-			NewMaterial.node_tree.links.new(col_node.outputs['Alpha'], DRSGroupNode.inputs['Color Alpha'])
-
-	# Add ParameterMap if present
-	for Tex in mesh_data.Textures.Textures:
-		if Tex.Identifier == 1936745324 and Tex.Length > 0:
-			param_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-			param_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-			param_node.location = Vector((-700.0, -100.0))
-			param_node.image = param_image
-			# Create a Separate RGB Node between the ParameterMap and the DRS Group Node
-			sep_rgb_node = NewMaterial.node_tree.nodes.new('ShaderNodeSeparateRGB')
-			sep_rgb_node.location = Vector((-400.0, -100.0))
-			NewMaterial.node_tree.links.new(param_node.outputs['Color'], sep_rgb_node.inputs['Image'])
-			NewMaterial.node_tree.links.new(sep_rgb_node.outputs['R'], DRSGroupNode.inputs['Metallic (Red)'])
-			NewMaterial.node_tree.links.new(sep_rgb_node.outputs['G'], DRSGroupNode.inputs['Roughness (Green)'])
-			# Skip B
-			NewMaterial.node_tree.links.new(param_node.outputs['Alpha'], DRSGroupNode.inputs['Emission (Alpha)'])
-
-	# Add NormalMap Texture if present
-	for Tex in mesh_data.Textures.Textures:
-		if Tex.Identifier == 1852992883 and Tex.Length > 0:
-			nor_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-			nor_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-			nor_node.location = Vector((-700.0, -300.0))
-			nor_node.image = nor_image
-			NewMaterial.node_tree.links.new(nor_node.outputs['Color'], DRSGroupNode.inputs['Normal Map'])
-
-	# Fluid is hard to add, prolly only as an hardcoded animation, there is no GIF support
-
-	# Scratch
-
-	# Environment can be ignored, its only used for Rendering
-
-	# Refraction
-	# for Tex in mesh_data.Textures.Textures:
-	# 	if Tex.Identifier == 1919116143 and Tex.Length > 0:
-	# 		RefractionMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-	# 		RefractionMapNode.location = Vector((-700.0, -900.0))
-	# 		RefractionMapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-	# 		RefBSDF = NewMaterial.node_tree.nodes.new('ShaderNodeBsdfRefraction')
-	# 		RefBSDF.location = Vector((-250.0, -770.0))
-	# 		NewMaterial.node_tree.links.new(RefBSDF.inputs['Color'], RefractionMapNode.outputs['Color'])
-	# 		MixNode = NewMaterial.node_tree.nodes.new('ShaderNodeMixShader')
-	# 		MixNode.location = Vector((0.0, 200.0))
-	# 		NewMaterial.node_tree.links.new(MixNode.inputs[1], RefBSDF.outputs[0])
-	# 		NewMaterial.node_tree.links.new(MixNode.inputs[2], BSDF.outputs[0])
-	# 		NewMaterial.node_tree.links.new(MixNode.outputs[0], NewMaterial.node_tree.nodes['Material Output'].inputs[0])
-	# 		MixNodeAlpha = NewMaterial.node_tree.nodes.new('ShaderNodeMixRGB')
-	# 		MixNodeAlpha.location = Vector((-250.0, -1120.0))
-	# 		MixNodeAlpha.use_alpha = True
-	# 		MixNodeAlpha.blend_type = 'SUBTRACT'
-	# 		# Set the Factor to 0.2, so the Refraction is not too strong
-	# 		MixNodeAlpha.inputs[0].default_value = 0.2
-	# 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[1], ColorMapNode.outputs['Alpha'])
-	# 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[2], RefractionMapNode.outputs['Alpha'])
-	# 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], MixNodeAlpha.outputs[0])
-	# 	else:
-	# 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], ColorMapNode.outputs['Alpha'])
-
-	# if mesh_data.Refraction.Length == 1:
-	# 	_RGB = mesh_data.Refraction.RGB
-		# What to do here?
-
-	return NewMaterial
 
 def create_skinned_mesh(mesh_file: CDspMeshFile, dir_name:str, base_name: str, mesh_object: bpy.types.Object, armature: object, bone_list: list[DRSBone], weight_list: List[BoneWeight], state: bool = False, override_name: str = None):
 	for i in range(mesh_file.MeshCount):
@@ -413,24 +316,7 @@ def CreateGrid(MeshGrid: MeshSetGrid, Collection: bpy.types.LayerCollection):
 	GridObject.rotation_euler = Euler((pi / 2, 0, 0), 'XYZ')
 
 
-def create_action(armature_object: bpy.types.Object, animation_name: str, animation_time_in_frames: int, force_new: bool = False, repeat: bool = False):
-	armature_action = None
-	if (force_new == False):
-		armature_action = bpy.data.actions.new(name=animation_name)
-	else:
-		action = bpy.data.actions.get(animation_name)
-		if (action is not None):
-			armature_action = (bpy.data.get(animation_name) is None)
 
-	armature_action.use_frame_range = True
-	armature_action.frame_range = (0, animation_time_in_frames)
-	armature_action.frame_start = 0
-	armature_action.frame_end = animation_time_in_frames
-	armature_action.use_cyclic = repeat
-
-	bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, animation_time_in_frames)
-	armature_object.animation_data.action = armature_action
-	return armature_action
 
 
 def insert_keyframes(pose_bone: bpy.types.PoseBone, frame_data, frame: float, animation_type: int, bind_rot: Quaternion, bind_loc: Vector) -> None:
