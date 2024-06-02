@@ -7,6 +7,9 @@ from mathutils import Vector
 from . drs_definitions import BattleforgeMesh, CDspMeshFile, Vertex, Face
 
 SOCKET_SHADER = "NodeSocketShader"
+SOCKET_COLOR = "NodeSocketColor"
+SOCKET_FLOAT = "NodeSocketFloat"
+bpy.types.NodeSocketFloat
 
 
 def create_static_mesh(context: bpy.types.Context, mesh_file: CDspMeshFile, base_name: str, dir_name:str, mesh_object: bpy.types.Object, state: bool = False, override_name: str = ""):
@@ -68,64 +71,81 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
     mesh_material.use_nodes = True
     mesh_material.node_tree.nodes.clear()
 
+
     DRSNodeGroup : bpy.types.NodeGroup = bpy.data.node_groups.get("DRS") if ( bpy.data.node_groups.get("DRS") is not None) else bpy.data.node_groups.new("DRS", type="ShaderNodeTree")
     DRSNodeGroup.node_tree.nodes.clear()
     DRSNodeGroup.node_tree.interface.clear()
 
     if (bpy.app.version[0] in [3]):
+        DRSNodeGroup.inputs.new(name="IN-Color Map", type=SOCKET_COLOR)
+        DRSNodeGroup.inputs.new(name="IN-Color Map Alpha", type=SOCKET_FLOAT)
+
+        DRSNodeGroup.inputs.new(name="IN-Metallic [red]", type=SOCKET_COLOR)
+        DRSNodeGroup.inputs.new(name="IN-Roughness [green]", type=SOCKET_COLOR)
+        DRSNodeGroup.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
+
         DRSNodeGroup.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
+
     if (bpy.app.version[0] in [4]):
+        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Color Map", in_out="INPUT", type=SOCKET_COLOR, parent=None)
+        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Color Map Alpha", in_out="INPUT", type=SOCKET_FLOAT, parent=None)
+
         DRSNodeGroup.node_tree.interface.new_socket(name="OUT-DRS Shader", in_out="OUTPUT", socket_type=SOCKET_SHADER, parent=None)
 
-    DRSShaderGroup : bpy.types.NodeGroup = mesh_material.node_tree.nodes.new('ShaderNodeGroup')
+
+    DRSShaderGroup : bpy.types.NodeGroup = mesh_material.node_tree.nodes.new("ShaderNodeGroup")
     DRSShaderGroup.node_tree = DRSNodeGroup
 
-    mesh_material_output = mesh_material.node_tree.nodes.new('ShaderNodeOutputMaterial')
+    mesh_material_output = mesh_material.node_tree.nodes.new("ShaderNodeOutputMaterial")
     mesh_material_output.location = Vector((400.0, 0.0))
 
     if (bpy.app.version[0] in [3]):
-        mesh_material.node_tree.links.new(DRSShaderGroup.outputs.get("OUT-DRS Shader"), mesh_material_output.inputs['Surface'])
+        mesh_material.node_tree.links.new(DRSShaderGroup.outputs.get("OUT-DRS Shader"), mesh_material_output.inputs.get("Surface"))
     if (bpy.app.version[0] in [4]):
-        mesh_material.node_tree.links.new(DRSShaderGroup.node_tree.interface.get("OUT-DRS Shader"), mesh_material_output.inputs['Surface'])
+        mesh_material.node_tree.links.new(DRSShaderGroup.node_tree.interface.get("OUT-DRS Shader"), mesh_material_output.get("Surface"))
 
-    # NewMaterial.blend_method = 'CLIP'
-    # NewMaterial.alpha_threshold = 0.6
-    # NewMaterial.show_transparent_back = False
-    # NewMaterial.use_nodes = True
-    # NewMaterial.node_tree.nodes['Material Output'].location = Vector((400.0, 0.0))	
-    # BSDF = NewMaterial.node_tree.nodes["Principled BSDF"]
-    # BSDF.location = Vector((0.0, 0.0))
-    # ColorMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-    # ColorMapNode.location = Vector((-700.0, 0.0))
 
-    # Add BaseColor Texture
-    for Tex in mesh_data.Textures.Textures:
-        if Tex.Identifier == 1684432499 and Tex.Length > 0:
-            col_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-            col_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-            col_node.location = Vector((-700.0, 0.0))
-            col_node.image = col_image
-            NewMaterial.node_tree.links.new(col_node.outputs['Color'], DRSGroupNode.inputs['Color Map'])
-            NewMaterial.node_tree.links.new(col_node.outputs['Alpha'], DRSGroupNode.inputs['Color Alpha'])
+    for texture in mesh_data.Textures.Textures:
+        if (texture.Length > 0):
+            match texture.Identifier:
+                case 1684432499:
+                    color_map_img = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+                    color_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
+                    color_map_node.location = Vector((-700.0, 0.0))
+                    color_map_node.image = color_map_img
+                    if (bpy.app.version[0] in [3]):
+                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSNodeGroup.inputs.get("IN-Color Map"))
+                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSNodeGroup.inputs.get("IN-Color Map Alpha"))
+                    if (bpy.app.version[0] in [4]):
+                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSNodeGroup.node_tree.interface.get("IN-Color Map"))
+                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSNodeGroup.node_tree.interface.get("IN-Color Map Alpha"))
+                
+                case 1936745324:
+                    parameter_map_img = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+                    parameter_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
+                    parameter_map_node.location = Vector((-700.0, -100.0))
+                    parameter_map_node.image = parameter_map_img
 
-    # Add ParameterMap if present
-    for Tex in mesh_data.Textures.Textures:
-        if Tex.Identifier == 1936745324 and Tex.Length > 0:
-            param_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-            param_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-            param_node.location = Vector((-700.0, -100.0))
-            param_node.image = param_image
-            # Create a Separate RGB Node between the ParameterMap and the DRS Group Node
-            sep_rgb_node = NewMaterial.node_tree.nodes.new('ShaderNodeSeparateRGB')
-            sep_rgb_node.location = Vector((-400.0, -100.0))
-            NewMaterial.node_tree.links.new(param_node.outputs['Color'], sep_rgb_node.inputs['Image'])
-            NewMaterial.node_tree.links.new(sep_rgb_node.outputs['R'], DRSGroupNode.inputs['Metallic (Red)'])
-            NewMaterial.node_tree.links.new(sep_rgb_node.outputs['G'], DRSGroupNode.inputs['Roughness (Green)'])
-            # Skip B
-            NewMaterial.node_tree.links.new(param_node.outputs['Alpha'], DRSGroupNode.inputs['Emission (Alpha)'])
+                    separate_rgb_node = mesh_material.node_tree.nodes.new('ShaderNodeSeparateRGB')
+                    separate_rgb_node.location = Vector((-400.0, -100.0))
+
+                    if (bpy.app.version[0] in [3]):
+                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Color"), separate_rgb_node.inputs.get("Color"))
+                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("R"), DRSNodeGroup.inputs.get("IN-Metallic [red]"))
+                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSNodeGroup.inputs.get("IN-Roughness [green]"))
+
+                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSNodeGroup.inputs.get("IN-Emission [alpha]"))
+
+                    if (bpy.app.version[0] in [4]):
+                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Color"), separate_rgb_node.inputs.get("Color"))
+                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("R"), DRSNodeGroup.node_tree.interface.get("IN-Metallic [red]"))
+                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSNodeGroup.node_tree.interface.get("IN-Roughness [green]"))
+
+                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSNodeGroup.inputs.get("IN-Emission [alpha]"))
+
 
     # Add NormalMap Texture if present
-    for Tex in mesh_data.Textures.Textures:
+    for Texture in mesh_data.Textures.Textures:
         if Tex.Identifier == 1852992883 and Tex.Length > 0:
             nor_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
             nor_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
