@@ -4,14 +4,12 @@ import bpy
 from bpy_extras.image_utils import load_image
 
 from mathutils import Vector
-from . drs_definitions import BattleforgeMesh, CDspMeshFile, Vertex, Face
+from . drs_definitions import CDspMeshFile, BattleforgeMesh, Vertex, Face
 
 SOCKET_SHADER = "NodeSocketShader"
 SOCKET_COLOR = "NodeSocketColor"
 SOCKET_NORMAL = "NodeSocketVector"
 SOCKET_FLOAT = "NodeSocketFloat"
-
-
 
 
 def create_static_mesh(context: bpy.types.Context, mesh_file: CDspMeshFile, base_name: str, dir_name:str, mesh_object: bpy.types.Object, state: bool = False, override_name: str = ""):

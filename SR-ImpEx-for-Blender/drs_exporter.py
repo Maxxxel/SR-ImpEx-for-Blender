@@ -10,7 +10,8 @@ from mathutils import Vector, Matrix
 import re
 
 from .ska_file import SKA, SKAHeader, SKAKeyframe, SKAAnimationData
-from .drs_file import DRS, CDspMeshFile, BattleforgeMesh, Face, EmptyString, LevelOfDetail, MeshData, Refraction, Textures, Texture, Vertex, Materials, Flow, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, CDspJointMap, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem, OBBNode, AnimationTimings, AnimationSet, CSkSkinInfo, VertexData, CSkSkeleton, Bone, BoneMatrix, BoneVertex
+from .drs_file import DRS, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, CDspJointMap, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem, OBBNode, AnimationTimings, AnimationSet, CSkSkinInfo, VertexData, CSkSkeleton, Bone, BoneMatrix, BoneVertex
+from .drs_utility import BattleforgeMesh, CDspMeshFile, Vertex, Face
 
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
