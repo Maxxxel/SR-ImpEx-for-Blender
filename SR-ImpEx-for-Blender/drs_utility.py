@@ -71,38 +71,37 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
     mesh_material.use_nodes = True
     mesh_material.node_tree.nodes.clear()
 
-
-    DRSNodeGroup : bpy.types.NodeGroup = bpy.data.node_groups.get("DRS") if ( bpy.data.node_groups.get("DRS") is not None) else bpy.data.node_groups.new("DRS", type="ShaderNodeTree")
-    DRSNodeGroup.node_tree.nodes.clear()
-    DRSNodeGroup.node_tree.interface.clear()
+    DRSShaderGroup = bpy.types.ShaderNodeGroup = bpy.data.node_groups.get("DRS") if ( bpy.data.node_groups.get("DRS") is not None) else bpy.data.node_groups.new("DRS", type="ShaderNodeGroup")
+    
+    DRSShaderGroup.nodes.clear()
+    DRSShaderGroup.interface.clear()
 
     if (bpy.app.version[0] in [3]):
-        DRSNodeGroup.inputs.new(name="IN-Color Map", type=SOCKET_COLOR)
-        DRSNodeGroup.inputs.new(name="IN-Color Map Alpha", type=SOCKET_FLOAT)
+        DRSShaderGroup.inputs.new(name="IN-Color Map", type=SOCKET_COLOR)
+        DRSShaderGroup.inputs.new(name="IN-Color Map Alpha", type=SOCKET_FLOAT)
 
-        DRSNodeGroup.inputs.new(name="IN-Metallic [red]", type=SOCKET_COLOR)
-        DRSNodeGroup.inputs.new(name="IN-Roughness [green]", type=SOCKET_COLOR)
-        DRSNodeGroup.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
+        DRSShaderGroup.inputs.new(name="IN-Metallic [red]", type=SOCKET_COLOR)
+        DRSShaderGroup.inputs.new(name="IN-Roughness [green]", type=SOCKET_COLOR)
+        DRSShaderGroup.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
 
-        DRSNodeGroup.inputs.new(name="IN-Normal Map", type=SOCKET_NORMAL)
+        DRSShaderGroup.inputs.new(name="IN-Normal Map", type=SOCKET_NORMAL)
 
-        DRSNodeGroup.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
+        DRSShaderGroup.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
 
     if (bpy.app.version[0] in [4]):
-        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Color Map", in_out="INPUT", type=SOCKET_COLOR, parent=None)
-        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Color Map Alpha", in_out="INPUT", type=SOCKET_FLOAT, parent=None)
+        DRSShaderGroup.interface.new_socket(name="IN-Color Map", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
+        DRSShaderGroup.interface.new_socket(name="IN-Color Map Alpha", in_out="INPUT", socket_type=SOCKET_FLOAT, parent=None)
 
-        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Metallic [red]", in_out="INPUT", type=SOCKET_COLOR, parent=None)
-        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Roughness [green]", in_out="INPUT", type=SOCKET_COLOR, parent=None)
-        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Emission [alpha]", in_out="INPUT", type=SOCKET_COLOR, parent=None)
+        DRSShaderGroup.interface.new_socket(name="IN-Metallic [red]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
+        DRSShaderGroup.interface.new_socket(name="IN-Roughness [green]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
+        DRSShaderGroup.interface.new_socket(name="IN-Emission [alpha]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
 
-        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Normal Map", in_out="INPUT", type=SOCKET_NORMAL, parent=None)
+        DRSShaderGroup.interface.new_socket(name="IN-Normal Map", in_out="INPUT", socket_type=SOCKET_NORMAL, parent=None)
 
-        DRSNodeGroup.node_tree.interface.new_socket(name="OUT-DRS Shader", in_out="OUTPUT", socket_type=SOCKET_SHADER, parent=None)
+        DRSShaderGroup.interface.new_socket(name="OUT-DRS Shader", in_out="OUTPUT", socket_type=SOCKET_SHADER, parent=None)
 
 
-    DRSShaderGroup : bpy.types.NodeGroup = mesh_material.node_tree.nodes.new("ShaderNodeGroup")
-    DRSShaderGroup.node_tree = DRSNodeGroup
+    
 
     mesh_material_output = mesh_material.node_tree.nodes.new("ShaderNodeOutputMaterial")
     mesh_material_output.location = Vector((400.0, 0.0))
@@ -110,7 +109,7 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
     if (bpy.app.version[0] in [3]):
         mesh_material.node_tree.links.new(DRSShaderGroup.outputs.get("OUT-DRS Shader"), mesh_material_output.inputs.get("Surface"))
     if (bpy.app.version[0] in [4]):
-        mesh_material.node_tree.links.new(DRSShaderGroup.node_tree.interface.get("OUT-DRS Shader"), mesh_material_output.get("Surface"))
+        mesh_material.node_tree.links.new(DRSShaderGroup.interface.get("OUT-DRS Shader"), mesh_material_output.get("Surface"))
 
 
     for texture in mesh_data.Textures.Textures:
@@ -122,11 +121,11 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
                     color_map_node.location = Vector((-700.0, 0.0))
                     color_map_node.image = color_map_img
                     if (bpy.app.version[0] in [3]):
-                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSNodeGroup.inputs.get("IN-Color Map"))
-                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSNodeGroup.inputs.get("IN-Color Map Alpha"))
+                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSShaderGroup.inputs.get("IN-Color Map"))
+                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSShaderGroup.inputs.get("IN-Color Map Alpha"))
                     if (bpy.app.version[0] in [4]):
-                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSNodeGroup.node_tree.interface.get("IN-Color Map"))
-                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSNodeGroup.node_tree.interface.get("IN-Color Map Alpha"))
+                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSShaderGroup.interface.get("IN-Color Map"))
+                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSShaderGroup.interface.get("IN-Color Map Alpha"))
                 
                 case 1936745324:
                     parameter_map_img = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
@@ -139,17 +138,17 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
 
                     if (bpy.app.version[0] in [3]):
                         mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Color"), separate_rgb_node.inputs.get("Color"))
-                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("R"), DRSNodeGroup.inputs.get("IN-Metallic [red]"))
-                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSNodeGroup.inputs.get("IN-Roughness [green]"))
+                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("R"), DRSShaderGroup.inputs.get("IN-Metallic [red]"))
+                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSShaderGroup.inputs.get("IN-Roughness [green]"))
 
-                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSNodeGroup.inputs.get("IN-Emission [alpha]"))
+                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSShaderGroup.inputs.get("IN-Emission [alpha]"))
 
                     if (bpy.app.version[0] in [4]):
                         mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Color"), separate_rgb_node.inputs.get("Color"))
-                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("R"), DRSNodeGroup.node_tree.interface.get("IN-Metallic [red]"))
-                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSNodeGroup.node_tree.interface.get("IN-Roughness [green]"))
+                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("R"), DRSShaderGroup.interface.get("IN-Metallic [red]"))
+                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSShaderGroup.interface.get("IN-Roughness [green]"))
 
-                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSNodeGroup.inputs.get("IN-Emission [alpha]"))
+                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSShaderGroup.inputs.get("IN-Emission [alpha]"))
                 
                 case 1852992883:
                     normal_map_image = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
@@ -158,9 +157,9 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
                     normal_map_node.image = normal_map_image
 
                     if (bpy.app.version[0] in [3]):
-                        mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSNodeGroup.node_tree.interface.get("IN-Normal Map"))
+                        mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSShaderGroup.interface.get("IN-Normal Map"))
                     if (bpy.app.version[0] in [4]):
-                        mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSNodeGroup.node_tree.interface.get("IN-Normal Map"))
+                        mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSShaderGroup.interface.get("IN-Normal Map"))
         
 
     # Fluid is hard to add, prolly only as an hardcoded animation, there is no GIF support

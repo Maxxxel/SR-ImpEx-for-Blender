@@ -89,9 +89,9 @@ from .drs_exporter import save_drs
 is_dev_version = True
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
-@bpy.app.handlers.persistent
-def do_stuff(dummy):
-    load_drs(DRS.operator, DRS.context, **DRS.keywords)
+# @bpy.app.handlers.persistent
+# def do_stuff(dummy):
+#     load_drs(DRS.operator, DRS.context, **DRS.keywords)
 
 @orientation_helper(axis_forward='X', axis_up='-Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
@@ -110,7 +110,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
-			bpy.app.handlers.load_post.append(do_stuff)
+			# bpy.app.handlers.load_post.append(do_stuff)
 			DRS.operator = self
 			DRS.keywords = keywords
 			DRS.context = context
@@ -118,7 +118,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 			if keywords["clear_scene"]:
 				bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
 
-			bpy.app.handlers.load_post.remove(do_stuff)
+			# bpy.app.handlers.load_post.remove(do_stuff)
 			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"):
 			return load_bmg(self, context, **keywords)

@@ -2,8 +2,7 @@ from typing import List
 from mathutils import Vector, Matrix
 from .file_io import FileReader, FileWriter
 
-from . drs_definitions import CDspMeshFile, Vertex, Face, AnimationType
-
+from . drs_definitions import CDspMeshFile, MagicValues, Vertex, Face, AnimationType
 
 class RootNodeInformation():
 	"""Root Node Information"""
