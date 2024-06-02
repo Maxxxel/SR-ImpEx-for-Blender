@@ -8,8 +8,10 @@ from . drs_definitions import BattleforgeMesh, CDspMeshFile, Vertex, Face
 
 SOCKET_SHADER = "NodeSocketShader"
 SOCKET_COLOR = "NodeSocketColor"
+SOCKET_NORMAL = "NodeSocketVector"
 SOCKET_FLOAT = "NodeSocketFloat"
-bpy.types.NodeSocketFloat
+
+
 
 
 def create_static_mesh(context: bpy.types.Context, mesh_file: CDspMeshFile, base_name: str, dir_name:str, mesh_object: bpy.types.Object, state: bool = False, override_name: str = ""):
@@ -84,11 +86,19 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
         DRSNodeGroup.inputs.new(name="IN-Roughness [green]", type=SOCKET_COLOR)
         DRSNodeGroup.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
 
+        DRSNodeGroup.inputs.new(name="IN-Normal Map", type=SOCKET_NORMAL)
+
         DRSNodeGroup.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
 
     if (bpy.app.version[0] in [4]):
         DRSNodeGroup.node_tree.interface.new_socket(name="IN-Color Map", in_out="INPUT", type=SOCKET_COLOR, parent=None)
         DRSNodeGroup.node_tree.interface.new_socket(name="IN-Color Map Alpha", in_out="INPUT", type=SOCKET_FLOAT, parent=None)
+
+        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Metallic [red]", in_out="INPUT", type=SOCKET_COLOR, parent=None)
+        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Roughness [green]", in_out="INPUT", type=SOCKET_COLOR, parent=None)
+        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Emission [alpha]", in_out="INPUT", type=SOCKET_COLOR, parent=None)
+
+        DRSNodeGroup.node_tree.interface.new_socket(name="IN-Normal Map", in_out="INPUT", type=SOCKET_NORMAL, parent=None)
 
         DRSNodeGroup.node_tree.interface.new_socket(name="OUT-DRS Shader", in_out="OUTPUT", socket_type=SOCKET_SHADER, parent=None)
 
@@ -142,16 +152,18 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
                         mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSNodeGroup.node_tree.interface.get("IN-Roughness [green]"))
 
                         mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSNodeGroup.inputs.get("IN-Emission [alpha]"))
+                
+                case 1852992883:
+                    normal_map_image = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+                    normal_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
+                    normal_map_node.location = Vector((-700.0, -300.0))
+                    normal_map_node.image = normal_map_image
 
-
-    # Add NormalMap Texture if present
-    for Texture in mesh_data.Textures.Textures:
-        if Tex.Identifier == 1852992883 and Tex.Length > 0:
-            nor_image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-            nor_node = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-            nor_node.location = Vector((-700.0, -300.0))
-            nor_node.image = nor_image
-            NewMaterial.node_tree.links.new(nor_node.outputs['Color'], DRSGroupNode.inputs['Normal Map'])
+                    if (bpy.app.version[0] in [3]):
+                        mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSNodeGroup.node_tree.interface.get("IN-Normal Map"))
+                    if (bpy.app.version[0] in [4]):
+                        mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSNodeGroup.node_tree.interface.get("IN-Normal Map"))
+        
 
     # Fluid is hard to add, prolly only as an hardcoded animation, there is no GIF support
 
@@ -189,7 +201,7 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
     # 	_RGB = mesh_data.Refraction.RGB
         # What to do here?
 
-    return NewMaterial
+    return mesh_material
 
 
 def create_action(armature_object: bpy.types.Object, animation_name: str, animation_time_in_frames: int, force_new: bool = True, repeat: bool = False):
