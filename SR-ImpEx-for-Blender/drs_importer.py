@@ -24,46 +24,16 @@ def ResetViewport() -> None:
 
 	context.view_layer.update()
 
-class DRSBone():
-	"""docstring for DRSBone"""
-	def __init__(self) -> None:
-		self.SKAIdentifier: int
-		self.Identifier: int
-		self.Name: str
-		self.Parent: int = -1
-		self.BoneMatrix: Matrix
-		self.Children: List[int]
-		self.BindLoc: Vector
-		self.BindRot: Quaternion
+
 
 class BoneWeight:
 	def __init__(self, BoneIndices=None, BoneWeights=None):
 		self.BoneIndices: List[int] = BoneIndices
 		self.BoneWeights: List[float] = BoneWeights
 
-def GetCollectionRecursively(Name: str, Collection:bpy.types.LayerCollection = None) -> bpy.types.LayerCollection:
-	if Name in Collection.children:
-		return Collection.children[Name]
 
-	for Child in Collection.children:
-		Result = GetCollectionRecursively(Name, Child)
-		if Result is not None:
-			return Result
 
-	return None
 
-def SetCollection(Name: str, SuffixHash: str, Collection: bpy.types.LayerCollection) -> bpy.types.LayerCollection:
-	Name = f"{Name}_{SuffixHash}"
-
-	if Name in Collection.children:
-		Root = Collection.children[Name]
-	else:
-		NewCollection: bpy.types.Collection = bpy.data.collections.new(Name)
-		Collection.collection.children.link(NewCollection)
-		Root = GetCollectionRecursively(Name, Collection)
-
-	bpy.context.view_layer.active_layer_collection = Root
-	return Root
 
 def SetObject(Name: str, SuffixHash: str, Collection: bpy.types.LayerCollection, Armature: bpy.types.Armature = None) -> bpy.types.Object:
 	Name = f"{Name}_{SuffixHash}"
@@ -75,51 +45,7 @@ def SetObject(Name: str, SuffixHash: str, Collection: bpy.types.LayerCollection,
 	Collection.collection.objects.link(NewObject)
 	return NewObject
 
-def init_skeleton(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
-	BoneList: list[DRSBone] = []
 
-	# Init the Bone List
-	for i in range(skeleton_data.BoneCount):
-		BoneList.append(DRSBone())
-
-	# Set the Bone Datapoints
-	for i in range(skeleton_data.BoneCount):
-		BoneData: Bone = skeleton_data.Bones[i]
-
-		# Get the RootBone Vertices
-		BoneVertices: List[BoneVertex] = skeleton_data.BoneMatrices[BoneData.Identifier].BoneVertices
-
-		_Vector0 = Vector((BoneVertices[0].Position.x, BoneVertices[0].Position.y, BoneVertices[0].Position.z, BoneVertices[0].Parent))
-		_Vector1 = Vector((BoneVertices[1].Position.x, BoneVertices[1].Position.y, BoneVertices[1].Position.z, BoneVertices[1].Parent))
-		_Vector2 = Vector((BoneVertices[2].Position.x, BoneVertices[2].Position.y, BoneVertices[2].Position.z, BoneVertices[2].Parent))
-		_Vector3 = Vector((BoneVertices[3].Position.x, BoneVertices[3].Position.y, BoneVertices[3].Position.z, BoneVertices[3].Parent))
-
-		# Create the Bone Matrix
-		# Make the 4th column negative to flip the Axis
-		_Rot = Matrix((_Vector0.xyz, _Vector1.xyz, _Vector2.xyz))
-		_Loc = _Rot @ (-1 * _Vector3.xyz)
-		_BoneMatrix = Matrix.LocRotScale(_Loc, _Rot, Vector((1, 1, 1)))
-
-		# Set Data
-		BoneListItem: DRSBone = BoneList[BoneData.Identifier]
-		BoneListItem.SKAIdentifier = BoneData.Version
-		BoneListItem.Identifier = BoneData.Identifier
-		BoneListItem.Name = BoneData.Name + (f"_{suffix}" if suffix else "")
-		BoneListItem.BoneMatrix = _BoneMatrix
-
-		# Set the Bone Children
-		BoneListItem.Children = BoneData.Children
-
-		# Set the Bones Children's Parent ID
-		for j in range(BoneData.ChildCount):
-			ChildID = BoneData.Children[j]
-			BoneList[ChildID].Parent = BoneData.Identifier
-
-	# Order the Bones by Parent ID
-	BoneList.sort(key=lambda x: x.Identifier)
-
-	# Return the BoneList
-	return BoneList
 
 def create_bone_tree(armature: bpy.types.Armature, bone_list: list[DRSBone], bone_data: DRSBone):
 	EditBone = armature.edit_bones.new(bone_data.Name)
@@ -137,26 +63,7 @@ def create_bone_tree(armature: bpy.types.Armature, bone_list: list[DRSBone], bon
 		if ChildBone.Parent == bone_data.Identifier:
 			create_bone_tree(armature, bone_list, ChildBone)
 
-def build_skeleton(bone_list: list[DRSBone], armature: bpy.types.Armature, armature_object: bpy.types.Object) -> None:
-	# Switch to edit mode
-	bpy.context.view_layer.objects.active = armature_object
-	bpy.ops.object.mode_set(mode='EDIT')
 
-	create_bone_tree(armature, bone_list, bone_list[0])
-
-	bpy.ops.object.mode_set(mode='OBJECT')
-
-	# Record bind pose transform to parent space
-	# Used to set pose bones for animation
-	for BoneData in bone_list:
-		ArmaBone = armature.bones[BoneData.Name]
-		MatrixLocal = ArmaBone.matrix_local
-
-		if ArmaBone.parent:
-			MatrixLocal = ArmaBone.parent.matrix_local.inverted_safe() @ MatrixLocal
-
-		BoneData.BindLoc = MatrixLocal.to_translation()
-		BoneData.BindRot = MatrixLocal.to_quaternion()
 
 def init_skin(mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mesh_data: CGeoMesh) -> list[BoneWeight]:
 	TotalVertexCount = sum(Mesh.VertexCount for Mesh in mesh_file.Meshes)
@@ -375,53 +282,13 @@ def create_animation(ska_file: SKA, armature_object, bone_list: list[DRSBone], a
 	bpy.ops.object.mode_set(mode='OBJECT')
 	add_animation_to_nla_track(armature_object, new_action)
 
-def load_drs(operator, context, filepath="", use_apply_transform=True, global_matrix=None, clear_scene=True):
-	base_name = os.path.basename(filepath).split(".")[0]
-	dir_name = os.path.dirname(filepath)
-	drs_file: DRS = DRS().Read(filepath)
 
-	# source_collection = SetCollection("DRSModel_" + base_name + "_Type", "", bpy.context.view_layer.layer_collection)
-	source_collection = SetCollection("New COllection", "", bpy.context.view_layer.layer_collection)
 
-	if drs_file.CSkSkeleton is not None:
-		armature = bpy.data.armatures.new("Bones")
-		armature_object: bpy.types.Object = bpy.data.objects.new("CSkSkeleton", armature)
-		bpy.context.collection.objects.link(armature_object)
-		bpy.context.view_layer.objects.active = armature_object
-		bone_list = init_skeleton(drs_file.CSkSkeleton)
-		build_skeleton(bone_list, armature, armature_object)
-		
-		weight_list = init_skin(drs_file.CDspMeshFile, drs_file.CSkSkinInfo, drs_file.CGeoMesh)
-		mesh_object: bpy.types.Object = SetObject("CDspMeshFile_" + base_name, "", source_collection) #, armature)
-		mesh_object.parent = armature_object
-		create_skinned_mesh(drs_file.CDspMeshFile, dir_name, base_name, mesh_object, armature_object, bone_list, weight_list)
 
-		if drs_file.AnimationSet is not None:
-			for AnimationKey in drs_file.AnimationSet.ModeAnimationKeys:
-				for Variant in AnimationKey.AnimationSetVariants:
-					SKAFile: SKA = SKA().Read(os.path.join(dir_name, Variant.File))
-					create_animation(SKAFile, armature_object, bone_list, Variant.File)
-	else:
-		mesh_object: bpy.types.Object = SetObject("CDspMeshFile_" + base_name, "", source_collection)
-		create_static_mesh(drs_file.CDspMeshFile, base_name, dir_name, mesh_object, override_name=base_name)
 
-	# if DRSFile.CollisionShape is not None:
-	# 	CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
-	# 	CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
-	if use_apply_transform:
-		if drs_file.CSkSkeleton is not None:
-			armature_object.matrix_world = global_matrix @ armature_object.matrix_world
-			armature_object.scale = (1, -1, 1)
-		else:
-			mesh_object.matrix_world = global_matrix @ mesh_object.matrix_world
-			mesh_object.scale = (1, -1, 1)
 
-	# 	if DRSFile.CollisionShape is not None:
-	# 		CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
-	# 		CollisionShapeObjectObject.scale = (1, -1, 1)
 
-	ResetViewport()
 
 def load_bmg(operator, context, filepath="", use_apply_transform=True, global_matrix=None, clear_scene=True):
 	pass

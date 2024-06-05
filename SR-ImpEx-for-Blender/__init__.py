@@ -73,11 +73,6 @@ AlxClassQueue = alx_class_object_list
 #################################################
 
 
-
-
-
-
-
 import os
 from os.path import dirname, realpath
 from bpy.props import StringProperty, BoolProperty
@@ -86,12 +81,12 @@ from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, 
 from .drs_importer import load_drs, load_bmg, DRS
 from .drs_exporter import save_drs
 
-is_dev_version = True
+is_dev_version = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
-# @bpy.app.handlers.persistent
-# def do_stuff(dummy):
-#     load_drs(DRS.operator, DRS.context, **DRS.keywords)
+
+
+from . drs_utility import load_drs
 
 @orientation_helper(axis_forward='X', axis_up='-Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
@@ -99,18 +94,24 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	bl_idname = "import_scene.drs"
 	bl_label = "Import DRS/BMG"
 	filename_ext = ".drs;.bmg"
-	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255) # type: ignore # ignore
-	use_apply_transform : BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True) # type: ignore # ignore
-	clear_scene : BoolProperty(name="Clear Scene", description="Clear the scene before importing", default=True) # type: ignore # ignore
+ 
+	import_file_path : bpy.props.StringProperty() #type:ignore
 
 	def execute(self, context):
+		if self.import_file_path.endwith(".drs"):
+			load_drs()
+
+
+
+
+
 		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
 		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
 		keywords["global_matrix"] = global_matrix
 
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
-			# bpy.app.handlers.load_post.append(do_stuff)
+			load_drs(DRS.operator, DRS.context, **DRS.keywords)
 			DRS.operator = self
 			DRS.keywords = keywords
 			DRS.context = context
@@ -118,7 +119,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 			if keywords["clear_scene"]:
 				bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
 
-			# bpy.app.handlers.load_post.remove(do_stuff)
 			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"):
 			return load_bmg(self, context, **keywords)
