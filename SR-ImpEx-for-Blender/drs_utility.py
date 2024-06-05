@@ -3,8 +3,15 @@ import os
 import bpy
 from bpy_extras.image_utils import load_image
 
-from mathutils import Vector
-from . drs_definitions import DRS, CDspMeshFile, CSkSkeleton, BattleforgeMesh, Vertex, Face
+from mathutils import Vector, Matrix
+from . drs_definitions import (
+    DRS, DRSBone,
+    CDspMeshFile, CDspJointMap,
+    CSkSkeleton, CSkSkinInfo,
+    Bone, BoneMatrix, BoneVertex,
+    Vertex, Face,
+    BattleforgeMesh
+)
 
 
 SOCKET_SHADER = "NodeSocketShader"
@@ -117,7 +124,7 @@ def init_skeleton(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBon
 		BoneData: Bone = skeleton_data.Bones[i]
 
 		# Get the RootBone Vertices
-		BoneVertices: List[BoneVertex] = skeleton_data.BoneMatrices[BoneData.Identifier].BoneVertices
+		BoneVertices: list[BoneVertex] = skeleton_data.BoneMatrices[BoneData.Identifier].BoneVertices
 
 		_Vector0 = Vector((BoneVertices[0].Position.x, BoneVertices[0].Position.y, BoneVertices[0].Position.z, BoneVertices[0].Parent))
 		_Vector1 = Vector((BoneVertices[1].Position.x, BoneVertices[1].Position.y, BoneVertices[1].Position.z, BoneVertices[1].Parent))
