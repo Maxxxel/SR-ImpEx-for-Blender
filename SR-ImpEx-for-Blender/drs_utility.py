@@ -190,21 +190,21 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
 
 	DRSShaderNodeTree: bpy.types.ShaderNodeTree = bpy.data.node_groups.get("DRS") if ( bpy.data.node_groups.get("DRS") is not None) else bpy.data.node_groups.new("DRS", type="ShaderNodeTree")
 	DRSShaderNodeTree.nodes.clear()
-	DRSShaderNodeTree.interface.clear()
 
 	if (bpy.app.version[0] in [3]):
-		DRSShaderGroup.inputs.new(name="IN-Color Map", type=SOCKET_COLOR)
-		DRSShaderGroup.inputs.new(name="IN-Color Map Alpha", type=SOCKET_FLOAT)
+		DRSShaderNodeTree.inputs.new(name="IN-Color Map", type=SOCKET_COLOR)
+		DRSShaderNodeTree.inputs.new(name="IN-Color Map Alpha", type=SOCKET_FLOAT)
 
-		DRSShaderGroup.inputs.new(name="IN-Metallic [red]", type=SOCKET_COLOR)
-		DRSShaderGroup.inputs.new(name="IN-Roughness [green]", type=SOCKET_COLOR)
-		DRSShaderGroup.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
+		DRSShaderNodeTree.inputs.new(name="IN-Metallic [red]", type=SOCKET_COLOR)
+		DRSShaderNodeTree.inputs.new(name="IN-Roughness [green]", type=SOCKET_COLOR)
+		DRSShaderNodeTree.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
 
-		DRSShaderGroup.inputs.new(name="IN-Normal Map", type=SOCKET_NORMAL)
+		DRSShaderNodeTree.inputs.new(name="IN-Normal Map", type=SOCKET_NORMAL)
 
-		DRSShaderGroup.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
+		DRSShaderNodeTree.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
 
 	if (bpy.app.version[0] in [4]):
+		DRSShaderNodeTree.interface.clear()
 		DRSShaderNodeTree.interface.new_socket(name="IN-Color Map", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
 		DRSShaderNodeTree.interface.new_socket(name="IN-Color Map Alpha", in_out="INPUT", socket_type=SOCKET_FLOAT, parent=None)
 
@@ -216,16 +216,19 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
 
 		DRSShaderNodeTree.interface.new_socket(name="OUT-DRS Shader", in_out="OUTPUT", socket_type=SOCKET_SHADER, parent=None)
 		
-		DRSShaderGroupInputs = DRSShaderNodeTree.nodes.new("NodeGroupInput") # Internal Node of the DRS Custom Shader
-		DRSShaderGroupInputs.location = Vector((-1000.0, 0.0))
+	DRSShaderGroupInputs = DRSShaderNodeTree.nodes.new("NodeGroupInput") # Internal Node of the DRS Custom Shader
+	DRSShaderGroupInputs.location = Vector((-1000.0, 0.0))
 
-		# Create the BSDF Shader
-		DRSShaderGroupShader = DRSShaderNodeTree.nodes.new("ShaderNodeBsdfPrincipled")
-		DRSShaderGroupShader.location = Vector((0.0, 0.0))
-		DRSShaderGroupShader.inputs.get("IOR").default_value = 1.0
+	# Create the BSDF Shader
+	DRSShaderGroupShader = DRSShaderNodeTree.nodes.new("ShaderNodeBsdfPrincipled")
+	DRSShaderGroupShader.location = Vector((0.0, 0.0))
+	DRSShaderGroupShader.inputs.get("IOR").default_value = 1.0
 
-		DRSShaderGroupOutputs = DRSShaderNodeTree.nodes.new("NodeGroupOutput") # Internal Node of the DRS Custom Shader
-		DRSShaderGroupOutputs.location = Vector((1000.0, 0.0))
+	if (bpy.app.version[0] in [3]):
+		DRSShaderGroupShader.inputs.get("Specular").default_value = 0
+
+	DRSShaderGroupOutputs = DRSShaderNodeTree.nodes.new("NodeGroupOutput") # Internal Node of the DRS Custom Shader
+	DRSShaderGroupOutputs.location = Vector((1000.0, 0.0))
 
 	DRSShaderGroup: bpy.types.ShaderNodeGroup = mesh_material.node_tree.nodes.get("DRS") if (mesh_material.node_tree.nodes.get("DRS") is not None) else mesh_material.node_tree.nodes.new("ShaderNodeGroup")
 	DRSShaderGroup.node_tree = DRSShaderNodeTree
@@ -268,7 +271,10 @@ def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: B
 					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Metallic [red]"), DRSShaderGroupShader.inputs.get("Metallic"))
 					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Roughness [green]"), DRSShaderGroupShader.inputs.get("Roughness"))
 					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Emission [alpha]"), DRSShaderGroupShader.inputs.get("Emission Strength"))
-					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Color Map"), DRSShaderGroupShader.inputs.get("Emission Color"))
+					if (bpy.app.version[0] in [3]):
+						DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Emission [alpha]"), DRSShaderGroupShader.inputs.get("Emission"))
+					if (bpy.app.version[0] in [4]):
+						DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Color Map"), DRSShaderGroupShader.inputs.get("Emission Color"))
 				case 1852992883:
 					normal_map_image = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
 					normal_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
