@@ -4,6 +4,8 @@ import subprocess
 from os.path import dirname, realpath
 from typing import List, Tuple, Dict
 from uu import Error
+from typing import List, Tuple, Dict
+from uu import Error
 import bpy
 import bmesh
 from mathutils import Vector, Matrix

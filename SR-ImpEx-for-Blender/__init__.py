@@ -79,8 +79,68 @@ from .drs_importer import load_bmg, DRS
 from .drs_exporter import save_drs
 from .drs_utility import load_drs
 
-is_dev_version = False
+#################################################
+# ALX MODULE AUTO-LOADER
+import bpy
+import os
+import importlib
+
+folder_blacklist = ["__pycache__", "alxoverhaul_updater"]
+file_blacklist = ["__init__.py", "addon_updater_ops", "addon_updater.py", "Extras.py", ]
+
+addon_folders = list([__path__[0]])
+addon_folders.extend( [os.path.join(__path__[0], folder_name) for folder_name in os.listdir(__path__[0]) if ( os.path.isdir( os.path.join(__path__[0], folder_name) ) ) and (folder_name not in folder_blacklist) ] )
+
+addon_files = [[folder_path, file_name[0:-3]] for folder_path in addon_folders for file_name in os.listdir(folder_path) if (file_name not in file_blacklist) and (file_name.endswith(".py"))]
+
+for folder_file_batch in addon_files:
+    if (os.path.basename(folder_file_batch[0]) == os.path.basename(__path__[0])):
+        file = folder_file_batch[1]
+
+        if (file not in locals()):
+            import_line = f"from . import {file}"
+            exec(import_line)
+        else:
+            reload_line = f"{file} = importlib.reload({file})"
+            exec(reload_line)
+    
+    else:
+        if (os.path.basename(folder_file_batch[0]) != os.path.basename(__path__[0])):
+            file = folder_file_batch[1]
+
+            if (file not in locals()):
+                import_line = f"from . {os.path.basename(folder_file_batch[0])} import {file}"
+                exec(import_line)
+            else:
+                reload_line = f"{file} = importlib.reload({file})"
+                exec(reload_line)
+
+import inspect
+
+class_blacklist = ["PSA_UL_SequenceList"]
+
+bpy_class_object_list = tuple(bpy_class[1] for bpy_class in inspect.getmembers(bpy.types, inspect.isclass) if (bpy_class not in class_blacklist))
+alx_class_object_list = tuple(alx_class[1] for file_batch in addon_files for alx_class in inspect.getmembers(eval(file_batch[1]), inspect.isclass) if issubclass(alx_class[1], bpy_class_object_list) and (not issubclass(alx_class[1], bpy.types.WorkSpaceTool)))
+
+AlxClassQueue = alx_class_object_list
+
+#################################################
+
+import os
+from os.path import dirname, realpath
+from bpy.props import StringProperty, BoolProperty
+from bpy.app.handlers import persistent
+from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
+from .drs_importer import load_bmg, DRS
+from .drs_exporter import save_drs
+from .drs_utility import load_drs
+
+is_dev_version = True
 resource_dir = dirname(realpath(__file__)) + "/resources"
+
+@bpy.app.handlers.persistent
+def do_stuff(dummy):
+    load_drs(DRS.operator, DRS.context, **DRS.keywords)
 
 @orientation_helper(axis_forward='X', axis_up='-Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
