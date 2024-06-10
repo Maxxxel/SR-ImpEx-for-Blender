@@ -10,8 +10,8 @@ from mathutils import Euler, Vector, Matrix, Quaternion
 
 
 from .drs_utility import create_static_mesh, create_material, create_action
-from .drs_file import DRS, CDspMeshFile, CSkSkeleton, CSkSkinInfo, Bone, CGeoMesh, Face, Vertex, BoneVertex, MeshSetGrid, BoxShape, SphereShape, CylinderShape, CGeoOBBTree, OBBNode
-from .ska_file import SKA, SKAHeader
+from .ska_file import *
+from .drs_definitions import *
 
 from . drs_definitions import BattleforgeMesh
 

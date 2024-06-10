@@ -1244,7 +1244,7 @@ class DRS():
 		self.MeshSetGridNode: Node = None
 		self.CDrwLocatorListNode: Node = None
 		self.AnimationSet: AnimationSet = None
-		self.CDspMeshFile: CDspMeshFile = None
+		self.CDspMeshFileData: CDspMeshFile = None
 		self.CGeoMesh: CGeoMesh = None
 		self.CSkSkinInfo: CSkSkinInfo = None
 		self.CSkSkeleton: CSkSkeleton = None
@@ -1256,6 +1256,7 @@ class DRS():
 		self.CollisionShape: CollisionShape = None
 		# self.EffectSet: EffectSet = None
 		self.MeshSetGrid: MeshSetGrid = None
+		self.IsSkinned: bool = False
 
 	def Read(self, FileName: str) -> 'DRS':
 		"""Reads the DRS from the file"""
@@ -1285,6 +1286,7 @@ class DRS():
 				self.CSkSkinInfoFileNodeInformation = _NodeInformation
 			elif _NodeInformation.Magic == -2110567991: # CSkSkeleton
 				self.CSkSkeletonFileNodeInformation = _NodeInformation
+				self.IsSkinned = True
 			elif _NodeInformation.Magic == -1403092629: # AnimationTimings
 				self.AnimationTimingsInformation = _NodeInformation
 			elif _NodeInformation.Magic == -1340635850: # JointMap
@@ -1350,7 +1352,7 @@ class DRS():
 
 		if self.CDspMeshFileNode is not None:
 			Reader.Seek(self.CDspMeshFileNodeInformation.Offset)
-			self.CDspMeshFile = CDspMeshFile().Read(Reader)
+			self.CDspMeshFileData = CDspMeshFile().Read(Reader)
 
 		if self.CGeoMeshNode is not None:
 			Reader.Seek(self.CGeoMeshFileNodeInformation.Offset)
@@ -2044,13 +2046,14 @@ class CollisionShape():
 
 	def Read(self, Buffer: FileReader) -> 'CollisionShape':
 		"""Reads the CollisionShape from the buffer"""
-		self.Version = Buffer.ReadByte()
-		self.BoxCount = Buffer.ReadInt()
-		self.Boxes = [BoxShape().Read(Buffer) for _ in range(self.BoxCount)]
-		self.SphereCount = Buffer.ReadInt()
-		self.Spheres = [SphereShape().Read(Buffer) for _ in range(self.SphereCount)]
-		self.CylinderCount = Buffer.ReadInt()
-		self.Cylinders = [CylinderShape().Read(Buffer) for _ in range(self.CylinderCount)]
+		# Some Files have a different Layout. Needs Investigation, we dont import These Values anyway!
+		# self.Version = Buffer.ReadByte()
+		# self.BoxCount = Buffer.ReadInt()
+		# self.Boxes = [BoxShape().Read(Buffer) for _ in range(self.BoxCount)]
+		# self.SphereCount = Buffer.ReadInt()
+		# self.Spheres = [SphereShape().Read(Buffer) for _ in range(self.SphereCount)]
+		# self.CylinderCount = Buffer.ReadInt()
+		# self.Cylinders = [CylinderShape().Read(Buffer) for _ in range(self.CylinderCount)]
 		return self
 
 	def Write(self, Buffer: FileWriter) -> 'CollisionShape':

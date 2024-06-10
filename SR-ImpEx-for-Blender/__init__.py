@@ -26,7 +26,6 @@ bl_info = {
 #################################################
 # ALX MODULE AUTO-LOADER
 import bpy
-
 import os
 import importlib
 
@@ -60,7 +59,6 @@ for folder_file_batch in addon_files:
                 reload_line = f"{file} = importlib.reload({file})"
                 exec(reload_line)
 
-
 import inspect
 
 class_blacklist = ["PSA_UL_SequenceList"]
@@ -72,21 +70,17 @@ AlxClassQueue = alx_class_object_list
 
 #################################################
 
-
 import os
 from os.path import dirname, realpath
 from bpy.props import StringProperty, BoolProperty
 from bpy.app.handlers import persistent
 from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
-from .drs_importer import load_drs, load_bmg, DRS
+from .drs_importer import load_bmg, DRS
 from .drs_exporter import save_drs
+from .drs_utility import load_drs
 
 is_dev_version = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
-
-
-
-from . drs_utility import load_drs
 
 @orientation_helper(axis_forward='X', axis_up='-Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
@@ -94,30 +88,23 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	bl_idname = "import_scene.drs"
 	bl_label = "Import DRS/BMG"
 	filename_ext = ".drs;.bmg"
- 
-	import_file_path : bpy.props.StringProperty() #type:ignore
 
 	def execute(self, context):
-		if self.import_file_path.endwith(".drs"):
-			load_drs()
-
-
-
-
-
 		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
 		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
 		keywords["global_matrix"] = global_matrix
 
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
-			load_drs(DRS.operator, DRS.context, **DRS.keywords)
-			DRS.operator = self
-			DRS.keywords = keywords
-			DRS.context = context
 			
-			if keywords["clear_scene"]:
-				bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
+			# if keywords["clear_scene"]:
+			# 	load_drs(DRS.operator, DRS.context, **DRS.keywords)
+			# 	DRS.operator = self
+			# 	DRS.keywords = keywords
+			# 	DRS.context = context
+			# 	bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
+			# else:
+			load_drs(context, filepath=self.filepath)
 
 			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"):
@@ -158,8 +145,6 @@ def menu_func_import(self, context=None):
 def menu_func_export(self, context=None):
 	self.layout.operator(ExportBFModel.bl_idname, text="Battleforge (.drs) - "+(is_dev_version and "DEV" or "")+" v" + str(bl_info["version"][0]) + "." + str(bl_info["version"][1]) + "." + str(bl_info["version"][2]))
 
-
-
 def AlxRegisterClassQueue():
     for AlxClass in AlxClassQueue:
         try:
@@ -170,6 +155,7 @@ def AlxRegisterClassQueue():
                 bpy.utils.register_class(AlxClass)
             except:
                 pass
+
 def AlxUnregisterClassQueue():
     for AlxClass in AlxClassQueue:
         try:
@@ -177,17 +163,8 @@ def AlxUnregisterClassQueue():
         except:
             print("Can't Unregister", AlxClass)
 
-
-
-
-
-
-
-
-
 def register():
 	AlxRegisterClassQueue()
-      
 
 	bpy.utils.register_class(ImportBFModel)
 	bpy.utils.register_class(ExportBFModel)
@@ -197,7 +174,6 @@ def register():
 
 def unregister():
 	AlxUnregisterClassQueue()
-
 
 	bpy.utils.unregister_class(ImportBFModel)
 	bpy.utils.unregister_class(ExportBFModel)

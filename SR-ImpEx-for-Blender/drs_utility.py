@@ -5,20 +5,18 @@ from bpy_extras.image_utils import load_image
 
 from mathutils import Vector, Matrix
 from . drs_definitions import (
-    DRS, DRSBone,
-    CDspMeshFile, CDspJointMap,
-    CSkSkeleton, CSkSkinInfo,
-    Bone, BoneMatrix, BoneVertex,
-    Vertex, Face,
-    BattleforgeMesh
+	DRS, DRSBone,
+	CDspMeshFile, CDspJointMap,
+	CSkSkeleton, CSkSkinInfo,
+	Bone, BoneMatrix, BoneVertex,
+	Vertex, Face,
+	BattleforgeMesh
 )
-
 
 SOCKET_SHADER = "NodeSocketShader"
 SOCKET_COLOR = "NodeSocketColor"
-SOCKET_NORMAL = "NodeSocketVector"
 SOCKET_FLOAT = "NodeSocketFloat"
-
+SOCKET_NORMAL = "NodeSocketVector"
 
 def load_drs(context: bpy.types.Context, filepath=""):
 	base_name = os.path.basename(filepath).split(".")[0]
@@ -28,7 +26,7 @@ def load_drs(context: bpy.types.Context, filepath=""):
 	# source_collection = SetCollection("DRSModel_" + base_name + "_Type", "", bpy.context.view_layer.layer_collection)
 	source_collection = context.scene.collection
 
-	if drs_file.CSkSkeleton is not None:
+	if drs_file.IsSkinned:
 		armature = bpy.data.armatures.new("Bones")
 		armature_object: bpy.types.Object = bpy.data.objects.new("CSkSkeleton", armature)
 		bpy.context.collection.objects.link(armature_object)
@@ -36,7 +34,7 @@ def load_drs(context: bpy.types.Context, filepath=""):
 		bone_list = init_skeleton(drs_file.CSkSkeleton)
 		build_skeleton(bone_list, armature, armature_object)
 		
-		weight_list = init_skin(drs_file.CDspMeshFile, drs_file.CSkSkinInfo, drs_file.CGeoMesh)
+		weight_list = init_skin(drs_file.CDspMeshFileData, drs_file.CSkSkinInfo, drs_file.CGeoMesh)
 		mesh_object: bpy.types.Object = SetObject("CDspMeshFile_" + base_name, "", source_collection) #, armature)
 		mesh_object.parent = armature_object
 		create_skinned_mesh(drs_file.CDspMeshFile, dir_name, base_name, mesh_object, armature_object, bone_list, weight_list)
@@ -47,71 +45,66 @@ def load_drs(context: bpy.types.Context, filepath=""):
 					SKAFile: SKA = SKA().Read(os.path.join(dir_name, Variant.File))
 					create_animation(SKAFile, armature_object, bone_list, Variant.File)
 	else:
-		mesh_object: bpy.types.Object = SetObject("CDspMeshFile_" + base_name, "", source_collection)
-		create_static_mesh(drs_file.CDspMeshFile, base_name, dir_name, mesh_object, override_name=base_name)
+		mesh_object: bpy.types.Object = bpy.data.objects.new("CDspMeshFile_" + base_name, None)
+		create_static_mesh(drs_file.CDspMeshFileData, base_name, dir_name, mesh_object, override_name=base_name)
 
 	# if DRSFile.CollisionShape is not None:
 	# 	CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
 	# 	CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
-	if use_apply_transform:
-		if drs_file.CSkSkeleton is not None:
-			armature_object.matrix_world = global_matrix @ armature_object.matrix_world
-			armature_object.scale = (1, -1, 1)
-		else:
-			mesh_object.matrix_world = global_matrix @ mesh_object.matrix_world
-			mesh_object.scale = (1, -1, 1)
+	# if use_apply_transform:
+	# 	if drs_file.CSkSkeleton is not None:
+	# 		armature_object.matrix_world = global_matrix @ armature_object.matrix_world
+	# 		armature_object.scale = (1, -1, 1)
+	# 	else:
+	# 		mesh_object.matrix_world = global_matrix @ mesh_object.matrix_world
+	# 		mesh_object.scale = (1, -1, 1)
 
 	# 	if DRSFile.CollisionShape is not None:
 	# 		CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
 	# 		CollisionShapeObjectObject.scale = (1, -1, 1)
 
-	ResetViewport()
+def create_static_mesh(mesh_file: CDspMeshFile, base_name: str, dir_name:str, mesh_object: bpy.types.Object, state: bool = False, override_name: str = ""):
+	for i in range(mesh_file.MeshCount):
+		BattleforgeMeshData: BattleforgeMesh = mesh_file.Meshes[i]
 
+		_name = override_name if (override_name != '') else f"State_{i}" if (state == True) else f"{i}"
+		mesh_name = f"MeshData_{_name}"
 
-def create_static_mesh(context: bpy.types.Context, mesh_file: CDspMeshFile, base_name: str, dir_name:str, mesh_object: bpy.types.Object, state: bool = False, override_name: str = ""):
-    for i in range(mesh_file.MeshCount):
-        BattleforgeMeshData: BattleforgeMesh = mesh_file.Meshes[i]
+		static_mesh = bpy.data.meshes.new(mesh_name)
+		static_mesh_object = bpy.data.objects.new(mesh_name, static_mesh)
 
-        _name = override_name if (override_name != '') else f"State_{i}" if (state == True) else f"{i}"
-        mesh_name = f"MeshData_{_name}"
+		Vertices = list()
+		Faces = list()		
+		Normals = list()
+		UVList = list()
 
-        static_mesh = bpy.data.meshes.new(mesh_name)
-        static_mesh_object = bpy.data.objects.new(mesh_name, static_mesh)
+		for _ in range(BattleforgeMeshData.FaceCount):
+			_Face: Face = BattleforgeMeshData.Faces[_].Indices
+			Faces.append([_Face[0], _Face[1], _Face[2]])
 
-        Vertices = list()
-        Faces = list()		
-        Normals = list()
-                
-        UVList = list()
+		for _ in range(BattleforgeMeshData.VertexCount):
+			_Vertex: Vertex = BattleforgeMeshData.MeshData[0].Vertices[_]
+			Vertices.append(_Vertex.Position)
+			Normals.append(_Vertex.Normal)
+			# Negate the UVs Y Axis before adding them
+			UVList.append((_Vertex.Texture[0], -_Vertex.Texture[1]))
 
-        for _ in range(BattleforgeMeshData.FaceCount):
-            _Face: Face = BattleforgeMeshData.Faces[_].Indices
-            Faces.append([_Face[0], _Face[1], _Face[2]])
+		static_mesh.from_pydata(Vertices, [], Faces)
+		static_mesh.polygons.foreach_set('use_smooth', [True] * len(static_mesh.polygons))
+		static_mesh.normals_split_custom_set_from_vertices(Normals)
+		if (bpy.app.version[:2] in [(3,3),(3,4),(3,5),(3,6),(4,0)]):
+			static_mesh.use_auto_smooth = True
 
-        for _ in range(BattleforgeMeshData.VertexCount):
-            _Vertex: Vertex = BattleforgeMeshData.MeshData[0].Vertices[_]
-            Vertices.append(_Vertex.Position)
-            Normals.append(_Vertex.Normal)
-            # Negate the UVs Y Axis before adding them
-            UVList.append((_Vertex.Texture[0], -_Vertex.Texture[1]))
+		UVList = [_ for poly in static_mesh.polygons for vidx in poly.vertices for _ in UVList[vidx]]
+		static_mesh.uv_layers.new().data.foreach_set('uv', UVList)
 
-        static_mesh.from_pydata(Vertices, [], Faces)
-        static_mesh.polygons.foreach_set('use_smooth', [True] * len(static_mesh.polygons))
-        static_mesh.normals_split_custom_set_from_vertices(Normals)
-        if (bpy.app.version[:2] in [(3,3),(3,4),(3,5),(3,6),(4,0)]):
-            static_mesh.use_auto_smooth = True
+		MaterialData = create_material(dir_name, base_name, i, BattleforgeMeshData)
+		static_mesh.materials.append(MaterialData)
+		static_mesh_object.parent = mesh_object
 
-        UVList = [i for poly in static_mesh.polygons for vidx in poly.vertices for i in UVList[vidx]]
-        static_mesh.uv_layers.new().data.foreach_set('uv', UVList)
-
-        MaterialData = create_material(i, BattleforgeMeshData, dir_name, base_name)
-        static_mesh.materials.append(MaterialData)
-        static_mesh_object.parent = mesh_object
-
-        bpy.context.collection.objects.link(static_mesh_object)
-        
-
+		bpy.context.collection.objects.link(static_mesh_object)
+		
 def init_skeleton(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
 	BoneList: list[DRSBone] = []
 
@@ -158,7 +151,6 @@ def init_skeleton(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBon
 	# Return the BoneList
 	return BoneList
 
-
 def build_skeleton(bone_list: list[DRSBone], armature: bpy.types.Armature, armature_object: bpy.types.Object) -> None:
 	# Switch to edit mode
 	bpy.context.view_layer.objects.active = armature_object
@@ -180,152 +172,165 @@ def build_skeleton(bone_list: list[DRSBone], armature: bpy.types.Armature, armat
 		BoneData.BindLoc = MatrixLocal.to_translation()
 		BoneData.BindRot = MatrixLocal.to_quaternion()
 
-
 def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: BattleforgeMesh, force_new: bool = True) -> bpy.types.Material:
-    mesh_material = None
-    material_name = f"Material_{base_name}_{mesh_index}"
+	mesh_material = None
+	material_name = f"Material_{base_name}_{mesh_index}"
 
-    if (force_new == True):
-        mesh_material = bpy.data.materials.new(material_name)
-    else:
-        _material = bpy.data.materials.get(material_name)
-        if (_material is not None):
-            mesh_material = _material
-        else:
-            mesh_material = bpy.data.materials.new(material_name)
+	if (force_new == True):
+		mesh_material = bpy.data.materials.new(material_name)
+	else:
+		_material = bpy.data.materials.get(material_name)
+		if (_material is not None):
+			mesh_material = _material
+		else:
+			mesh_material = bpy.data.materials.new(material_name)
 
-    mesh_material.use_nodes = True
-    mesh_material.node_tree.nodes.clear()
+	mesh_material.use_nodes = True
+	mesh_material.node_tree.nodes.clear()
 
-    DRSShaderGroup : bpy.types.ShaderNodeTree = bpy.data.node_groups.get("DRS") if ( bpy.data.node_groups.get("DRS") is not None) else bpy.data.node_groups.new("DRS", type="ShaderNodeGroup")
-    
-    DRSShaderGroup.nodes.clear()
-    DRSShaderGroup.interface.clear()
+	DRSShaderNodeTree: bpy.types.ShaderNodeTree = bpy.data.node_groups.get("DRS") if ( bpy.data.node_groups.get("DRS") is not None) else bpy.data.node_groups.new("DRS", type="ShaderNodeTree")
+	DRSShaderNodeTree.nodes.clear()
+	DRSShaderNodeTree.interface.clear()
 
-    if (bpy.app.version[0] in [3]):
-        DRSShaderGroup.inputs.new(name="IN-Color Map", type=SOCKET_COLOR)
-        DRSShaderGroup.inputs.new(name="IN-Color Map Alpha", type=SOCKET_FLOAT)
+	if (bpy.app.version[0] in [3]):
+		DRSShaderGroup.inputs.new(name="IN-Color Map", type=SOCKET_COLOR)
+		DRSShaderGroup.inputs.new(name="IN-Color Map Alpha", type=SOCKET_FLOAT)
 
-        DRSShaderGroup.inputs.new(name="IN-Metallic [red]", type=SOCKET_COLOR)
-        DRSShaderGroup.inputs.new(name="IN-Roughness [green]", type=SOCKET_COLOR)
-        DRSShaderGroup.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
+		DRSShaderGroup.inputs.new(name="IN-Metallic [red]", type=SOCKET_COLOR)
+		DRSShaderGroup.inputs.new(name="IN-Roughness [green]", type=SOCKET_COLOR)
+		DRSShaderGroup.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
 
-        DRSShaderGroup.inputs.new(name="IN-Normal Map", type=SOCKET_NORMAL)
+		DRSShaderGroup.inputs.new(name="IN-Normal Map", type=SOCKET_NORMAL)
 
-        DRSShaderGroup.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
+		DRSShaderGroup.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
 
-    if (bpy.app.version[0] in [4]):
-        DRSShaderGroup.interface.new_socket(name="IN-Color Map", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
-        DRSShaderGroup.interface.new_socket(name="IN-Color Map Alpha", in_out="INPUT", socket_type=SOCKET_FLOAT, parent=None)
+	if (bpy.app.version[0] in [4]):
+		DRSShaderNodeTree.interface.new_socket(name="IN-Color Map", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
+		DRSShaderNodeTree.interface.new_socket(name="IN-Color Map Alpha", in_out="INPUT", socket_type=SOCKET_FLOAT, parent=None)
 
-        DRSShaderGroup.interface.new_socket(name="IN-Metallic [red]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
-        DRSShaderGroup.interface.new_socket(name="IN-Roughness [green]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
-        DRSShaderGroup.interface.new_socket(name="IN-Emission [alpha]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
+		DRSShaderNodeTree.interface.new_socket(name="IN-Metallic [red]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
+		DRSShaderNodeTree.interface.new_socket(name="IN-Roughness [green]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
+		DRSShaderNodeTree.interface.new_socket(name="IN-Emission [alpha]", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
 
-        DRSShaderGroup.interface.new_socket(name="IN-Normal Map", in_out="INPUT", socket_type=SOCKET_NORMAL, parent=None)
+		DRSShaderNodeTree.interface.new_socket(name="IN-Normal Map", in_out="INPUT", socket_type=SOCKET_NORMAL, parent=None)
 
-        DRSShaderGroup.interface.new_socket(name="OUT-DRS Shader", in_out="OUTPUT", socket_type=SOCKET_SHADER, parent=None)
+		DRSShaderNodeTree.interface.new_socket(name="OUT-DRS Shader", in_out="OUTPUT", socket_type=SOCKET_SHADER, parent=None)
+		
+		DRSShaderGroupInputs = DRSShaderNodeTree.nodes.new("NodeGroupInput") # Internal Node of the DRS Custom Shader
+		DRSShaderGroupInputs.location = Vector((-1000.0, 0.0))
 
+		# Create the BSDF Shader
+		DRSShaderGroupShader = DRSShaderNodeTree.nodes.new("ShaderNodeBsdfPrincipled")
+		DRSShaderGroupShader.location = Vector((0.0, 0.0))
+		DRSShaderGroupShader.inputs.get("IOR").default_value = 1.0
 
-    
+		DRSShaderGroupOutputs = DRSShaderNodeTree.nodes.new("NodeGroupOutput") # Internal Node of the DRS Custom Shader
+		DRSShaderGroupOutputs.location = Vector((1000.0, 0.0))
 
-    mesh_material_output = mesh_material.node_tree.nodes.new("ShaderNodeOutputMaterial")
-    mesh_material_output.location = Vector((400.0, 0.0))
+	DRSShaderGroup: bpy.types.ShaderNodeGroup = mesh_material.node_tree.nodes.get("DRS") if (mesh_material.node_tree.nodes.get("DRS") is not None) else mesh_material.node_tree.nodes.new("ShaderNodeGroup")
+	DRSShaderGroup.node_tree = DRSShaderNodeTree
 
-    if (bpy.app.version[0] in [3]):
-        mesh_material.node_tree.links.new(DRSShaderGroup.outputs.get("OUT-DRS Shader"), mesh_material_output.inputs.get("Surface"))
-    if (bpy.app.version[0] in [4]):
-        mesh_material.node_tree.links.new(DRSShaderGroup.outputs.get("OUT-DRS Shader"), mesh_material_output.get("Surface"))
+	mesh_material_output = mesh_material.node_tree.nodes.new("ShaderNodeOutputMaterial")
+	mesh_material_output.location = Vector((400.0, 0.0))
+	
+	mesh_material.node_tree.links.new(DRSShaderGroup.outputs.get("OUT-DRS Shader"), mesh_material_output.inputs.get("Surface"))
+	DRSShaderNodeTree.links.new(DRSShaderGroupShader.outputs.get("BSDF"), DRSShaderGroupOutputs.inputs.get("OUT-DRS Shader"))
 
+	for texture in mesh_data.Textures.Textures:
+		if (texture.Length > 0):
+			match texture.Identifier:
+				case 1684432499:
+					color_map_img = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+					color_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
+					color_map_node.location = Vector((-700.0, 0.0))
+					color_map_node.image = color_map_img
 
-    for texture in mesh_data.Textures.Textures:
-        if (texture.Length > 0):
-            match texture.Identifier:
-                case 1684432499:
-                    color_map_img = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-                    color_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
-                    color_map_node.location = Vector((-700.0, 0.0))
-                    color_map_node.image = color_map_img
-                    if (bpy.app.version[0] in [3]):
-                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSShaderGroup.inputs.get("IN-Color Map"))
-                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSShaderGroup.inputs.get("IN-Color Map Alpha"))
-                    if (bpy.app.version[0] in [4]):
-                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSShaderGroup.interface.get("IN-Color Map"))
-                        mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSShaderGroup.interface.get("IN-Color Map Alpha"))
-                
-                case 1936745324:
-                    parameter_map_img = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-                    parameter_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
-                    parameter_map_node.location = Vector((-700.0, -100.0))
-                    parameter_map_node.image = parameter_map_img
+					mesh_material.node_tree.links.new(color_map_node.outputs.get("Color"), DRSShaderGroup.inputs.get("IN-Color Map"))
+					mesh_material.node_tree.links.new(color_map_node.outputs.get("Alpha"), DRSShaderGroup.inputs.get("IN-Color Map Alpha"))
+					# Group Internal Links
+					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Color Map"), DRSShaderGroupShader.inputs.get("Base Color"))
+					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Color Map Alpha"), DRSShaderGroupShader.inputs.get("Alpha"))
+				case 1936745324:
+					parameter_map_img = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+					parameter_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
+					parameter_map_node.location = Vector((-700.0, -100.0))
+					parameter_map_node.image = parameter_map_img
 
-                    separate_rgb_node = mesh_material.node_tree.nodes.new('ShaderNodeSeparateRGB')
-                    separate_rgb_node.location = Vector((-400.0, -100.0))
+					separate_rgb_node = mesh_material.node_tree.nodes.new('ShaderNodeSeparateColor')
+					separate_rgb_node.location = Vector((-400.0, -100.0))
 
-                    if (bpy.app.version[0] in [3]):
-                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Color"), separate_rgb_node.inputs.get("Color"))
-                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("R"), DRSShaderGroup.inputs.get("IN-Metallic [red]"))
-                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSShaderGroup.inputs.get("IN-Roughness [green]"))
+					mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Color"), separate_rgb_node.inputs.get("Color"))
+					mesh_material.node_tree.links.new(separate_rgb_node.outputs[0], DRSShaderGroup.inputs.get("IN-Metallic [red]"))
+					mesh_material.node_tree.links.new(separate_rgb_node.outputs[1], DRSShaderGroup.inputs.get("IN-Roughness [green]"))
 
-                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSShaderGroup.inputs.get("IN-Emission [alpha]"))
+					mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSShaderGroup.inputs.get("IN-Emission [alpha]"))
+					# Group Internal Links
+					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Metallic [red]"), DRSShaderGroupShader.inputs.get("Metallic"))
+					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Roughness [green]"), DRSShaderGroupShader.inputs.get("Roughness"))
+					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Emission [alpha]"), DRSShaderGroupShader.inputs.get("Emission Strength"))
+					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Color Map"), DRSShaderGroupShader.inputs.get("Emission Color"))
+				case 1852992883:
+					normal_map_image = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+					normal_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
+					normal_map_node.location = Vector((-700.0, -300.0))
+					normal_map_node.image = normal_map_image
 
-                    if (bpy.app.version[0] in [4]):
-                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Color"), separate_rgb_node.inputs.get("Color"))
-                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("R"), DRSShaderGroup.interface.get("IN-Metallic [red]"))
-                        mesh_material.node_tree.links.new(separate_rgb_node.outputs.get("G"), DRSShaderGroup.interface.get("IN-Roughness [green]"))
+					mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSShaderGroup.inputs.get("IN-Normal Map"))
+					# Group Internal Links
+					# We need to flip the Y Axis of the Normal Map to match Blender's Normal Map
+					# Separate
+					normal_map_separate = DRSShaderNodeTree.nodes.new("ShaderNodeSeparateXYZ")
+					normal_map_separate.location = Vector((-700.0, -100.0))
+					DRSShaderNodeTree.links.new(DRSShaderGroupInputs.outputs.get("IN-Normal Map"), normal_map_separate.inputs.get("Vector"))
+					# Invert
+					normal_map_invert = DRSShaderNodeTree.nodes.new("ShaderNodeInvert")
+					normal_map_invert.location = Vector((-500.0, -100.0))
+					DRSShaderNodeTree.links.new(normal_map_separate.outputs.get("Y"), normal_map_invert.inputs.get("Color"))
+					# Combine
+					normal_map_combine = DRSShaderNodeTree.nodes.new("ShaderNodeCombineXYZ")
+					normal_map_combine.location = Vector((-300.0, -100.0))
+					DRSShaderNodeTree.links.new(normal_map_invert.outputs.get("Color"), normal_map_combine.inputs.get("Y"))
+					DRSShaderNodeTree.links.new(normal_map_separate.outputs.get("X"), normal_map_combine.inputs.get("X"))
+					DRSShaderNodeTree.links.new(normal_map_separate.outputs.get("Z"), normal_map_combine.inputs.get("Z"))
+					DRSShaderNodeTree.links.new(normal_map_combine.outputs.get("Vector"), DRSShaderGroupShader.inputs.get("Normal"))
 
-                        mesh_material.node_tree.links.new(parameter_map_node.outputs.get("Alpha"), DRSShaderGroup.inputs.get("IN-Emission [alpha]"))
-                
-                case 1852992883:
-                    normal_map_image = load_image(os.path.basename(texture.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-                    normal_map_node = mesh_material.node_tree.nodes.new('ShaderNodeTexImage')
-                    normal_map_node.location = Vector((-700.0, -300.0))
-                    normal_map_node.image = normal_map_image
+	# Fluid is hard to add, prolly only as an hardcoded animation, there is no GIF support
 
-                    if (bpy.app.version[0] in [3]):
-                        mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSShaderGroup.interface.get("IN-Normal Map"))
-                    if (bpy.app.version[0] in [4]):
-                        mesh_material.node_tree.links.new(normal_map_node.outputs.get("Color"), DRSShaderGroup.interface.get("IN-Normal Map"))
-        
+	# Scratch
 
-    # Fluid is hard to add, prolly only as an hardcoded animation, there is no GIF support
+	# Environment can be ignored, its only used for Rendering
 
-    # Scratch
+	# Refraction
+	# for Tex in mesh_data.Textures.Textures:
+	# 	if Tex.Identifier == 1919116143 and Tex.Length > 0:
+	# 		RefractionMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
+	# 		RefractionMapNode.location = Vector((-700.0, -900.0))
+	# 		RefractionMapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
+	# 		RefBSDF = NewMaterial.node_tree.nodes.new('ShaderNodeBsdfRefraction')
+	# 		RefBSDF.location = Vector((-250.0, -770.0))
+	# 		NewMaterial.node_tree.links.new(RefBSDF.inputs['Color'], RefractionMapNode.outputs['Color'])
+	# 		MixNode = NewMaterial.node_tree.nodes.new('ShaderNodeMixShader')
+	# 		MixNode.location = Vector((0.0, 200.0))
+	# 		NewMaterial.node_tree.links.new(MixNode.inputs[1], RefBSDF.outputs[0])
+	# 		NewMaterial.node_tree.links.new(MixNode.inputs[2], BSDF.outputs[0])
+	# 		NewMaterial.node_tree.links.new(MixNode.outputs[0], NewMaterial.node_tree.nodes['Material Output'].inputs[0])
+	# 		MixNodeAlpha = NewMaterial.node_tree.nodes.new('ShaderNodeMixRGB')
+	# 		MixNodeAlpha.location = Vector((-250.0, -1120.0))
+	# 		MixNodeAlpha.use_alpha = True
+	# 		MixNodeAlpha.blend_type = 'SUBTRACT'
+	# 		# Set the Factor to 0.2, so the Refraction is not too strong
+	# 		MixNodeAlpha.inputs[0].default_value = 0.2
+	# 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[1], ColorMapNode.outputs['Alpha'])
+	# 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[2], RefractionMapNode.outputs['Alpha'])
+	# 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], MixNodeAlpha.outputs[0])
+	# 	else:
+	# 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], ColorMapNode.outputs['Alpha'])
 
-    # Environment can be ignored, its only used for Rendering
+	# if mesh_data.Refraction.Length == 1:
+	# 	_RGB = mesh_data.Refraction.RGB
+		# What to do here?
 
-    # Refraction
-    # for Tex in mesh_data.Textures.Textures:
-    # 	if Tex.Identifier == 1919116143 and Tex.Length > 0:
-    # 		RefractionMapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-    # 		RefractionMapNode.location = Vector((-700.0, -900.0))
-    # 		RefractionMapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-    # 		RefBSDF = NewMaterial.node_tree.nodes.new('ShaderNodeBsdfRefraction')
-    # 		RefBSDF.location = Vector((-250.0, -770.0))
-    # 		NewMaterial.node_tree.links.new(RefBSDF.inputs['Color'], RefractionMapNode.outputs['Color'])
-    # 		MixNode = NewMaterial.node_tree.nodes.new('ShaderNodeMixShader')
-    # 		MixNode.location = Vector((0.0, 200.0))
-    # 		NewMaterial.node_tree.links.new(MixNode.inputs[1], RefBSDF.outputs[0])
-    # 		NewMaterial.node_tree.links.new(MixNode.inputs[2], BSDF.outputs[0])
-    # 		NewMaterial.node_tree.links.new(MixNode.outputs[0], NewMaterial.node_tree.nodes['Material Output'].inputs[0])
-    # 		MixNodeAlpha = NewMaterial.node_tree.nodes.new('ShaderNodeMixRGB')
-    # 		MixNodeAlpha.location = Vector((-250.0, -1120.0))
-    # 		MixNodeAlpha.use_alpha = True
-    # 		MixNodeAlpha.blend_type = 'SUBTRACT'
-    # 		# Set the Factor to 0.2, so the Refraction is not too strong
-    # 		MixNodeAlpha.inputs[0].default_value = 0.2
-    # 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[1], ColorMapNode.outputs['Alpha'])
-    # 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[2], RefractionMapNode.outputs['Alpha'])
-    # 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], MixNodeAlpha.outputs[0])
-    # 	else:
-    # 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], ColorMapNode.outputs['Alpha'])
-
-    # if mesh_data.Refraction.Length == 1:
-    # 	_RGB = mesh_data.Refraction.RGB
-        # What to do here?
-
-    return mesh_material
-
+	return mesh_material
 
 def create_action(armature_object: bpy.types.Object, animation_name: str, animation_time_in_frames: int, force_new: bool = True, repeat: bool = False):
 	armature_action = None
@@ -345,5 +350,3 @@ def create_action(armature_object: bpy.types.Object, animation_name: str, animat
 	bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, animation_time_in_frames)
 	armature_object.animation_data.action = armature_action
 	return armature_action
-
-

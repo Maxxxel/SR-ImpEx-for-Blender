@@ -7,11 +7,10 @@ from uu import Error
 import bpy
 import bmesh
 from mathutils import Vector, Matrix
-import re
 
-from .ska_file import SKA, SKAHeader, SKAKeyframe, SKAAnimationData
-from .drs_file import DRS, CGeoMesh, CGeoOBBTree, DrwResourceMeta, CGeoPrimitiveContainer, CDspJointMap, CollisionShape, CylinderShape, CGeoCylinder, BoxShape, CGeoAABox, SphereShape, CGeoSphere, CMatCoordinateSystem, OBBNode, AnimationTimings, AnimationSet, CSkSkinInfo, VertexData, CSkSkeleton, Bone, BoneMatrix, BoneVertex
-from .drs_utility import BattleforgeMesh, CDspMeshFile, Vertex, Face
+from .ska_file import *
+from .drs_utility import *
+from .drs_definitions import *
 
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
