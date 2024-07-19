@@ -26,14 +26,14 @@ class DRS_Material:
     def create_material(self, material_name: str) -> None:
         _material = bpy.data.materials.get(material_name)
         if _material is None:
-            print(f"Creating new material: {material_name}")
             self.material = bpy.data.materials.new(material_name)
         else:
-            print(f"Material already exists: {material_name}")
             self.material = _material
 
         self.material.use_nodes = True
         self.material.node_tree.nodes.clear()
+        self.material.blend_method = "CLIP"
+        self.material.shadow_method = "NONE"
 
     def get_or_create_base_node_tree(self) -> bpy.types.NodeTree:
         base_node_tree_name = "DRS_Base_NodeGroup"

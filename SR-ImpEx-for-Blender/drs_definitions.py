@@ -1051,7 +1051,7 @@ class CGeoCylinder:
 
 	def read(self, file: BinaryIO) -> 'CGeoCylinder':
 		self.center = Vector3().read(file)
-		self.height, self.radius = unpack('ff', file.read(calcsize('ff')))[0]
+		self.height, self.radius = unpack('ff', file.read(calcsize('ff')))
 		return self
 
 	def write(self, file: BinaryIO) -> None:
@@ -1123,7 +1123,8 @@ class CollisionShape:
 	cylinders: List[CylinderShape] = field(default_factory=list)
 
 	def read(self, file: BinaryIO) -> 'CollisionShape':
-		self.version, self.box_count = unpack('Bi', file.read(calcsize('Bi')))[0]
+		self.version = unpack('B', file.read(calcsize('B')))
+		self.box_count = unpack('i', file.read(calcsize('i')))[0]
 		self.boxes = [BoxShape().read(file) for _ in range(self.box_count)]
 		self.sphere_count = unpack('i', file.read(calcsize('i')))[0]
 		self.spheres = [SphereShape().read(file) for _ in range(self.sphere_count)]
@@ -1267,7 +1268,7 @@ class DRS:
 			"CGeoOBBTree": 'cgeo_obb_tree_node',
 			"DrwResourceMeta": 'drw_resource_meta_node',
 			"CGeoPrimitiveContainer": 'cgeo_primitive_container_node',
-			"collisionShape": 'collision_shape_node',
+			"CollisionShape": 'collision_shape_node',
 			# "EffectSet": 'effect_set_node',
 			# "MeshSetGrid": 'mesh_set_grid_node',
 			"CDrwLocatorList": 'cdrw_locator_list_node'

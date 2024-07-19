@@ -86,21 +86,29 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	bl_idname = "import_scene.drs"
 	bl_label = "Import DRS/BMG"
 	filename_ext = ".drs;.bmg"
+	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255) # type: ignore
+	apply_transform: BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True) # type: ignore
+	clear_scene: BoolProperty(name="Clear Scene", description="Clear the scene before importing", default=True) # type: ignore
+	create_size_reference: BoolProperty(name="Create Size References", description="Creates multiple size references in the scene", default=False) # type: ignore
 
 	def execute(self, context):
-		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
-		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4()
+		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4() # type: ignore
+		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "clear_scene", "create_size_reference"))
 		keywords["global_matrix"] = global_matrix
+
+		if self.clear_scene:
+			# Delete all collections
+			for collection in bpy.data.collections:
+				bpy.data.collections.remove(collection)
+			bpy.ops.object.select_all(action='SELECT')
+			bpy.ops.object.delete(use_global=False)
 
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
-			load_drs(context, filepath=self.filepath)
+			load_drs(context, **keywords)
 			# DRS.operator = self
 			# DRS.keywords = keywords
 			# DRS.context = context
-			
-			# if keywords["clear_scene"]:
-			# 	bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
 
 			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"):

@@ -6,7 +6,7 @@ from mathutils import Matrix, Vector
 from .drs_definitions import DRS, CDspMeshFile, Vertex, Face, BattleforgeMesh
 from .drs_material import DRS_Material
 
-def load_drs(context: bpy.types.Context, filepath=""):
+def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4)) -> None:
 	base_name = os.path.basename(filepath).split(".")[0]
 	dir_name = os.path.dirname(filepath)
 	drs_file: DRS = DRS().read(filepath)
@@ -40,13 +40,13 @@ def load_drs(context: bpy.types.Context, filepath=""):
 	# 	CollisionShapeObjectObject = SetObject("CollisionShape", HashOf5Letters, ModelDataCollection)
 	# 	CreateCollisionShapes(DRSFile.CollisionShape, CollisionShapeObjectObject)
 
-	# if use_apply_transform:
+	if apply_transform:
 	# 	if drs_file.csk_skeleton is not None:
 	# 		armature_object.matrix_world = global_matrix @ armature_object.matrix_world
 	# 		armature_object.scale = (1, -1, 1)
 	# 	else:
-	# 		mesh_object.matrix_world = global_matrix @ mesh_object.matrix_world
-	# 		mesh_object.scale = (1, -1, 1)
+			mesh_object.matrix_world = global_matrix @ mesh_object.matrix_world
+			mesh_object.scale = (1, -1, 1)
 
 	# 	if DRSFile.CollisionShape is not None:
 	# 		CollisionShapeObjectObject.matrix_world = global_matrix @ CollisionShapeObjectObject.matrix_world
@@ -165,7 +165,7 @@ def create_static_mesh(parent_collection: bpy.types.Collection, mesh_file: CDspM
 
 def create_material(dir_name: str, base_name: str, mesh_index: int, mesh_data: BattleforgeMesh, force_new: bool = True) -> bpy.types.Material:
 	material_name = f"Material_{base_name}_{mesh_index}"
-	drs_material: DRS_Material = DRS_Material(material_name)
+	drs_material: 'DRS_Material' = DRS_Material(material_name)
 
 	for texture in mesh_data.textures.textures:
 		if (texture.length > 0):
