@@ -1,9 +1,15 @@
-from typing import List
-from mathutils import Vector, Quaternion, Matrix
-
+from dataclasses import dataclass, field
+from struct import calcsize, pack, unpack
+from typing import List, Union, BinaryIO, Optional
+from mathutils import Vector, Matrix, Quaternion
 from .file_io import FileReader, FileWriter
 
-# Create a enum or dictionary for the magic values
+def unpack_data(file: BinaryIO, *formats: str) -> List[List[Union[float, int]]]:
+	result = []
+	for fmt in formats:
+		result.append(list(unpack(fmt, file.read(calcsize(fmt)))))
+	return result
+
 MagicValues = {
 	"CDspJointMap": -1340635850,
 	"CGeoMesh": 100449016,
@@ -15,2310 +21,2053 @@ MagicValues = {
 	"CGeoPrimitiveContainer": 1396683476
 }
 
-AnimationType = {
-	"CastResolve": 0,
-	"Spawn": 1,
-	"Melee": 2,
-	"Channel": 3,
-	"ModeSwitch": 4, 
-	"WormMovement": 5,
-}
-
-
-class UnknownStruct():
-	"""UnknownStruct"""
-	def __init__(self) -> None:
-		"""UnknownStruct Constructor"""
-		self.Unknown: int
-		self.Length: int
-		self.Name: str
-		self.Unknown2: int
-		self.Unknown3: int
-		self.UnknownStructs: List[UnknownStruct2]
-
-	def Read(self, Buffer: FileReader) -> 'UnknownStruct':
-		"""Reads the UnknownStruct from the buffer"""
-		self.Unknown = Buffer.ReadInt()
-		self.Length = Buffer.ReadInt()
-		self.Name = Buffer.ReadString(self.Length)
-		self.Unknown2 = Buffer.ReadInt()
-		self.Unknown3 = Buffer.ReadInt()
-		self.UnknownStructs = [UnknownStruct2().Read(Buffer) for _ in range(self.Unknown3)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'UnknownStruct':
-		"""Writes the UnknownStruct to the buffer"""
-		Buffer.WriteInt(self.Unknown)
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.Name)
-		Buffer.WriteInt(self.Unknown2)
-		Buffer.WriteInt(self.Unknown3)
-		for _UnknownStruct2 in self.UnknownStructs:
-			_UnknownStruct2.Write(Buffer)
-		return self
-	
-
-class UnknownStruct2():
-	"""UnknownStruct2"""
-	def __init__(self) -> None:
-		"""UnknownStruct2 Constructor"""
-		self.UnknownInts: List[int]
-
-	def Read(self, Buffer: FileReader) -> 'UnknownStruct2':
-		"""Reads the UnknownStruct2 from the buffer"""
-		self.UnknownInts = [Buffer.ReadInt() for _ in range(5)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'UnknownStruct2':
-		"""Writes the UnknownStruct2 to the buffer"""
-		for UnknownInt in self.UnknownInts:
-			Buffer.WriteInt(UnknownInt)
-		return self
-	
-
+@dataclass(eq=False, repr=False)
 class RootNode():
-	"""Root Node"""
-	def __init__(self) -> None:
-		"""Root Node Constructor"""
-		self.Identifier: int = 0
-		self.Unknown: int = 0
-		self.Length: int = 9
-		self.NodeName: str = "root name"
+	identifier: int = 0
+	unknown: int = 0
+	length: int = field(default=9, init=False)
+	name: str = "root name"
 
-	def Read(self, Buffer: FileReader) -> 'RootNode':
-		"""Reads the Root Node from the buffer"""
-		self.Identifier = Buffer.ReadInt()
-		self.Unknown = Buffer.ReadInt()
-		self.Length = Buffer.ReadInt()
-		self.NodeName = Buffer.ReadString(self.Length)
+	def read(self, file: BinaryIO) -> 'RootNode':
+		self.identifier, self.unknown, self.length = unpack("iii", file.read(calcsize("iii")))
+		self.name = file.read(self.length).decode('utf-8').strip('\x00')
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'RootNode':
-		"""Writes the Root Node to the buffer"""
-		Buffer.WriteInt(self.Identifier)
-		Buffer.WriteInt(self.Unknown)
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.NodeName)#
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack(f"iii{self.length}s", self.identifier, self.unknown, self.length, self.name.encode("utf-8")))
+
+	def size(self) -> int:
+		return calcsize(f"iii{self.length}s")
+
+@dataclass(eq=False, repr=False)
+class Node:
+	info_index: int = 0
+	length: int = field(default=0, init=False)
+	name: str = ""
+	zero: int = 0
+
+	def __post_init__(self):
+		self.length = len(self.name)
+
+	def read(self, file: BinaryIO) -> 'Node':
+		self.info_index, self.length = unpack('ii', file.read(calcsize('ii')))
+		self.name = unpack(f'{self.length}s', file.read(calcsize(f'{self.length}s')))
+		self.zero = unpack('i', file.read(calcsize('i')))[0]
 		return self
 
-class Node():
-	"""Node"""
-	def __init__(self, index: int = 0, name: str = "") -> None:
-		"""Node Constructor"""
-		self.InfoIndex: int = index
-		self.Length: int = name and len(name) or 0
-		self.Name: str = name or ""
-		self.Zero: int = 0
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack(f'ii{self.length}si', self.info_index, self.length, self.name.encode("utf-8"), self.zero))
 
-	def Read(self, Buffer: FileReader) -> 'Node':
-		"""Reads the Node from the buffer"""
-		self.InfoIndex = Buffer.ReadInt()
-		self.Length = Buffer.ReadInt()
-		self.Name = Buffer.ReadString(self.Length)
-		self.Zero = Buffer.ReadInt()
+	def size(self) -> int:
+		return calcsize(f'ii{self.length}si')
+
+@dataclass(eq=False, repr=False)
+class RootNodeInformation:
+	zeroes: List[int] = field(default_factory=lambda: [0] * 16)
+	neg_one: int = -1
+	one: int = 1
+	node_information_count: int = 0
+	zero: int = 0
+	data_object: None = None # Placeholder
+
+	def read(self, file: BinaryIO) -> 'RootNodeInformation':
+		self.zeroes = unpack('16b', file.read(calcsize('16b')))
+		self.neg_one, self.one, self.node_information_count, self.zero = unpack('iiii', file.read(calcsize('iiii')))
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'Node':
-		"""Writes the Node to the buffer"""
-		Buffer.WriteInt(self.InfoIndex)
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.Name)
-		Buffer.WriteInt(self.Zero)
-		return self
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('16biiii', *self.zeroes, self.neg_one, self.one, self.node_information_count, self.zero))
 
-	def Size(self) -> int:
-		"""Returns the size of the Node"""
-		return 12 + self.Length
-
-class RootNodeInformation():
-	"""Root Node Information"""
-	def __init__(self) -> None:
-		"""Root Node Constructor"""
-		self.Zeroes: List[int] =[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] # 16
-		self.NegOne: int = -1 # 4
-		self.One: int = 1 # 4
-		self.NodeInformationCount: int = 0 # 4
-		self.Zero: int = 0 # 4
-		self.DataObject = None # 0
-
-	def Read(self, Buffer: FileReader) -> 'RootNodeInformation':
-		"""Reads the Root Node Information from the buffer"""
-		self.Zeroes = Buffer.ReadByte(16)
-		self.NegOne = Buffer.ReadInt()
-		self.One = Buffer.ReadInt()
-		self.NodeInformationCount = Buffer.ReadInt()
-		self.Zero = Buffer.ReadInt()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'RootNodeInformation':
-		"""Writes the Root Node Information to the buffer"""
-		Buffer.WriteByte(self.Zeroes)
-		Buffer.WriteInt(self.NegOne)
-		Buffer.WriteInt(self.One)
-		Buffer.WriteInt(self.NodeInformationCount)
-		Buffer.WriteInt(self.Zero)
-		return self
-
-	def Size(self) -> int:
-		"""Returns the size of the Root Node Information"""
-		return 32
+	def size(self) -> int:
+		return calcsize('16biiii')
 	
-class NodeInformation():
+@dataclass(eq=False, repr=False)
+class NodeInformation:
 	"""Node Information"""
-	def __init__(self, Name: str = None, Identifier: int = -1, dataObject = None) -> None:
-		"""Node Information Constructor"""
+	magic: int = field(init=False)
+	identifier: int = -1
+	offset: int = -1
+	node_size: int = field(init=False)
+	spacer: List[int] = field(default_factory=lambda: [0] * 16)
+	data_object: Optional[object] = None
+
+	def __post_init__(self):
 		global MagicValues
-		self.Magic: int = MagicValues.get(Name, 0) or 0
-		self.Identifier: int = Identifier or -1
-		self.Offset: int = -1
-		self.NodeSize: int = dataObject and dataObject.Size() or 0
-		self.DataObject = dataObject
-		self.Spacer: List[int] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+		self.magic = MagicValues.get(self.data_object.__class__.__name__, 0) if self.data_object else 0
+		self.node_size = self.data_object.size() if self.data_object else 0
 
-	def Read(self, Buffer: FileReader) -> 'NodeInformation':
-		"""Reads the Node Information from the buffer"""
-		self.Magic = Buffer.ReadInt() # 4
-		self.Identifier = Buffer.ReadInt() # 4
-		self.Offset = Buffer.ReadInt() # 4
-		self.NodeSize = Buffer.ReadInt() # 4
-		self.Spacer = Buffer.ReadByte(16) # 16
+	def read(self, file: BinaryIO) -> 'NodeInformation':
+		self.magic, self.identifier, self.offset, self.node_size = unpack('iiii', file.read(calcsize('iiii')))
+		self.spacer = unpack('16b', file.read(calcsize('16b')))
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'NodeInformation':
-		"""Writes the Node Information to the buffer"""
-		Buffer.WriteInt(self.Magic)
-		Buffer.WriteInt(self.Identifier)
-		Buffer.WriteInt(self.Offset)
-		Buffer.WriteInt(self.NodeSize)
-		Buffer.WriteByte(self.Spacer)
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('iiii16b', self.magic, self.identifier, self.offset, self.node_size, *self.spacer))
+
+	def update_offset(self, offset: int) -> None:
+		self.offset = offset
+
+	def size(self) -> int:
+		return calcsize('iiii16b')
+	
+@dataclass(eq=False, repr=False)
+class Vertex:
+	position: Optional[List[float]] = field(default_factory=list)
+	normal: Optional[List[float]] = field(default_factory=list)
+	texture: Optional[List[float]] = field(default_factory=list)
+	tangent: Optional[List[float]] = field(default_factory=list)
+	bitangent: Optional[List[float]] = field(default_factory=list)
+	raw_weights: Optional[List[int]] = field(default_factory=lambda: [0] * 4)
+	bone_indices: Optional[List[int]] = field(default_factory=lambda: [0] * 4)
+
+	def read(self, file: BinaryIO, revision: int) -> 'Vertex':
+		if revision == 133121:
+			self.position, self.normal, self.texture = unpack_data(file, 'fff', 'fff', 'ff')
+		elif revision == 12288:
+			self.tangent, self.bitangent = unpack_data(file, 'fff', 'fff')
+		elif revision == 12:
+			self.raw_weights, self.bone_indices = unpack_data(file, '4B', '4B')
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		if self.position:
+			file.write(pack('fff', *self.position))
+		if self.normal:
+			file.write(pack('fff', *self.normal))
+		if self.texture:
+			file.write(pack('ff', *self.texture))
+		if self.tangent:
+			file.write(pack('fff', *self.tangent))
+		if self.bitangent:
+			file.write(pack('fff', *self.bitangent))
+		if self.raw_weights:
+			file.write(pack('4B', *self.raw_weights))
+		if self.bone_indices:
+			file.write(pack('4B', *self.bone_indices))
+
+	def size(self) -> int:
+		if self.position:
+			return calcsize('fff')
+		if self.normal:
+			return calcsize('fff')
+		if self.texture:
+			return calcsize('ff')
+		if self.tangent:
+			return calcsize('fff')
+		if self.bitangent:
+			return calcsize('fff')
+		if self.raw_weights:
+			return calcsize('4B')
+		if self.bone_indices:
+			return calcsize('4B')
+		return 0
+
+@dataclass(eq=False, repr=False)
+class VertexData:
+	weights: List[float] = field(default_factory=lambda: [0.0] * 4)
+	bone_indices: List[int] = field(default_factory=lambda: [0] * 4)
+
+	def read(self, file: BinaryIO) -> 'VertexData':
+		self.weights, self.bone_indices = unpack('4f4i', file.read(calcsize('4f4i')))
+		self.weights, self.bone_indices = list(self.weights), list(self.bone_indices)
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('4f4i', *self.weights, *self.bone_indices))
+
+	def size(self) -> int:
+		return calcsize('4f4i')
+
+@dataclass(eq=False, repr=False)
+class Face:
+	indices: List[int] = field(default_factory=lambda: [0] * 3)
+
+	def read(self, file: BinaryIO) -> 'Face':
+		self.indices = list(unpack('3H', file.read(calcsize('3H'))))
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('3H', *self.indices))
+
+	def size(self) -> int:
+		return calcsize('3H')
+
+@dataclass(repr=False)
+class Vector4:
+	x: float = 0.0
+	y: float = 0.0
+	z: float = 0.0
+	w: float = 0.0
+
+	def read(self, file: BinaryIO) -> 'Vector4':
+		self.x, self.y, self.z, self.w = unpack('4f', file.read(calcsize('4f')))
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('4f', self.x, self.y, self.z, self.w))
+
+	def size(self) -> int:
+		return calcsize('4f')
+
+@dataclass(repr=False)
+class Vector3:
+	x: float = 0.0
+	y: float = 0.0
+	z: float = 0.0
+
+	def read(self, file: BinaryIO) -> 'Vector3':
+		self.x, self.y, self.z = unpack('3f', file.read(calcsize('3f')))
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('3f', self.x, self.y, self.z))
+
+	def size(self) -> int:
+		return calcsize('3f')
+
+@dataclass(eq=False, repr=False)
+class Matrix4x4:
+	matrix: tuple = ((0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0))
+
+	def read(self, file: BinaryIO) -> 'Matrix4x4':
+		self.matrix = unpack('16f', file.read(calcsize('16f')))
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('16f', *self.matrix))
+
+	def size(self) -> int:
+		return calcsize('16f')
+	
+@dataclass(eq=False, repr=False)
+class Matrix3x3:
+	matrix: tuple = ((0, 0, 0), (0, 0, 0), (0, 0, 0))
+
+	def read(self, file: BinaryIO) -> 'Matrix3x3':
+		self.matrix = unpack('9f', file.read(calcsize('9f')))
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('9f', *self.matrix))
+
+	def size(self) -> int:
+		return calcsize('9f')
+
+@dataclass(eq=False, repr=False)
+class CMatCoordinateSystem:
+	matrix: Matrix3x3 = field(default_factory=Matrix3x3)
+	position: Vector3 = field(default_factory=Vector3)
+
+	def read(self, file: BinaryIO) -> 'CMatCoordinateSystem':
+		self.matrix = Matrix3x3().read(file)
+		self.position = Vector3().read(file)
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		self.matrix.write(file)
+		self.position.write(file)
+
+	def size(self) -> int:
+		return self.matrix.size() + self.position.size()
+
+@dataclass(eq=False, repr=False)
+class CGeoMesh:
+	magic: int = 1
+	index_count: int = 0
+	faces: List[Face] = field(default_factory=list)
+	vertex_count: int = 0
+	vertices: List[Vector4] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'CGeoMesh':
+		self.magic, self.index_count = unpack('ii', file.read(calcsize('ii')))
+		self.faces = [Face().read(file) for _ in range(self.index_count // 3)]
+		self.vertex_count = unpack('i', file.read(calcsize('i')))[0]
+		self.vertices = [Vector4().read(file) for _ in range(self.vertex_count)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('ii', self.magic, self.index_count))
+		for face in self.faces:
+			face.write(file)
+		file.write(pack('i', self.vertex_count))
+		for vertex in self.vertices:
+			vertex.write(file)
+
+	def size(self) -> int:
+		return calcsize('iii') + calcsize('3H') * len(self.faces) + calcsize('4f') * len(self.vertices)
+
+@dataclass(eq=False, repr=False)
+class CSkSkinInfo:
+	version: int = 1
+	vertex_count: int = 0
+	vertex_data: List[VertexData] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'CSkSkinInfo':
+		self.version, self.vertex_count = unpack('ii', file.read(calcsize('ii')))
+		self.vertex_data = [VertexData().read(file) for _ in range(self.vertex_count)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('ii', self.version, self.vertex_count))
+		for vertex in self.vertex_data:
+			vertex.write(file)
+
+	def size(self) -> int:
+		return calcsize('ii') + sum(vd.size() for vd in self.vertex_data)
+
+@dataclass(eq=False, repr=False)
+class MeshData:
+	revision: int = 0
+	vertex_size: int = 0
+	vertices: List[Vertex] = field(default_factory=list)
+
+	def read(self, file: BinaryIO, vertex_count: int) -> 'MeshData':
+		self.revision, self.vertex_size = unpack('ii', file.read(calcsize('ii')))
+		self.vertices = [Vertex().read(file, self.revision) for _ in range(vertex_count)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('ii', self.revision, self.vertex_size))
+		for vertex in self.vertices:
+			vertex.write(file)
+
+	def size(self) -> int:
+		return calcsize('ii') + self.vertex_size * len(self.vertices)
+
+@dataclass(eq=False, repr=False)
+class Bone:
+	version: int = 0
+	identifier: int = 0
+	name_length: int = field(default=0, init=False)
+	name: str = ""
+	child_count: int = 0
+	children: List[int] = field(default_factory=list)
+
+	def __post_init__(self):
+		self.name_length = len(self.name)
+
+	def read(self, file: BinaryIO) -> 'Bone':
+		self.version, self.identifier, self.name_length = unpack('iii', file.read(calcsize('iii')))
+		self.name = unpack(f'{self.name_length}s', file.read(calcsize(f'{self.name_length}s')))[0].decode('utf-8').strip('\x00')
+		self.child_count = unpack('i', file.read(calcsize('i')))[0]
+		self.children = list(unpack(f'{self.child_count}i', file.read(calcsize(f'{self.child_count}i'))))
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack(f'iiii{self.name_length}s{self.child_count}i', self.version, self.identifier, self.name_length, self.name.encode('utf-8'), self.child_count, *self.children))
+
+	def size(self) -> int:
+		return calcsize(f'iiii{self.name_length}s{self.child_count}i')
+
+@dataclass(eq=False, repr=False)
+class BoneMatrix:
+	bone_vertices: List['BoneVertex'] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'BoneMatrix':
+		self.bone_vertices = [BoneVertex().read(file) for _ in range(4)]
+		return self
+
+	def write(self, file: BinaryIO) -> 'BoneMatrix':
+		for bone_vertex in self.bone_vertices:
+			bone_vertex.write(file)
 		return self
 	
-	def UpdateOffset(self, Offset: int) -> None:
-		"""Updates the Offset of the Node Information"""
-		self.Offset = Offset
+	def size(self) -> int:
+		return sum(bv.size() for bv in self.bone_vertices)
 
-	def Size(self) -> int:
-		"""Returns the size of the Node Information"""
-		return 32
+@dataclass(eq=False, repr=False)
+class BoneVertex:
+	position: 'Vector3'
+	parent: int = 0
+
+	def read(self, file: BinaryIO) -> 'BoneVertex':
+		self.position = Vector3().read(file)
+		self.parent = unpack('i', file.read(calcsize('i')))[0]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		self.position.write(file)
+		file.write(pack('i', self.parent))
+
+	def size(self) -> int:
+		return self.position.size() + calcsize('i')
 	
+# class DRSBone():
+# 	"""docstring for DRSBone"""
+# 	def __init__(self) -> None:
+# 		self.SKAIdentifier: int
+# 		self.Identifier: int
+# 		self.Name: str
+# 		self.Parent: int = -1
+# 		self.BoneMatrix: Matrix
+# 		self.Children: List[int]
+# 		self.BindLoc: Vector
+# 		self.BindRot: Quaternion
 
-class Vertex():
-    """Vertex"""
-    def __init__(self, Position = None, Normal = None, Texture = None, Tangent = None, Bitangent = None, RawWeights = None, BoneIndices = None) -> None:
-        """Vertex Constructor"""
-        self.Position: Vector = Position
-        self.Normal: Vector = Normal
-        self.Texture: Vector = Texture
-        self.Tangent: Vector = Tangent
-        self.Bitangent: Vector = Bitangent
-        self.RawWeights: List[int] = RawWeights
-        self.BoneIndices: List[int] = BoneIndices
+@dataclass(eq=False, repr=False)
+class CSkSkeleton:
+	magic: int = 1558308612
+	version: int = 3
+	bone_matrix_count: int = 0
+	bone_matrices: List[BoneMatrix] = field(default_factory=list)
+	bone_count: int = 0
+	bones: List[Bone] = field(default_factory=list)
+	super_parent: 'Matrix4x4' = field(default_factory=lambda: Matrix(((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))))
 
-    def Read(self, Buffer: FileReader, Revision: int) -> 'Vertex':
-        """Reads the Vertex from the buffer"""
-        match Revision:
-            case 133121:
-                self.Position = Buffer.ReadVector3()
-                self.Normal = Buffer.ReadVector3()
-                self.Texture = Buffer.ReadVector2()
-            case 12288:
-                self.Tangent = Buffer.ReadVector3()
-                self.Bitangent = Buffer.ReadVector3()
-            case 12:
-                self.RawWeights = Buffer.ReadByte(4)
-                self.BoneIndices = Buffer.ReadByte(4)
-
-        return self
-
-    def Write(self, Buffer: FileWriter) -> 'Vertex':
-        """Writes the Vertex to the buffer"""
-        if self.Position is not None:
-            Buffer.WriteVector3(self.Position)
-        if self.Normal is not None:
-            Buffer.WriteVector3(self.Normal)
-        if self.Texture is not None:
-            Buffer.WriteVector2(self.Texture)
-        if self.Tangent is not None:
-            Buffer.WriteVector3(self.Tangent)
-        if self.Bitangent is not None:
-            Buffer.WriteVector3(self.Bitangent)
-        if self.RawWeights is not None:
-            Buffer.WriteByte(self.RawWeights)
-        if self.BoneIndices is not None:
-            Buffer.WriteByte(self.BoneIndices)
-
-        return self
-
-class VertexData():
-	"""VertexData"""
-	def __init__(self) -> None:
-		"""VertexData Constructor"""
-		self.Weights: list[float] = []
-		self.BoneIndices: list[int] = []
-
-	def Read(self, Buffer: FileReader) -> 'VertexData':
-		"""Reads the VertexData from the buffer"""
-		self.Weights = [Buffer.ReadFloat() for _ in range(4)]
-		self.BoneIndices = [Buffer.ReadInt() for _ in range(4)]
+	def read(self, file: BinaryIO) -> 'CSkSkeleton':
+		self.magic, self.version, self.bone_matrix_count = unpack('iii', file.read(calcsize('iii')))
+		self.bone_matrices = [BoneMatrix().read(file) for _ in range(self.bone_matrix_count)]
+		self.bone_count = unpack('i', file.read(calcsize('i')))[0]
+		self.bones = [Bone().read(file) for _ in range(self.bone_count)]
+		self.super_parent = Matrix4x4().read(file)
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'VertexData':
-		"""Writes the VertexData to the buffer"""
-		for Weight in self.Weights:
-			Buffer.WriteFloat(Weight)
-		for BoneIndex in self.BoneIndices:
-			Buffer.WriteInt(BoneIndex)
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('iii', self.magic, self.version, self.bone_matrix_count))
+		for bone_matrix in self.bone_matrices:
+			bone_matrix.write(file)
+		file.write(pack('i', self.bone_count))
+		for bone in self.bones:
+			bone.write(file)
+		self.super_parent.write(file)
+
+	def size(self) -> int:
+		return calcsize('iiii') + sum(bone_matrix.size() for bone_matrix in self.bone_matrices) + sum(bone.size() for bone in self.bones) + self.super_parent.size()
+
+@dataclass(eq=False, repr=False)
+class Texture:
+	identifier: int = 0
+	length: int = field(default=0, init=False)
+	name: str = ""
+	spacer: int = 0
+
+	def __post_init__(self):
+		self.length = len(self.name)
+
+	def read(self, file: BinaryIO) -> 'Texture':
+		self.identifier, self.length = unpack('ii', file.read(calcsize('ii')))
+		self.name = file.read(self.length).decode('utf-8').strip('\x00')
+		self.spacer = unpack('i', file.read(calcsize('i')))[0]
 		return self
 
-class Face():
-	"""Face"""
-	def __init__(self) -> None:
-		"""Face Constructor"""
-		self.Indices: List[int]
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack(f'ii{self.length}s i', self.identifier, self.length, self.name.encode('utf-8'), self.spacer))
 
-	def Read(self, Buffer: FileReader) -> 'Face':
-		"""Reads the Face from the buffer"""
-		self.Indices = Buffer.ReadUShort(3)
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'Face':
-		"""Writes the Face to the buffer"""
-		Buffer.WriteUShort(self.Indices)
-		return self
-
-
-class CGeoMesh():
-	"""CGeoMesh"""
-	def __init__(self) -> None:
-		"""CGeoMesh Constructor"""
-		self.Magic: int = 1
-		self.IndexCount: int
-		self.Faces: List[Face]
-		self.VertexCount: int
-		self.Vertices: List[Vector]
-
-	def Read(self, Buffer: FileReader) -> 'CGeoMesh':
-		"""Reads the CGeoMesh from the buffer"""
-		self.Magic = Buffer.ReadInt()
-		self.IndexCount = Buffer.ReadInt()
-		self.Faces = [Face().Read(Buffer) for _ in range(int(self.IndexCount / 3))]
-		self.VertexCount = Buffer.ReadInt()
-		self.Vertices = [Buffer.ReadVector4() for _ in range(self.VertexCount)]
-
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CGeoMesh':
-		"""Writes the CGeoMesh to the buffer"""
-		Buffer.WriteInt(self.Magic)
-		Buffer.WriteInt(self.IndexCount)
-		for _Face in self.Faces:
-			_Face.Write(Buffer)
-		Buffer.WriteInt(self.VertexCount)
-		for _Vertex in self.Vertices:
-			Buffer.WriteVector4(_Vertex)
-
-		return self
-
-	def Size(self) -> int:
-		"""Returns the size of the CGeoMesh"""
-		return 12 + 6 * len(self.Faces) + 16 * len(self.Vertices)
+	def size(self) -> int:
+		return calcsize(f'ii{self.length}s i')
 	
+@dataclass(eq=False, repr=False)
+class Textures:
+	length: int = 0
+	textures: List['Texture'] = field(default_factory=list)
 
-class CSkSkinInfo():
-	"""CSkSkinInfo"""
-	def __init__(self) -> None:
-		"""CSkSkinInfo Constructor"""
-		self.Version: int = 1
-		self.VertexCount: int
-		self.VertexData: List[VertexData]
-
-	def Read(self, Buffer: FileReader) -> 'CSkSkinInfo':
-		"""Reads the CSkSkinInfo from the buffer"""
-		self.Version = Buffer.ReadInt()
-		self.VertexCount = Buffer.ReadInt()
-		self.VertexData = [VertexData().Read(Buffer) for _ in range(self.VertexCount)]
+	def read(self, file: BinaryIO) -> 'Textures':
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		self.textures = [Texture().read(file) for _ in range(self.length)]
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'CSkSkinInfo':
-		"""Writes the CSkSkinInfo to the buffer"""
-		Buffer.WriteInt(self.Version)
-		Buffer.WriteInt(self.VertexCount)
-		for _VertexData in self.VertexData:
-			_VertexData.Write(Buffer)
-		return self
-	
-	def Size(self) -> int:
-		"""Returns the size of the CSkSkinInfo"""
-		return 8 + 32 * self.VertexCount
-	
+	def write(self, file: BinaryIO) -> None:
+		self.length = len(self.textures)
+		file.write(pack('i', self.length))
+		for texture in self.textures:
+			texture.write(file)
 
-class MeshData():
-	"""Mesh Data"""
-	def __init__(self) -> None:
-		"""Mesh Data Constructor"""
-		self.Revision: int
-		self.VertexSize: int
-		self.Vertices: List[Vertex]
+	def size(self) -> int:
+		return calcsize('i') + sum(texture.size() for texture in self.textures)
 
-	def Read(self, Buffer: FileReader, VertexCount: int) -> 'MeshData':
-		"""Reads the Mesh Data from the buffer"""
-		self.Revision = Buffer.ReadInt()
-		self.VertexSize = Buffer.ReadInt()
-		self.Vertices = [Vertex().Read(Buffer, self.Revision) for _ in range(VertexCount)]
-		return self
+@dataclass(eq=False, repr=False)
+class Material:
+	identifier: int = 0
+	smoothness: float = 0.0
+	metalness: float = 0.0
+	reflectivity: float = 0.0
+	emissivity: float = 0.0
+	refraction_scale: float = 0.0
+	distortion_mesh_scale: float = 0.0
+	scratch: float = 0.0
+	specular_scale: float = 0.0
+	wind_response: float = 0.0
+	wind_height: float = 0.0
+	depth_write_threshold: float = 0.0
+	saturation: float = 0.0
+	unknown: float = 0.0
 
-	def Write(self, Buffer: FileWriter) -> 'MeshData':
-		"""Writes the Mesh Data to the buffer"""
-		Buffer.WriteInt(self.Revision)
-		Buffer.WriteInt(self.VertexSize)
-		for _Vertex in self.Vertices:
-			_Vertex.Write(Buffer)
-		return self
+	def __init__(self, index: int = None) -> None:
+		"""Material Constructor"""
+		if index is not None:
+			if index == 0:
+				self.identifier = 1668510769
+				self.smoothness = 0
+			elif index == 1:
+				self.identifier = 1668510770
+				self.metalness = 0
+			elif index == 2:
+				self.identifier = 1668510771
+				self.reflectivity = 0
+			elif index == 3:
+				self.identifier = 1668510772
+				self.emissivity = 0
+			elif index == 4:
+				self.identifier = 1668510773
+				self.refraction_scale = 1
+			elif index == 5:
+				self.identifier = 1668510774
+				self.distortion_mesh_scale = 0
+			elif index == 6:
+				self.identifier = 1935897704
+				self.scratch = 0
+			elif index == 7:
+				self.identifier = 1668510775
+				self.specular_scale = 1.5
+			elif index == 8:
+				self.identifier = 1668510776
+				self.wind_response = 0  # Needs to be updated
+			elif index == 9:
+				self.identifier = 1668510777
+				self.wind_height = 0  # Needs to be updated
+			elif index == 10:
+				self.identifier = 1935893623
+				self.depth_write_threshold = 0.5
+			elif index == 11:
+				self.identifier = 1668510785
+				self.saturation = 1.0
 
-	def Size(self) -> int:
-		"""Returns the size of the Mesh Data"""
-		Size = 8
-		Size += self.VertexSize * len(self.Vertices)
-		return Size
-
-
-class Bone():
-	"""Bone"""
-	def __init__(self) -> None:
-		"""Bone Constructor"""
-		self.Version: int
-		self.Identifier: int
-		self.NameLength: int
-		self.Name: str
-		self.ChildCount: int
-		self.Children: List[int]
-
-	def Read(self, Buffer: FileReader) -> 'Bone':
-		"""Reads the Bone from the buffer"""
-		self.Version = Buffer.ReadInt()
-		self.Identifier = Buffer.ReadInt()
-		self.NameLength = Buffer.ReadInt()
-		self.Name = Buffer.ReadString(self.NameLength)
-		self.ChildCount = Buffer.ReadInt()
-		self.Children = [Buffer.ReadInt() for _ in range(self.ChildCount)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'Bone':
-		"""Writes the Bone to the buffer"""
-		Buffer.WriteInt(self.Version)
-		Buffer.WriteInt(self.Identifier)
-		Buffer.WriteInt(self.NameLength)
-		Buffer.WriteString(self.Name)
-		Buffer.WriteInt(self.ChildCount)
-		for Child in self.Children:
-			Buffer.WriteInt(Child)
-		return self
-
-class BoneMatrix():
-	"""BoneMatrix"""
-	def __init__(self) -> None:
-		"""BoneMatrix Constructor"""
-		self.BoneVertices: List[BoneVertex]
-
-	def Read(self, Buffer: FileReader) -> 'BoneMatrix':
-		"""Reads the BoneMatrix from the buffer"""
-		self.BoneVertices = [BoneVertex().Read(Buffer) for _ in range(4)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'BoneMatrix':
-		"""Writes the BoneMatrix to the buffer"""
-		for _BoneVertex in self.BoneVertices:
-			_BoneVertex.Write(Buffer)
-		return self
-
-class BoneVertex():
-	"""BoneVertex"""
-	def __init__(self) -> None:
-		"""BoneVertex Constructor"""
-		self.Position: Vector
-		self.Parent: int
-
-	def Read(self, Buffer: FileReader) -> 'BoneVertex':
-		"""Reads the BoneVertex from the buffer"""
-		self.Position = Buffer.ReadVector3()
-		self.Parent = Buffer.ReadInt()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'BoneVertex':
-		"""Writes the BoneVertex to the buffer"""
-		Buffer.WriteVector3(self.Position)
-		Buffer.WriteInt(self.Parent)
-		return self
-	
-class DRSBone():
-	"""docstring for DRSBone"""
-	def __init__(self) -> None:
-		self.SKAIdentifier: int
-		self.Identifier: int
-		self.Name: str
-		self.Parent: int = -1
-		self.BoneMatrix: Matrix
-		self.Children: List[int]
-		self.BindLoc: Vector
-		self.BindRot: Quaternion
-
-class CSkSkeleton():
-	"""CSkSkeleton"""
-	def __init__(self) -> None:
-		"""CSkSkeleton Constructor"""
-		self.Magic: int = 1558308612
-		self.Version: int = 3
-		self.BoneMatrixCount: int
-		self.BoneMatrices: List[BoneMatrix]
-		self.BoneCount: int
-		self.Bones: List[Bone]
-		self.SuperParent: Matrix = Matrix(((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)))
-
-	def Read(self, Buffer: FileReader) -> 'CSkSkeleton':
-		"""Reads the CSkSkeleton from the buffer"""
-		self.Magic = Buffer.ReadInt()
-		self.Version = Buffer.ReadInt()
-		self.BoneMatrixCount = Buffer.ReadInt()
-		self.BoneMatrices = [BoneMatrix().Read(Buffer) for _ in range(self.BoneMatrixCount)]
-		self.BoneCount = Buffer.ReadInt()
-		self.Bones = [Bone().Read(Buffer) for _ in range(self.BoneCount)]
-		self.SuperParent = Buffer.ReadVector4()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CSkSkeleton':
-		"""Writes the CSkSkeleton to the buffer"""
-		Buffer.WriteInt(self.Magic)
-		Buffer.WriteInt(self.Version)
-		Buffer.WriteInt(self.BoneMatrixCount)
-		for _BoneMatrix in self.BoneMatrices:
-			_BoneMatrix.Write(Buffer)
-		Buffer.WriteInt(self.BoneCount)
-		for _Bone in self.Bones:
-			_Bone.Write(Buffer)
-		Buffer.WriteVector4(self.SuperParent)
-		return self
-
-	def Size(self) -> int:
-		"""Returns the size of the CSkSkeleton"""
-		add = 0
-		for bone in self.Bones:
-			add += 16 + 4 * bone.ChildCount + bone.NameLength
-		return 80 + 64 * self.BoneMatrixCount + add
-
-
-
-
-
-class Constraint():
-	"""Constraint"""
-	def __init__(self) -> None:
-		"""Constraint Constructor"""
-		self.Revision: int
-		self.LeftAngle: float
-		self.RightAngle: float
-		self.LeftDampStart: float
-		self.RightDamStart: float
-		self.DampRatio: float
-
-	def Read(self, Buffer: FileReader) -> 'Constraint':
-		"""Reads the Constraint from the buffer"""
-		self.Revision = Buffer.ReadShort()
-		if self.Revision == 1:
-			self.LeftAngle = Buffer.ReadFloat()
-			self.RightAngle = Buffer.ReadFloat()
-			self.LeftDampStart = Buffer.ReadFloat()
-			self.RightDamStart = Buffer.ReadFloat()
-			self.DampRatio = Buffer.ReadFloat()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'Constraint':
-		"""Writes the Constraint to the buffer"""
-		Buffer.WriteShort(self.Revision)
-		Buffer.WriteFloat(self.LeftAngle)
-		Buffer.WriteFloat(self.RightAngle)
-		Buffer.WriteFloat(self.LeftDampStart)
-		Buffer.WriteFloat(self.RightDamStart)
-		Buffer.WriteFloat(self.DampRatio)
-		return self
-	
-
-class IKAtlas():
-	"""IKAtlas"""
-	def __init__(self) -> None:
-		"""IKAtlas Constructor"""
-		self.Identifier: int
-		self.Version: int
-		self.Axis: int
-		self.ChainOrder: int
-		self.Constraints: List[Constraint]
-		self.PurposeFlags: int
-
-	def Read(self, Buffer: FileReader) -> 'IKAtlas':
-		"""Reads the IKAtlas from the buffer"""
-		self.Identifier = Buffer.ReadInt()
-		self.Version = Buffer.ReadShort()
-		if self.Version >= 1:
-			self.Axis = Buffer.ReadInt()
-			self.ChainOrder = Buffer.ReadInt()
-			self.Constraints = [Constraint().Read(Buffer) for _ in range(3)]
-			if self.Version >= 2:
-				self.PurposeFlags = Buffer.ReadShort()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'IKAtlas':
-		"""Writes the IKAtlas to the buffer"""
-		Buffer.WriteInt(self.Identifier)
-		Buffer.WriteShort(self.Version)
-		Buffer.WriteInt(self.Axis)
-		Buffer.WriteInt(self.ChainOrder)
-		for _Constraint in self.Constraints:
-			_Constraint.Write(Buffer)
-		Buffer.WriteShort(self.PurposeFlags)
-		return self
-	
-
-class ModeAnimationKey():
-	"""ModeAnimationKey"""
-	def __init__(self, animation_file_name: str = "") -> None:
-		"""ModeAnimationKey Constructor"""
-		self.Type: int = 6 # TODO: Is this always 6?
-		self.Length: int = 11
-		self.File: str = "Battleforge"
-		self.Unknown: int = 2 # TODO: Is this always 2?
-		self.Unknown2: int = 3 # TODO: Is this always 3?
-		self.VisJob: int = 0 # Short. 0 for Animated Objects else it can be used to link this animation key to an animation tag ID from the AnimationTimings
-		self.Unknown3: int = 3 # TODO: Is this always 3?
-		self.Unknown4: int = 0 # Short. TODO: Is this always 0?
-		self.VariantCount: int = 1 # 1 for animated objects, units can have more variants per animation if needed.
-		self.AnimationSetVariants: List[AnimationSetVariant] = []
-		if animation_file_name != "":
-			for _ in range(self.VariantCount):
-				self.AnimationSetVariants.append(AnimationSetVariant(animation_file_name=animation_file_name))
-
-	def Read(self, Buffer: FileReader, UK: int) -> 'ModeAnimationKey':
-		"""Reads the ModeAnimationKey from the buffer"""
-		if UK != 2:
-			self.Type = Buffer.ReadInt()
+	def read(self, file: BinaryIO) -> 'Material':
+		"""Reads the Material from the buffer"""
+		self.identifier = unpack('i', file.read(calcsize('i')))[0]
+		if self.identifier == 1668510769:
+			self.smoothness = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510770:
+			self.metalness = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510771:
+			self.reflectivity = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510772:
+			self.emissivity = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510773:
+			self.refraction_scale = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510774:
+			self.distortion_mesh_scale = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1935897704:
+			self.scratch = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510775:
+			self.specular_scale = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510776:
+			self.wind_response = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510777:
+			self.wind_height = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1935893623:
+			self.depth_write_threshold = unpack('f', file.read(calcsize('f')))[0]
+		elif self.identifier == 1668510785:
+			self.saturation = unpack('f', file.read(calcsize('f')))[0]
 		else:
-			self.Type = 2
-		self.Length = Buffer.ReadInt()
-		self.File = Buffer.ReadString(self.Length)
-		self.Unknown = Buffer.ReadInt()
-		if self.Type == 1:
-			self.Unknown2 = [Buffer.ReadByte() for _ in range(24)]
-		elif self.Type <= 5:
-			self.Unknown2 = [Buffer.ReadByte() for _ in range(6)]
-		elif self.Type == 6:
-			self.Unknown2 = Buffer.ReadInt()
-			self.VisJob = Buffer.ReadShort()
-			self.Unknown3 = Buffer.ReadInt()
-			self.Unknown4 = Buffer.ReadShort()
-		self.VariantCount = Buffer.ReadInt()
-		self.AnimationSetVariants = [AnimationSetVariant().Read(Buffer) for _ in range(self.VariantCount)]
+			self.unknown = unpack('f', file.read(calcsize('f')))[0]
+			raise TypeError("Unknown Material {}".format(self.unknown))
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'ModeAnimationKey':
-		"""Writes the ModeAnimationKey to the buffer"""
-		Buffer.WriteInt(self.Type)
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.File)
-		Buffer.WriteInt(self.Unknown)
-		Buffer.WriteInt(self.Unknown2)
-		Buffer.WriteShort(self.VisJob)
-		Buffer.WriteInt(self.Unknown3)
-		Buffer.WriteShort(self.Unknown4)
-		Buffer.WriteInt(self.VariantCount)
-		for _AnimationSetVariant in self.AnimationSetVariants:
-			_AnimationSetVariant.Write(Buffer)
-		return self
-	
-	def Size(self) -> int:
-		"""Returns the size of the ModeAnimationKey"""
-		add = 0
-		for Variant in self.AnimationSetVariants:
-			add += Variant.Size()
-		return 39 + add
-	
-
-class AnimationMarker():
-	"""AnimationMarker"""
-	def __init__(self) -> None:
-		"""AnimationMarker Constructor"""
-		self.Class: int
-		self.Time: float
-		self.Direction: Vector
-		self.Position: Vector
-
-	def Read(self, Buffer: FileReader) -> 'AnimationMarker':
-		"""Reads the AnimationMarker from the buffer"""
-		self.Class = Buffer.ReadInt()
-		self.Time = Buffer.ReadFloat()
-		self.Direction = Buffer.ReadVector3()
-		self.Position = Buffer.ReadVector3()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'AnimationMarker':
-		"""Writes the AnimationMarker to the buffer"""
-		Buffer.WriteInt(self.Class)
-		Buffer.WriteFloat(self.Time)
-		Buffer.WriteVector3(self.Direction)
-		Buffer.WriteVector3(self.Position)
-		return self
-
-
-class AnimationMarkerSet():
-	"""AnimationMarkerSet"""
-	def __init__(self) -> None:
-		"""AnimationMarkerSet Constructor"""
-		self.AnimID: int
-		self.Length: int
-		self.Name: str
-		self.AnimationMarkerID: int
-		self.MarkerCount: int
-		self.AnimationMarkers: List[AnimationMarker]
-
-	def Read(self, Buffer: FileReader) -> 'AnimationMarkerSet':
-		"""Reads the AnimationMarkerSet from the buffer"""
-		self.AnimID = Buffer.ReadInt()
-		self.Length = Buffer.ReadInt()
-		self.Name = Buffer.ReadString(self.Length)
-		self.AnimationMarkerID = Buffer.ReadInt()
-		self.MarkerCount = Buffer.ReadInt()
-		self.AnimationMarkers = [AnimationMarker().Read(Buffer) for _ in range(self.MarkerCount)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'AnimationMarkerSet':
-		"""Writes the AnimationMarkerSet to the buffer"""
-		Buffer.WriteInt(self.AnimID)
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.Name)
-		Buffer.WriteInt(self.AnimationMarkerID)
-		Buffer.WriteInt(self.MarkerCount)
-		for _AnimationMarker in self.AnimationMarkers:
-			_AnimationMarker.Write(Buffer)
-		return self
-	
-
-class AnimationSet():
-	"""AnimationSet"""
-	def __init__(self, animation_file_name: str = "") -> None:
-		"""AnimationSet Constructor"""
-		self.Length: int = 11
-		self.Magic: str = "Battleforge"
-		self.Version: int = 6
-		# Is used by the game to determine the animation speed when walking/running
-		self.DefaultRunSpeed: float = 4.8 # TODO: Add a way to show/edit this value in Blender
-		self.DefaultWalkSpeed: float = 2.4 # TODO: Add a way to show/edit this value in Blender
-		self.Revision: int = 6 # TODO: Is it all the time?
-		self.ModeAnimationKeyCount: int = 1 # How many different animations are there?
-		# TODO find out how often these values are used and for which object/unit/building types
-		self.ModeChangeType: int = 0
-		self.HoveringGround: int = 0
-		self.FlyBankScale: float = 1 # Changes for flying units
-		self.FlyAccelScale: float = 0 # Changes for flying units
-		self.FlyHitScale: float = 1 # Changes for flying units
-		self.AllignToTerrain: int = 0
-		# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-		self.ModeAnimationKeys: List[ModeAnimationKey] = []
-		if animation_file_name != "": # So we can still import original drs files
-			# Assure the name end with '.ska'
-			if not animation_file_name.endswith(".ska"):
-				animation_file_name += ".ska"
-			for _ in range(self.ModeAnimationKeyCount):
-				self.ModeAnimationKeys.append(ModeAnimationKey(animation_file_name))
-		self.HasAtlas: int = 1 # 1 or 2
-		self.AtlasCount: int = 0 # Animated Objects: 0
-		self.IKAtlases: List[IKAtlas] = []
-		self.UKLen: int = 0 # TODO: Always 0?
-		self.UKInts: List[int] = []
-		self.Subversion: int = 2 # TODO: Always 2?
-		self.AnimationMarkerCount: int = 0 # Animated Objects: 0
-		self.AnimationMarkerSets: List[AnimationMarkerSet] = []
-		self.Unknown: int # Not needed
-		self.UnknownStructs: List[UnknownStruct] # Not needed
-
-	def Read(self, Buffer: FileReader) -> 'AnimationSet':
-		"""Reads the AnimationSet from the buffer"""
-		self.Length = Buffer.ReadInt()
-		self.Magic = Buffer.ReadString(self.Length)
-		self.Version = Buffer.ReadInt()
-		self.DefaultRunSpeed = Buffer.ReadFloat()
-		self.DefaultWalkSpeed = Buffer.ReadFloat()
-
-		if self.Version == 2:
-			self.ModeAnimationKeyCount = Buffer.ReadInt()
+	def write(self, file: BinaryIO) -> None:
+		"""Writes the Material to the buffer"""
+		file.write(pack('i', self.identifier))
+		if self.identifier == 1668510769:
+			file.write(pack('f', self.smoothness))
+		elif self.identifier == 1668510770:
+			file.write(pack('f', self.metalness))
+		elif self.identifier == 1668510771:
+			file.write(pack('f', self.reflectivity))
+		elif self.identifier == 1668510772:
+			file.write(pack('f', self.emissivity))
+		elif self.identifier == 1668510773:
+			file.write(pack('f', self.refraction_scale))
+		elif self.identifier == 1668510774:
+			file.write(pack('f', self.distortion_mesh_scale))
+		elif self.identifier == 1935897704:
+			file.write(pack('f', self.scratch))
+		elif self.identifier == 1668510775:
+			file.write(pack('f', self.specular_scale))
+		elif self.identifier == 1668510776:
+			file.write(pack('f', self.wind_response))
+		elif self.identifier == 1668510777:
+			file.write(pack('f', self.wind_height))
+		elif self.identifier == 1935893623:
+			file.write(pack('f', self.depth_write_threshold))
+		elif self.identifier == 1668510785:
+			file.write(pack('f', self.saturation))
 		else:
-			self.Revision = Buffer.ReadInt()
+			file.write(pack('f', self.unknown))
+			raise TypeError("Unknown Material {}".format(self.unknown))
+		return self
 
-		if self.Version >= 6:
-			if self.Revision >= 2:
-				self.ModeChangeType = Buffer.ReadByte()
-				self.HoveringGround = Buffer.ReadByte()
+@dataclass(eq=False, repr=False)
+class Materials:
+	length: int = 12
+	materials: List['Material'] = field(default_factory=lambda: [Material(index) for index in range(12)])
 
-			if self.Revision >= 5:
-				self.FlyBankScale = Buffer.ReadFloat()
-				self.FlyAccelScale = Buffer.ReadFloat()
-				self.FlyHitScale = Buffer.ReadFloat()
+	def read(self, file: BinaryIO) -> 'Materials':
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		self.materials = [Material().read(file) for _ in range(self.length)]
+		return self
 
-			if self.Revision >= 6:
-				self.AllignToTerrain = Buffer.ReadByte()
+	def write(self, file: BinaryIO) -> None:
+		self.length = len(self.materials)
+		file.write(pack('i', self.length))
+		for material in self.materials:
+			material.write(file)
 
-		UK:int = 0
+	def size(self) -> int:
+		return calcsize('i') + sum(material.size() for material in self.materials)
 
-		if self.Version == 2:
-			UK = Buffer.ReadInt()
+@dataclass(eq=False, repr=False)
+class Refraction:
+	length: int = 0
+	identifier: int = 1668510769
+	rgb: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+
+	def read(self, file: BinaryIO) -> 'Refraction':
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		if self.length == 1:
+			self.identifier = unpack('i', file.read(calcsize('i')))[0]
+			self.rgb = list(unpack('3f', file.read(calcsize('3f'))))
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('i', self.length))
+		if self.length == 1:
+			file.write(pack('i', self.identifier))
+			file.write(pack('3f', *self.rgb))
+
+	def size(self) -> int:
+		size = calcsize('i')
+		if self.length == 1:
+			size += calcsize('i') + calcsize('3f')
+		return size
+
+@dataclass(eq=False, repr=False)
+class LevelOfDetail:
+	length: int = 1
+	lod_level: int = 2
+
+	def read(self, file: BinaryIO) -> 'LevelOfDetail':
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		if self.length == 1:
+			self.lod_level = unpack('i', file.read(calcsize('i')))[0]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('i', self.length))
+		if self.length == 1:
+			file.write(pack('i', self.lod_level))
+
+	def size(self) -> int:
+		size = calcsize('i')
+		if self.length == 1:
+			size += calcsize('i')
+		return size
+
+@dataclass(eq=False, repr=False)
+class EmptyString:
+	length: int = 0
+	unknown_string: str = ""
+
+	def read(self, file: BinaryIO) -> 'EmptyString':
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		self.unknown_string = unpack(f'{self.length * 2}s', file.read(calcsize(f'{self.length * 2}s')))[0].decode('utf-8')
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack(f'i{self.length * 2}s', self.length, self.unknown_string.encode('utf-8')))
+
+	def size(self) -> int:
+		return calcsize(f'i{self.length * 2}s')
+
+@dataclass(eq=False, repr=False)
+class Flow:
+	length: int = 4
+	max_flow_speed_identifier: int = 1668707377
+	max_flow_speed: Vector4 = field(default_factory=Vector4)
+	min_flow_speed_identifier: int = 1668707378
+	min_flow_speed: Vector4 = field(default_factory=Vector4)
+	flow_speed_change_identifier: int = 1668707379
+	flow_speed_change: Vector4 = field(default_factory=Vector4)
+	flow_scale_identifier: int = 1668707380
+	flow_scale: Vector4 = field(default_factory=Vector4)
+
+	def read(self, file: BinaryIO) -> 'Flow':
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		if self.length == 4:
+			self.max_flow_speed_identifier = unpack('i', file.read(calcsize('i')))[0]
+			self.max_flow_speed = Vector4().read(file)
+			self.min_flow_speed_identifier = unpack('i', file.read(calcsize('i')))[0]
+			self.min_flow_speed = Vector4().read(file)
+			self.flow_speed_change_identifier = unpack('i', file.read(calcsize('i')))[0]
+			self.flow_speed_change = Vector4().read(file)
+			self.flow_scale_identifier = unpack('i', file.read(calcsize('i')))[0]
+			self.flow_scale = Vector4().read(file)
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('i', self.length))
+		if self.length == 4:
+			file.write(pack('i', self.max_flow_speed_identifier))
+			self.max_flow_speed.write(file)
+			file.write(pack('i', self.min_flow_speed_identifier))
+			self.min_flow_speed.write(file)
+			file.write(pack('i', self.flow_speed_change_identifier))
+			self.flow_speed_change.write(file)
+			file.write(pack('i', self.flow_scale_identifier))
+			self.flow_scale.write(file)
+
+	def size(self) -> int:
+		size = calcsize('i')
+		if self.length == 4:
+			size += calcsize('iiii') + self.max_flow_speed.size() + self.min_flow_speed.size() + self.flow_speed_change.size() + self.flow_scale.size()
+		return size
+
+@dataclass(eq=False, repr=False)
+class BattleforgeMesh:
+	vertex_count: int = 0
+	face_count: int = 0
+	faces: List[Face] = field(default_factory=list)
+	mesh_count: int = 0
+	mesh_data: List[MeshData] = field(default_factory=list)
+	bounding_box_lower_left_corner: Vector3 = field(default_factory=Vector3)
+	bounding_box_upper_right_corner: Vector3 = field(default_factory=Vector3)
+	material_id: int = 0
+	material_parameters: int = 0
+	material_stuff: int = 0
+	bool_parameter: int = 0
+	textures: Textures = field(default_factory=Textures)
+	refraction: Refraction = field(default_factory=Refraction)
+	materials: Materials = field(default_factory=Materials)
+	level_of_detail: LevelOfDetail = field(default_factory=LevelOfDetail)
+	empty_string: EmptyString = field(default_factory=EmptyString)
+	flow: Flow = field(default_factory=Flow)
+
+	def read(self, file: BinaryIO) -> 'BattleforgeMesh':
+		self.vertex_count, self.face_count = unpack('ii', file.read(calcsize('ii')))
+		self.faces = [Face().read(file) for _ in range(self.face_count)]
+		self.mesh_count = unpack('B', file.read(calcsize('B')))[0]
+		self.mesh_data = [MeshData().read(file, self.vertex_count) for _ in range(self.mesh_count)]
+		self.bounding_box_lower_left_corner = Vector3().read(file)
+		self.bounding_box_upper_right_corner = Vector3().read(file)
+		self.material_id, self.material_parameters = unpack('=hi', file.read(calcsize('=hi')))
+
+		if self.material_parameters == -86061050:
+			self.material_stuff, self.bool_parameter = unpack('ii', file.read(calcsize('ii')))
+			self.textures.read(file)
+			self.refraction.read(file)
+			self.materials.read(file)
+			self.level_of_detail.read(file)
+			self.empty_string.read(file)
+			self.flow.read(file)
+		elif self.material_parameters == -86061051:
+			self.material_stuff, self.bool_parameter = unpack('ii', file.read(calcsize('ii')))
+			self.textures.read(file)
+			self.refraction.read(file)
+			self.materials.read(file)
+			self.level_of_detail.read(file)
+			self.empty_string.read(file)
+		elif self.material_parameters == -86061055:
+			self.bool_parameter = unpack('i', file.read(calcsize('i')))[0]
+			self.textures.read(file)
+			self.refraction.read(file)
+			self.materials.read(file)
 		else:
-			self.ModeAnimationKeyCount = Buffer.ReadInt()
-
-		self.ModeAnimationKeys = [ModeAnimationKey().Read(Buffer, UK) for _ in range(self.ModeAnimationKeyCount)]
-
-		if self.Version >= 3:
-			self.HasAtlas = Buffer.ReadShort()
-
-			if self.HasAtlas >= 1:
-				self.AtlasCount = Buffer.ReadInt()
-				self.IKAtlases = [IKAtlas().Read(Buffer) for _ in range(self.AtlasCount)]
-
-			if self.HasAtlas >= 2:
-				self.UKLen = Buffer.ReadInt()
-				self.UKInts = [Buffer.ReadInt() for _ in range(self.UKLen * 3)]
-
-		if self.Version >= 4:
-			self.Subversion = Buffer.ReadShort()
-
-			if self.Subversion == 2:
-				self.AnimationMarkerCount = Buffer.ReadInt()
-				self.AnimationMarkerSets = [AnimationMarkerSet().Read(Buffer) for _ in range(self.AnimationMarkerCount)]
-			elif self.Subversion == 1:
-				self.Unknown = Buffer.ReadInt()
-				self.UnknownStructs = [UnknownStruct().Read(Buffer) for _ in range(self.Unknown)]
-
+			raise TypeError(f"Unknown MaterialParameters {self.material_parameters}")
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'AnimationSet':
-		"""Writes the AnimationSet to the buffer"""
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.Magic)
-		Buffer.WriteInt(self.Version)
-		Buffer.WriteFloat(self.DefaultRunSpeed)
-		Buffer.WriteFloat(self.DefaultWalkSpeed)
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('ii', self.vertex_count, self.face_count))
+		for face in self.faces:
+			face.write(file)
+		file.write(pack('B', self.mesh_count))
+		for mesh_data in self.mesh_data:
+			mesh_data.write(file)
+		self.bounding_box_lower_left_corner.write(file)
+		self.bounding_box_upper_right_corner.write(file)
+		file.write(pack('=hi', self.material_id, self.material_parameters))
 
-		if self.Version == 2:
-			Buffer.WriteInt(self.ModeAnimationKeyCount)
+		if self.material_parameters == -86061050:
+			file.write(pack('ii', self.material_stuff, self.bool_parameter))
+			self.textures.write(file)
+			self.refraction.write(file)
+			self.materials.write(file)
+			self.level_of_detail.write(file)
+			self.empty_string.write(file)
+			self.flow.write(file)
+		elif self.material_parameters == -86061051:
+			file.write(pack('ii', self.material_stuff, self.bool_parameter))
+			self.textures.write(file)
+			self.refraction.write(file)
+			self.materials.write(file)
+			self.level_of_detail.write(file)
+			self.empty_string.write(file)
+		elif self.material_parameters == -86061055:
+			file.write(pack('i', self.bool_parameter))
+			self.textures.write(file)
+			self.refraction.write(file)
+			self.materials.write(file)
 		else:
-			Buffer.WriteInt(self.Revision)
+			raise TypeError(f"Unknown MaterialParameters {self.material_parameters}")
 
-		if self.Version >= 6:
-			if self.Revision >= 2:
-				Buffer.WriteByte(self.ModeChangeType)
-				Buffer.WriteByte(self.HoveringGround)
+	def size(self) -> int:
+		size = calcsize('=iiB6fhi') + sum(face.size() for face in self.faces) + sum(mesh_data.size() for mesh_data in self.mesh_data)
 
-			if self.Revision >= 5:
-				Buffer.WriteFloat(self.FlyBankScale)
-				Buffer.WriteFloat(self.FlyAccelScale)
-				Buffer.WriteFloat(self.FlyHitScale)
+		if self.material_parameters == -86061050:
+			size += calcsize('ii')  # MaterialStuff + BoolParameter
+			size += self.textures.size()
+			size += self.refraction.size()
+			size += self.materials.size()
+			size += self.level_of_detail.size()
+			size += self.empty_string.size()
+			size += self.flow.size()
+		elif self.material_parameters == -86061051:
+			size += calcsize('ii')  # MaterialStuff + BoolParameter
+			size += self.textures.size()
+			size += self.refraction.size()
+			size += self.materials.size()
+			size += self.level_of_detail.size()
+			size += self.empty_string.size()
+		elif self.material_parameters == -86061055:
+			size += calcsize('i')  # BoolParameter
+			size += self.textures.size()
+			size += self.refraction.size()
+			size += self.materials.size()
+		return size
 
-			if self.Revision >= 6:
-				Buffer.WriteByte(self.AllignToTerrain)
+@dataclass(eq=False, repr=False)
+class CDspMeshFile:
+	magic: int = 1314189598
+	zero: int = 0
+	mesh_count: int = 0
+	bounding_box_lower_left_corner: Vector3 = field(default_factory=lambda: Vector3(0, 0, 0))
+	bounding_box_upper_right_corner: Vector3 = field(default_factory=lambda: Vector3(0, 0, 0))
+	meshes: List[BattleforgeMesh] = field(default_factory=list)
+	some_points: List[Vector4] = field(default_factory=lambda: [Vector4(0, 0, 0, 1), Vector4(1, 1, 0, 1), Vector4(0, 0, 1, 1)])
 
-		if self.Version == 2:
-			Buffer.WriteInt(0)
+	def read(self, file: BinaryIO) -> 'CDspMeshFile':
+		self.magic = unpack('i', file.read(calcsize('i')))[0]
+		if self.magic == 1314189598:
+			self.zero, self.mesh_count = unpack('ii', file.read(calcsize('ii')))
+			self.bounding_box_lower_left_corner = Vector3().read(file)
+			self.bounding_box_upper_right_corner = Vector3().read(file)
+			self.meshes = [BattleforgeMesh().read(file) for _ in range(self.mesh_count)]
+			self.some_points = [Vector4().read(file) for _ in range(3)]
 		else:
-			Buffer.WriteInt(self.ModeAnimationKeyCount)
-
-		for _ModeAnimationKey in self.ModeAnimationKeys:
-			_ModeAnimationKey.Write(Buffer)
-
-		if self.Version >= 3:
-			Buffer.WriteShort(self.HasAtlas)
-
-			if self.HasAtlas >= 1:
-				Buffer.WriteInt(self.AtlasCount)
-				for _IKAtlas in self.IKAtlases:
-					_IKAtlas.Write(Buffer)
-
-			if self.HasAtlas >= 2:
-				Buffer.WriteInt(self.UKLen)
-				for UKInt in self.UKInts:
-					Buffer.WriteInt(UKInt)
-
-		if self.Version >= 4:
-			Buffer.WriteShort(self.Subversion)
-
-			if self.Subversion == 2:
-				Buffer.WriteInt(self.AnimationMarkerCount)
-				for _AnimationMarkerSet in self.AnimationMarkerSets:
-					_AnimationMarkerSet.Write(Buffer)
-			elif self.Subversion == 1:
-				Buffer.WriteInt(self.Unknown)
-				for _UnknownStruct in self.UnknownStructs:
-					_UnknownStruct.Write(Buffer)
-
+			raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
 		return self
 
-	def Size(self) -> int:
-		"""Returns the size of the AnimationSet"""
-		add = 0
-		for Key in self.ModeAnimationKeys:
-			add += Key.Size()
-		return 62 + add
-	
-
-class AnimationSetVariant():
-	"""AnimationSetVariant"""
-	def __init__(self, weight: int = 100, animation_file_name: str = "") -> None:
-		"""AnimationSetVariant Constructor"""
-		self.Version: int = 7 # 6 or 7
-		self.Weight: int = weight # Maximum 100 in sum for all Variants
-		self.Length: int = len(animation_file_name)
-		self.File: str = animation_file_name
-		self.Start: float = 0 # TODO: Sometimes it isnt 0, why?
-		self.End: float = 1 # TODO: always 1?
-		self.AllowsIK: int = 1 # TODO: Most of the time 1?
-		self.Unknown2: int = 0 # TODO: Most of the time 0?
-
-	def Read(self, Buffer: FileReader) -> 'AnimationSetVariant':
-		"""Reads the AnimationSetVariant from the buffer"""
-		self.Version = Buffer.ReadInt()
-		self.Weight = Buffer.ReadInt()
-		self.Length = Buffer.ReadInt()
-		self.File = Buffer.ReadString(self.Length)
-
-		if self.Version >= 4:
-			self.Start = Buffer.ReadFloat()
-			self.End = Buffer.ReadFloat()
-
-		if self.Version >= 5:
-			self.AllowsIK = Buffer.ReadByte()
-
-		if self.Version >= 7:
-			self.Unknown2 = Buffer.ReadByte()
-
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'AnimationSetVariant':
-		"""Writes the AnimationSetVariant to the buffer"""
-		Buffer.WriteInt(self.Version)
-		Buffer.WriteInt(self.Weight)
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.File)
-		Buffer.WriteFloat(self.Start)
-		Buffer.WriteFloat(self.End)
-		Buffer.WriteByte(self.AllowsIK)
-		Buffer.WriteByte(self.Unknown2)
-		return self
-
-	def Size(self) -> int:
-		"""Returns the size of the AnimationSetVariant"""
-		return 21 + self.Length
-
-
-class Texture():
-	"""Texture"""
-	def __init__(self) -> None:
-		"""Texture Constructor"""
-		self.Identifier: int
-		self.Length: int
-		self.Name: str
-		self.Spacer: int = 0
-
-	def Read(self, Buffer: FileReader) -> 'Texture':
-		"""Reads the Texture from the buffer"""
-		self.Identifier = Buffer.ReadInt()
-		self.Length = Buffer.ReadInt()
-		self.Name = Buffer.ReadString(self.Length)
-		self.Spacer = Buffer.ReadInt()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'Texture':
-		"""Writes the Texture to the buffer"""
-		Buffer.WriteInt(self.Identifier)
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.Name)
-		Buffer.WriteInt(self.Spacer)
-		return self
-	
-class Textures():
-	"""Textures"""
-	def __init__(self) -> None:
-		"""Textures Constructor"""
-		self.Length: int = 0
-		self.Textures: List[Texture] = []
-
-	def Read(self, Buffer: FileReader) -> 'Textures':
-		"""Reads the Textures from the buffer"""
-		self.Length = Buffer.ReadInt()
-		self.Textures = [Texture().Read(Buffer) for _ in range(self.Length)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'Textures':
-		"""Writes the Textures to the buffer"""
-		Buffer.WriteInt(self.Length)
-		for _Texture in self.Textures:
-			_Texture.Write(Buffer)
-		return self
-
-
-class Material():
-    """Material"""
-    def __init__(self, index = None) -> None:
-        """Material Constructor"""
-        self.Identifier: int
-        self.Smoothness: float
-        self.Metalness: float
-        self.Reflectivity: float
-        self.Emissivity: float
-        self.RefractionScale: float
-        self.DistortionMeshScale: float
-        self.Scratch: float
-        self.SpecularScale: float
-        self.WindResponse: float
-        self.WindHeight: float
-        self.DepthWriteThreshold: float
-        self.Saturation: float
-        self.Unknown: float
-
-        if index is not None:
-            match index:
-                case 0:
-                    self.Identifier = 1668510769
-                    self.Smoothness = 0
-                case 1:
-                    self.Identifier = 1668510770
-                    self.Metalness = 0
-                case 2:
-                    self.Identifier = 1668510771
-                    self.Reflectivity = 0
-                case 3:
-                    self.Identifier = 1668510772
-                    self.Emissivity = 0
-                case 4:
-                    self.Identifier = 1668510773
-                    self.RefractionScale = 1
-                case 5:
-                    self.Identifier = 1668510774
-                    self.DistortionMeshScale = 0
-                case 6:
-                    self.Identifier = 1935897704
-                    self.Scratch = 0
-                case 7:
-                    self.Identifier = 1668510775
-                    self.SpecularScale = 1.5
-                case 8:
-                    self.Identifier = 1668510776
-                    self.WindResponse = 0 # Needs to be updated
-                case 9:
-                    self.Identifier = 1668510777
-                    self.WindHeight = 0 # Needs to be updated
-                case 10:
-                    self.Identifier = 1935893623
-                    self.DepthWriteThreshold = 0.5
-                case 11:
-                    self.Identifier = 1668510785
-                    self.Saturation = 1.0
-
-    def Read(self, Buffer: FileReader) -> 'Material':
-        """Reads the Material from the buffer"""
-        self.Identifier = Buffer.ReadInt()
-        match self.Identifier:
-            case 1668510769:
-                self.Smoothness = Buffer.ReadFloat()
-            case 1668510770:
-                self.Metalness = Buffer.ReadFloat()
-            case 1668510771:
-                self.Reflectivity = Buffer.ReadFloat()
-            case 1668510772:
-                self.Emissivity = Buffer.ReadFloat()
-            case 1668510773:
-                self.RefractionScale = Buffer.ReadFloat()
-            case 1668510774:
-                self.DistortionMeshScale = Buffer.ReadFloat()
-            case 1935897704:
-                self.Scratch = Buffer.ReadFloat() # Only touch if ScratchMap is present
-            case 1668510775:
-                self.SpecularScale = Buffer.ReadFloat() # Reflectioness
-            case 1668510776:
-                self.WindResponse = Buffer.ReadFloat() # Wind Force 0 -> 0.1
-            case 1668510777:
-                self.WindHeight = Buffer.ReadFloat() # Wind Attack Height at maximum unit height
-            case 1935893623:
-                self.DepthWriteThreshold = Buffer.ReadFloat()
-            case 1668510785:
-                self.Saturation = Buffer.ReadFloat()
-
-            case _:
-                # Unknown Property, add to the list
-                self.Unknown = Buffer.ReadFloat()
-                raise TypeError("Unknown Material {}".format(self.Unknown))
-        return self
-
-    def Write(self, Buffer: FileWriter) -> 'Material':
-        """Writes the Material to the buffer"""
-        Buffer.WriteInt(self.Identifier)
-        match self.Identifier:
-            case 1668510769:
-                Buffer.WriteFloat(self.Smoothness)
-            case 1668510770:
-                Buffer.WriteFloat(self.Metalness)
-            case 1668510771:
-                Buffer.WriteFloat(self.Reflectivity)
-            case 1668510772:
-                Buffer.WriteFloat(self.Emissivity)
-            case 1668510773:
-                Buffer.WriteFloat(self.RefractionScale)
-            case 1668510774:
-                Buffer.WriteFloat(self.DistortionMeshScale)
-            case 1935897704:
-                Buffer.WriteFloat(self.Scratch)
-            case 1668510775:
-                Buffer.WriteFloat(self.SpecularScale)
-            case 1668510776:
-                Buffer.WriteFloat(self.WindResponse)
-            case 1668510777:
-                Buffer.WriteFloat(self.WindHeight)
-            case 1935893623:
-                Buffer.WriteFloat(self.DepthWriteThreshold)
-            case 1668510785:
-                Buffer.WriteFloat(self.Saturation)
-
-            case _:
-                # Unknown Property, add to the list
-                Buffer.WriteFloat(self.Unknown)
-                raise TypeError("Unknown Material {}".format(self.Unknown))
-        return self
-
-class Materials():
-	"""Materials"""
-	def __init__(self) -> None:
-		"""Materials Constructor"""
-		self.Length: int = 12
-		self.Materials: List[Material] = [Material(_) for _ in range(self.Length)]
-
-	def Read(self, Buffer: FileReader) -> 'Materials':
-		"""Reads the Materials from the buffer"""
-		self.Length = Buffer.ReadInt()
-		self.Materials = [Material().Read(Buffer) for _ in range(self.Length)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'Materials':
-		"""Writes the Materials to the buffer"""
-		Buffer.WriteInt(self.Length)
-		for _Material in self.Materials:
-			_Material.Write(Buffer)
-		return self
-	
-
-class Refraction():
-	"""Refraction"""
-	def __init__(self) -> None:
-		"""Refraction Constructor"""
-		self.Length: int
-		self.Identifier: int = 1668510769
-		self.RGB: List[float] = [0, 0, 0]
-
-	def Read(self, Buffer: FileReader) -> 'Refraction':
-		"""Reads the Refraction from the buffer"""
-		self.Length = Buffer.ReadInt()
-		if self.Length == 1:
-			self.Identifier = Buffer.ReadInt()
-			self.RGB = Buffer.ReadFloat(3)
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'Refraction':
-		"""Writes the Refraction to the buffer"""
-		Buffer.WriteInt(self.Length)
-		if self.Length == 1:
-			Buffer.WriteInt(self.Identifier)
-			Buffer.WriteFloat(self.RGB)
-		return self
-
-class LevelOfDetail():
-	"""LevelOfDetail"""
-	def __init__(self) -> None:
-		"""LevelOfDetail Constructor"""
-		self.Length: int = 1
-		self.LODLevel: int = 2
-
-	def Read(self, Buffer: FileReader) -> 'LevelOfDetail':
-		"""Reads the LevelOfDetail from the buffer"""
-		self.Length = Buffer.ReadInt()
-		if self.Length == 1:
-			self.LODLevel = Buffer.ReadInt()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'LevelOfDetail':
-		"""Writes the LevelOfDetail to the buffer"""
-		Buffer.WriteInt(self.Length)
-		if self.Length == 1:
-			Buffer.WriteInt(self.LODLevel)
-		return self
-
-class EmptyString():
-	"""EmptyString"""
-	def __init__(self) -> None:
-		"""EmptyString Constructor"""
-		self.Length: int = 0
-		self.UnknwonString: str = ""
-
-	def Read(self, Buffer: FileReader) -> 'EmptyString':
-		"""Reads the EmptyString from the buffer"""
-		self.Length = Buffer.ReadInt()
-		self.UnknwonString = Buffer.ReadString(self.Length * 2)
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'EmptyString':
-		"""Writes the EmptyString to the buffer"""
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.UnknwonString)
-		return self
-
-class Flow():
-	"""Flow"""
-	def __init__(self) -> None:
-		"""Flow Constructor"""
-		self.Length: int = 4
-		self.MaxFlowSpeedIdentifier: int = 1668707377
-		self.MaxFlowSpeed: Vector = Vector((0, 0, 0, 0))
-		self.MinFlowSpeedIdentifier: int = 1668707378
-		self.MinFlowSpeed: Vector = Vector((0, 0, 0, 0))
-		self.FlowSpeedChangeIdentifier: int = 1668707379
-		self.FlowSpeedChange: Vector = Vector((0, 0, 0, 0))
-		self.FlowScaleIdentifier: int = 1668707380
-		self.FlowScale: Vector = Vector((0, 0, 0, 0))
-
-	def Read(self, Buffer: FileReader) -> 'Flow':
-		"""Reads the Flow from the buffer"""
-		self.Length = Buffer.ReadInt()
-		if self.Length == 4:
-			self.MaxFlowSpeedIdentifier = Buffer.ReadInt()
-			self.MaxFlowSpeed = Buffer.ReadVector4()
-			self.MinFlowSpeedIdentifier = Buffer.ReadInt()
-			self.MinFlowSpeed = Buffer.ReadVector4()
-			self.FlowSpeedChangeIdentifier = Buffer.ReadInt()
-			self.FlowSpeedChange = Buffer.ReadVector4()
-			self.FlowScaleIdentifier = Buffer.ReadInt()
-			self.FlowScale = Buffer.ReadVector4()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'Flow':
-		"""Writes the Flow to the buffer"""
-		Buffer.WriteInt(self.Length)
-		if self.Length == 4:
-			Buffer.WriteInt(self.MaxFlowSpeedIdentifier)
-			Buffer.WriteVector4(self.MaxFlowSpeed)
-			Buffer.WriteInt(self.MinFlowSpeedIdentifier)
-			Buffer.WriteVector4(self.MinFlowSpeed)
-			Buffer.WriteInt(self.FlowSpeedChangeIdentifier)
-			Buffer.WriteVector4(self.FlowSpeedChange)
-			Buffer.WriteInt(self.FlowScaleIdentifier)
-			Buffer.WriteVector4(self.FlowScale)
-		return self
-
-
-class DRS():
-	"""DRS class"""
-	def __init__(self) -> None:
-		self.operator = None
-		self.context = None
-		self.keywords = None
-		self.Magic: int = -981667554
-		self.NumberOfModels: int = 1
-		self.NodeInformationOffset: int = 41 # 20 cause of the header + 21 cause of the root node
-		self.NodeHierarchyOffset: int = 20 # 20 cause of the header
-		self.dataOffset: int = 41 + 32 # 32 cause of the root node information
-		self.NodeCount: int = 1 # RootNode is always present
-		self.Nodes: List[Node] = [RootNode()]
-		self.NodeInformations: List[NodeInformation | NodeInformation] = [RootNodeInformation()]
-		self.AnimationSetNode: Node = None
-		self.CDspMeshFileNode: Node = None
-		self.CGeoMeshNode: Node = None
-		self.CSkSkinInfoNode: Node = None
-		self.CSkSkeletonNode: Node = None
-		self.AnimationTimingsNode: Node = None
-		self.JointMapNode: Node = None
-		self.CGeoOBBTreeNode: Node = None
-		self.DrwResourceMetaNode: Node = None
-		self.CGeoPrimitiveContainerNode: Node = None
-		self.CollisionShapeNode: Node = None
-		self.EffectSetNode: Node = None
-		self.MeshSetGridNode: Node = None
-		self.CDrwLocatorListNode: Node = None
-		self.AnimationSet: AnimationSet = None
-		self.CDspMeshFile: CDspMeshFile = None
-		self.CGeoMesh: CGeoMesh = None
-		self.CSkSkinInfo: CSkSkinInfo = None
-		self.CSkSkeleton: CSkSkeleton = None
-		# self.AnimationTimings: AnimationTimings = None
-		self.Joints: CDspJointMap = None
-		self.CGeoOBBTree: CGeoOBBTree = None
-		self.DrwResourceMeta: DrwResourceMeta = None
-		self.CGeoPrimitiveContainer: CGeoPrimitiveContainer = None
-		self.CollisionShape: CollisionShape = None
-		# self.EffectSet: EffectSet = None
-		self.MeshSetGrid: MeshSetGrid = None
-
-	def Read(self, FileName: str) -> 'DRS':
-		"""Reads the DRS from the file"""
-		Reader = FileReader(FileName)
-		self.Magic = Reader.ReadInt()
-		self.NumberOfModels = Reader.ReadInt()
-		self.NodeInformationOffset = Reader.ReadInt()
-		self.NodeHierarchyOffset = Reader.ReadInt()
-		self.NodeCount = Reader.ReadInt()
-
-		if self.Magic != -981667554 or self.NodeCount < 1:
-			raise TypeError("This is not a valid file. Magic: {}, NodeCount: {}".format(self.Magic, self.NodeCount))
-
-		Reader.Seek(self.NodeInformationOffset)
-		self.RootNodeInformation = RootNodeInformation().Read(Reader)
-
-		for _ in range(self.NodeCount - 1):
-			_NodeInformation = NodeInformation().Read(Reader)
-
-			if _NodeInformation.Magic == -475734043: # AnimationSet
-				self.AnimationSetNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == -1900395636: # CDspMeshFile
-				self.CDspMeshFileNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == 100449016: # CGeoMesh
-				self.CGeoMeshFileNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == -761174227: # CSkSkinInfo
-				self.CSkSkinInfoFileNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == -2110567991: # CSkSkeleton
-				self.CSkSkeletonFileNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == -1403092629: # AnimationTimings
-				self.AnimationTimingsInformation = _NodeInformation
-			elif _NodeInformation.Magic == -1340635850: # JointMap
-				self.JointNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == -933519637: # OBBTree
-				self.CGeoOBBTreeInformation = _NodeInformation
-			elif _NodeInformation.Magic == -183033339: # drwResourceMeta
-				self.DrwResourceMetaInformation = _NodeInformation
-			elif _NodeInformation.Magic == 1396683476: # CGeoPrimitiveContainer
-				self.CGeoPrimitiveContainerNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == 268607026: # collisionShape
-				self.CollisionShapeNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == 688490554: # EffectSet
-				self.EffectSetNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == 154295579: # MeshSetgrid
-				self.MeshSetGridNodeInformation = _NodeInformation
-			elif _NodeInformation.Magic == 735146985: # CDrwLocatorList
-				self.CDrwLocatorListNodeInformation = _NodeInformation
-			else:
-				print("Unknown NodeInformation Magic: {}".format(_NodeInformation.Magic))
-
-		Reader.Seek(self.NodeHierarchyOffset)
-		self.RootNode = RootNode().Read(Reader)
-
-		for _ in range(self.NodeCount - 1):
-			_Node = Node().Read(Reader)
-
-			# Compare the node's name to the node information's name
-			if _Node.Name == "AnimationSet":
-				self.AnimationSetNode = _Node
-			elif _Node.Name == "CDspMeshFile":
-				self.CDspMeshFileNode = _Node
-			elif _Node.Name == "CGeoMesh":
-				self.CGeoMeshNode = _Node
-			elif _Node.Name == "CSkSkinInfo":
-				self.CSkSkinInfoNode = _Node
-			elif _Node.Name == "CSkSkeleton":
-				self.CSkSkeletonNode = _Node
-			elif _Node.Name == "AnimationTimings":
-				self.AnimationTimingsNode = _Node
-			elif _Node.Name == "CDspJointMap":
-				self.JointMapNode = _Node
-			elif _Node.Name == "CGeoOBBTree":
-				self.CGeoOBBTreeNode = _Node
-			elif _Node.Name == "DrwResourceMeta":
-				self.DrwResourceMetaNode = _Node
-			elif _Node.Name == "CGeoPrimitiveContainer":
-				self.CGeoPrimitiveContainerNode = _Node
-			elif _Node.Name == "collisionShape":
-				self.CollisionShapeNode = _Node
-			elif _Node.Name == "EffectSet":
-				self.EffectSetNode = _Node
-			elif _Node.Name == "MeshSetGrid":
-				self.MeshSetGridNode = _Node
-			elif _Node.Name == "CDrwLocatorList":
-				self.CDrwLocatorListNode = _Node
-			else:
-				print("Unknown node name: {}".format(_Node.Name))
-
-		if self.AnimationSetNode is not None:
-			Reader.Seek(self.AnimationSetNodeInformation.Offset)
-			self.AnimationSet = AnimationSet().Read(Reader)
-
-		if self.CDspMeshFileNode is not None:
-			Reader.Seek(self.CDspMeshFileNodeInformation.Offset)
-			self.CDspMeshFile = CDspMeshFile().Read(Reader)
-
-		if self.CGeoMeshNode is not None:
-			Reader.Seek(self.CGeoMeshFileNodeInformation.Offset)
-			self.CGeoMesh = CGeoMesh().Read(Reader)
-
-		if self.CSkSkinInfoNode is not None:
-			Reader.Seek(self.CSkSkinInfoFileNodeInformation.Offset)
-			self.CSkSkinInfo = CSkSkinInfo().Read(Reader)
-
-		if self.CSkSkeletonNode is not None:
-			Reader.Seek(self.CSkSkeletonFileNodeInformation.Offset)
-			self.CSkSkeleton = CSkSkeleton().Read(Reader)
-
-		# if self.AnimationTimingsNode is not None:
-		# 	Reader.Seek(self.AnimationTimingsInformation.Offset)
-		# 	self.AnimationTimings = AnimationTimings().Read(Reader)
-
-		# if self.JointMapNode is not None:
-		# 	Reader.Seek(self.JointNodeInformation.Offset)
-		# 	self.Joints = CDspJointMap().Read(Reader)
-
-		if self.CGeoOBBTreeNode is not None:
-			Reader.Seek(self.CGeoOBBTreeInformation.Offset)
-			self.CGeoOBBTree = CGeoOBBTree().Read(Reader)
-
-		# if self.DrwResourceMetaNode is not None:
-		# 	Reader.Seek(self.DrwResourceMetaInformation.Offset)
-		# 	self.DrwResourceMeta = DrwResourceMeta().Read(Reader)
-
-		# if self.CGeoPrimitiveContainerNode is not None:
-		# 	Reader.Seek(self.CGeoPrimitiveContainerNodeInformation.Offset)
-		# 	self.CGeoPrimitiveContainer = CGeoPrimitiveContainer().Read(Reader)
-
-		if self.CollisionShapeNode is not None:
-			Reader.Seek(self.CollisionShapeNodeInformation.Offset)
-			self.CollisionShape = CollisionShape().Read(Reader)
-
-		# if self.EffectSetNode is not None:
-		# 	Reader.Seek(self.EffectSetNodeInformation.Offset)
-		# 	self.EffectSet = EffectSet().Read(Reader)
-
-		if self.MeshSetGridNode is not None:
-			Reader.Seek(self.MeshSetGridNodeInformation.Offset)
-			self.MeshSetGrid = MeshSetGrid().Read(Reader)
-
-		return self
-
-	def PushNode(self, name: str, dataObject):
-		"""Pushes a new node to the DRS"""
-		NewNode = Node(self.NodeCount, name)
-		self.Nodes.append(NewNode)
-		self.NodeInformationOffset += NewNode.Size()
-		self.dataOffset += NewNode.Size()
-		self.NodeInformations[0].NodeInformationCount += 1
-		self.PushNodeInformation(name, self.NodeInformations[0].NodeInformationCount, dataObject)
-		self.NodeCount += 1
-
-	def PushNodeInformation(self, name: str, identifier: int, dataObject):
-		"""Pushes a new node information to the DRS"""
-		NewNodeInformation = NodeInformation(name, identifier, dataObject)
-		self.NodeInformations.append(NewNodeInformation)
-		self.dataOffset += NewNodeInformation.Size()
-
-	def Save(self, FileName: str):
-		"""Saves the DRS to the file"""
-		# Open the file
-		Writer = FileWriter(FileName +  "_new.drs")
-		# Write the header
-		Writer.WriteInt(self.Magic)
-		Writer.WriteInt(self.NumberOfModels)
-		Writer.WriteInt(self.NodeInformationOffset)
-		Writer.WriteInt(self.NodeHierarchyOffset)
-		Writer.WriteInt(self.NodeCount)
-		# Write the nodes
-		for _Node in self.Nodes:
-			_Node.Write(Writer)
-		# Write the node informations
-		for _NodeInformation in self.NodeInformations:
-			# Root Node Check, check if the _NodeInformation has a data object attribute
-			if _NodeInformation.DataObject is None:
-				# Root Node
-				_NodeInformation.Write(Writer)
-				continue
-			_NodeInformation.UpdateOffset(self.dataOffset)
-			self.dataOffset += _NodeInformation.NodeSize
-			_NodeInformation.Write(Writer)
-		# Write the data objects
-		for _NodeInformation in self.NodeInformations:
-			if _NodeInformation.DataObject is not None:
-				_NodeInformation.DataObject.Write(Writer)
-
-		# Close the file
-		Writer.Close()
-
-class CDspMeshFile():
-	"""CDspMeshFile"""
-	def __init__(self) -> None:
-		"""CDspMeshFile Constructor"""
-		self.Magic: int = 1314189598 # 4
-		self.Zero: int = 0 # 4
-		self.MeshCount: int = 0 # 4
-		self.BoundingBoxLowerLeftCorner: Vector = Vector((0, 0, 0)) # 12
-		self.BoundingBoxUpperRightCorner: Vector = Vector((0, 0, 0)) # 12
-		self.Meshes: List[BattleforgeMesh] = []
-		self.SomePoints: List[Vector] = [(0,0,0,1),(1,1,0,1),(0,0,1,1)] # 48
-
-	def Read(self, Buffer: FileReader) -> 'CDspMeshFile':
-		"""Reads the CDspMeshFile from the buffer"""
-		self.Magic = Buffer.ReadInt() # 4
-		if self.Magic == 1314189598:
-			self.Zero = Buffer.ReadInt() # 4
-			self.MeshCount = Buffer.ReadInt() # 4
-			self.BoundingBoxLowerLeftCorner = Buffer.ReadVector3() # 12
-			self.BoundingBoxUpperRightCorner = Buffer.ReadVector3() # 12
-			self.Meshes = [BattleforgeMesh().Read(Buffer) for _ in range(self.MeshCount)]
-			self.SomePoints = [Buffer.ReadVector4() for _ in range(3)] # 48
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('i', self.magic))
+		if self.magic == 1314189598:
+			file.write(pack('ii', self.zero, self.mesh_count))
+			self.bounding_box_lower_left_corner.write(file)
+			self.bounding_box_upper_right_corner.write(file)
+			for mesh in self.meshes:
+				mesh.write(file)
+			for point in self.some_points:
+				point.write(file)
 		else:
-			raise TypeError("This Mesh has the wrong Magic Value: {}".format(self.Magic))
+			raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
+
+	def size(self) -> int:
+		size = calcsize('3i')  # Magic + Zero + MeshCount
+		size += self.bounding_box_lower_left_corner.size()
+		size += self.bounding_box_upper_right_corner.size()
+		size += sum(mesh.size() for mesh in self.meshes)
+		size += sum(point.size() for point in self.some_points)
+		return size
+
+@dataclass(eq=False, repr=False)
+class OBBNode:
+	oriented_bounding_box: CMatCoordinateSystem = field(default_factory=CMatCoordinateSystem)
+	unknown1: int = 0
+	unknown2: int = 0
+	unknown3: int = 0
+	node_depth: int = 0
+	current_triangle_count: int = 0
+	minimum_triangles_found: int = 0
+
+	def read(self, file: BinaryIO) -> 'OBBNode':
+		self.oriented_bounding_box = CMatCoordinateSystem().read(file)
+		self.unknown1, self.unknown2, self.unknown3, self.node_depth, self.current_triangle_count, self.minimum_triangles_found = unpack('4H2i', file.read(calcsize('4H2i')))
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'CDspMeshFile':
-		"""Writes the CDspMeshFile to the buffer"""
-		Buffer.WriteInt(self.Magic)
-		if self.Magic == 1314189598:
-			Buffer.WriteInt(self.Zero)
-			Buffer.WriteInt(self.MeshCount)
-			Buffer.WriteVector3(self.BoundingBoxLowerLeftCorner)
-			Buffer.WriteVector3(self.BoundingBoxUpperRightCorner)
-			for Mesh in self.Meshes:
-				Mesh.Write(Buffer)
-			for Point in self.SomePoints:
-				Buffer.WriteVector4(Point)
-		else:
-			raise TypeError("This Mesh has the wrong Magic Value: {}".format(self.Magic))
+	def write(self, file: BinaryIO) -> None:
+		self.oriented_bounding_box.write(file)
+		file.write(pack('4H2i', self.unknown1, self.unknown2, self.unknown3, self.node_depth, self.current_triangle_count, self.minimum_triangles_found))
+
+	def size(self) -> int:
+		return self.oriented_bounding_box.size() + calcsize('4H2i')
+
+@dataclass(eq=False, repr=False)
+class CGeoOBBTree:
+	magic: int = 1845540702
+	version: int = 3
+	matrix_count: int = 0
+	obb_nodes: List[OBBNode] = field(default_factory=list)
+	triangle_count: int = 0
+	faces: List[Face] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'CGeoOBBTree':
+		self.magic, self.version, self.matrix_count = unpack('iii', file.read(calcsize('iii')))
+		self.obb_nodes = [OBBNode().read(file) for _ in range(self.matrix_count)]
+		self.triangle_count = unpack('i', file.read(calcsize('i')))[0]
+		self.faces = [Face().read(file) for _ in range(self.triangle_count)]
 		return self
 
-	def Size(self) -> int:
-		"""Returns the size of the CDspMeshFile"""
-		Size = 84 # Magic + Zero + MeshCount + BoundingBoxLowerLeftCorner + BoundingBoxUpperRightCorner
-		for Mesh in self.Meshes:
-			Size += Mesh.Size()
-		return Size
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('iii', self.magic, self.version, self.matrix_count))
+		for obb_node in self.obb_nodes:
+			obb_node.write(file)
+		file.write(pack('i', self.triangle_count))
+		for face in self.faces:
+			face.write(file)
 
-
-
-
-
-class OBBNode():
-	"""OBBNode class"""
-	def __init__(self) -> None:
-		"""Initializes the OBBNode"""
-		self.OrientedBoundingBox: CMatCoordinateSystem
-		self.Unknown1: int
-		self.Unknown2: int
-		self.Unknown3: int
-		self.NodeDepth: int
-		self.CurrentTriangleCount: int
-		self.MinimumTrianglesFound: int
-
-	def Read(self, Buffer: FileReader) -> 'OBBNode':
-		"""Reads the OBBNode from the buffer"""
-		self.OrientedBoundingBox = CMatCoordinateSystem().Read(Buffer)
-		self.Unknown1 = Buffer.ReadUShort()
-		self.Unknown2 = Buffer.ReadUShort()
-		self.Unknown3 = Buffer.ReadUShort()
-		self.NodeDepth = Buffer.ReadUShort()
-		self.CurrentTriangleCount = Buffer.ReadInt()
-		self.MinimumTrianglesFound = Buffer.ReadInt()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'OBBNode':
-		"""Writes the OBBNode to the buffer"""
-		self.OrientedBoundingBox.Write(Buffer)
-		Buffer.WriteInt(self.Unknown1)
-		Buffer.WriteInt(self.Unknown2)
-		Buffer.WriteInt(self.Unknown3)
-		Buffer.WriteInt(self.NodeDepth)
-		Buffer.WriteInt(self.CurrentTriangleCount)
-		Buffer.WriteInt(self.MinimumTrianglesFound)
-		return self
-
-class CGeoOBBTree():
-	"""CGeoOBBTree class"""
-	def __init__(self) -> None:
-		"""Initializes the CGeoOBBTree"""
-		self.Magic: int = 1845540702
-		self.Version: int = 3
-		self.MatrixCount: int = 0
-		self.OBBNodes: List[OBBNode] = []
-		self.TriangleCount: int = 0
-		self.Faces: List[Face] = []
-
-	def Read(self, Buffer: FileReader) -> 'CGeoOBBTree':
-		"""Reads the CGeoOBBTree from the buffer"""
-		self.Magic = Buffer.ReadInt()
-		self.Version = Buffer.ReadInt()
-		self.MatrixCount = Buffer.ReadInt()
-		self.OBBNodes = [OBBNode().Read(Buffer) for _ in range(self.MatrixCount)]
-		self.TriangleCount = Buffer.ReadInt()
-		self.Faces = [Face().Read(Buffer) for _ in range(self.TriangleCount)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CGeoOBBTree':
-		"""Writes the CGeoOBBTree to the buffer"""
-		Buffer.WriteInt(self.Magic)
-		Buffer.WriteInt(self.Version)
-		Buffer.WriteInt(self.MatrixCount)
-		if self.MatrixCount > 0:
-			for _OBBNode in self.OBBNodes:
-				_OBBNode.Write(Buffer)
-		Buffer.WriteInt(self.TriangleCount)
-		for _Face in self.Faces: _Face.Write(Buffer)
-		return self
-
-	def Size(self) -> int:
-		"""Returns the size of the CGeoOBBTree"""
-		return 16 + 24 * len(self.OBBNodes) + 6 * len(self.Faces)
+	def size(self) -> int:
+		return calcsize('iiii') + sum(obb_node.size() for obb_node in self.obb_nodes) + sum(face.size() for face in self.faces)
 	
+@dataclass(eq=False, repr=False)
+class JointGroup:
+	joint_count: int = 0
+	joints: List[int] = field(default_factory=list)
 
-class JointGroup():
-	"""JointGroup"""
-	def __init__(self) -> None:
-		"""JointGroup Constructor"""
-		self.JointCount: int = 0
-		self.Joints: List[int] = [] # Sorted by Bone Identifier Appearance in the Skeleton.Bones List
-
-	def Read(self, Buffer: FileReader) -> 'JointGroup':
-		"""Reads the JointGroup from the buffer"""
-		self.JointCount = Buffer.ReadInt()
-		self.Joints = [Buffer.ReadInt() for _ in range(self.JointCount)]
+	def read(self, file: BinaryIO) -> 'JointGroup':
+		self.joint_count = unpack('i', file.read(calcsize('i')))[0]
+		self.joints = list(unpack(f'{self.joint_count}i', file.read(calcsize(f'{self.joint_count}i'))))
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'JointGroup':
-		"""Writes the JointGroup to the buffer"""
-		Buffer.WriteInt(self.JointCount)
-		for Joint in self.Joints:
-			Buffer.WriteInt(Joint)
-		return self
-	
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack(f'i{self.joint_count}i', self.joint_count, *self.joints))
 
-class CDspJointMap():
-	"""CDspJointMap"""
-	def __init__(self) -> None:
-		"""CDspJointMap Constructor"""
-		self.Version: int = 1
-		self.JointGroupCount: int = 0
-		self.JointGroups: List[JointGroup] = []
+	def size(self) -> int:
+		return calcsize('i') + calcsize(f'{self.joint_count}i')
 
-	def Read(self, Buffer: FileReader) -> 'CDspJointMap':
-		"""Reads the CDspJointMap from the buffer"""
-		self.Version = Buffer.ReadInt()
-		self.JointGroupCount = Buffer.ReadInt()
-		self.JointGroups = [JointGroup().Read(Buffer) for _ in range(self.JointGroupCount)]
+@dataclass(eq=False, repr=False)
+class CDspJointMap:
+	version: int = 1
+	joint_group_count: int = 0
+	joint_groups: List[JointGroup] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'CDspJointMap':
+		self.version, self.joint_group_count = unpack('ii', file.read(calcsize('ii')))
+		self.joint_groups = [JointGroup().read(file) for _ in range(self.joint_group_count)]
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'CDspJointMap':
-		"""Writes the CDspJointMap to the buffer"""
-		Buffer.WriteInt(self.Version)
-		Buffer.WriteInt(self.JointGroupCount)
-		for _JointGroup in self.JointGroups:
-			_JointGroup.Write(Buffer)
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('ii', self.version, self.joint_group_count))
+		for joint_group in self.joint_groups:
+			joint_group.write(file)
+
+	def size(self) -> int:
+		return calcsize('ii') + sum(joint_group.size() for joint_group in self.joint_groups)
+
+@dataclass(eq=False, repr=False)
+class SLocator:
+	cmat_coordinate_system: CMatCoordinateSystem = field(default_factory=CMatCoordinateSystem)
+	class_id: int = 0
+	sub_id: int = 0
+	file_name_length: int = 0
+	file_name: str = ""
+	uk_int: int = 0
+
+	def read(self, file: BinaryIO, version: int) -> 'SLocator':
+		self.cmat_coordinate_system = CMatCoordinateSystem().read(file)
+		self.class_id, self.sub_id, self.file_name_length = unpack('iii', file.read(calcsize('iii')))
+		self.file_name = unpack(f'{self.file_name_length}s', file.read(calcsize(f'{self.file_name_length}s')))[0].decode('utf-8').strip('\x00')
+		if version == 5:
+			self.uk_int = unpack('i', file.read(calcsize('i')))[0]
 		return self
 
-	def Size(self) -> int:
-		"""Returns the size of the CDspJointMap"""
-		return 8 # For now, as we dont have JointGroups yet
-	
+	def write(self, file: BinaryIO) -> None:
+		self.cmat_coordinate_system.write(file)
+		file.write(pack(f'iii{self.file_name_length}s', self.class_id, self.sub_id, self.file_name_length, self.file_name.encode('utf-8')))
+		if hasattr(self, 'uk_int'):
+			file.write(pack('i', self.uk_int))
 
-class BattleforgeMesh():
-	"""BattleforgeMesh"""
-	def __init__(self) -> None:
-		"""BattleforgeMesh Constructor"""
-		self.VertexCount: int # 4
-		self.FaceCount: int # 4
-		self.Faces: List[Face] # 6 * FaceCount
-		self.MeshCount: int # 1
-		self.MeshData: List[MeshData]
-		self.BoundingBoxLowerLeftCorner: Vector # 12
-		self.BoundingBoxUpperRightCorner: Vector # 12
-		self.MaterialID: int # 2
-		self.MaterialParameters: int # 4
-		self.MaterialStuff: int # 4
-		self.BoolParameter: int # 4
-		self.Textures: Textures # Individual Length
-		self.Refraction: Refraction # 20
-		self.Materials: Materials # 100
-		self.LevelOfDetail: LevelOfDetail # 8 Only if MaterialParameters == -86061050
-		self.EmptyString: EmptyString # 4 Only if MaterialParameters == -86061050
-		self.Flow: Flow # 84 Only if MaterialParameters == -86061050
+	def size(self) -> int:
+		size = self.cmat_coordinate_system.size() + calcsize(f'iii{self.file_name_length}s')
+		if hasattr(self, 'uk_int'):
+			size += calcsize('i')
+		return size
 
-	def Read(self, Buffer: FileReader) -> 'BattleforgeMesh':
-		"""Reads the BattleforgeMesh from the buffer"""
-		self.VertexCount = Buffer.ReadInt()
-		self.FaceCount = Buffer.ReadInt()
-		self.Faces = [Face().Read(Buffer) for _ in range(self.FaceCount)]
-		self.MeshCount = Buffer.ReadByte()
-		self.MeshData = [MeshData().Read(Buffer, self.VertexCount) for _ in range(self.MeshCount)]
-		self.BoundingBoxLowerLeftCorner = Buffer.ReadVector3()
-		self.BoundingBoxUpperRightCorner = Buffer.ReadVector3()
-		self.MaterialID = Buffer.ReadShort()
-		self.MaterialParameters = Buffer.ReadInt()
-		if self.MaterialParameters == -86061050:
-			self.MaterialStuff = Buffer.ReadInt()
-			self.BoolParameter = Buffer.ReadInt()
-			self.Textures = Textures().Read(Buffer)
-			self.Refraction = Refraction().Read(Buffer)
-			self.Materials = Materials().Read(Buffer)
-			self.LevelOfDetail = LevelOfDetail().Read(Buffer)
-			self.EmptyString = EmptyString().Read(Buffer)
-			self.Flow = Flow().Read(Buffer)
-		elif self.MaterialParameters == -86061051:
-			self.MaterialStuff = Buffer.ReadInt()
-			self.BoolParameter = Buffer.ReadInt()
-			self.Textures = Textures().Read(Buffer)
-			self.Refraction = Refraction().Read(Buffer)
-			self.Materials = Materials().Read(Buffer)
-			self.LevelOfDetail = LevelOfDetail().Read(Buffer)
-			self.EmptyString = EmptyString().Read(Buffer)
-		elif self.MaterialParameters == -86061055:
-			self.BoolParameter = Buffer.ReadInt()
-			self.Textures = Textures().Read(Buffer)
-			self.Refraction = Refraction().Read(Buffer)
-			self.Materials = Materials().Read(Buffer)
-		else:
-			raise TypeError("Unknown MaterialParameters {}".format(self.MaterialParameters))
+@dataclass(eq=False, repr=False)
+class CDrwLocatorList:
+	magic: int = 0
+	version: int = 0
+	length: int = 0
+	slocators: List[SLocator] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'CDrwLocatorList':
+		self.magic, self.version, self.length = unpack('iii', file.read(calcsize('iii')))
+		self.slocators = [SLocator().read(file, self.version) for _ in range(self.length)]
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'BattleforgeMesh':
-		"""Writes the BattleforgeMesh to the buffer"""
-		Buffer.WriteInt(self.VertexCount)
-		Buffer.WriteInt(self.FaceCount)
-		for _Face in self.Faces:
-			_Face.Write(Buffer)
-		Buffer.WriteByte(self.MeshCount)
-		for _MeshData in self.MeshData:
-			_MeshData.Write(Buffer)
-		Buffer.WriteVector3(self.BoundingBoxLowerLeftCorner)
-		Buffer.WriteVector3(self.BoundingBoxUpperRightCorner)
-		Buffer.WriteShort(self.MaterialID)
-		Buffer.WriteInt(self.MaterialParameters)
-		if self.MaterialParameters == -86061050:
-			Buffer.WriteInt(self.MaterialStuff)
-			Buffer.WriteInt(self.BoolParameter)
-			self.Textures.Write(Buffer)
-			self.Refraction.Write(Buffer)
-			self.Materials.Write(Buffer)
-			self.LevelOfDetail.Write(Buffer)
-			self.EmptyString.Write(Buffer)
-			self.Flow.Write(Buffer)
-		elif self.MaterialParameters == -86061055:
-			Buffer.WriteInt(self.BoolParameter)
-			self.Textures.Write(Buffer)
-			self.Refraction.Write(Buffer)
-			self.Materials.Write(Buffer)
-		else:
-			raise TypeError("Unknown MaterialParameters {}".format(self.MaterialParameters))
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('iii', self.magic, self.version, self.length))
+		for locator in self.slocators:
+			locator.write(file)
+
+	def size(self) -> int:
+		return calcsize('iii') + sum(locator.size() for locator in self.slocators)
+
+@dataclass(eq=False, repr=False)
+class CGeoAABox:
+	lower_left_corner: Vector3 = field(default_factory=Vector3)
+	upper_right_corner: Vector3 = field(default_factory=Vector3)
+
+	def read(self, file: BinaryIO) -> 'CGeoAABox':
+		self.lower_left_corner = Vector3().read(file)
+		self.upper_right_corner = Vector3().read(file)
 		return self
 
-	def Size(self) -> int:
-		"""Returns the size of the BattleforgeMesh"""
-		Size = 8 # VertexCount + FaceCount
-		for _ in self.Faces:
-			Size += 6
-		Size += 1 # MeshCount
-		for Mesh in self.MeshData:
-			Size += Mesh.Size()
-		Size += 12 + 12 + 2 + 4 + 4 + 4
-		for T in self.Textures.Textures:
-			Size += 12 + T.Length
-		Size += 20 + 100 + (self.MaterialParameters == -86061050 and 8 + 4 + 84 + 4 or 0)
-		return Size
+	def write(self, file: BinaryIO) -> None:
+		self.lower_left_corner.write(file)
+		self.upper_right_corner.write(file)
 
+	def size(self) -> int:
+		return self.lower_left_corner.size() + self.upper_right_corner.size()
 
-class SMeshState():
-	"""SMeshState"""
-	def __init__(self) -> None:
-		"""SMeshState Constructor"""
-		self.StateNum: int
-		self.HasFiles: int
-		self.UKFileLength: int
-		self.UKFile: str
-		self.DRSFileLength: int
-		self.DRSFile: str
+@dataclass(eq=False, repr=False)
+class BoxShape:
+	coord_system: CMatCoordinateSystem = field(default_factory=CMatCoordinateSystem)
+	geo_aabox: CGeoAABox = field(default_factory=CGeoAABox)
 
-	def Read(self, Buffer: FileReader) -> 'SMeshState':
-		"""Reads the SMeshState from the buffer"""
-		self.StateNum = Buffer.ReadInt()
-		self.HasFiles = Buffer.ReadShort()
-		if self.HasFiles == 1:
-			self.UKFileLength = Buffer.ReadInt()
-			self.UKFile = Buffer.ReadString(self.UKFileLength)
-			self.DRSFileLength = Buffer.ReadInt()
-			self.DRSFile = Buffer.ReadString(self.DRSFileLength)
+	def read(self, file: BinaryIO) -> 'BoxShape':
+		self.coord_system = CMatCoordinateSystem().read(file)
+		self.geo_aabox = CGeoAABox().read(file)
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'SMeshState':
-		"""Writes the SMeshState to the buffer"""
-		Buffer.WriteInt(self.StateNum)
-		Buffer.WriteShort(self.HasFiles)
-		if self.HasFiles == 1:
-			Buffer.WriteInt(self.UKFileLength)
-			Buffer.WriteString(self.UKFile)
-			Buffer.WriteInt(self.DRSFileLength)
-			Buffer.WriteString(self.DRSFile)
+	def write(self, file: BinaryIO) -> None:
+		self.coord_system.write(file)
+		self.geo_aabox.write(file)
+
+	def size(self) -> int:
+		return self.coord_system.size() + self.geo_aabox.size()
+
+@dataclass(eq=False, repr=False)
+class CGeoCylinder:
+	center: Vector3 = field(default_factory=Vector3)
+	height: float = 0.0
+	radius: float = 0.0
+
+	def read(self, file: BinaryIO) -> 'CGeoCylinder':
+		self.center = Vector3().read(file)
+		self.height, self.radius = unpack('ff', file.read(calcsize('ff')))[0]
 		return self
 
-class DestructionState():
-	"""DestructionState"""
-	def __init__(self) -> None:
-		"""DestructionState Constructor"""
-		self.StateNum: int
-		self.FileNameLength: int
-		self.FileName: str
+	def write(self, file: BinaryIO) -> None:
+		self.center.write(file)
+		file.write(pack('ff', self.height, self.radius))
 
-	def Read(self, Buffer: FileReader) -> 'DestructionState':
-		"""Reads the DestructionState from the buffer"""
-		self.StateNum = Buffer.ReadInt()
-		self.FileNameLength = Buffer.ReadInt()
-		self.FileName = Buffer.ReadString(self.FileNameLength)
+	def size(self) -> int:
+		return self.center.size() + calcsize('ff')
+
+@dataclass(eq=False, repr=False)
+class CylinderShape:
+	coord_system: CMatCoordinateSystem = field(default_factory=CMatCoordinateSystem)
+	geo_cylinder: CGeoCylinder = field(default_factory=CGeoCylinder)
+
+	def read(self, file: BinaryIO) -> 'CylinderShape':
+		self.coord_system = CMatCoordinateSystem().read(file)
+		self.geo_cylinder = CGeoCylinder().read(file)
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'DestructionState':
-		"""Writes the DestructionState to the buffer"""
-		Buffer.WriteInt(self.StateNum)
-		Buffer.WriteInt(self.FileNameLength)
-		Buffer.WriteString(self.FileName)
+	def write(self, file: BinaryIO) -> None:
+		self.coord_system.write(file)
+		self.geo_cylinder.write(file)
+
+	def size(self) -> int:
+		return self.coord_system.size() + self.geo_cylinder.size()
+
+@dataclass(eq=False, repr=False)
+class CGeoSphere:
+	radius: float = 0.0
+	center: Vector3 = field(default_factory=Vector3)
+
+	def read(self, file: BinaryIO) -> 'CGeoSphere':
+		self.radius = unpack('f', file.read(calcsize('f')))[0]
+		self.center = Vector3().read(file)
 		return self
 
-class StateBasedMeshSet():
-	"""StateBasedMeshSet"""
-	def __init__(self) -> None:
-		"""StateBasedMeshSet Constructor"""
-		self.UKShort: int
-		self.UKInt: int
-		self.NumMeshStates: int
-		self.SMeshStates: List[SMeshState]
-		self.NumDestructionStates: int
-		self.DestructionStates: List[DestructionState]
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('f', self.radius))
+		self.center.write(file)
 
-	def Read(self, Buffer: FileReader) -> 'StateBasedMeshSet':
-		"""Reads the StateBasedMeshSet from the buffer"""
-		self.UKShort = Buffer.ReadShort()
-		self.UKInt = Buffer.ReadInt()
-		self.NumMeshStates = Buffer.ReadInt()
-		self.SMeshStates = [SMeshState().Read(Buffer) for _ in range(self.NumMeshStates)]
-		self.NumDestructionStates = Buffer.ReadInt()
-		self.DestructionStates = [DestructionState().Read(Buffer) for _ in range(self.NumDestructionStates)]
+	def size(self) -> int:
+		return calcsize('f') + self.center.size()
+
+@dataclass(eq=False, repr=False)
+class SphereShape:
+	coord_system: CMatCoordinateSystem = field(default_factory=CMatCoordinateSystem)
+	geo_sphere: CGeoSphere = field(default_factory=CGeoSphere)
+
+	def read(self, file: BinaryIO) -> 'SphereShape':
+		self.coord_system = CMatCoordinateSystem().read(file)
+		self.geo_sphere = CGeoSphere().read(file)
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'StateBasedMeshSet':
-		"""Writes the StateBasedMeshSet to the buffer"""
-		Buffer.WriteShort(self.UKShort)
-		Buffer.WriteInt(self.UKInt)
-		Buffer.WriteInt(self.NumMeshStates)
-		for MeshState in self.SMeshStates:
-			MeshState.Write(Buffer)
-		Buffer.WriteInt(self.NumDestructionStates)
-		for _DestructionState in self.DestructionStates:
-			_DestructionState.Write(Buffer)
+	def write(self, file: BinaryIO) -> None:
+		self.coord_system.write(file)
+		self.geo_sphere.write(file)
+
+	def size(self) -> int:
+		return self.coord_system.size() + self.geo_sphere.size()
+
+@dataclass(eq=False, repr=False)
+class CollisionShape:
+	version: int = 1
+	box_count: int = 0
+	boxes: List[BoxShape] = field(default_factory=list)
+	sphere_count: int = 0
+	spheres: List[SphereShape] = field(default_factory=list)
+	cylinder_count: int = 0
+	cylinders: List[CylinderShape] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'CollisionShape':
+		self.version, self.box_count = unpack('Bi', file.read(calcsize('Bi')))[0]
+		self.boxes = [BoxShape().read(file) for _ in range(self.box_count)]
+		self.sphere_count = unpack('i', file.read(calcsize('i')))[0]
+		self.spheres = [SphereShape().read(file) for _ in range(self.sphere_count)]
+		self.cylinder_count = unpack('i', file.read(calcsize('i')))[0]
+		self.cylinders = [CylinderShape().read(file) for _ in range(self.cylinder_count)]
 		return self
 
-class MeshGridModule():
-	"""MeshGridModule"""
-	def __init__(self) -> None:
-		"""MeshGridModule Constructor"""
-		self.UKShort: int
-		self.HasMeshSet: int
-		self.StateBasedMeshSet: StateBasedMeshSet
-
-	def Read(self, Buffer: FileReader) -> 'MeshGridModule':
-		"""Reads the MeshGridModule from the buffer"""
-		self.UKShort = Buffer.ReadShort()
-		self.HasMeshSet = Buffer.ReadByte()
-		if self.HasMeshSet == 1:
-			self.StateBasedMeshSet = StateBasedMeshSet().Read(Buffer)
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'MeshGridModule':
-		"""Writes the MeshGridModule to the buffer"""
-		Buffer.WriteShort(self.UKShort)
-		Buffer.WriteByte(self.HasMeshSet)
-		if self.HasMeshSet == 1:
-			self.StateBasedMeshSet.Write(Buffer)
-		return self
-
-class CMatCoordinateSystem():
-	"""CMatCoordinateSystem"""
-	def __init__(self) -> None:
-		"""CMatCoordinateSystem Constructor"""
-		self.Matrix: Matrix
-		self.Position: Vector
-
-	def Read(self, Buffer: FileReader) -> 'CMatCoordinateSystem':
-		"""Reads the CMatCoordinateSystem from the buffer"""
-		self.Matrix = Buffer.ReadMatrix3x3()
-		self.Position = Buffer.ReadVector3()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CMatCoordinateSystem':
-		"""Writes the CMatCoordinateSystem to the buffer"""
-		Buffer.WriteMatrix3x3(self.Matrix)
-		Buffer.WriteVector3(self.Position)
-		return self
-
-class SLocator():
-	"""SLocator"""
-	def __init__(self) -> None:
-		"""SLocator Constructor"""
-		self.CMatCoordinateSystem: CMatCoordinateSystem
-		self.Class: int
-		self.SubID: int
-		self.FileNameLength: int
-		self.FileName: str
-		self.UKInt: int
-
-	def Read(self, Buffer: FileReader, Version: int) -> 'SLocator':
-		"""Reads the SLocator from the buffer"""
-		self.CMatCoordinateSystem = CMatCoordinateSystem().Read(Buffer)
-		self.Class = Buffer.ReadInt()
-		self.SubID = Buffer.ReadInt()
-		self.FileNameLength = Buffer.ReadInt()
-		self.FileName = Buffer.ReadString(self.FileNameLength)
-		if Version == 5:
-			self.UKInt = Buffer.ReadInt()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'SLocator':
-		"""Writes the SLocator to the buffer"""
-		self.CMatCoordinateSystem.Write(Buffer)
-		Buffer.WriteInt(self.Class)
-		Buffer.WriteInt(self.SubID)
-		Buffer.WriteInt(self.FileNameLength)
-		Buffer.WriteString(self.FileName)
-		Buffer.WriteInt(self.UKInt)
-		return self
-
-class CDrwLocatorList():
-	"""CDrwLocatorList"""
-	def __init__(self) -> None:
-		"""CDrwLocatorList Constructor"""
-		self.Magic: int
-		self.Version: int
-		self.Length: int
-		self.SLocators: List[SLocator]
-
-	def Read(self, Buffer: FileReader) -> 'CDrwLocatorList':
-		"""Reads the CDrwLocatorList from the buffer"""
-		self.Magic = Buffer.ReadInt()
-		self.Version = Buffer.ReadInt()
-		self.Length = Buffer.ReadInt()
-		self.SLocators = [SLocator().Read(Buffer, self.Version) for _ in range(self.Length)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CDrwLocatorList':
-		"""Writes the CDrwLocatorList to the buffer"""
-		Buffer.WriteInt(self.Magic)
-		Buffer.WriteInt(self.Version)
-		Buffer.WriteInt(self.Length)
-		for Locator in self.SLocators:
-			Locator.Write(Buffer)
-		return self
-
-class CGeoAABox():
-	"""CGeoAABox"""
-	def __init__(self) -> None:
-		"""CGeoAABox Constructor"""
-		self.LowerLeftCorner: Vector
-		self.UpperRightCorner: Vector
-
-	def Read(self, Buffer: FileReader) -> 'CGeoAABox':
-		"""Reads the CGeoAABox from the buffer"""
-		self.LowerLeftCorner = Buffer.ReadVector3()
-		self.UpperRightCorner = Buffer.ReadVector3()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CGeoAABox':
-		"""Writes the CGeoAABox to the buffer"""
-		Buffer.WriteVector3(self.LowerLeftCorner)
-		Buffer.WriteVector3(self.UpperRightCorner)
-		return self
-
-class BoxShape():
-	"""Box"""
-	def __init__(self) -> None:
-		"""Box Constructor"""
-		self.CoordSystem: CMatCoordinateSystem
-		self.CGeoAABox: CGeoAABox
-
-	def Read(self, Buffer: FileReader) -> 'BoxShape':
-		"""Reads the Box from the buffer"""
-		self.CoordSystem = CMatCoordinateSystem().Read(Buffer)
-		self.CGeoAABox = CGeoAABox().Read(Buffer)
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'BoxShape':
-		"""Writes the Box to the buffer"""
-		self.CoordSystem.Write(Buffer)
-		self.CGeoAABox.Write(Buffer)
-		return self
-
-class CGeoCylinder():
-	"""CGeoCylinder"""
-	def __init__(self) -> None:
-		"""CGeoCylinder Constructor"""
-		self.Center: Vector
-		self.Height: float
-		self.Radius: float
-
-	def Read(self, Buffer: FileReader) -> 'CGeoCylinder':
-		"""Reads the CGeoCylinder from the buffer"""
-		self.Center = Buffer.ReadVector3()
-		self.Height = Buffer.ReadFloat()
-		self.Radius = Buffer.ReadFloat()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CGeoCylinder':
-		"""Writes the CGeoCylinder to the buffer"""
-		Buffer.WriteVector3(self.Center)
-		Buffer.WriteFloat(self.Height)
-		Buffer.WriteFloat(self.Radius)
-		return self
-
-class CylinderShape():
-	"""Cylinder"""
-	def __init__(self) -> None:
-		"""Cylinder Constructor"""
-		self.CoordSystem: CMatCoordinateSystem
-		self.CGeoCylinder: CGeoCylinder
-
-	def Read(self, Buffer: FileReader) -> 'CylinderShape':
-		"""Reads the Cylinder from the buffer"""
-		self.CoordSystem = CMatCoordinateSystem().Read(Buffer)
-		self.CGeoCylinder = CGeoCylinder().Read(Buffer)
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CylinderShape':
-		"""Writes the Cylinder to the buffer"""
-		self.CoordSystem.Write(Buffer)
-		self.CGeoCylinder.Write(Buffer)
-		return self
-
-class CGeoSphere():
-	"""CGeoSphere"""
-	def __init__(self) -> None:
-		"""CGeoSphere Constructor"""
-		self.Radius: float
-		self.Center: Vector
-
-	def Read(self, Buffer: FileReader) -> 'CGeoSphere':
-		"""Reads the CGeoSphere from the buffer"""
-		self.Radius = Buffer.ReadFloat()
-		self.Center = Buffer.ReadVector3()
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CGeoSphere':
-		"""Writes the CGeoSphere to the buffer"""
-		Buffer.WriteFloat(self.Radius)
-		Buffer.WriteVector3(self.Center)
-		return self
-
-class SphereShape():
-	"""CGeoSphere"""
-	def __init__(self) -> None:
-		"""CGeoSphere Constructor"""
-		self.CoordSystem: CMatCoordinateSystem
-		self.CGeoSphere: CGeoSphere
-
-	def Read(self, Buffer: FileReader) -> 'CGeoSphere':
-		"""Reads the CGeoSphere from the buffer"""
-		self.CoordSystem = CMatCoordinateSystem().Read(Buffer)
-		self.CGeoSphere = CGeoSphere().Read(Buffer)
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CGeoSphere':
-		"""Writes the CGeoSphere to the buffer"""
-		self.CoordSystem.Write(Buffer)
-		self.CGeoSphere.Write(Buffer)
-		return self
-
-class CollisionShape():
-	"""CollisionShape"""
-	def __init__(self) -> None:
-		"""CollisionShape Constructor"""
-		self.Version: int = 1
-		self.BoxCount: int = 0
-		self.Boxes: List[BoxShape] = []
-		self.SphereCount: int = 0
-		self.Spheres: List[SphereShape] = []
-		self.CylinderCount: int = 0
-		self.Cylinders: List[CylinderShape] = []
-
-	def Read(self, Buffer: FileReader) -> 'CollisionShape':
-		"""Reads the CollisionShape from the buffer"""
-		self.Version = Buffer.ReadByte()
-		self.BoxCount = Buffer.ReadInt()
-		self.Boxes = [BoxShape().Read(Buffer) for _ in range(self.BoxCount)]
-		self.SphereCount = Buffer.ReadInt()
-		self.Spheres = [SphereShape().Read(Buffer) for _ in range(self.SphereCount)]
-		self.CylinderCount = Buffer.ReadInt()
-		self.Cylinders = [CylinderShape().Read(Buffer) for _ in range(self.CylinderCount)]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CollisionShape':
-		"""Writes the CollisionShape to the buffer"""
-		Buffer.WriteByte(self.Version)
-		Buffer.WriteInt(self.BoxCount)
-		for _Box in self.Boxes:
-			_Box.Write(Buffer)
-		Buffer.WriteInt(self.SphereCount)
-		for Sphere in self.Spheres:
-			Sphere.Write(Buffer)
-		Buffer.WriteInt(self.CylinderCount)
-		for Cylinder in self.Cylinders:
-			Cylinder.Write(Buffer)
-		return self
-
-	def Size(self) -> int:
-		"""Returns the size of the CollisionShape"""
-		return 68 * self.CylinderCount + 72 * self.BoxCount + 64 * self.SphereCount + 13
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-class Timing():
-	'''Timing'''
-	def __init__(self) -> None:
-		'''Timing Constructor'''
-		self.CastMs: int # Int
-		self.ResolveMs: int # Int
-		self.UK1: float # Float
-		self.UK2: float # Float
-		self.UK3: float # Float
-		self.AnimationMarkerID: int # Int
-		# NOTICE:
-		# When tying the visual animation to the game logic,
-		# the castMs/resolveMs seem to get converted into game ticks by simply dividing them by 100.
-		# So while the visual part of the animation is handled in milliseconds,
-		# the maximum precision for the game logic is in deciseconds/game ticks.
-		#
-		# Meaning of the variables below:
-		# For type Spawn:
-		# castMs is the duration it will take until the unit can be issued commands or lose damage immunity
-		# If castMs is for zero game ticks (< 100), then the animation is skipped entirely.
-		# If castMs is for exactly one game tick (100-199), it seems to bug out.
-		# Therefore the minimum value here should be 200, if you wish to play a spawn animation.
-		# resolveMs is the duration the spawn animation will play out for in total.
-		# This should match the total time from the .ska file, otherwise it looks weird.
-		# If you wish to slow down/speed up the animation, you can change the total time in the .ska file.
-		#
-		# For type CastResolve:
-		# castMs is the duration it will take the unit to start casting its ability (can still be aborted)
-		# If castMs is for zero game ticks (< 100), then the ability skips the cast stage
-		# and instantly moves onto the resolve stage.
-		# resolveMs is the duration it will take the unit to finish casting its ability (cannot be aborted)
-		# It seems the stage cannot be skipped and uses a minimum duration of 1 game tick,
-		# even if a value < 100 is specified.
-		# The animation is automatically slowed down/sped up based on these timings.
-		# The total time from the .ska file is ignored.
-		#
-		# For type ModeSwitch:
-		# castMs is the duration it will take the unit to start its mode switch animation.
-		# If castMs is for zero game ticks (< 100), then the mode switch is done instantly
-		# and also does not interrupt movement. During castMs, any commands are blocked.
-		# resolveMs seems to be ignored here. The unit can be issued new commands after the cast time.
-		# If you wish to slow down/speed up the animation, you can change the total time in the .ska file.
-		#
-		# For type Melee/WormMovement No experiments conducted yet.
-		#  castMs;
-		#  resolveMs;
-		# at uk1;
-		# at uk2;
-		# 
-		# Can be used to link an AnimationMarkerSet to a timing.
-		# Relevant field: AnimationMarkerSet.animationMarkerID
-		#
-		# Seems to be often used for Spawn animations.
-		# In cases where e.g. the animationTagID is used,
-		# the animationMarkerID usually not referenced anywhere.
-
-class TimingVariant():
-	'''TimingVariant'''
-	def __init__(self) -> None:
-		'''TimingVariant Constructor'''
-		self.Weight: int # Byte. The weight of this variant. The higher the weight, the more likely it is to be chosen.
-		self.VariantIndex: int # Byte.
-		self.TimingCount: int # Short. The number of Timings for this Variant. Most of the time, this is 1.
-		self.Timings: List[Timing]
-
-class AnimationTiming():
-	'''AnimationTiming'''
-	def __init__(self) -> None:
-		'''AnimationTiming Constructor'''
-		self.AnimationType: int = AnimationType['CastResolve']
-		self.AnimationTagID: int = 0
-		self.IsEnterModeAnimation: int = 0 # Short. This is 1 most of the time.
-		self.VariantCount: int # Short. The number of Animations for this Type/TagID combination.
-		self.TimingVariants: List[TimingVariant]
-
-class StructV3():
-	'''StructV3'''
-	def __init__(self) -> None:
-		'''StructV3 Constructor'''
-		self.Length: int = 1
-		self.Unknown: List[int] = [0, 0]
-
-	def Write(self, Buffer: FileWriter) -> 'StructV3':
-		'''Writes the StructV3 to the buffer'''
-		Buffer.WriteInt(self.Length)
-		for Unknown in self.Unknown:
-			Buffer.WriteInt(Unknown)
-		return self
-	
-	def Size(self) -> int:
-		'''Returns the size of the StructV3'''
-		return 12
-
-class AnimationTimings():
-	"""AnimationTimings"""
-	def __init__(self):
-		"""AnimationTimings Constructor"""
-		self.Magic: int = 1650881127
-		self.Version: int = 4 # Short. 3 or 4
-		self.AnimationTimingCount: int = 0 # Short. Only used if there are multiple Animations.
-		self.AnimationTimings: List[AnimationTiming]
-		self.StructV3: StructV3 = StructV3()
-
-	def Write(self, Buffer: FileWriter) -> 'AnimationTimings':
-		"""Writes the AnimationTimings to the buffer"""
-		Buffer.WriteInt(self.Magic)
-		Buffer.WriteShort(self.Version)
-		Buffer.WriteShort(self.AnimationTimingCount)
-		if self.AnimationTimingCount > 0:
-			# TODO
-			pass
-		self.StructV3.Write(Buffer)
-		return self
-	
-	def Size(self) -> int:
-		"""Returns the size of the AnimationTimings"""
-		return 8 + self.StructV3.Size()
-
-class MeshSetGrid():
-	"""MeshSetGrid class"""
-	def __init__(self) -> None:
-		self.Revision: int
-		self.GridWidth: int
-		self.GridHeight: int
-		self.NameLength: int
-		self.Name: str
-		self.UUIDLength: int
-		self.UUID: str
-		self.GridRotation: int
-		self.GroundDecalLength: int
-		self.GroundDecal: str
-		self.UKString0Length: int
-		self.UKString0: str
-		self.UKString1Length: int
-		self.UKString1: str
-		self.ModuleDistance: float
-		self.IsCenterPivoted: int
-		self.MeshModules: List[MeshGridModule]
-
-	def Read(self, Buffer: FileReader) -> 'MeshSetGrid':
-		"""Reads the MeshSetGrid from the buffer"""
-		self.Revision = Buffer.ReadShort()
-		self.GridWidth = Buffer.ReadByte()
-		self.GridHeight = Buffer.ReadByte()
-		self.NameLength = Buffer.ReadInt()
-		self.Name = Buffer.ReadString(self.NameLength)
-		self.UUIDLength = Buffer.ReadInt()
-		self.UUID = Buffer.ReadString(self.UUIDLength)
-		self.GridRotation = Buffer.ReadShort()
-		self.GroundDecalLength = Buffer.ReadInt()
-		self.GroundDecal = Buffer.ReadString(self.GroundDecalLength)
-		self.UKString0Length = Buffer.ReadInt()
-		self.UKString0 = Buffer.ReadString(self.UKString0Length)
-		self.UKString1Length = Buffer.ReadInt()
-		self.UKString1 = Buffer.ReadString(self.UKString1Length)
-		self.ModuleDistance = Buffer.ReadFloat()
-		self.IsCenterPivoted = Buffer.ReadByte()
-		self.MeshModules = [MeshGridModule().Read(Buffer) for _ in range((self.GridWidth * 2 + 1) * (self.GridHeight * 2 + 1))]
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'MeshSetGrid':
-		"""Writes the MeshSetGrid to the buffer"""
-		Buffer.WriteShort(self.Revision)
-		Buffer.WriteByte(self.GridWidth)
-		Buffer.WriteByte(self.GridHeight)
-		Buffer.WriteInt(self.NameLength)
-		Buffer.WriteString(self.Name)
-		Buffer.WriteInt(self.UUIDLength)
-		Buffer.WriteString(self.UUID)
-		Buffer.WriteShort(self.GridRotation)
-		Buffer.WriteInt(self.GroundDecalLength)
-		Buffer.WriteString(self.GroundDecal)
-		Buffer.WriteInt(self.UKString0Length)
-		Buffer.WriteString(self.UKString0)
-		Buffer.WriteInt(self.UKString1Length)
-		Buffer.WriteString(self.UKString1)
-		Buffer.WriteFloat(self.ModuleDistance)
-		Buffer.WriteByte(self.IsCenterPivoted)
-		for MeshModule in self.MeshModules: MeshModule.Write(Buffer)
-		return self
-
-
-
-
-
-class DrwResourceMeta():
-	"""DrwResourceMeta class"""
-	def __init__(self) -> None:
-		"""Initializes the DrwResourceMeta"""
-		self.Unknown: List[int] = [0, 0]
-		self.Length: int = 0
-		self.Hash: str = ""
-
-	def Read(self, Buffer: FileReader) -> 'DrwResourceMeta':
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('Bi', self.version, self.box_count))
+		for box in self.boxes:
+			box.write(file)
+		file.write(pack('i', self.sphere_count))
+		for sphere in self.spheres:
+			sphere.write(file)
+		file.write(pack('i', self.cylinder_count))
+		for cylinder in self.cylinders:
+			cylinder.write(file)
+
+	def size(self) -> int:
+		return (calcsize('Biii') + sum(box.size() for box in self.boxes) + sum(sphere.size() for sphere in self.spheres) + sum(cylinder.size() for cylinder in self.cylinders))
+
+@dataclass(eq=False, repr=False)
+class DrwResourceMeta:
+	unknown: List[int] = field(default_factory=lambda: [0, 0])
+	length: int = 0
+	hash: str = ""
+
+	def read(self, file: BinaryIO) -> 'DrwResourceMeta':
 		"""Reads the DrwResourceMeta from the buffer"""
-		self.Unknown = [Buffer.ReadInt() for _ in range(2)]
-		self.Length = Buffer.ReadInt()
-		self.Hash = Buffer.ReadString(32)
+		self.unknown = list(unpack('2i', file.read(calcsize('2i'))))
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		self.hash = file.read(self.length).decode('utf-8').strip('\x00')
 		return self
 
-	def Write(self, Buffer: FileWriter) -> 'DrwResourceMeta':
+	def write(self, file: BinaryIO) -> None:
 		"""Writes the DrwResourceMeta to the buffer"""
-		for _Unknown in self.Unknown: Buffer.WriteInt(_Unknown)
-		Buffer.WriteInt(self.Length)
-		Buffer.WriteString(self.Hash)
+		file.write(pack(f'2ii{self.length}s', *self.unknown, self.length, self.hash.encode('utf-8')))
+
+	def size(self) -> int:
+		"""Returns the size of the DrwResourceMeta"""
+		return calcsize(f'2ii{self.length}s')
+
+@dataclass(eq=False, repr=False)
+class CGeoPrimitiveContainer:
+	"""CGeoPrimitiveContainer class"""
+
+	def read(self, file: BinaryIO) -> 'CGeoPrimitiveContainer':
+		"""Reads the CGeoPrimitiveContainer from the buffer"""
+		# Add code here if you need to read specific data for this class
 		return self
 
-	def Size(self) -> int:
-		"""Returns the size of the DrwResourceMeta"""
-		return 12 + self.Length
-
-class CGeoPrimitiveContainer():
-	"""CGeoPrimitiveContainer class"""
-	def __init__(self) -> None:
-		"""Initializes the CGeoPrimitiveContainer"""
+	def write(self, file: BinaryIO) -> 'CGeoPrimitiveContainer':
+		"""Writes the CGeoPrimitiveContainer to the buffer"""
 		pass
 
-	def Read(self, Buffer: FileReader) -> 'CGeoPrimitiveContainer':
-		"""Reads the CGeoPrimitiveContainer from the buffer"""
-		return self
-
-	def Write(self, Buffer: FileWriter) -> 'CGeoPrimitiveContainer':
-		"""Writes the CGeoPrimitiveContainer to the buffer"""
-		return self
-
-	def Size(self) -> int:
+	def size(self) -> int:
 		"""Returns the size of the CGeoPrimitiveContainer"""
 		return 0
 
+@dataclass(eq=False, repr=False)
+class DRS:
+	operator: object = None
+	context: object = None
+	keywords: object = None
+	magic: int = -981667554
+	number_of_models: int = 1
+	node_information_offset: int = 41
+	node_hierarchy_offset: int = 20
+	data_offset: int = 73
+	node_count: int = 1
+	nodes: List[Node] = field(default_factory=lambda: [RootNode()])
+	node_informations: List[Union[NodeInformation, RootNodeInformation]] = field(default_factory=lambda: [RootNodeInformation()])
+	animation_set_node: Node = None
+	cdsp_mesh_file_node: Node = None
+	cgeo_mesh_node: Node = None
+	csk_skin_info_node: Node = None
+	csk_skeleton_node: Node = None
+	animation_timings_node: Node = None
+	joint_map_node: Node = None
+	cgeo_obb_tree_node: Node = None
+	drw_resource_meta_node: Node = None
+	cgeo_primitive_container_node: Node = None
+	collision_shape_node: Node = None
+	effect_set_node: Node = None
+	mesh_set_grid_node: Node = None
+	cdrw_locator_list_node: Node = None
+	# animation_set: AnimationSet = None
+	cdsp_mesh_file: CDspMeshFile = None
+	cgeo_mesh: CGeoMesh = None
+	csk_skin_info: CSkSkinInfo = None
+	csk_skeleton: CSkSkeleton = None
+	joints: CDspJointMap = None
+	cgeo_obb_tree: CGeoOBBTree = None
+	drw_resource_meta: DrwResourceMeta = None
+	cgeo_primitive_container: CGeoPrimitiveContainer = None
+	collision_shape: CollisionShape = None
+	# mesh_set_grid: MeshSetGrid = None
+
+	def read(self, file_name: str) -> 'DRS':
+		reader = FileReader(file_name)
+		self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count = unpack('iiiii', reader.read(calcsize('iiiii')))
+
+		if self.magic != -981667554 or self.node_count < 1:
+			raise TypeError(f"This is not a valid file. Magic: {self.magic}, NodeCount: {self.node_count}")
+
+		reader.seek(self.node_information_offset)
+		self.node_informations[0] = RootNodeInformation().read(reader)
+
+		node_information_map = {
+			# -475734043: 'animation_set_node',
+			-1900395636: 'cdsp_mesh_file_node',
+			100449016: 'cgeo_mesh_node',
+			# -761174227: 'csk_skin_info_node',
+			# -2110567991: 'csk_skeleton_node',
+			# -1403092629: 'animation_timings_node',
+			-1340635850: 'joint_map_node',
+			-933519637: 'cgeo_obb_tree_node',
+			-183033339: 'drw_resource_meta_node',
+			1396683476: 'cgeo_primitive_container_node',
+			268607026: 'collision_shape_node',
+			# 688490554: 'effect_set_node',
+			# 154295579: 'mesh_set_grid_node',
+			735146985: 'cdrw_locator_list_node'
+		}
+
+		for _ in range(self.node_count - 1):
+			node_info = NodeInformation().read(reader)
+			setattr(self, node_information_map.get(node_info.magic, ''), node_info)
+
+		reader.seek(self.node_hierarchy_offset)
+		self.nodes[0] = RootNode().read(reader)
+
+		node_map = {
+			# "AnimationSet": 'animation_set_node',
+			"CDspMeshFile": 'cdsp_mesh_file_node',
+			"CGeoMesh": 'cgeo_mesh_node',
+			# "CSkSkinInfo": 'csk_skin_info_node',
+			# "CSkSkeleton": 'csk_skeleton_node',
+			# "AnimationTimings": 'animation_timings_node',
+			"CDspJointMap": 'joint_map_node',
+			"CGeoOBBTree": 'cgeo_obb_tree_node',
+			"DrwResourceMeta": 'drw_resource_meta_node',
+			"CGeoPrimitiveContainer": 'cgeo_primitive_container_node',
+			"collisionShape": 'collision_shape_node',
+			# "EffectSet": 'effect_set_node',
+			# "MeshSetGrid": 'mesh_set_grid_node',
+			"CDrwLocatorList": 'cdrw_locator_list_node'
+		}
+
+		for _ in range(self.node_count - 1):
+			node = Node().read(reader)
+			setattr(self, node_map.get(node.name, ''), node)
+
+		for key, value in node_map.items():
+			# remove _node from the value
+			node_info = getattr(self, value, None)
+			index = value.replace('_node', '')
+			if node_info is not None:
+				reader.seek(node_info.offset)
+				setattr(self, index, globals()[key]().read(reader))
+
+		reader.close()
+		return self
+
+	def push_node(self, name: str, data_object):
+		new_node = Node(self.node_count, name)
+		self.nodes.append(new_node)
+		self.node_information_offset += new_node.size()
+		self.data_offset += new_node.size()
+		self.node_informations[0].node_information_count += 1
+		self.push_node_information(name, self.node_informations[0].node_information_count, data_object)
+		self.node_count += 1
+
+	def push_node_information(self, name: str, identifier: int, data_object):
+		new_node_information = NodeInformation(name, identifier, data_object)
+		self.node_informations.append(new_node_information)
+		self.data_offset += new_node_information.size()
+
+	def save(self, file_name: str):
+		writer = FileWriter(file_name + "_new.drs")
+		writer.write(pack('iiiii', self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count))
+
+		for node in self.nodes:
+			node.write(writer)
+
+		for node_info in self.node_informations:
+			if node_info.data_object is None:
+				node_info.write(writer)
+				continue
+			node_info.update_offset(self.data_offset)
+			self.data_offset += node_info.node_size
+			node_info.write(writer)
+
+		for node_info in self.node_informations:
+			if node_info.data_object is not None:
+				node_info.data_object.write(writer)
+
+		writer.close()
+
+# class Constraint():
+# 	"""Constraint"""
+# 	def __init__(self) -> None:
+# 		"""Constraint Constructor"""
+# 		self.Revision: int
+# 		self.LeftAngle: float
+# 		self.RightAngle: float
+# 		self.LeftDampStart: float
+# 		self.RightDamStart: float
+# 		self.DampRatio: float
+
+# 	def read(self, file: BinaryIO) -> 'Constraint':
+# 		"""Reads the Constraint from the buffer"""
+# 		self.Revision = Buffer.ReadShort()
+# 		if self.Revision == 1:
+# 			self.LeftAngle = Buffer.ReadFloat()
+# 			self.RightAngle = Buffer.ReadFloat()
+# 			self.LeftDampStart = Buffer.ReadFloat()
+# 			self.RightDamStart = Buffer.ReadFloat()
+# 			self.DampRatio = Buffer.ReadFloat()
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'Constraint':
+# 		"""Writes the Constraint to the buffer"""
+# 		Buffer.WriteShort(self.Revision)
+# 		Buffer.WriteFloat(self.LeftAngle)
+# 		Buffer.WriteFloat(self.RightAngle)
+# 		Buffer.WriteFloat(self.LeftDampStart)
+# 		Buffer.WriteFloat(self.RightDamStart)
+# 		Buffer.WriteFloat(self.DampRatio)
+# 		return self
+
+# class IKAtlas():
+# 	"""IKAtlas"""
+# 	def __init__(self) -> None:
+# 		"""IKAtlas Constructor"""
+# 		self.Identifier: int
+# 		self.Version: int
+# 		self.Axis: int
+# 		self.ChainOrder: int
+# 		self.Constraints: List[Constraint]
+# 		self.PurposeFlags: int
+
+# 	def read(self, file: BinaryIO) -> 'IKAtlas':
+# 		"""Reads the IKAtlas from the buffer"""
+# 		self.Identifier = Buffer.ReadInt()
+# 		self.Version = Buffer.ReadShort()
+# 		if self.Version >= 1:
+# 			self.Axis = Buffer.ReadInt()
+# 			self.ChainOrder = Buffer.ReadInt()
+# 			self.Constraints = [Constraint().Read(Buffer) for _ in range(3)]
+# 			if self.Version >= 2:
+# 				self.PurposeFlags = Buffer.ReadShort()
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'IKAtlas':
+# 		"""Writes the IKAtlas to the buffer"""
+# 		Buffer.WriteInt(self.Identifier)
+# 		Buffer.WriteShort(self.Version)
+# 		Buffer.WriteInt(self.Axis)
+# 		Buffer.WriteInt(self.ChainOrder)
+# 		for _Constraint in self.Constraints:
+# 			_Constraint.Write(Buffer)
+# 		Buffer.WriteShort(self.PurposeFlags)
+# 		return self
+	
+
+# class ModeAnimationKey():
+# 	"""ModeAnimationKey"""
+# 	def __init__(self, animation_file_name: str = "") -> None:
+# 		"""ModeAnimationKey Constructor"""
+# 		self.Type: int = 6 # TODO: Is this always 6?
+# 		self.Length: int = 11
+# 		self.File: str = "Battleforge"
+# 		self.Unknown: int = 2 # TODO: Is this always 2?
+# 		self.Unknown2: int = 3 # TODO: Is this always 3?
+# 		self.VisJob: int = 0 # Short. 0 for Animated Objects else it can be used to link this animation key to an animation tag ID from the AnimationTimings
+# 		self.Unknown3: int = 3 # TODO: Is this always 3?
+# 		self.Unknown4: int = 0 # Short. TODO: Is this always 0?
+# 		self.VariantCount: int = 1 # 1 for animated objects, units can have more variants per animation if needed.
+# 		self.AnimationSetVariants: List[AnimationSetVariant] = []
+# 		if animation_file_name != "":
+# 			for _ in range(self.VariantCount):
+# 				self.AnimationSetVariants.append(AnimationSetVariant(animation_file_name=animation_file_name))
+
+# 	def Read(self, Buffer: FileReader, UK: int) -> 'ModeAnimationKey':
+# 		"""Reads the ModeAnimationKey from the buffer"""
+# 		if UK != 2:
+# 			self.Type = Buffer.ReadInt()
+# 		else:
+# 			self.Type = 2
+# 		self.Length = Buffer.ReadInt()
+# 		self.File = Buffer.ReadString(self.Length)
+# 		self.Unknown = Buffer.ReadInt()
+# 		if self.Type == 1:
+# 			self.Unknown2 = [Buffer.ReadByte() for _ in range(24)]
+# 		elif self.Type <= 5:
+# 			self.Unknown2 = [Buffer.ReadByte() for _ in range(6)]
+# 		elif self.Type == 6:
+# 			self.Unknown2 = Buffer.ReadInt()
+# 			self.VisJob = Buffer.ReadShort()
+# 			self.Unknown3 = Buffer.ReadInt()
+# 			self.Unknown4 = Buffer.ReadShort()
+# 		self.VariantCount = Buffer.ReadInt()
+# 		self.AnimationSetVariants = [AnimationSetVariant().Read(Buffer) for _ in range(self.VariantCount)]
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'ModeAnimationKey':
+# 		"""Writes the ModeAnimationKey to the buffer"""
+# 		Buffer.WriteInt(self.Type)
+# 		Buffer.WriteInt(self.Length)
+# 		Buffer.WriteString(self.File)
+# 		Buffer.WriteInt(self.Unknown)
+# 		Buffer.WriteInt(self.Unknown2)
+# 		Buffer.WriteShort(self.VisJob)
+# 		Buffer.WriteInt(self.Unknown3)
+# 		Buffer.WriteShort(self.Unknown4)
+# 		Buffer.WriteInt(self.VariantCount)
+# 		for _AnimationSetVariant in self.AnimationSetVariants:
+# 			_AnimationSetVariant.Write(Buffer)
+# 		return self
+	
+# 	def Size(self) -> int:
+# 		"""Returns the size of the ModeAnimationKey"""
+# 		add = 0
+# 		for Variant in self.AnimationSetVariants:
+# 			add += Variant.Size()
+# 		return 39 + add
+
+# class AnimationMarker():
+# 	"""AnimationMarker"""
+# 	def __init__(self) -> None:
+# 		"""AnimationMarker Constructor"""
+# 		self.Class: int
+# 		self.Time: float
+# 		self.Direction: Vector
+# 		self.Position: Vector
+
+# 	def read(self, file: BinaryIO) -> 'AnimationMarker':
+# 		"""Reads the AnimationMarker from the buffer"""
+# 		self.Class = Buffer.ReadInt()
+# 		self.Time = Buffer.ReadFloat()
+# 		self.Direction = Buffer.ReadVector3()
+# 		self.Position = Buffer.ReadVector3()
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'AnimationMarker':
+# 		"""Writes the AnimationMarker to the buffer"""
+# 		Buffer.WriteInt(self.Class)
+# 		Buffer.WriteFloat(self.Time)
+# 		Buffer.WriteVector3(self.Direction)
+# 		Buffer.WriteVector3(self.Position)
+# 		return self
+
+# class AnimationMarkerSet():
+# 	"""AnimationMarkerSet"""
+# 	def __init__(self) -> None:
+# 		"""AnimationMarkerSet Constructor"""
+# 		self.AnimID: int
+# 		self.Length: int
+# 		self.Name: str
+# 		self.AnimationMarkerID: int
+# 		self.MarkerCount: int
+# 		self.AnimationMarkers: List[AnimationMarker]
+
+# 	def read(self, file: BinaryIO) -> 'AnimationMarkerSet':
+# 		"""Reads the AnimationMarkerSet from the buffer"""
+# 		self.AnimID = Buffer.ReadInt()
+# 		self.Length = Buffer.ReadInt()
+# 		self.Name = Buffer.ReadString(self.Length)
+# 		self.AnimationMarkerID = Buffer.ReadInt()
+# 		self.MarkerCount = Buffer.ReadInt()
+# 		self.AnimationMarkers = [AnimationMarker().Read(Buffer) for _ in range(self.MarkerCount)]
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'AnimationMarkerSet':
+# 		"""Writes the AnimationMarkerSet to the buffer"""
+# 		Buffer.WriteInt(self.AnimID)
+# 		Buffer.WriteInt(self.Length)
+# 		Buffer.WriteString(self.Name)
+# 		Buffer.WriteInt(self.AnimationMarkerID)
+# 		Buffer.WriteInt(self.MarkerCount)
+# 		for _AnimationMarker in self.AnimationMarkers:
+# 			_AnimationMarker.Write(Buffer)
+# 		return self
+
+# class AnimationSet():
+# 	"""AnimationSet"""
+# 	def __init__(self, animation_file_name: str = "") -> None:
+# 		"""AnimationSet Constructor"""
+# 		self.Length: int = 11
+# 		self.Magic: str = "Battleforge"
+# 		self.Version: int = 6
+# 		# Is used by the game to determine the animation speed when walking/running
+# 		self.DefaultRunSpeed: float = 4.8 # TODO: Add a way to show/edit this value in Blender
+# 		self.DefaultWalkSpeed: float = 2.4 # TODO: Add a way to show/edit this value in Blender
+# 		self.Revision: int = 6 # TODO: Is it all the time?
+# 		self.ModeAnimationKeyCount: int = 1 # How many different animations are there?
+# 		# TODO find out how often these values are used and for which object/unit/building types
+# 		self.ModeChangeType: int = 0
+# 		self.HoveringGround: int = 0
+# 		self.FlyBankScale: float = 1 # Changes for flying units
+# 		self.FlyAccelScale: float = 0 # Changes for flying units
+# 		self.FlyHitScale: float = 1 # Changes for flying units
+# 		self.AllignToTerrain: int = 0
+# 		# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# 		self.ModeAnimationKeys: List[ModeAnimationKey] = []
+# 		if animation_file_name != "": # So we can still import original drs files
+# 			# Assure the name end with '.ska'
+# 			if not animation_file_name.endswith(".ska"):
+# 				animation_file_name += ".ska"
+# 			for _ in range(self.ModeAnimationKeyCount):
+# 				self.ModeAnimationKeys.append(ModeAnimationKey(animation_file_name))
+# 		self.HasAtlas: int = 1 # 1 or 2
+# 		self.AtlasCount: int = 0 # Animated Objects: 0
+# 		self.IKAtlases: List[IKAtlas] = []
+# 		self.UKLen: int = 0 # TODO: Always 0?
+# 		self.UKInts: List[int] = []
+# 		self.Subversion: int = 2 # TODO: Always 2?
+# 		self.AnimationMarkerCount: int = 0 # Animated Objects: 0
+# 		self.AnimationMarkerSets: List[AnimationMarkerSet] = []
+# 		self.Unknown: int # Not needed
+# 		self.UnknownStructs: List[UnknownStruct] # Not needed
+
+# 	def read(self, file: BinaryIO) -> 'AnimationSet':
+# 		"""Reads the AnimationSet from the buffer"""
+# 		self.Length = Buffer.ReadInt()
+# 		self.Magic = Buffer.ReadString(self.Length)
+# 		self.Version = Buffer.ReadInt()
+# 		self.DefaultRunSpeed = Buffer.ReadFloat()
+# 		self.DefaultWalkSpeed = Buffer.ReadFloat()
+
+# 		if self.Version == 2:
+# 			self.ModeAnimationKeyCount = Buffer.ReadInt()
+# 		else:
+# 			self.Revision = Buffer.ReadInt()
+
+# 		if self.Version >= 6:
+# 			if self.Revision >= 2:
+# 				self.ModeChangeType = Buffer.ReadByte()
+# 				self.HoveringGround = Buffer.ReadByte()
+
+# 			if self.Revision >= 5:
+# 				self.FlyBankScale = Buffer.ReadFloat()
+# 				self.FlyAccelScale = Buffer.ReadFloat()
+# 				self.FlyHitScale = Buffer.ReadFloat()
+
+# 			if self.Revision >= 6:
+# 				self.AllignToTerrain = Buffer.ReadByte()
+
+# 		UK:int = 0
+
+# 		if self.Version == 2:
+# 			UK = Buffer.ReadInt()
+# 		else:
+# 			self.ModeAnimationKeyCount = Buffer.ReadInt()
+
+# 		self.ModeAnimationKeys = [ModeAnimationKey().Read(Buffer, UK) for _ in range(self.ModeAnimationKeyCount)]
+
+# 		if self.Version >= 3:
+# 			self.HasAtlas = Buffer.ReadShort()
+
+# 			if self.HasAtlas >= 1:
+# 				self.AtlasCount = Buffer.ReadInt()
+# 				self.IKAtlases = [IKAtlas().Read(Buffer) for _ in range(self.AtlasCount)]
+
+# 			if self.HasAtlas >= 2:
+# 				self.UKLen = Buffer.ReadInt()
+# 				self.UKInts = [Buffer.ReadInt() for _ in range(self.UKLen * 3)]
+
+# 		if self.Version >= 4:
+# 			self.Subversion = Buffer.ReadShort()
+
+# 			if self.Subversion == 2:
+# 				self.AnimationMarkerCount = Buffer.ReadInt()
+# 				self.AnimationMarkerSets = [AnimationMarkerSet().Read(Buffer) for _ in range(self.AnimationMarkerCount)]
+# 			elif self.Subversion == 1:
+# 				self.Unknown = Buffer.ReadInt()
+# 				self.UnknownStructs = [UnknownStruct().Read(Buffer) for _ in range(self.Unknown)]
+
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'AnimationSet':
+# 		"""Writes the AnimationSet to the buffer"""
+# 		Buffer.WriteInt(self.Length)
+# 		Buffer.WriteString(self.Magic)
+# 		Buffer.WriteInt(self.Version)
+# 		Buffer.WriteFloat(self.DefaultRunSpeed)
+# 		Buffer.WriteFloat(self.DefaultWalkSpeed)
+
+# 		if self.Version == 2:
+# 			Buffer.WriteInt(self.ModeAnimationKeyCount)
+# 		else:
+# 			Buffer.WriteInt(self.Revision)
+
+# 		if self.Version >= 6:
+# 			if self.Revision >= 2:
+# 				Buffer.WriteByte(self.ModeChangeType)
+# 				Buffer.WriteByte(self.HoveringGround)
+
+# 			if self.Revision >= 5:
+# 				Buffer.WriteFloat(self.FlyBankScale)
+# 				Buffer.WriteFloat(self.FlyAccelScale)
+# 				Buffer.WriteFloat(self.FlyHitScale)
+
+# 			if self.Revision >= 6:
+# 				Buffer.WriteByte(self.AllignToTerrain)
+
+# 		if self.Version == 2:
+# 			Buffer.WriteInt(0)
+# 		else:
+# 			Buffer.WriteInt(self.ModeAnimationKeyCount)
+
+# 		for _ModeAnimationKey in self.ModeAnimationKeys:
+# 			_ModeAnimationKey.Write(Buffer)
+
+# 		if self.Version >= 3:
+# 			Buffer.WriteShort(self.HasAtlas)
+
+# 			if self.HasAtlas >= 1:
+# 				Buffer.WriteInt(self.AtlasCount)
+# 				for _IKAtlas in self.IKAtlases:
+# 					_IKAtlas.Write(Buffer)
+
+# 			if self.HasAtlas >= 2:
+# 				Buffer.WriteInt(self.UKLen)
+# 				for UKInt in self.UKInts:
+# 					Buffer.WriteInt(UKInt)
+
+# 		if self.Version >= 4:
+# 			Buffer.WriteShort(self.Subversion)
+
+# 			if self.Subversion == 2:
+# 				Buffer.WriteInt(self.AnimationMarkerCount)
+# 				for _AnimationMarkerSet in self.AnimationMarkerSets:
+# 					_AnimationMarkerSet.Write(Buffer)
+# 			elif self.Subversion == 1:
+# 				Buffer.WriteInt(self.Unknown)
+# 				for _UnknownStruct in self.UnknownStructs:
+# 					_UnknownStruct.Write(Buffer)
+
+# 		return self
+
+# 	def Size(self) -> int:
+# 		"""Returns the size of the AnimationSet"""
+# 		add = 0
+# 		for Key in self.ModeAnimationKeys:
+# 			add += Key.Size()
+# 		return 62 + add
+
+# class AnimationSetVariant():
+# 	"""AnimationSetVariant"""
+# 	def __init__(self, weight: int = 100, animation_file_name: str = "") -> None:
+# 		"""AnimationSetVariant Constructor"""
+# 		self.Version: int = 7 # 6 or 7
+# 		self.Weight: int = weight # Maximum 100 in sum for all Variants
+# 		self.Length: int = len(animation_file_name)
+# 		self.File: str = animation_file_name
+# 		self.Start: float = 0 # TODO: Sometimes it isnt 0, why?
+# 		self.End: float = 1 # TODO: always 1?
+# 		self.AllowsIK: int = 1 # TODO: Most of the time 1?
+# 		self.Unknown2: int = 0 # TODO: Most of the time 0?
+
+# 	def read(self, file: BinaryIO) -> 'AnimationSetVariant':
+# 		"""Reads the AnimationSetVariant from the buffer"""
+# 		self.Version = Buffer.ReadInt()
+# 		self.Weight = Buffer.ReadInt()
+# 		self.Length = Buffer.ReadInt()
+# 		self.File = Buffer.ReadString(self.Length)
+
+# 		if self.Version >= 4:
+# 			self.Start = Buffer.ReadFloat()
+# 			self.End = Buffer.ReadFloat()
+
+# 		if self.Version >= 5:
+# 			self.AllowsIK = Buffer.ReadByte()
+
+# 		if self.Version >= 7:
+# 			self.Unknown2 = Buffer.ReadByte()
+
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'AnimationSetVariant':
+# 		"""Writes the AnimationSetVariant to the buffer"""
+# 		Buffer.WriteInt(self.Version)
+# 		Buffer.WriteInt(self.Weight)
+# 		Buffer.WriteInt(self.Length)
+# 		Buffer.WriteString(self.File)
+# 		Buffer.WriteFloat(self.Start)
+# 		Buffer.WriteFloat(self.End)
+# 		Buffer.WriteByte(self.AllowsIK)
+# 		Buffer.WriteByte(self.Unknown2)
+# 		return self
+
+# 	def Size(self) -> int:
+# 		"""Returns the size of the AnimationSetVariant"""
+# 		return 21 + self.Length
+
+# class SMeshState():
+# 	"""SMeshState"""
+# 	def __init__(self) -> None:
+# 		"""SMeshState Constructor"""
+# 		self.StateNum: int
+# 		self.HasFiles: int
+# 		self.UKFileLength: int
+# 		self.UKFile: str
+# 		self.DRSFileLength: int
+# 		self.DRSFile: str
+
+# 	def read(self, file: BinaryIO) -> 'SMeshState':
+# 		"""Reads the SMeshState from the buffer"""
+# 		self.StateNum = Buffer.ReadInt()
+# 		self.HasFiles = Buffer.ReadShort()
+# 		if self.HasFiles == 1:
+# 			self.UKFileLength = Buffer.ReadInt()
+# 			self.UKFile = Buffer.ReadString(self.UKFileLength)
+# 			self.DRSFileLength = Buffer.ReadInt()
+# 			self.DRSFile = Buffer.ReadString(self.DRSFileLength)
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'SMeshState':
+# 		"""Writes the SMeshState to the buffer"""
+# 		Buffer.WriteInt(self.StateNum)
+# 		Buffer.WriteShort(self.HasFiles)
+# 		if self.HasFiles == 1:
+# 			Buffer.WriteInt(self.UKFileLength)
+# 			Buffer.WriteString(self.UKFile)
+# 			Buffer.WriteInt(self.DRSFileLength)
+# 			Buffer.WriteString(self.DRSFile)
+# 		return self
+
+# class DestructionState():
+# 	"""DestructionState"""
+# 	def __init__(self) -> None:
+# 		"""DestructionState Constructor"""
+# 		self.StateNum: int
+# 		self.FileNameLength: int
+# 		self.FileName: str
+
+# 	def read(self, file: BinaryIO) -> 'DestructionState':
+# 		"""Reads the DestructionState from the buffer"""
+# 		self.StateNum = Buffer.ReadInt()
+# 		self.FileNameLength = Buffer.ReadInt()
+# 		self.FileName = Buffer.ReadString(self.FileNameLength)
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'DestructionState':
+# 		"""Writes the DestructionState to the buffer"""
+# 		Buffer.WriteInt(self.StateNum)
+# 		Buffer.WriteInt(self.FileNameLength)
+# 		Buffer.WriteString(self.FileName)
+# 		return self
+
+# class StateBasedMeshSet():
+# 	"""StateBasedMeshSet"""
+# 	def __init__(self) -> None:
+# 		"""StateBasedMeshSet Constructor"""
+# 		self.UKShort: int
+# 		self.UKInt: int
+# 		self.NumMeshStates: int
+# 		self.SMeshStates: List[SMeshState]
+# 		self.NumDestructionStates: int
+# 		self.DestructionStates: List[DestructionState]
+
+# 	def read(self, file: BinaryIO) -> 'StateBasedMeshSet':
+# 		"""Reads the StateBasedMeshSet from the buffer"""
+# 		self.UKShort = Buffer.ReadShort()
+# 		self.UKInt = Buffer.ReadInt()
+# 		self.NumMeshStates = Buffer.ReadInt()
+# 		self.SMeshStates = [SMeshState().Read(Buffer) for _ in range(self.NumMeshStates)]
+# 		self.NumDestructionStates = Buffer.ReadInt()
+# 		self.DestructionStates = [DestructionState().Read(Buffer) for _ in range(self.NumDestructionStates)]
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'StateBasedMeshSet':
+# 		"""Writes the StateBasedMeshSet to the buffer"""
+# 		Buffer.WriteShort(self.UKShort)
+# 		Buffer.WriteInt(self.UKInt)
+# 		Buffer.WriteInt(self.NumMeshStates)
+# 		for MeshState in self.SMeshStates:
+# 			MeshState.Write(Buffer)
+# 		Buffer.WriteInt(self.NumDestructionStates)
+# 		for _DestructionState in self.DestructionStates:
+# 			_DestructionState.Write(Buffer)
+# 		return self
+
+# class MeshGridModule():
+# 	"""MeshGridModule"""
+# 	def __init__(self) -> None:
+# 		"""MeshGridModule Constructor"""
+# 		self.UKShort: int
+# 		self.HasMeshSet: int
+# 		self.StateBasedMeshSet: StateBasedMeshSet
+
+# 	def read(self, file: BinaryIO) -> 'MeshGridModule':
+# 		"""Reads the MeshGridModule from the buffer"""
+# 		self.UKShort = Buffer.ReadShort()
+# 		self.HasMeshSet = Buffer.ReadByte()
+# 		if self.HasMeshSet == 1:
+# 			self.StateBasedMeshSet = StateBasedMeshSet().Read(Buffer)
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'MeshGridModule':
+# 		"""Writes the MeshGridModule to the buffer"""
+# 		Buffer.WriteShort(self.UKShort)
+# 		Buffer.WriteByte(self.HasMeshSet)
+# 		if self.HasMeshSet == 1:
+# 			self.StateBasedMeshSet.Write(Buffer)
+# 		return self
+
+# class Timing():
+# 	'''Timing'''
+# 	def __init__(self) -> None:
+# 		'''Timing Constructor'''
+# 		self.CastMs: int # Int
+# 		self.ResolveMs: int # Int
+# 		self.UK1: float # Float
+# 		self.UK2: float # Float
+# 		self.UK3: float # Float
+# 		self.AnimationMarkerID: int # Int
+# 		# NOTICE:
+# 		# When tying the visual animation to the game logic,
+# 		# the castMs/resolveMs seem to get converted into game ticks by simply dividing them by 100.
+# 		# So while the visual part of the animation is handled in milliseconds,
+# 		# the maximum precision for the game logic is in deciseconds/game ticks.
+# 		#
+# 		# Meaning of the variables below:
+# 		# For type Spawn:
+# 		# castMs is the duration it will take until the unit can be issued commands or lose damage immunity
+# 		# If castMs is for zero game ticks (< 100), then the animation is skipped entirely.
+# 		# If castMs is for exactly one game tick (100-199), it seems to bug out.
+# 		# Therefore the minimum value here should be 200, if you wish to play a spawn animation.
+# 		# resolveMs is the duration the spawn animation will play out for in total.
+# 		# This should match the total time from the .ska file, otherwise it looks weird.
+# 		# If you wish to slow down/speed up the animation, you can change the total time in the .ska file.
+# 		#
+# 		# For type CastResolve:
+# 		# castMs is the duration it will take the unit to start casting its ability (can still be aborted)
+# 		# If castMs is for zero game ticks (< 100), then the ability skips the cast stage
+# 		# and instantly moves onto the resolve stage.
+# 		# resolveMs is the duration it will take the unit to finish casting its ability (cannot be aborted)
+# 		# It seems the stage cannot be skipped and uses a minimum duration of 1 game tick,
+# 		# even if a value < 100 is specified.
+# 		# The animation is automatically slowed down/sped up based on these timings.
+# 		# The total time from the .ska file is ignored.
+# 		#
+# 		# For type ModeSwitch:
+# 		# castMs is the duration it will take the unit to start its mode switch animation.
+# 		# If castMs is for zero game ticks (< 100), then the mode switch is done instantly
+# 		# and also does not interrupt movement. During castMs, any commands are blocked.
+# 		# resolveMs seems to be ignored here. The unit can be issued new commands after the cast time.
+# 		# If you wish to slow down/speed up the animation, you can change the total time in the .ska file.
+# 		#
+# 		# For type Melee/WormMovement No experiments conducted yet.
+# 		#  castMs;
+# 		#  resolveMs;
+# 		# at uk1;
+# 		# at uk2;
+# 		# 
+# 		# Can be used to link an AnimationMarkerSet to a timing.
+# 		# Relevant field: AnimationMarkerSet.animationMarkerID
+# 		#
+# 		# Seems to be often used for Spawn animations.
+# 		# In cases where e.g. the animationTagID is used,
+# 		# the animationMarkerID usually not referenced anywhere.
+
+# class TimingVariant():
+# 	'''TimingVariant'''
+# 	def __init__(self) -> None:
+# 		'''TimingVariant Constructor'''
+# 		self.Weight: int # Byte. The weight of this variant. The higher the weight, the more likely it is to be chosen.
+# 		self.VariantIndex: int # Byte.
+# 		self.TimingCount: int # Short. The number of Timings for this Variant. Most of the time, this is 1.
+# 		self.Timings: List[Timing]
+
+# class AnimationTiming():
+# 	'''AnimationTiming'''
+# 	def __init__(self) -> None:
+# 		'''AnimationTiming Constructor'''
+# 		self.AnimationType: int = AnimationType['CastResolve']
+# 		self.AnimationTagID: int = 0
+# 		self.IsEnterModeAnimation: int = 0 # Short. This is 1 most of the time.
+# 		self.VariantCount: int # Short. The number of Animations for this Type/TagID combination.
+# 		self.TimingVariants: List[TimingVariant]
+
+# class StructV3():
+# 	'''StructV3'''
+# 	def __init__(self) -> None:
+# 		'''StructV3 Constructor'''
+# 		self.Length: int = 1
+# 		self.Unknown: List[int] = [0, 0]
+
+# 	def write(self, file: BinaryIO) -> 'StructV3':
+# 		'''Writes the StructV3 to the buffer'''
+# 		Buffer.WriteInt(self.Length)
+# 		for Unknown in self.Unknown:
+# 			Buffer.WriteInt(Unknown)
+# 		return self
+	
+# 	def Size(self) -> int:
+# 		'''Returns the size of the StructV3'''
+# 		return 12
+
+# class AnimationTimings():
+# 	"""AnimationTimings"""
+# 	def __init__(self):
+# 		"""AnimationTimings Constructor"""
+# 		self.Magic: int = 1650881127
+# 		self.Version: int = 4 # Short. 3 or 4
+# 		self.AnimationTimingCount: int = 0 # Short. Only used if there are multiple Animations.
+# 		self.AnimationTimings: List[AnimationTiming]
+# 		self.StructV3: StructV3 = StructV3()
+
+# 	def write(self, file: BinaryIO) -> 'AnimationTimings':
+# 		"""Writes the AnimationTimings to the buffer"""
+# 		Buffer.WriteInt(self.Magic)
+# 		Buffer.WriteShort(self.Version)
+# 		Buffer.WriteShort(self.AnimationTimingCount)
+# 		if self.AnimationTimingCount > 0:
+# 			# TODO
+# 			pass
+# 		self.StructV3.Write(Buffer)
+# 		return self
+	
+# 	def Size(self) -> int:
+# 		"""Returns the size of the AnimationTimings"""
+# 		return 8 + self.StructV3.Size()
+
+# class MeshSetGrid():
+# 	"""MeshSetGrid class"""
+# 	def __init__(self) -> None:
+# 		self.Revision: int
+# 		self.GridWidth: int
+# 		self.GridHeight: int
+# 		self.NameLength: int
+# 		self.Name: str
+# 		self.UUIDLength: int
+# 		self.UUID: str
+# 		self.GridRotation: int
+# 		self.GroundDecalLength: int
+# 		self.GroundDecal: str
+# 		self.UKString0Length: int
+# 		self.UKString0: str
+# 		self.UKString1Length: int
+# 		self.UKString1: str
+# 		self.ModuleDistance: float
+# 		self.IsCenterPivoted: int
+# 		self.MeshModules: List[MeshGridModule]
+
+# 	def read(self, file: BinaryIO) -> 'MeshSetGrid':
+# 		"""Reads the MeshSetGrid from the buffer"""
+# 		self.Revision = Buffer.ReadShort()
+# 		self.GridWidth = Buffer.ReadByte()
+# 		self.GridHeight = Buffer.ReadByte()
+# 		self.NameLength = Buffer.ReadInt()
+# 		self.Name = Buffer.ReadString(self.NameLength)
+# 		self.UUIDLength = Buffer.ReadInt()
+# 		self.UUID = Buffer.ReadString(self.UUIDLength)
+# 		self.GridRotation = Buffer.ReadShort()
+# 		self.GroundDecalLength = Buffer.ReadInt()
+# 		self.GroundDecal = Buffer.ReadString(self.GroundDecalLength)
+# 		self.UKString0Length = Buffer.ReadInt()
+# 		self.UKString0 = Buffer.ReadString(self.UKString0Length)
+# 		self.UKString1Length = Buffer.ReadInt()
+# 		self.UKString1 = Buffer.ReadString(self.UKString1Length)
+# 		self.ModuleDistance = Buffer.ReadFloat()
+# 		self.IsCenterPivoted = Buffer.ReadByte()
+# 		self.MeshModules = [MeshGridModule().Read(Buffer) for _ in range((self.GridWidth * 2 + 1) * (self.GridHeight * 2 + 1))]
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'MeshSetGrid':
+# 		"""Writes the MeshSetGrid to the buffer"""
+# 		Buffer.WriteShort(self.Revision)
+# 		Buffer.WriteByte(self.GridWidth)
+# 		Buffer.WriteByte(self.GridHeight)
+# 		Buffer.WriteInt(self.NameLength)
+# 		Buffer.WriteString(self.Name)
+# 		Buffer.WriteInt(self.UUIDLength)
+# 		Buffer.WriteString(self.UUID)
+# 		Buffer.WriteShort(self.GridRotation)
+# 		Buffer.WriteInt(self.GroundDecalLength)
+# 		Buffer.WriteString(self.GroundDecal)
+# 		Buffer.WriteInt(self.UKString0Length)
+# 		Buffer.WriteString(self.UKString0)
+# 		Buffer.WriteInt(self.UKString1Length)
+# 		Buffer.WriteString(self.UKString1)
+# 		Buffer.WriteFloat(self.ModuleDistance)
+# 		Buffer.WriteByte(self.IsCenterPivoted)
+# 		for MeshModule in self.MeshModules: MeshModule.Write(Buffer)
+# 		return self
+
+# AnimationType = {
+# 	"CastResolve": 0,
+# 	"Spawn": 1,
+# 	"Melee": 2,
+# 	"Channel": 3,
+# 	"ModeSwitch": 4, 
+# 	"WormMovement": 5,
+# }
+
+# class UnknownStruct():
+# 	"""UnknownStruct"""
+# 	def __init__(self) -> None:
+# 		"""UnknownStruct Constructor"""
+# 		self.Unknown: int
+# 		self.Length: int
+# 		self.Name: str
+# 		self.Unknown2: int
+# 		self.Unknown3: int
+# 		self.UnknownStructs: List[UnknownStruct2]
+
+# 	def read(self, file: BinaryIO) -> 'UnknownStruct':
+# 		"""Reads the UnknownStruct from the buffer"""
+# 		self.Unknown = Buffer.ReadInt()
+# 		self.Length = Buffer.ReadInt()
+# 		self.Name = Buffer.ReadString(self.Length)
+# 		self.Unknown2 = Buffer.ReadInt()
+# 		self.Unknown3 = Buffer.ReadInt()
+# 		self.UnknownStructs = [UnknownStruct2().Read(Buffer) for _ in range(self.Unknown3)]
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'UnknownStruct':
+# 		"""Writes the UnknownStruct to the buffer"""
+# 		Buffer.WriteInt(self.Unknown)
+# 		Buffer.WriteInt(self.Length)
+# 		Buffer.WriteString(self.Name)
+# 		Buffer.WriteInt(self.Unknown2)
+# 		Buffer.WriteInt(self.Unknown3)
+# 		for _UnknownStruct2 in self.UnknownStructs:
+# 			_UnknownStruct2.Write(Buffer)
+# 		return self
+	
+# class UnknownStruct2():
+# 	"""UnknownStruct2"""
+# 	def __init__(self) -> None:
+# 		"""UnknownStruct2 Constructor"""
+# 		self.UnknownInts: List[int]
+
+# 	def read(self, file: BinaryIO) -> 'UnknownStruct2':
+# 		"""Reads the UnknownStruct2 from the buffer"""
+# 		self.UnknownInts = [Buffer.ReadInt() for _ in range(5)]
+# 		return self
+
+# 	def write(self, file: BinaryIO) -> 'UnknownStruct2':
+# 		"""Writes the UnknownStruct2 to the buffer"""
+# 		for UnknownInt in self.UnknownInts:
+# 			Buffer.WriteInt(UnknownInt)
+# 		return self
