@@ -168,8 +168,8 @@ class VertexData:
 	bone_indices: List[int] = field(default_factory=lambda: [0] * 4)
 
 	def read(self, file: BinaryIO) -> 'VertexData':
-		self.weights, self.bone_indices = unpack('4f4i', file.read(calcsize('4f4i')))
-		self.weights, self.bone_indices = list(self.weights), list(self.bone_indices)
+		data = unpack('4f4i', file.read(calcsize('4f4i')))
+		self.weights, self.bone_indices = list(data[:4]), list(data[4:])
 		return self
 
 	def write(self, file: BinaryIO) -> None:
@@ -377,7 +377,7 @@ class BoneMatrix:
 
 @dataclass(eq=False, repr=False)
 class BoneVertex:
-	position: 'Vector3'
+	position: 'Vector3' = field(default_factory=Vector3)
 	parent: int = 0
 
 	def read(self, file: BinaryIO) -> 'BoneVertex':
@@ -392,17 +392,17 @@ class BoneVertex:
 	def size(self) -> int:
 		return self.position.size() + calcsize('i')
 	
-# class DRSBone():
-# 	"""docstring for DRSBone"""
-# 	def __init__(self) -> None:
-# 		self.SKAIdentifier: int
-# 		self.Identifier: int
-# 		self.Name: str
-# 		self.Parent: int = -1
-# 		self.BoneMatrix: Matrix
-# 		self.Children: List[int]
-# 		self.BindLoc: Vector
-# 		self.BindRot: Quaternion
+class DRSBone():
+	"""docstring for DRSBone"""
+	def __init__(self) -> None:
+		self.ska_identifier: int
+		self.identifier: int
+		self.name: str
+		self.parent: int = -1
+		self.bone_matrix: Matrix
+		self.children: List[int]
+		self.bind_loc: Vector
+		self.bind_rot: Quaternion
 
 @dataclass(eq=False, repr=False)
 class CSkSkeleton:
@@ -1237,8 +1237,8 @@ class DRS:
 			# -475734043: 'animation_set_node',
 			-1900395636: 'cdsp_mesh_file_node',
 			100449016: 'cgeo_mesh_node',
-			# -761174227: 'csk_skin_info_node',
-			# -2110567991: 'csk_skeleton_node',
+			-761174227: 'csk_skin_info_node',
+			-2110567991: 'csk_skeleton_node',
 			# -1403092629: 'animation_timings_node',
 			-1340635850: 'joint_map_node',
 			-933519637: 'cgeo_obb_tree_node',
@@ -1261,8 +1261,8 @@ class DRS:
 			# "AnimationSet": 'animation_set_node',
 			"CDspMeshFile": 'cdsp_mesh_file_node',
 			"CGeoMesh": 'cgeo_mesh_node',
-			# "CSkSkinInfo": 'csk_skin_info_node',
-			# "CSkSkeleton": 'csk_skeleton_node',
+			"CSkSkinInfo": 'csk_skin_info_node',
+			"CSkSkeleton": 'csk_skeleton_node',
 			# "AnimationTimings": 'animation_timings_node',
 			"CDspJointMap": 'joint_map_node',
 			"CGeoOBBTree": 'cgeo_obb_tree_node',

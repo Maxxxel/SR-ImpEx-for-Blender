@@ -106,10 +106,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 		# Check if the file is a DRS or a BMG file
 		if self.filepath.endswith(".drs"):
 			load_drs(context, **keywords)
-			# DRS.operator = self
-			# DRS.keywords = keywords
-			# DRS.context = context
-
 			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"):
 			# return load_bmg(self, context, **keywords)
