@@ -80,7 +80,7 @@ class RootNodeInformation:
 
 	def size(self) -> int:
 		return calcsize('16biiii')
-	
+
 @dataclass(eq=False, repr=False)
 class NodeInformation:
 	"""Node Information"""
@@ -109,7 +109,7 @@ class NodeInformation:
 
 	def size(self) -> int:
 		return calcsize('iiii16b')
-	
+
 @dataclass(eq=False, repr=False)
 class Vertex:
 	position: Optional[List[float]] = field(default_factory=list)
@@ -238,7 +238,7 @@ class Matrix4x4:
 
 	def size(self) -> int:
 		return calcsize('16f')
-	
+
 @dataclass(eq=False, repr=False)
 class Matrix3x3:
 	matrix: tuple = ((0, 0, 0), (0, 0, 0), (0, 0, 0))
@@ -371,7 +371,7 @@ class BoneMatrix:
 		for bone_vertex in self.bone_vertices:
 			bone_vertex.write(file)
 		return self
-	
+
 	def size(self) -> int:
 		return sum(bv.size() for bv in self.bone_vertices)
 
@@ -391,7 +391,7 @@ class BoneVertex:
 
 	def size(self) -> int:
 		return self.position.size() + calcsize('i')
-	
+
 class DRSBone():
 	"""docstring for DRSBone"""
 	def __init__(self) -> None:
@@ -455,7 +455,7 @@ class Texture:
 
 	def size(self) -> int:
 		return calcsize(f'ii{self.length}s i')
-	
+
 @dataclass(eq=False, repr=False)
 class Textures:
 	length: int = 0
@@ -924,7 +924,7 @@ class CGeoOBBTree:
 
 	def size(self) -> int:
 		return calcsize('iiii') + sum(obb_node.size() for obb_node in self.obb_nodes) + sum(face.size() for face in self.faces)
-	
+
 @dataclass(eq=False, repr=False)
 class JointGroup:
 	joint_count: int = 0
@@ -1389,7 +1389,7 @@ class DRS:
 # 			_Constraint.Write(Buffer)
 # 		Buffer.WriteShort(self.PurposeFlags)
 # 		return self
-	
+
 
 # class ModeAnimationKey():
 # 	"""ModeAnimationKey"""
@@ -1445,7 +1445,7 @@ class DRS:
 # 		for _AnimationSetVariant in self.AnimationSetVariants:
 # 			_AnimationSetVariant.Write(Buffer)
 # 		return self
-	
+
 # 	def Size(self) -> int:
 # 		"""Returns the size of the ModeAnimationKey"""
 # 		add = 0
@@ -1882,7 +1882,7 @@ class DRS:
 # 		#  resolveMs;
 # 		# at uk1;
 # 		# at uk2;
-# 		# 
+# 		#
 # 		# Can be used to link an AnimationMarkerSet to a timing.
 # 		# Relevant field: AnimationMarkerSet.animationMarkerID
 # 		#
@@ -1922,7 +1922,7 @@ class DRS:
 # 		for Unknown in self.Unknown:
 # 			Buffer.WriteInt(Unknown)
 # 		return self
-	
+
 # 	def Size(self) -> int:
 # 		'''Returns the size of the StructV3'''
 # 		return 12
@@ -1947,7 +1947,7 @@ class DRS:
 # 			pass
 # 		self.StructV3.Write(Buffer)
 # 		return self
-	
+
 # 	def Size(self) -> int:
 # 		"""Returns the size of the AnimationTimings"""
 # 		return 8 + self.StructV3.Size()
@@ -2020,7 +2020,7 @@ class DRS:
 # 	"Spawn": 1,
 # 	"Melee": 2,
 # 	"Channel": 3,
-# 	"ModeSwitch": 4, 
+# 	"ModeSwitch": 4,
 # 	"WormMovement": 5,
 # }
 
@@ -2055,7 +2055,7 @@ class DRS:
 # 		for _UnknownStruct2 in self.UnknownStructs:
 # 			_UnknownStruct2.Write(Buffer)
 # 		return self
-	
+
 # class UnknownStruct2():
 # 	"""UnknownStruct2"""
 # 	def __init__(self) -> None:

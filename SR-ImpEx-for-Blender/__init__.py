@@ -10,6 +10,15 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
+import os
+from os.path import dirname, realpath
+import importlib
+import inspect
+import bpy
+from bpy.props import StringProperty, BoolProperty
+from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
+from .drs_utility import load_drs, debug_drs_file
+from .drs_definitions import DRS
 
 bl_info = {
 	"name" : "Battleforge Tools",
@@ -25,10 +34,6 @@ bl_info = {
 
 #################################################
 # ALX MODULE AUTO-LOADER
-import bpy
-import os
-import importlib
-
 folder_blacklist = ["__pycache__", "alxoverhaul_updater"]
 file_blacklist = ["__init__.py", "addon_updater_ops", "addon_updater.py", "Extras.py", ]
 
@@ -59,8 +64,6 @@ for folder_file_batch in addon_files:
 				reload_line = f"{file} = importlib.reload({file})"
 				exec(reload_line)
 
-import inspect
-
 class_blacklist = ["PSA_UL_SequenceList"]
 
 bpy_class_object_list = tuple(bpy_class[1] for bpy_class in inspect.getmembers(bpy.types, inspect.isclass) if (bpy_class not in class_blacklist))
@@ -68,14 +71,6 @@ alx_class_object_list = tuple(alx_class[1] for file_batch in addon_files for alx
 
 AlxClassQueue = alx_class_object_list
 #################################################
-
-import os
-from os.path import dirname, realpath
-from bpy.props import StringProperty, BoolProperty
-from bpy.app.handlers import persistent
-from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
-from .drs_utility import load_drs
-from .drs_definitions import DRS
 
 is_dev_version = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -90,11 +85,13 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	apply_transform: BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True) # type: ignore
 	clear_scene: BoolProperty(name="Clear Scene", description="Clear the scene before importing", default=True) # type: ignore
 	create_size_reference: BoolProperty(name="Create Size References", description="Creates multiple size references in the scene", default=False) # type: ignore
+	import_collision_shape: BoolProperty(name="Import Collision Shape", description="Import collision shapes", default=True) # type: ignore
 
 	def execute(self, context):
-		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4() # type: ignore
+		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4() # type: ignore # pylint disable=no-member
 		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "clear_scene", "create_size_reference"))
 		keywords["global_matrix"] = global_matrix
+		keywords["import_collision_shape"] = self.import_collision_shape
 
 		if self.clear_scene:
 			# Delete all collections
@@ -104,10 +101,10 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 			bpy.ops.object.delete(use_global=False)
 
 		# Check if the file is a DRS or a BMG file
-		if self.filepath.endswith(".drs"):
+		if self.filepath.endswith(".drs"): # pylint disable=no-member
 			load_drs(context, **keywords)
 			return {'FINISHED'}
-		elif self.filepath.endswith(".bmg"):
+		elif self.filepath.endswith(".bmg"): # pylint disable=no-member
 			# return load_bmg(self, context, **keywords)
 			return {'FINISHED'}
 		else:
@@ -125,7 +122,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	keep_debug_collections : BoolProperty(name="Keep Debug Collection", description="Keep debug collection in the scene", default=False) # type: ignore # ignore
 
 	def execute(self, context):
-		keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
+		# keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
 		# return save_drs(self, context, **keywords)
 		return {'FINISHED'}
 
@@ -134,7 +131,7 @@ class NewBFScene(bpy.types.Operator):
 	bl_idname = "scene.new_bf_scene"
 	bl_label = "New Battleforge Scene"
 	bl_options = {'REGISTER', 'UNDO'}
-	
+
 	def execute(self, context):
 		# Load the default scene from resources
 		bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
