@@ -1,16 +1,16 @@
 import os
-import mathutils
 from math import radians
+import mathutils
 import bmesh
 import bpy
 # from bpy_extras.image_utils import load_image
 from mathutils import Matrix, Vector
-from .drs_definitions import DRS, CDspMeshFile, CylinderShape, Face, BattleforgeMesh, DRSBone, CSkSkeleton, Bone, BoneVertex, CollisionShape, BoxShape, SphereShape
+from .drs_definitions import DRS, CDspMeshFile, CylinderShape, Face, BattleforgeMesh, DRSBone, CSkSkeleton, Bone, BoneVertex, BoxShape, SphereShape
 from .drs_material import DRSMaterial
 
 def debug_drs_file(filepath: str) -> 'DRS':
-	base_name = os.path.basename(filepath).split(".")[0]
-	dir_name = os.path.dirname(filepath)
+	# base_name = os.path.basename(filepath).split(".")[0]
+	# dir_name = os.path.dirname(filepath)
 	drs_file: DRS = DRS().read(filepath)
 	return drs_file
 
@@ -60,12 +60,14 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 		bpy.ops.object.mode_set(mode='OBJECT')
 		# Build the Skeleton
 		build_skeleton(bone_list, armature_data)
-		# Apply the Transformations to the Armature Object
-		apply_transformations(armature_object, global_matrix, apply_transform)
+		# Add the Animations to the Armature Object
+		if drs_file.animation_set is not None:
+			# Apply the Transformations to the Armature Object
+			apply_transformations(armature_object, global_matrix, apply_transform)
 
 	for i in range(drs_file.cdsp_mesh_file.mesh_count):
 		# Create the Mesh Data
-		mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, i, base_name, dir_name)
+		mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, i, dir_name)
 		# Create the Mesh Object and add the Mesh Data to it
 		mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{i}", mesh_data)
 		# Link the Mesh Object to the Source Collection
@@ -104,7 +106,7 @@ def apply_transformations(obj: bpy.types.Object, global_matrix: Matrix, apply_tr
 		obj.matrix_world = global_matrix @ obj.matrix_world
 		obj.scale = (1, -1, 1)
 
-def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int, base_name: str, dir_name:str, state: bool = False, override_name: str = "") -> bpy.types.Mesh:
+def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int, dir_name:str) -> bpy.types.Mesh:
 	battleforge_mesh_data: BattleforgeMesh = mesh_file.meshes[mesh_index]
 	# _name = override_name if (override_name != '') else f"State_{i}" if (state == True) else f"{i}"
 	mesh_data = bpy.data.meshes.new(f"MeshData_{mesh_index}")
@@ -135,7 +137,7 @@ def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int, base_name: str,
 	mesh_data.uv_layers.new().data.foreach_set('uv', uv_list)
 
 	# Create the Material
-	material_data = create_material(dir_name, mesh_index, base_name, battleforge_mesh_data)
+	material_data = create_material(dir_name, mesh_index, battleforge_mesh_data)
 	# Assign the Material to the Mesh
 	mesh_data.materials.append(material_data)
 
@@ -216,8 +218,8 @@ def build_skeleton(bone_list: list[DRSBone], armature: bpy.types.Armature) -> No
 		bone_data.bind_loc = matrix_local.to_translation()
 		bone_data.bind_rot = matrix_local.to_quaternion()
 
-def create_material(dir_name: str, mesh_index: int, base_name: str, mesh_data: BattleforgeMesh, force_new: bool = True) -> bpy.types.Material:
-	drs_material: 'DRS_Material' = DRSMaterial(f"MaterialData_{mesh_index}")
+def create_material(dir_name: str, mesh_index: int, mesh_data: BattleforgeMesh) -> bpy.types.Material:
+	drs_material: 'DRSMaterial' = DRSMaterial(f"MaterialData_{mesh_index}")
 
 	for texture in mesh_data.textures.textures:
 		if texture.length > 0:
@@ -336,8 +338,8 @@ def create_collision_shape_cylinder_object(cylinder_shape: CylinderShape, index:
 	cylinder_shape_mesh_data = bpy.data.meshes.new('CollisionCylinderMesh')
 	cylinder_object = bpy.data.objects.new(f"CollisionCylinder_{index}", cylinder_shape_mesh_data)
 
-	bm = bmesh.new() # type: ignore
-	segments = 32      # Number of segments around the cylinder
+	bm = bmesh.new() # pylint: disable=E1111
+	segments = 32
 	radius = cylinder_shape.geo_cylinder.radius
 	depth = cylinder_shape.geo_cylinder.height
 
@@ -389,8 +391,8 @@ def create_collision_shape_sphere_object(sphere_shape: SphereShape, index: int) 
 	sphere_shape_mesh_data = bpy.data.meshes.new('CollisionSphereMesh')
 	sphere_object = bpy.data.objects.new(f"CollisionSphere_{index}", sphere_shape_mesh_data)
 
-	bm = bmesh.new()
-	segments = 32      # Number of segments around the sphere
+	bm = bmesh.new() # pylint: disable=E1111
+	segments = 32
 	radius = sphere_shape.geo_sphere.radius
 	# center = sphere_shape.geo_sphere.center # should always be (0, 0, 0) so we ignore it
 

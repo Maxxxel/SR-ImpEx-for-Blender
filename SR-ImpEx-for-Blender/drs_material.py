@@ -1,7 +1,7 @@
+import os
+from mathutils import Vector
 import bpy
 from bpy_extras.image_utils import load_image
-from mathutils import Vector
-import os
 
 SOCKET_SHADER = "NodeSocketShader"
 SOCKET_COLOR = "NodeSocketColor"
@@ -50,7 +50,7 @@ class DRSMaterial:
 		self.setup_node_tree_inputs_outputs(self.node_tree)
 
 	def setup_node_tree_inputs_outputs(self, node_tree: bpy.types.NodeTree) -> None:
-		if bpy.app.version[0] == 3:
+		if bpy.app.version[0] == 3: # pylint: disable=E1136
 			node_tree.inputs.new(name="IN-Color Map", type=SOCKET_COLOR)
 			node_tree.inputs.new(name="IN-Color Map Alpha", type=SOCKET_FLOAT)
 			node_tree.inputs.new(name="IN-Metallic [red]", type=SOCKET_COLOR)
@@ -58,7 +58,7 @@ class DRSMaterial:
 			node_tree.inputs.new(name="IN-Emission [alpha]", type=SOCKET_COLOR)
 			node_tree.inputs.new(name="IN-Normal Map", type=SOCKET_NORMAL)
 			node_tree.outputs.new(name="OUT-DRS Shader", type=SOCKET_SHADER)
-		elif bpy.app.version[0] == 4:
+		elif bpy.app.version[0] == 4: # pylint: disable=E1136
 			node_tree.interface.clear()
 			node_tree.interface.new_socket(name="IN-Color Map", in_out="INPUT", socket_type=SOCKET_COLOR, parent=None)
 			node_tree.interface.new_socket(name="IN-Color Map Alpha", in_out="INPUT", socket_type=SOCKET_FLOAT, parent=None)
@@ -75,7 +75,7 @@ class DRSMaterial:
 		self.shader = self.node_tree.nodes.new("ShaderNodeBsdfPrincipled")
 		self.shader.location = Vector((0.0, 0.0))
 		self.shader.inputs.get("IOR").default_value = 1.0
-		if bpy.app.version[0] == 3:
+		if bpy.app.version[0] == 3: # pylint: disable=E1136
 			self.shader.inputs.get("Specular").default_value = 0
 
 		self.outputs = self.node_tree.nodes.new("NodeGroupOutput")
@@ -99,9 +99,9 @@ class DRSMaterial:
 		self.node_tree.links.new(self.inputs.outputs.get("IN-Metallic [red]"), self.shader.inputs.get("Metallic"))
 		self.node_tree.links.new(self.inputs.outputs.get("IN-Roughness [green]"), self.shader.inputs.get("Roughness"))
 		self.node_tree.links.new(self.inputs.outputs.get("IN-Emission [alpha]"), self.shader.inputs.get("Emission Strength"))
-		if bpy.app.version[0] in [3]:
+		if bpy.app.version[0] in [3]: # pylint: disable=E1136
 			self.node_tree.links.new(self.inputs.outputs.get("IN-Emission [alpha]"), self.shader.inputs.get("Emission"))
-		if bpy.app.version[0] in [4]:
+		if bpy.app.version[0] in [4]: # pylint: disable=E1136
 			self.node_tree.links.new(self.inputs.outputs.get("IN-Color Map"), self.shader.inputs.get("Emission Color"))
 
 	def create_image_nodes(self) -> None:
