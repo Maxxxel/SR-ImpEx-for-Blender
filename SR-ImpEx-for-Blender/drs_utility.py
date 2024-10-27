@@ -9,12 +9,6 @@ from .drs_definitions import DRS, CDspMeshFile, CylinderShape, Face, Battleforge
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA, SKAKeyframe
 
-def debug_drs_file(filepath: str) -> 'DRS':
-	# base_name = os.path.basename(filepath).split(".")[0]
-	# dir_name = os.path.dirname(filepath)
-	drs_file: DRS = DRS().read(filepath)
-	return drs_file
-
 def apply_transformations(obj: bpy.types.Object, global_matrix: Matrix, apply_transform: bool) -> None:
 	if apply_transform:
 		obj.matrix_world = global_matrix @ obj.matrix_world
@@ -621,60 +615,6 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 	bpy.ops.object.mode_set(mode='OBJECT')
 	# Print the Time Measurement
 	print(f"Time to load DRS: {time.time() - start_time}")
-
-# Debug the file by loading it, write a main
-# if __name__ == "__main__":
-# 	# Load ALL DRS files in given directory
-# 	# Create an array sorted by the amount of bones
-# 	# check how many duplicate bones the models have and create a ranking, like: only uniques, 2 duplicates, etc. with a counter
-# 	dir = "D:\\Games\\Skylords Reborn\\Mods\\Unpack\\bf1\\gfx\\units"
-# 	## Load all DRS files in the subdirectories, not main
-# 	files = []
-# 	for root, dirs, file in os.walk(dir):
-# 		for f in file:
-# 			if f.endswith(".drs"):
-# 				# Append full path
-# 				files.append(os.path.relpath(os.path.join(root, f), dir))
-	
-# 	models_by_bone_count = {}
-# 	models_by_duplicate_bones = {}
-
-# 	for file in files:
-# 		print(f"Loading: {file}")
-# 		drs_file = debug_drs_file(os.path.join(dir, file))
-# 		if drs_file.csk_skeleton is not None:
-
-# 			# Every Bone has a 4x4 Matrix. Check if there are bones withing the model with the same matrix. If so add the file name to the list of duplicate counts.
-# 			# Compare every matrix with every other matrix
-# 			duplicate_bones = 0
-# 			cskskeleton: CSkSkeleton = drs_file.csk_skeleton
-# 			for i in range(drs_file.csk_skeleton.bone_matrix_count):
-# 				matrix_a = cskskeleton.bone_matrices[i].bone_vertices
-# 				# Compare the bone matrix with every other bone matrix, every comaprisonr educes the total amount of comparisons by 1
-# 				for j in range(i + 1, drs_file.csk_skeleton.bone_matrix_count):
-# 					matrix_b = cskskeleton.bone_matrices[j].bone_vertices
-# 					# Compare the 4x4 matrix
-# 					if matrix_a[0].position.xyz == matrix_b[0].position.xyz and matrix_a[1].position.xyz == matrix_b[1].position.xyz and matrix_a[2].position.xyz == matrix_b[2].position.xyz and matrix_a[3].position.xyz == matrix_b[3].position.xyz:
-# 						duplicate_bones += 1
-# 						# Print the Bone Names, find by identifiert in the drs_file.csk_skeleton.bones array
-# 						bone_a = next((bone for bone in drs_file.csk_skeleton.bones if bone.identifier == i), None)
-# 						bone_b = next((bone for bone in drs_file.csk_skeleton.bones if bone.identifier == j), None)
-# 						print(f"Duplicate Bones: {bone_a.name} and {bone_b.name}")
-# 					# if same is True:
-# 					# 	duplicate_bones += 1
-# 					# 	print(f"Duplicate Bones: {i} and {j}")
-# 					# 	print(f"Matrix A: {matrix_a[0].position.xyz}, {matrix_a[1].position.xyz}, {matrix_a[2].position.xyz}, {matrix_a[3].position.xyz}")
-# 					# 	print(f"Matrix B: {matrix_b[0].position.xyz}, {matrix_b[1].position.xyz}, {matrix_b[2].position.xyz}, {matrix_b[3].position.xyz}")
-# 					# 	print(matrix_a[3].position.xyz == matrix_b[3].position.xyz)
-
-# 			if duplicate_bones not in models_by_duplicate_bones:
-# 				models_by_duplicate_bones[duplicate_bones] = []
-
-# 			models_by_duplicate_bones[duplicate_bones].append(file)
-# 			# Now we need to check every corresponding SKA File if the bones have different animation data
-
-# 	print("DONE")
- 
 
 # 1
 # 'skel_dummy_l\\unit_dummy_l_fire.drs'

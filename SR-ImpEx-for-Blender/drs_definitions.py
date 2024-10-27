@@ -950,18 +950,20 @@ class CGeoOBBTree:
 @dataclass(eq=False, repr=False)
 class JointGroup:
 	joint_count: int = 0
-	joints: List[int] = field(default_factory=list)
+	joints: List[int] = field(default_factory=list) #short
 
 	def read(self, file: BinaryIO) -> 'JointGroup':
 		self.joint_count = unpack('i', file.read(calcsize('i')))[0]
-		self.joints = list(unpack(f'{self.joint_count}i', file.read(calcsize(f'{self.joint_count}i'))))
+		for _ in range(self.joint_count):
+			self.joints.append(unpack('h', file.read(calcsize('h')))[0])
 		return self
 
 	def write(self, file: BinaryIO) -> None:
-		file.write(pack(f'i{self.joint_count}i', self.joint_count, *self.joints))
+		file.write(pack('i', self.joint_count))
+		file.write(pack(f'{self.joint_count}s', *self.joints))
 
 	def size(self) -> int:
-		return calcsize('i') + calcsize(f'{self.joint_count}i')
+		return calcsize('i') + calcsize(f'{self.joint_count}s')
 
 @dataclass(eq=False, repr=False)
 class CDspJointMap:
@@ -970,7 +972,8 @@ class CDspJointMap:
 	joint_groups: List[JointGroup] = field(default_factory=list)
 
 	def read(self, file: BinaryIO) -> 'CDspJointMap':
-		self.version, self.joint_group_count = unpack('ii', file.read(calcsize('ii')))
+		self.version = unpack('i', file.read(calcsize('i')))[0]
+		self.joint_group_count = unpack('i', file.read(calcsize('i')))[0]
 		self.joint_groups = [JointGroup().read(file) for _ in range(self.joint_group_count)]
 		return self
 
@@ -1504,8 +1507,9 @@ class AnimationSet:
 		"""Reads the AnimationSet from the buffer"""
 		self.length = unpack('i', file.read(calcsize('i')))[0]
 		self.magic = unpack('11s', file.read(calcsize('11s')))[0].decode('utf-8').strip('\x00')
-		data = file.read(calcsize('iff'))
-		self.version, self.default_run_speed, self.default_walk_speed = data[0], data[1], data[2]
+		self.version = unpack('i', file.read(calcsize('i')))[0]
+		self.default_run_speed = unpack('f', file.read(calcsize('f')))[0]
+		self.default_walk_speed = unpack('f', file.read(calcsize('f')))[0]
 
 		if self.version == 2:
 			self.mode_animation_key_count = unpack('i', file.read(calcsize('i')))[0]
@@ -1538,7 +1542,7 @@ class AnimationSet:
 			self.has_atlas = unpack('h', file.read(calcsize('h')))[0]
 
 			if self.has_atlas >= 1:
-				self.has_atlas = unpack('i', file.read(calcsize('i')))[0]
+				self.atlas_count = unpack('i', file.read(calcsize('i')))[0]
 				self.ik_atlases = [IKAtlas().read(file) for _ in range(self.atlas_count)]
 
 			if self.has_atlas >= 2:
