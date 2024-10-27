@@ -31,7 +31,7 @@ AnimationType = {
 }
 
 @dataclass(eq=False, repr=False)
-class RootNode():
+class RootNode:
 	identifier: int = 0
 	unknown: int = 0
 	length: int = field(default=9, init=False)
@@ -229,9 +229,11 @@ class Vector3:
 	x: float = 0.0
 	y: float = 0.0
 	z: float = 0.0
+	xyz: Vector = field(default_factory=lambda: Vector((0, 0, 0)))
 
 	def read(self, file: BinaryIO) -> 'Vector3':
 		self.x, self.y, self.z = unpack('3f', file.read(calcsize('3f')))
+		self.xyz = Vector((self.x, self.y, self.z))
 		return self
 
 	def write(self, file: BinaryIO) -> None:
@@ -407,7 +409,7 @@ class BoneVertex:
 	def size(self) -> int:
 		return self.position.size() + calcsize('i')
 
-class DRSBone():
+class DRSBone:
 	"""docstring for DRSBone"""
 	def __init__(self) -> None:
 		self.ska_identifier: int
@@ -418,6 +420,11 @@ class DRSBone():
 		self.children: List[int]
 		self.bind_loc: Vector
 		self.bind_rot: Quaternion
+
+class BoneWeight:
+	def __init__(self, indices=None, weights=None):
+		self.indices: List[int] = indices
+		self.weights: List[float] = weights
 
 @dataclass(eq=False, repr=False)
 class CSkSkeleton:
@@ -1200,7 +1207,7 @@ class CGeoPrimitiveContainer:
 		return 0
 
 @dataclass(eq=False, repr=False)
-class Constraint():
+class Constraint:
 	"""Constraint"""
 	revision: int = 0
 	left_angle: float = 0.0
@@ -1224,7 +1231,7 @@ class Constraint():
 		return self
 
 @dataclass(eq=False, repr=False)
-class IKAtlas():
+class IKAtlas:
 	"""IKAtlas"""
 	identifier: int = 0
 	version: int = 0
@@ -1257,7 +1264,7 @@ class IKAtlas():
 		return self
 
 @dataclass(eq=False, repr=False)
-class AnimationSetVariant():
+class AnimationSetVariant:
 	version: int = 7
 	weight: int = 100
 	length: int = 0
@@ -1301,7 +1308,7 @@ class AnimationSetVariant():
 		return 21 + self.length
 
 @dataclass(eq=False, repr=False)
-class ModeAnimationKey():
+class ModeAnimationKey:
 	"""ModeAnimationKey"""
 	type: int = 6
 	length: int = 11
@@ -1316,7 +1323,7 @@ class ModeAnimationKey():
 
 	def read(self, file: BinaryIO, uk: int) -> 'ModeAnimationKey':
 		"""Reads the ModeAnimationKey from the buffer"""
-		if uk is not 2:
+		if uk != 2:
 			self.type = unpack('i', file.read(calcsize('i')))[0]
 		else:
 			self.type = 2
@@ -1361,7 +1368,7 @@ class ModeAnimationKey():
 		return 39 + sum(animation_set_variant.size() for animation_set_variant in self.animation_set_variants)
 
 @dataclass(eq=False, repr=False)
-class AnimationMarker():
+class AnimationMarker:
 	"""AnimationMarker"""
 	some_class: int = 0
 	time: float = 0.0
@@ -1384,7 +1391,7 @@ class AnimationMarker():
 		return self
 
 @dataclass(eq=False, repr=False)
-class AnimationMarkerSet():
+class AnimationMarkerSet:
 	"""AnimationMarkerSet"""
 	anim_id: int = 0
 	length: int = 0
@@ -1413,7 +1420,7 @@ class AnimationMarkerSet():
 		return self
 
 @dataclass(eq=False, repr=False)
-class UnknownStruct2():
+class UnknownStruct2:
 	"""UnknownStruct2"""
 	unknown_ints: List[int] = field(default_factory=list)
 
@@ -1429,7 +1436,7 @@ class UnknownStruct2():
 		return self
 
 @dataclass(eq=False, repr=False)
-class UnknownStruct():
+class UnknownStruct:
 	"""UnknownStruct"""
 	unknown: int = 0
 	length: int = 0
@@ -1458,7 +1465,7 @@ class UnknownStruct():
 		return self
 
 @dataclass(eq=False, repr=False)
-class AnimationSet():
+class AnimationSet:
 	"""AnimationSet"""
 	length: int = 11
 	magic: str = "Battleforge"
@@ -1483,20 +1490,22 @@ class AnimationSet():
 	subversion: int = 2 # TODO: Always 2?
 	animation_marker_count: int = 0 # Animated Objects: 0
 	animation_marker_sets: List[AnimationMarkerSet] = field(default_factory=list)
-	unknown: int # Not needed
+	unknown: int = 0 # Not needed
 	unknown_structs: List[UnknownStruct] = field(default_factory=list) # Not needed
 	data_object: str = None # Placeholder for the animation name
 
-	def __post_init__(self):
-		if not self.data_object.endswith(".ska"):
-			self.data_object += ".ska"
-			for _ in range(self.mode_animation_key_count):
-				self.mode_animation_keys.append(ModeAnimationKey(self.data_object))
+	# def __post_init__(self):
+	# 	if not self.data_object.endswith(".ska"):
+	# 		self.data_object += ".ska"
+	# 		for _ in range(self.mode_animation_key_count):
+	# 			self.mode_animation_keys.append(ModeAnimationKey(self.data_object))
 
 	def read(self, file: BinaryIO) -> 'AnimationSet':
 		"""Reads the AnimationSet from the buffer"""
-		data = file.read(calcsize('i11siff'))
-		self.length, self.magic, self.version, self.default_run_speed, self.default_walk_speed = unpack('i11siff', data)
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		self.magic = unpack('11s', file.read(calcsize('11s')))[0].decode('utf-8').strip('\x00')
+		data = file.read(calcsize('iff'))
+		self.version, self.default_run_speed, self.default_walk_speed = data[0], data[1], data[2]
 
 		if self.version == 2:
 			self.mode_animation_key_count = unpack('i', file.read(calcsize('i')))[0]
@@ -1607,7 +1616,7 @@ class AnimationSet():
 			add += key.size()
 		return 62 + add
 
-# class SMeshState():
+# class SMeshState:
 # 	"""SMeshState"""
 # 	def __init__(self) -> None:
 # 		"""SMeshState Constructor"""
@@ -1640,7 +1649,7 @@ class AnimationSet():
 # 			Buffer.WriteString(self.DRSFile)
 # 		return self
 
-# class DestructionState():
+# class DestructionState:
 # 	"""DestructionState"""
 # 	def __init__(self) -> None:
 # 		"""DestructionState Constructor"""
@@ -1662,7 +1671,7 @@ class AnimationSet():
 # 		Buffer.WriteString(self.FileName)
 # 		return self
 
-# class StateBasedMeshSet():
+# class StateBasedMeshSet:
 # 	"""StateBasedMeshSet"""
 # 	def __init__(self) -> None:
 # 		"""StateBasedMeshSet Constructor"""
@@ -1695,7 +1704,7 @@ class AnimationSet():
 # 			_DestructionState.Write(Buffer)
 # 		return self
 
-# class MeshGridModule():
+# class MeshGridModule:
 # 	"""MeshGridModule"""
 # 	def __init__(self) -> None:
 # 		"""MeshGridModule Constructor"""
@@ -1719,7 +1728,7 @@ class AnimationSet():
 # 			self.StateBasedMeshSet.Write(Buffer)
 # 		return self
 
-# class Timing():
+# class Timing:
 # 	'''Timing'''
 # 	def __init__(self) -> None:
 # 		'''Timing Constructor'''
@@ -1775,7 +1784,7 @@ class AnimationSet():
 # 		# In cases where e.g. the animationTagID is used,
 # 		# the animationMarkerID usually not referenced anywhere.
 
-# class TimingVariant():
+# class TimingVariant:
 # 	'''TimingVariant'''
 # 	def __init__(self) -> None:
 # 		'''TimingVariant Constructor'''
@@ -1784,7 +1793,7 @@ class AnimationSet():
 # 		self.TimingCount: int # Short. The number of Timings for this Variant. Most of the time, this is 1.
 # 		self.Timings: List[Timing]
 
-# class AnimationTiming():
+# class AnimationTiming:
 # 	'''AnimationTiming'''
 # 	def __init__(self) -> None:
 # 		'''AnimationTiming Constructor'''
@@ -1794,7 +1803,7 @@ class AnimationSet():
 # 		self.VariantCount: int # Short. The number of Animations for this Type/TagID combination.
 # 		self.TimingVariants: List[TimingVariant]
 
-# class StructV3():
+# class StructV3:
 # 	'''StructV3'''
 # 	def __init__(self) -> None:
 # 		'''StructV3 Constructor'''
@@ -1812,7 +1821,7 @@ class AnimationSet():
 # 		'''Returns the size of the StructV3'''
 # 		return 12
 
-# class AnimationTimings():
+# class AnimationTimings:
 # 	"""AnimationTimings"""
 # 	def __init__(self):
 # 		"""AnimationTimings Constructor"""
@@ -1837,7 +1846,7 @@ class AnimationSet():
 # 		"""Returns the size of the AnimationTimings"""
 # 		return 8 + self.StructV3.Size()
 
-# class MeshSetGrid():
+# class MeshSetGrid:
 # 	"""MeshSetGrid class"""
 # 	def __init__(self) -> None:
 # 		self.Revision: int
@@ -1979,7 +1988,7 @@ class DRS:
 			"CGeoMesh": 'cgeo_mesh_node',
 			"CSkSkinInfo": 'csk_skin_info_node',
 			"CSkSkeleton": 'csk_skeleton_node',
-			# "AnimationTimings": 'animation_timings_node',
+			"AnimationTimings": 'animation_timings_node',
 			"CDspJointMap": 'joint_map_node',
 			"CGeoOBBTree": 'cgeo_obb_tree_node',
 			"DrwResourceMeta": 'drw_resource_meta_node',

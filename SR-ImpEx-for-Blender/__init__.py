@@ -15,7 +15,7 @@ from os.path import dirname, realpath
 import importlib
 import inspect
 import bpy
-from bpy.props import StringProperty, BoolProperty
+from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
 from .drs_utility import load_drs, debug_drs_file
 from .drs_definitions import DRS
@@ -86,12 +86,17 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	clear_scene: BoolProperty(name="Clear Scene", description="Clear the scene before importing", default=True) # type: ignore
 	create_size_reference: BoolProperty(name="Create Size References", description="Creates multiple size references in the scene", default=False) # type: ignore
 	import_collision_shape: BoolProperty(name="Import Collision Shape", description="Import collision shapes", default=True) # type: ignore
+	# Dropwdown for FPS Selection: 15, 30 (default), 60
+	fps_selection: EnumProperty(name="FPS Selection", description="Select the FPS for the animation", items=[('15', '15 FPS', ''), ('30', '30 FPS', ''), ('60', '60 FPS', '')], default='30') # type: ignore
+	# use_animation_smoothing: BoolProperty(name="Use Animation Smoothing", description="Use animation smoothing", default=True) # type: ignore
 
 	def execute(self, context):
 		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4() # type: ignore # pylint disable=no-member
 		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "clear_scene", "create_size_reference"))
 		keywords["global_matrix"] = global_matrix
 		keywords["import_collision_shape"] = self.import_collision_shape
+		keywords["fps_selection"] = self.fps_selection
+		# keywords["use_animation_smoothing"] = self.use_animation_smoothing
 
 		if self.clear_scene:
 			# Delete all collections
