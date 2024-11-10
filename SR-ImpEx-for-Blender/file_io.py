@@ -23,3 +23,6 @@ class FileWriter:
 
     def close(self):
         self.file.close()
+
+    def tell(self):
+        return self.file.tell()

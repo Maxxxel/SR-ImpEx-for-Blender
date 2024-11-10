@@ -17,7 +17,8 @@ import inspect
 import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
-from .drs_utility import load_drs, debug_drs_file
+from bpy_types import Operator, Panel, PropertyGroup, UIList
+from .drs_utility import load_drs, save_drs, load_bmg
 from .drs_definitions import DRS
 
 bl_info = {
@@ -106,11 +107,11 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 			bpy.ops.object.delete(use_global=False)
 
 		# Check if the file is a DRS or a BMG file
-		if self.filepath.endswith(".drs"): # pylint disable=no-member
+		if self.filepath.endswith(".drs"): # pylint disable=E1101
 			load_drs(context, **keywords)
 			return {'FINISHED'}
 		elif self.filepath.endswith(".bmg"): # pylint disable=no-member
-			# return load_bmg(self, context, **keywords)
+			load_bmg(context, **keywords)
 			return {'FINISHED'}
 		else:
 			self.report({'ERROR'}, "Unsupported file type")
@@ -121,14 +122,28 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	bl_idname = "export_scene.drs"
 	bl_label = "Export DRS"
 	filename_ext = ".drs"
+	# Create a Category
+
 	filter_glob: StringProperty(default="*.drs;*.bmg", options={'HIDDEN'}, maxlen=255) # type: ignore # ignore
 	use_apply_transform : BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True) # type: ignore # ignore
 	split_mesh_by_uv_islands : BoolProperty(name="Split Mesh by UV Islands", description="Split mesh by UV islands", default=False) # type: ignore # ignore
 	keep_debug_collections : BoolProperty(name="Keep Debug Collection", description="Keep debug collection in the scene", default=False) # type: ignore # ignore
+	export_animation : BoolProperty(name="Export Animation", description="Export animation", default=True) # type: ignore # ignore
+	forward_direction: EnumProperty(name="Forward Direction", description="Select the forward direction for the animation", items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', ''), ('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', '')], default='X') # type: ignore # ignore
+	up_direction: EnumProperty(name="Up Direction", description="Select the up direction for the animation", items=[('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', ''), ('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')], default='Z') # type: ignore # ignore
+	automatic_naming: BoolProperty(name="Automatic Naming", description="Names the exported file automatically based on the selection and model name, else the name from the save-path is taken.", default=True) # type: ignore # ignore
+	model_type: EnumProperty(name="Model Type", description="Select the model type", items=[('unit', 'Unit', ''), ('building', 'Building', ''), ('object', 'Object', '')], default='object') # type: ignore # ignore
 
 	def execute(self, context):
-		# keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
-		# return save_drs(self, context, **keywords)
+		keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
+		keywords["use_apply_transform"] = self.use_apply_transform
+		keywords["split_mesh_by_uv_islands"] = self.split_mesh_by_uv_islands
+		keywords["keep_debug_collections"] = self.keep_debug_collections
+		keywords["export_animation"] = self.export_animation
+		keywords["forward_direction"] = self.forward_direction
+		keywords["up_direction"] = self.up_direction
+		keywords["automatic_naming"] = self.automatic_naming
+		save_drs(context, **keywords)
 		return {'FINISHED'}
 
 class NewBFScene(bpy.types.Operator):
@@ -141,6 +156,50 @@ class NewBFScene(bpy.types.Operator):
 		# Load the default scene from resources
 		bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
 		return {'FINISHED'}
+
+# class ShowMessagesOperator(bpy.types.Operator):
+#     """Display collected messages in a popup dialog."""
+#     bl_idname = "my_category.show_messages"
+#     bl_label = "Messages"
+#     bl_options = {'REGISTER', 'INTERNAL'}
+
+#     messages: StringProperty()
+
+#     def execute(self, context):
+#         # Optional: Actions to perform when the operator is executed
+#         self.report({'INFO'}, "Messages displayed.")
+#         return {'FINISHED'}
+
+#     def invoke(self, context, event):
+#         return context.window_manager.invoke_popup(self)
+
+#     def draw(self, context):
+#         layout = self.layout
+#         for message in self.messages.split('\n'):
+#             layout.label(text=message)
+
+class ShowMessagesOperator(bpy.types.Operator):
+	"""Display collected messages in a popup dialog."""
+	bl_idname = "my_category.show_messages"
+	bl_label = "Messages"
+	bl_options = {'REGISTER', 'INTERNAL'}
+
+	messages: StringProperty()
+
+	def execute(self, context):
+		# Optional actions upon confirmation
+		return {'FINISHED'}
+
+	def invoke(self, context, event):
+		width = 800
+		return context.window_manager.invoke_popup(self, width=width)
+
+	def draw(self, context):
+		layout = self.layout
+		col = layout.column()
+		for message in self.messages.split('\n'):
+			col.label(text=message)
+
 
 def menu_func_import(self, context=None):
 	self.layout.operator(ImportBFModel.bl_idname, text="Battleforge (.drs) - "+(is_dev_version and "DEV" or "")+" v" + str(bl_info["version"][0]) + "." + str(bl_info["version"][1]) + "." + str(bl_info["version"][2]))
@@ -172,6 +231,7 @@ def register():
 	bpy.utils.register_class(ImportBFModel)
 	bpy.utils.register_class(ExportBFModel)
 	bpy.utils.register_class(NewBFScene)
+	bpy.utils.register_class(ShowMessagesOperator)
 	bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
@@ -180,6 +240,7 @@ def unregister():
 	bpy.utils.unregister_class(ImportBFModel)
 	bpy.utils.unregister_class(ExportBFModel)
 	bpy.utils.unregister_class(NewBFScene)
+	bpy.utils.unregister_class(ShowMessagesOperator)
 	bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
 
