@@ -489,7 +489,7 @@ def create_bone_weights(mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mes
 
 	return bone_weights
 
-def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30) -> None:
+def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True) -> None:
  	# reset messages
 	global messages
 	messages = []
@@ -618,7 +618,7 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 			cylinder_collection.objects.link(cylinder_object)
 			apply_transformations(cylinder_object, global_matrix, apply_transform)
 
-	if drs_file.animation_set is not None and armature_object is not None:
+	if drs_file.animation_set is not None and armature_object is not None and import_animation:
 		# Set the FPS for the Animation
 		bpy.context.scene.render.fps = int(fps_selection)
 		bpy.ops.object.mode_set(mode='POSE')
@@ -635,7 +635,7 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 	# Show the Messages
 	return {'FINISHED'}
 
-def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30) -> None:
+def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True) -> None:
 	dir_name = os.path.dirname(filepath)	
 	base_name = os.path.basename(filepath).split(".")[0]
 	source_collection: bpy.types.Collection = bpy.data.collections.new("DRSModel_" + base_name)
@@ -827,7 +827,7 @@ def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, glob
 							cylinder_collection.objects.link(cylinder_object)
 							apply_transformations(cylinder_object, global_matrix, apply_transform)
 
-					if bmg_file.animation_set is not None and armature_object is not None:
+					if bmg_file.animation_set is not None and armature_object is not None and import_animation:
 						# Set the FPS for the Animation
 						bpy.context.scene.render.fps = int(fps_selection)
 						bpy.ops.object.mode_set(mode='POSE')
@@ -1633,3 +1633,6 @@ def save_drs(context: bpy.types.Context, filepath: str, use_apply_transform: boo
 	# Show the Messages
 	show_message_box(final=True)
 	return {"FINISHED"}
+
+# TODO: Always improt to Main Scene
+# TODO: Only one time import Collision Meshes

@@ -26,7 +26,7 @@ bl_info = {
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
 	"blender" : (4, 0, 0),
-	"version" : (2, 4, 3),
+	"version" : (2, 4, 4),
 	"location" : "File > Import",
 	"warning" : "",
 	"category" : "Import-Export",
@@ -90,6 +90,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	# Dropwdown for FPS Selection: 15, 30 (default), 60
 	fps_selection: EnumProperty(name="FPS Selection", description="Select the FPS for the animation", items=[('15', '15 FPS', ''), ('30', '30 FPS', ''), ('60', '60 FPS', '')], default='30') # type: ignore
 	# use_animation_smoothing: BoolProperty(name="Use Animation Smoothing", description="Use animation smoothing", default=True) # type: ignore
+	import_animation: BoolProperty(name="Import Animation", description="Import animation", default=True) # type: ignore
 
 	def execute(self, context):
 		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4() # type: ignore # pylint disable=no-member
@@ -98,6 +99,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 		keywords["import_collision_shape"] = self.import_collision_shape
 		keywords["fps_selection"] = self.fps_selection
 		# keywords["use_animation_smoothing"] = self.use_animation_smoothing
+		keywords["import_animation"] = self.import_animation
 
 		if self.clear_scene:
 			# Delete all collections
