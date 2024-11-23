@@ -116,6 +116,12 @@ def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
 	# Order the Bones by Parent ID
 	bone_list.sort(key=lambda x: x.identifier)
 
+	# Go through the Bone List find the bones without a parent
+	for bone in bone_list:
+		if bone.parent == -1 and bone.identifier != 0:
+			bone.parent = 0
+			print(f"Bone {bone.name} has no parent, setting it to the root bone.")
+
 	# Return the BoneList
 	return bone_list
 
@@ -131,6 +137,15 @@ def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> 
 
 		bone_data.bind_loc = matrix_local.to_translation()
 		bone_data.bind_rot = matrix_local.to_quaternion()
+
+def pretty_print_bone_tree(bone_list: list[DRSBone], indent: int = 0, bone_data: DRSBone = None) -> None:
+	if bone_data is None:
+		bone_data = bone_list[0]
+
+	print("  " * indent + str(bone_data.identifier) + ": " + bone_data.name)
+
+	for child_bone in [b for b in bone_list if b.parent == bone_data.identifier]:
+		pretty_print_bone_tree(bone_list, indent + 1, child_bone)
 
 def create_bone_tree(armature_data: bpy.types.Armature, bone_list: list[DRSBone], bone_data: DRSBone):
 	edit_bones = armature_data.edit_bones
@@ -515,6 +530,7 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 		bpy.context.view_layer.objects.active = armature_object
 		bpy.ops.object.mode_set(mode='EDIT')
 		# Create the Bone Tree without using bpy.ops or context
+		# pretty_print_bone_tree(bone_list)
 		create_bone_tree(armature_data, bone_list, bone_list[0])
 		# Restore armature data mode to OBJECT
 		bpy.ops.object.mode_set(mode='OBJECT')
