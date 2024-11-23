@@ -33,7 +33,9 @@ class DRSMaterial:
 		self.material.use_nodes = True
 		self.material.node_tree.nodes.clear()
 		self.material.blend_method = "CLIP"
-		self.material.shadow_method = "NONE"
+		# only for blender < 4.3: self.material.shadow_method = "NONE"
+		if bpy.app.version[0] <= 4 and bpy.app.version[1] < 3: # pylint: disable=E1136
+			self.material.shadow_method = "NONE"
 
 	def get_or_create_base_node_tree(self) -> bpy.types.NodeTree:
 		base_node_tree_name = "DRS_Base_NodeGroup"
