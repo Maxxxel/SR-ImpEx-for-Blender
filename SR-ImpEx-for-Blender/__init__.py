@@ -53,7 +53,7 @@ for folder_file_batch in addon_files:
 		else:
 			reload_line = f"{file} = importlib.reload({file})"
 			exec(reload_line)
-	
+
 	else:
 		if (os.path.basename(folder_file_batch[0]) != os.path.basename(__path__[0])):
 			file = folder_file_batch[1]
@@ -87,10 +87,11 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	clear_scene: BoolProperty(name="Clear Scene", description="Clear the scene before importing", default=True) # type: ignore
 	create_size_reference: BoolProperty(name="Create Size References", description="Creates multiple size references in the scene", default=False) # type: ignore
 	import_collision_shape: BoolProperty(name="Import Collision Shape", description="Import collision shapes", default=True) # type: ignore
-	# Dropwdown for FPS Selection: 15, 30 (default), 60
 	fps_selection: EnumProperty(name="FPS Selection", description="Select the FPS for the animation", items=[('15', '15 FPS', ''), ('30', '30 FPS', ''), ('60', '60 FPS', '')], default='30') # type: ignore
 	# use_animation_smoothing: BoolProperty(name="Use Animation Smoothing", description="Use animation smoothing", default=True) # type: ignore
 	import_animation: BoolProperty(name="Import Animation", description="Import animation", default=True) # type: ignore
+	import_debris: BoolProperty(name="Import Debris", description="Import debris for bmg files", default=True) # type: ignore
+	import_construction: BoolProperty(name="Import Construction", description="Import construction for bmg files", default=True) # type: ignore
 
 	def execute(self, context):
 		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4() # type: ignore # pylint disable=no-member
@@ -100,6 +101,8 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 		keywords["fps_selection"] = self.fps_selection
 		# keywords["use_animation_smoothing"] = self.use_animation_smoothing
 		keywords["import_animation"] = self.import_animation
+		keywords["import_debris"] = self.import_debris
+		keywords["import_construction"] = self.import_construction
 
 		if self.clear_scene:
 			# Delete all collections

@@ -9,6 +9,7 @@ from mathutils import Matrix, Vector, Quaternion
 import bpy
 from bpy_extras.io_utils import axis_conversion
 import bmesh
+import xml.etree.ElementTree as ET
 
 from .drs_definitions import DRS, CDspMeshFile, CylinderShape, Face, BattleforgeMesh, DRSBone, CSkSkeleton, Bone, BoneVertex, BoxShape, SphereShape, CSkSkinInfo, CGeoMesh, BoneWeight, CGeoOBBTree, OBBNode, CMatCoordinateSystem, CDspJointMap, MeshData, Vertex, LevelOfDetail, EmptyString, Flow, Textures, Texture, Refraction, Materials, DrwResourceMeta, JointGroup, Vector3, Vector4
 from .drs_material import DRSMaterial
@@ -36,6 +37,27 @@ def apply_transformations(obj: bpy.types.Object, global_matrix: Matrix, apply_tr
 		obj.matrix_world = global_matrix @ obj.matrix_world
 		if edit_scale:
 			obj.scale = (1, -1, 1)
+
+def mirror_object_by_vector(obj, vector):
+    """
+    Mirrors an object across a vector.
+
+    :param obj: The object to mirror.
+    :param vector: The vector to mirror across (mathutils.Vector).
+    """
+    # Normalize the vector to create a plane of reflection
+    vector = vector.normalized()
+    
+    # Create the reflection matrix
+    reflection_matrix = Matrix((
+        (1 - 2 * vector.x ** 2, -2 * vector.x * vector.y, -2 * vector.x * vector.z, 0),
+        (-2 * vector.x * vector.y, 1 - 2 * vector.y ** 2, -2 * vector.y * vector.z, 0),
+        (-2 * vector.x * vector.z, -2 * vector.y * vector.z, 1 - 2 * vector.z ** 2, 0),
+        (0, 0, 0, 1)
+    ))
+    
+    # Apply the reflection matrix to the object's transformation
+    obj.matrix_world = reflection_matrix @ obj.matrix_world
 
 def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Mesh:
 	battleforge_mesh_data: BattleforgeMesh = mesh_file.meshes[mesh_index]
@@ -504,7 +526,7 @@ def create_bone_weights(mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mes
 
 	return bone_weights
 
-def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True) -> None:
+def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True, import_debris=False, import_construction=False) -> None:
  	# reset messages
 	global messages
 	messages = []
@@ -651,8 +673,8 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 	# Show the Messages
 	return {'FINISHED'}
 
-def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True) -> None:
-	dir_name = os.path.dirname(filepath)	
+def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True, import_debris=True, import_construction=True) -> None:
+	dir_name = os.path.dirname(filepath)
 	base_name = os.path.basename(filepath).split(".")[0]
 	source_collection: bpy.types.Collection = bpy.data.collections.new("DRSModel_" + base_name)
 	context.collection.children.link(source_collection)
@@ -717,12 +739,11 @@ def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, glob
 
 	for module in bmg_file.mesh_set_grid.mesh_modules:
 		if module.has_mesh_set:
-			# Get individual desctruction states
+			# Get individual mesh states
 			for mesh_set in module.state_based_mesh_set.mesh_states:
-				state = mesh_set.state_num
 				if mesh_set.has_files:
 					# Create a new Collection for the State
-					state_collection: bpy.types.Collection = bpy.data.collections.new(f"State_{state}") # pylint: disable=E1111
+					state_collection: bpy.types.Collection = bpy.data.collections.new(f"Mesh_State_{mesh_set.state_num}") # pylint: disable=E1111
 					source_collection.children.link(state_collection)
 					# Load the DRS Files
 					drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_set.drs_file))
@@ -851,6 +872,71 @@ def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, glob
 							for variant in animation_key.animation_set_variants:
 								ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
 								create_animation(ska_file, armature_object, bone_list, variant.file)
+			# Get individual desctruction States
+			if import_debris:
+				for destruction_state in module.state_based_mesh_set.destruction_states:
+					state_collection: bpy.types.Collection = bpy.data.collections.new(f"Destruction_State_Meshes{destruction_state.state_num}")
+					source_collection.children.link(state_collection)
+					# Load the XML File
+					xml_file_path = os.path.join(dir_name, destruction_state.file_name)
+					# Read the file without any imports
+					with open(xml_file_path, 'r', encoding='utf-8') as file:
+						xml_file = file.read()
+					# Parse the XML File
+					xml_root = ET.fromstring(xml_file)
+					for element in xml_root.findall(".//Element[@type='PhysicObject']"):
+						resource = element.attrib.get("resource")
+						name = element.attrib.get("name")
+						if resource and name:
+							drs_file: DRS = DRS().read(os.path.join(dir_name, "meshes", resource))
+							for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
+								# Create the Mesh Data
+								mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
+								# Create the Mesh Object and add the Mesh Data to it
+								mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{name}", mesh_data)
+								apply_transformations(mesh_object, global_matrix, apply_transform)
+								# Create the Material Data
+								material_data = create_material(dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name + "_" + name)
+								# Assign the Material to the Mesh
+								mesh_data.materials.append(material_data)
+								# Link the Mesh Object to the Source Collection
+								state_collection.objects.link(mesh_object)
+
+	# Import Construction
+	if import_construction:
+		slocator_collection: bpy.types.Collection = bpy.data.collections.new(f"SLocators")
+		source_collection.children.link(slocator_collection)
+		for slocator in bmg_file.mesh_set_grid.cdrw_locator_list.slocators:
+			if slocator.file_name_length > 0:
+				# We need to move two directory up to find the construction folder
+				construction_dir = os.path.join(dir_name, "..", "..", "construction")
+				drs_file: DRS = DRS().read(os.path.join(construction_dir, slocator.file_name))
+				for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
+					# Create the Mesh Data
+					mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
+					# Create the Mesh Object and add the Mesh Data to it
+					mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{slocator.class_type}", mesh_data)
+					# Apply the Transformations to the Mesh Object
+					apply_transformations(mesh_object, global_matrix, apply_transform)
+					# We need to move and rotate the construction objects prior to applying the global matrix
+					location = (slocator.cmat_coordinate_system.position.x, slocator.cmat_coordinate_system.position.y, slocator.cmat_coordinate_system.position.z)
+					rotation = slocator.cmat_coordinate_system.matrix.matrix
+					rotation_matrix = [list(rotation[i:i+3]) for i in range(0, len(rotation), 3)]
+					transposed_rotation = Matrix(rotation_matrix).transposed()
+					# Create a new Matrix with the Location and Rotation
+					local_matrix = Matrix.Translation(location) @ transposed_rotation.to_4x4()
+					# Apply the Local Matrix to the Mesh Object
+					if apply_transform:
+						mesh_object.matrix_world = global_matrix @ local_matrix
+						mirror_object_by_vector(mesh_object, Vector((0, 0, 1)))
+					else:
+						mesh_object.matrix_world = local_matrix
+					# Create the Material Data
+					material_data = create_material(construction_dir, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name + "_Construction_" + str(mesh_index))
+					# Assign the Material to the Mesh
+					mesh_data.materials.append(material_data)
+					# Link the Mesh Object to the Source Collection
+					slocator_collection.objects.link(mesh_object)
 
 	# Return to the Object Mode
 	bpy.ops.object.mode_set(mode='OBJECT')

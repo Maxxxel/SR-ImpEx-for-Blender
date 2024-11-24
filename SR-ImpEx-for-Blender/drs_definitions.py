@@ -30,6 +30,18 @@ AnimationType = {
 	"WormMovement": 5,
 }
 
+LocatorClass = {
+	0: "Unknown0",
+	1: "Module1",
+	2: "Construction",
+	3: "SKA",
+	4: "FxbIdle",
+	5: "Module2",
+	8: "FxbPermOvt",
+	16: "Unknown16",
+	29: "FxbAtt"
+}
+
 @dataclass(eq=False, repr=False)
 class RootNode:
 	identifier: int = 0
@@ -1031,11 +1043,14 @@ class SLocator:
 	file_name_length: int = 0
 	file_name: str = ""
 	uk_int: int = 0
+	class_type: str = ""
 
 	def read(self, file: BinaryIO, version: int) -> 'SLocator':
 		self.cmat_coordinate_system = CMatCoordinateSystem().read(file)
 		self.class_id, self.sub_id, self.file_name_length = unpack('iii', file.read(calcsize('iii')))
 		self.file_name = unpack(f'{self.file_name_length}s', file.read(calcsize(f'{self.file_name_length}s')))[0].decode('utf-8').strip('\x00')
+		# Get LocatorClass from ClassID
+		self.class_type = LocatorClass.get(self.class_id, 'Unknown')
 		if version == 5:
 			self.uk_int = unpack('i', file.read(calcsize('i')))[0]
 		return self
@@ -1870,6 +1885,7 @@ class MeshSetGrid:
 	module_distance : float = 2 # Float
 	is_center_pivoted : int = 0 # Byte
 	mesh_modules : List[MeshGridModule] = field(default_factory=list)
+	cdrw_locator_list : CDrwLocatorList = None
 
 	def read(self, file: BinaryIO) -> 'MeshSetGrid':
 		"""Reads the MeshSetGrid from the buffer"""
@@ -1890,6 +1906,7 @@ class MeshSetGrid:
 		self.module_distance = unpack('f', file.read(calcsize('f')))[0]
 		self.is_center_pivoted = unpack('B', file.read(calcsize('B')))[0]
 		self.mesh_modules = [MeshGridModule().read(file) for _ in range((self.grid_width * 2 + 1) * (self.grid_height * 2 + 1))]
+		self.cdrw_locator_list = CDrwLocatorList().read(file)
 		return self
 
 	def write(self, file: BinaryIO) -> 'MeshSetGrid':
