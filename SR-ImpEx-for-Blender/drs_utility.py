@@ -1676,6 +1676,23 @@ def abort(keep_debug_collections: bool, source_collection_copy: bpy.types.Collec
 
 	return {"CANCELLED"}
 
+def test_export(context: bpy.types.Context, filepath: str, use_apply_transform: bool, split_mesh_by_uv_islands: bool, keep_debug_collections: bool, export_animation: bool, forward_direction: str, up_direction: str, automatic_naming: bool, temporary_file_path: str, model_type: str) -> dict:
+	original_file: DRS = DRS().read(file_name=temporary_file_path)
+	new_drs_file: DRS = DRS()
+	new_drs_file.push_node("CGeoMesh", original_file.cgeo_mesh)
+	new_drs_file.push_node("CGeoOBBTree", original_file.cgeo_obb_tree)
+	new_drs_file.push_node("CDspJointMap", original_file.cdsp_joint_map)
+	new_drs_file.push_node("CDspMeshFile", original_file.cdsp_mesh_file)
+	new_drs_file.push_node("DrwResourceMeta", original_file.drw_resource_meta)
+
+	new_drs_file.push_node("CSkSkeleton", original_file.csk_skeleton)
+	new_drs_file.push_node("CSkSkinInfo", original_file.csk_skin_info)
+	new_drs_file.push_node("AnimationSet", original_file.animation_set)
+	new_drs_file.push_node("AnimationTimings", original_file.animation_timings)
+	new_drs_file.push_node("EffectSet", original_file.effect_set)
+
+	new_drs_file.save(filepath)
+
 def save_drs(context: bpy.types.Context, filepath: str, use_apply_transform: bool, split_mesh_by_uv_islands: bool, keep_debug_collections: bool, export_animation: bool, forward_direction: str, up_direction: str, automatic_naming: bool, model_type: str) -> dict:
 	# Reset messages
 	global messages

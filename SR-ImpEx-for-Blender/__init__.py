@@ -18,7 +18,7 @@ import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
 from bpy_types import Operator, Panel, PropertyGroup, UIList
-from .drs_utility import load_drs, save_drs, load_bmg
+from .drs_utility import load_drs, save_drs, load_bmg, test_export
 from .drs_definitions import DRS
 
 bl_info = {
@@ -75,6 +75,7 @@ AlxClassQueue = alx_class_object_list
 
 is_dev_version = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
+temporary_file_path = ""
 
 @orientation_helper(axis_forward='X', axis_up='-Y')
 class ImportBFModel(bpy.types.Operator, ImportHelper):
@@ -94,7 +95,9 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	import_modules: BoolProperty(name="Import Modules", description="Import modules for drs files", default=True) # type: ignore
 	import_construction: BoolProperty(name="Import Construction", description="Import construction for bmg files", default=True) # type: ignore
 
-	def execute(self, context):
+	def execute(self, context):#
+		global temporary_file_path
+		temporary_file_path = self.filepath
 		global_matrix = axis_conversion(from_forward=self.axis_forward, from_up=self.axis_up).to_4x4() # type: ignore # pylint disable=no-member
 		keywords: list = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob", "clear_scene", "create_size_reference"))
 		keywords["global_matrix"] = global_matrix
@@ -150,7 +153,9 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 		keywords["forward_direction"] = self.forward_direction
 		keywords["up_direction"] = self.up_direction
 		keywords["automatic_naming"] = self.automatic_naming
-		save_drs(context, **keywords)
+		keywords["temporary_file_path"] = temporary_file_path
+		# save_drs(context, **keywords)
+		test_export(context, **keywords)
 		return {'FINISHED'}
 
 class NewBFScene(bpy.types.Operator):

@@ -404,12 +404,16 @@ class Bone:
 		self.name = self.name.replace("building_nature_versatile_tower_", "")
 		if len(self.name) > 63:
 			self.name = str(hash(self.name))
+			print(f"Hashed Bone Name: {self.name}")
 		self.child_count = unpack('i', file.read(calcsize('i')))[0]
 		self.children = list(unpack(f'{self.child_count}i', file.read(calcsize(f'{self.child_count}i'))))
 		return self
 
-	def write(self, file: BinaryIO) -> None:	
-		file.write(pack(f'iiii{self.name_length}s{self.child_count}i', self.version, self.identifier, self.name_length, self.name.encode('utf-8'), self.child_count, *self.children))
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('iii', self.version, self.identifier, self.name_length))
+		file.write(pack(f'{self.name_length}s', self.name.encode('utf-8')))
+		file.write(pack('i', self.child_count))
+		file.write(pack(f'{self.child_count}i', *self.children))
 
 	def size(self) -> int:
 		return calcsize(f'iiii{self.name_length}s{self.child_count}i')
@@ -659,7 +663,7 @@ class Material:
 		return self
 
 	def size(self) -> int:
-		return calcsize('i') + calcsize('f') 
+		return calcsize('i') + calcsize('f')
 
 @dataclass(eq=False, repr=False)
 class Materials:
@@ -1290,6 +1294,13 @@ class Constraint:
 			file.write(pack('5f', self.left_angle, self.right_angle, self.left_damp_start, self.right_damp_start, self.damp_ratio))
 		return self
 
+	def size(self) -> int:
+		"""Returns the size of the Constraint"""
+		base = calcsize('h')
+		if self.revision == 1:
+			base += calcsize('5f')
+		return base
+
 @dataclass(eq=False, repr=False)
 class IKAtlas:
 	"""IKAtlas"""
@@ -1322,6 +1333,15 @@ class IKAtlas:
 			if self.version >= 2:
 				file.write(pack('h', self.purpose_flags))
 		return self
+
+	def size(self) -> int:
+		"""Returns the size of the IKAtlas"""
+		base = calcsize('ih')
+		if self.version >= 1:
+			base += calcsize('ii') + sum(constraint.size() for constraint in self.constraints)
+			if self.version >= 2:
+				base += calcsize('h')
+		return base
 
 @dataclass(eq=False, repr=False)
 class AnimationSetVariant:
@@ -1357,15 +1377,24 @@ class AnimationSetVariant:
 		file.write(pack('i', self.weight))
 		file.write(pack('i', self.length))
 		file.write(pack(f'{self.length}s', self.file.encode('utf-8')))
-		file.write(pack('f', self.start))
-		file.write(pack('f', self.end))
-		file.write(pack('B', self.allows_ik))
-		file.write(pack('B', self.unknown2))
+		if self.version >= 4:
+			file.write(pack('ff', self.start, self.end))
+		if self.version >= 5:
+			file.write(pack('B', self.allows_ik))
+		if self.version >= 7:
+			file.write(pack('B', self.unknown2))
 		return self
 
 	def size(self) -> int:
 		"""Returns the size of the AnimationSetVariant"""
-		return 21 + self.length
+		base = calcsize('iii') + self.length
+		if self.version >= 4:
+			base += calcsize('ff')
+		if self.version >= 5:
+			base += calcsize('B')
+		if self.version >= 7:
+			base += calcsize('B')
+		return base
 
 @dataclass(eq=False, repr=False)
 class ModeAnimationKey:
@@ -1410,9 +1439,9 @@ class ModeAnimationKey:
 		file.write(pack(f'{self.length}s', self.file.encode('utf-8')))
 		file.write(pack('i', self.unknown))
 		if self.type == 1:
-			file.write(pack('24B', self.unknown2))
+			file.write(pack('24B', *self.unknown2))
 		elif self.type <= 5:
-			file.write(pack('6B', self.unknown2))
+			file.write(pack('6B', *self.unknown2))
 		elif self.type == 6:
 			file.write(pack('i', self.unknown2))
 			file.write(pack('h', self.vis_job))
@@ -1425,7 +1454,17 @@ class ModeAnimationKey:
 
 	def size(self) -> int:
 		"""Returns the size of the ModeAnimationKey"""
-		return 39 + sum(animation_set_variant.size() for animation_set_variant in self.animation_set_variants)
+		base = 12 + self.length
+		if self.type == 1:
+			base += 24
+		elif self.type <= 5:
+			base += 6
+		elif self.type == 6:
+			base += 12
+		base += 4
+		for animation_set_variant in self.animation_set_variants:
+			base += animation_set_variant.size()
+		return base
 
 @dataclass(eq=False, repr=False)
 class AnimationMarker:
@@ -1437,10 +1476,10 @@ class AnimationMarker:
 
 	def read(self, file: BinaryIO) -> 'AnimationMarker':
 		"""Reads the AnimationMarker from the buffer"""
-		self.some_class = unpack('i', file.read(calcsize('i')))[0]
-		self.time = unpack('f', file.read(calcsize('f')))[0]
-		self.direction = Vector3().read(file)
-		self.position = Vector3().read(file)
+		self.some_class = unpack('i', file.read(calcsize('i')))[0] # 4 bytes
+		self.time = unpack('f', file.read(calcsize('f')))[0] # 4 bytes
+		self.direction = Vector3().read(file) # 12 bytes
+		self.position = Vector3().read(file) # 12 bytes
 		return self
 
 	def write(self, file: BinaryIO) -> 'AnimationMarker':
@@ -1449,6 +1488,10 @@ class AnimationMarker:
 		self.direction.write(file)
 		self.position.write(file)
 		return self
+
+	def size(self) -> int:
+		"""Returns the size of the AnimationMarker"""
+		return 32
 
 @dataclass(eq=False, repr=False)
 class AnimationMarkerSet:
@@ -1479,6 +1522,10 @@ class AnimationMarkerSet:
 			animation_marker.write(file)
 		return self
 
+	def size(self) -> int:
+		"""Returns the size of the AnimationMarkerSet"""
+		return 16 + self.length + sum(animation_marker.size() for animation_marker in self.animation_markers)
+
 @dataclass(eq=False, repr=False)
 class UnknownStruct2:
 	"""UnknownStruct2"""
@@ -1494,6 +1541,10 @@ class UnknownStruct2:
 		for unknown_int in self.unknown_ints:
 			file.write(pack('i', unknown_int))
 		return self
+
+	def size(self) -> int:
+		"""Returns the size of the UnknownStruct2"""
+		return 20
 
 @dataclass(eq=False, repr=False)
 class UnknownStruct:
@@ -1523,6 +1574,10 @@ class UnknownStruct:
 		for unknown_struct2 in self.unknown_structs:
 			unknown_struct2.write(file)
 		return self
+
+	def size(self) -> int:
+		"""Returns the size of the UnknownStruct"""
+		return 16 + self.length + sum(unknown_struct2.size() for unknown_struct2 in self.unknown_structs)
 
 @dataclass(eq=False, repr=False)
 class AnimationSet:
@@ -1672,128 +1727,450 @@ class AnimationSet:
 
 	def size(self) -> int:
 		"""Returns the size of the AnimationSet"""
-		add = 0
-		for key in self.mode_animation_keys:
-			add += key.size()
-		return 62 + add
+		base = 27 + 4 + 4
 
-# class Timing:
-# 	'''Timing'''
-# 	def __init__(self) -> None:
-# 		'''Timing Constructor'''
-# 		self.CastMs: int # Int
-# 		self.ResolveMs: int # Int
-# 		self.UK1: float # Float
-# 		self.UK2: float # Float
-# 		self.UK3: float # Float
-# 		self.AnimationMarkerID: int # Int
-# 		# NOTICE:
-# 		# When tying the visual animation to the game logic,
-# 		# the castMs/resolveMs seem to get converted into game ticks by simply dividing them by 100.
-# 		# So while the visual part of the animation is handled in milliseconds,
-# 		# the maximum precision for the game logic is in deciseconds/game ticks.
-# 		#
-# 		# Meaning of the variables below:
-# 		# For type Spawn:
-# 		# castMs is the duration it will take until the unit can be issued commands or lose damage immunity
-# 		# If castMs is for zero game ticks (< 100), then the animation is skipped entirely.
-# 		# If castMs is for exactly one game tick (100-199), it seems to bug out.
-# 		# Therefore the minimum value here should be 200, if you wish to play a spawn animation.
-# 		# resolveMs is the duration the spawn animation will play out for in total.
-# 		# This should match the total time from the .ska file, otherwise it looks weird.
-# 		# If you wish to slow down/speed up the animation, you can change the total time in the .ska file.
-# 		#
-# 		# For type CastResolve:
-# 		# castMs is the duration it will take the unit to start casting its ability (can still be aborted)
-# 		# If castMs is for zero game ticks (< 100), then the ability skips the cast stage
-# 		# and instantly moves onto the resolve stage.
-# 		# resolveMs is the duration it will take the unit to finish casting its ability (cannot be aborted)
-# 		# It seems the stage cannot be skipped and uses a minimum duration of 1 game tick,
-# 		# even if a value < 100 is specified.
-# 		# The animation is automatically slowed down/sped up based on these timings.
-# 		# The total time from the .ska file is ignored.
-# 		#
-# 		# For type ModeSwitch:
-# 		# castMs is the duration it will take the unit to start its mode switch animation.
-# 		# If castMs is for zero game ticks (< 100), then the mode switch is done instantly
-# 		# and also does not interrupt movement. During castMs, any commands are blocked.
-# 		# resolveMs seems to be ignored here. The unit can be issued new commands after the cast time.
-# 		# If you wish to slow down/speed up the animation, you can change the total time in the .ska file.
-# 		#
-# 		# For type Melee/WormMovement No experiments conducted yet.
-# 		#  castMs;
-# 		#  resolveMs;
-# 		# at uk1;
-# 		# at uk2;
-# 		#
-# 		# Can be used to link an AnimationMarkerSet to a timing.
-# 		# Relevant field: AnimationMarkerSet.animationMarkerID
-# 		#
-# 		# Seems to be often used for Spawn animations.
-# 		# In cases where e.g. the animationTagID is used,
-# 		# the animationMarkerID usually not referenced anywhere.
+		if self.version >= 6:
+			if self.revision >= 2:
+				base += 2
+			if self.revision >= 5:
+				base += 12
+			if self.revision >= 6:
+				base += 1
 
-# class TimingVariant:
-# 	'''TimingVariant'''
-# 	def __init__(self) -> None:
-# 		'''TimingVariant Constructor'''
-# 		self.Weight: int # Byte. The weight of this variant. The higher the weight, the more likely it is to be chosen.
-# 		self.VariantIndex: int # Byte.
-# 		self.TimingCount: int # Short. The number of Timings for this Variant. Most of the time, this is 1.
-# 		self.Timings: List[Timing]
+		for mode_animation_key in self.mode_animation_keys:
+			base += mode_animation_key.size()
 
-# class AnimationTiming:
-# 	'''AnimationTiming'''
-# 	def __init__(self) -> None:
-# 		'''AnimationTiming Constructor'''
-# 		self.AnimationType: int = AnimationType['CastResolve']
-# 		self.AnimationTagID: int = 0
-# 		self.IsEnterModeAnimation: int = 0 # Short. This is 1 most of the time.
-# 		self.VariantCount: int # Short. The number of Animations for this Type/TagID combination.
-# 		self.TimingVariants: List[TimingVariant]
+		if self.version >= 3:
+			base += 2
+			if self.has_atlas >= 1:
+				base += 4 + sum(ik_atlas.size() for ik_atlas in self.ik_atlases)
+			if self.has_atlas >= 2:
+				base += 4 + 4 * len(self.uk_ints)
 
-# class StructV3:
-# 	'''StructV3'''
-# 	def __init__(self) -> None:
-# 		'''StructV3 Constructor'''
-# 		self.Length: int = 1
-# 		self.Unknown: List[int] = [0, 0]
+		if self.version >= 4:
+			base += 2
+			if self.subversion == 2:
+				base += 4 + sum(animation_marker_set.size() for animation_marker_set in self.animation_marker_sets)
+			elif self.subversion == 1:
+				base += 4 + sum(unknown_struct.size() for unknown_struct in self.unknown_structs)
 
-# 	def write(self, file: BinaryIO) -> 'StructV3':
-# 		'''Writes the StructV3 to the buffer'''
-# 		Buffer.WriteInt(self.Length)
-# 		for Unknown in self.Unknown:
-# 			Buffer.WriteInt(Unknown)
-# 		return self
+		return base
 
-# 	def Size(self) -> int:
-# 		'''Returns the size of the StructV3'''
-# 		return 12
+@dataclass(eq=False, repr=False)
+class Timing:
+	cast_ms: int = 0 # Int
+	resolve_ms: int = 0 # Int
+	uk_1: float = 0 # Float
+	uk_2: float = 0 # Float
+	uk_3: float = 0 # Float
+	animation_marker_id: int = 0 # Int
 
-# class AnimationTimings:
-# 	"""AnimationTimings"""
-# 	def __init__(self):
-# 		"""AnimationTimings Constructor"""
-# 		self.Magic: int = 1650881127
-# 		self.Version: int = 4 # Short. 3 or 4
-# 		self.AnimationTimingCount: int = 0 # Short. Only used if there are multiple Animations.
-# 		self.AnimationTimings: List[AnimationTiming]
-# 		self.StructV3: StructV3 = StructV3()
+	def read(self, file: BinaryIO) -> 'Timing':
+		"""Reads the Timing from the buffer"""
+		self.cast_ms = unpack('i', file.read(calcsize('i')))[0]
+		self.resolve_ms = unpack('i', file.read(calcsize('i')))[0]
+		self.uk_1 = unpack('f', file.read(calcsize('f')))[0]
+		self.uk_2 = unpack('f', file.read(calcsize('f')))[0]
+		self.uk_3 = unpack('f', file.read(calcsize('f')))[0]
+		self.animation_marker_id = unpack('i', file.read(calcsize('i')))[0]
+		return self
 
-# 	def write(self, file: BinaryIO) -> 'AnimationTimings':
-# 		"""Writes the AnimationTimings to the buffer"""
-# 		Buffer.WriteInt(self.Magic)
-# 		Buffer.WriteShort(self.Version)
-# 		Buffer.WriteShort(self.AnimationTimingCount)
-# 		if self.AnimationTimingCount > 0:
-# 			# TODO
-# 			pass
-# 		self.StructV3.Write(Buffer)
-# 		return self
+	def write(self, file: BinaryIO) -> 'Timing':
+		"""Writes the Timing to the buffer"""
+		file.write(pack('i', self.cast_ms))
+		file.write(pack('i', self.resolve_ms))
+		file.write(pack('f', self.uk_1))
+		file.write(pack('f', self.uk_2))
+		file.write(pack('f', self.uk_3))
+		file.write(pack('i', self.animation_marker_id))
+		return self
 
-# 	def Size(self) -> int:
-# 		"""Returns the size of the AnimationTimings"""
-# 		return 8 + self.StructV3.Size()
+	def size(self) -> int:
+		"""Returns the size of the Timing"""
+		return calcsize('iifffi')
+
+@dataclass(eq=False, repr=False)
+class TimingVariant:
+	weight: int = 0 # Byte. The weight of this variant. The higher the weight, the more likely it is to be chosen.
+	variant_index: int = 0 # Byte.
+	timing_count: int = 0 # Short. The number of Timings for this Variant. Most of the time, this is 1.
+	timings: List[Timing] = field(default_factory=list)
+
+	def read(self, file: BinaryIO, animation_timing_version: int) -> 'TimingVariant':
+		"""Reads the TimingVariant from the buffer"""
+		self.weight = unpack('B', file.read(calcsize('B')))[0]
+		if animation_timing_version == 4:
+			self.variant_index = unpack('B', file.read(calcsize('B')))[0]
+		self.timing_count = unpack('H', file.read(calcsize('H')))[0]
+		self.timings = [Timing().read(file) for _ in range(self.timing_count)]
+		return self
+
+	def write(self, file: BinaryIO, animation_timing_version: int) -> 'TimingVariant':
+		"""Writes the TimingVariant to the buffer"""
+		file.write(pack('B', self.weight))
+		if animation_timing_version == 4:
+			file.write(pack('B', self.variant_index))
+		file.write(pack('H', self.timing_count))
+		for timing in self.timings:
+			timing.write(file)
+		return self
+
+	def size(self, animation_timing_version: int) -> int:
+		"""Returns the size of the TimingVariant"""
+		if animation_timing_version == 4:
+			return 4 + sum(timing.size() for timing in self.timings)
+		return 3 + sum(timing.size() for timing in self.timings)
+
+@dataclass(eq=False, repr=False)
+class AnimationTiming:
+	animation_type: int = AnimationType['CastResolve'] # int
+	animation_tag_id: int = 0
+	is_enter_mode_animation: int = 0 # Short. This is 1 most of the time.
+	variant_count: int = 0 # Short. The number of Animations for this Type/TagID combination.
+	timing_variants: List[TimingVariant] = field(default_factory=list)
+
+	def read(self, file: BinaryIO, animation_timing_version: int) -> 'AnimationTiming':
+		"""Reads the AnimationTiming from the buffer"""
+		self.animation_type = unpack('i', file.read(calcsize('i')))[0]
+		if animation_timing_version in [2, 3, 4]:
+			self.animation_tag_id = unpack('i', file.read(calcsize('i')))[0]
+			self.is_enter_mode_animation = unpack('h', file.read(calcsize('h')))[0]
+		self.variant_count = unpack('H', file.read(calcsize('H')))[0]
+		self.timing_variants = [TimingVariant().read(file, animation_timing_version) for _ in range(self.variant_count)]
+		return self
+
+	def write(self, file: BinaryIO, animation_timing_version: int) -> 'AnimationTiming':
+		'''Writes the AnimationTiming to the buffer'''
+		file.write(pack('i', self.animation_type))
+		if animation_timing_version in [2, 3, 4]:
+			file.write(pack('i', self.animation_tag_id))
+			file.write(pack('h', self.is_enter_mode_animation))
+		file.write(pack('H', self.variant_count))
+		for variant in self.timing_variants:
+			variant.write(file, animation_timing_version)
+		return self
+
+	def size(self, animation_timing_version: int) -> int:
+		"""Returns the size of the AnimationTiming"""
+		if animation_timing_version in [2, 3, 4]:
+			return 12 + sum(variant.size(animation_timing_version) for variant in self.timing_variants)
+		return 6 + sum(variant.size(animation_timing_version) for variant in self.timing_variants)
+
+@dataclass(eq=False, repr=False)
+class StructV3:
+	length: int = 1 # Int
+	unknown: List[int] = field(default_factory=lambda: [0, 0]) # Ints
+
+	def read(self, file: BinaryIO) -> 'StructV3':
+		"""Reads the StructV3 from the buffer"""
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		self.unknown = [unpack('i', file.read(calcsize('i')))[0] for _ in range(self.length)]
+		return self
+
+	def write(self, file: BinaryIO) -> 'StructV3':
+		'''Writes the StructV3 to the buffer'''
+		file.write(pack('i', self.length))
+		for unknown in self.unknown:
+			file.write(pack('i', unknown))
+
+	def size(self) -> int:
+		'''Returns the size of the StructV3'''
+		return 4 + 8 * self.length
+
+@dataclass(eq=False, repr=False)
+class AnimationTimings:
+	magic: int = 1650881127 # int
+	version: int = 4 # Short. 3 or 4
+	animation_timing_count: int = 0 # Short. Only used if there are multiple Animations.
+	animation_timings: List[AnimationTiming] = field(default_factory=list)
+	struct_v3: StructV3 = StructV3()
+
+	def read(self, file: BinaryIO) -> 'AnimationTimings':
+		self.magic = unpack('i', file.read(calcsize('i')))[0]
+		self.version = unpack('h', file.read(calcsize('h')))[0]
+		self.animation_timing_count = unpack('h', file.read(calcsize('h')))[0]
+		self.animation_timings = [AnimationTiming().read(file, self.version) for _ in range(self.animation_timing_count)]
+		self.struct_v3 = StructV3().read(file)
+		return self
+
+	def write(self, file: BinaryIO) -> 'AnimationTimings':
+		"""Writes the AnimationTimings to the buffer"""
+		file.write(pack('i', self.magic))
+		file.write(pack('h', self.version))
+		file.write(pack('h', self.animation_timing_count))
+		for animation_timing in self.animation_timings:
+			animation_timing.write(file, self.version)
+		self.struct_v3.write(file)
+		return self
+
+	def size(self) -> int:
+		"""Returns the size of the AnimationTimings"""
+		return 8 + sum(animation_timing.size(self.version) for animation_timing in self.animation_timings) + self.struct_v3.size()
+
+@dataclass(eq=False, repr=False)
+class Variant:
+	weight: int = 0  # Byte
+	length: int = 0  # Int
+	name: str = ""  # CString split into length and name
+
+	def read(self, file: BinaryIO) -> 'Variant':
+		self.weight = unpack('B', file.read(1))[0]
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		self.name = file.read(self.length).decode('utf-8').strip('\x00')
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('B', self.weight))
+		file.write(pack('i', self.length))
+		file.write(self.name.encode('utf-8'))
+
+	def size(self) -> int:
+		return 5 + self.length
+
+@dataclass(eq=False, repr=False)
+class Keyframe:
+	time: float = 0.0
+	keyframe_type: int = 0
+	min_falloff: float = 0.0
+	max_falloff: float = 0.0
+	volume: float = 0.0
+	pitch_shift_min: float = 0.0
+	pitch_shift_max: float = 0.0
+	offset: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])  # Vector3
+	interruptable: int = 0
+	uk: Optional[int] = None  # Only if type != 10 and type != 11
+	variant_count: int = 0
+	variants: List[Variant] = field(default_factory=list)
+
+	def read(self, file: BinaryIO, type: int) -> 'Keyframe':
+		self.time, self.keyframe_type, self.min_falloff, self.max_falloff, self.volume, self.pitch_shift_min, self.pitch_shift_max = unpack('fifffff', file.read(calcsize('fifffff')))
+		self.offset = list(unpack('3f', file.read(calcsize('3f'))))
+		self.interruptable = unpack('B', file.read(1))[0]
+
+		if type not in [10, 11]:
+			self.uk = unpack('B', file.read(1))[0]
+
+		self.variant_count = unpack('i', file.read(calcsize('i')))[0]
+		self.variants = [Variant().read(file) for _ in range(self.variant_count)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('fifffff', self.time, self.keyframe_type, self.min_falloff, self.max_falloff, self.volume, self.pitch_shift_min, self.pitch_shift_max))
+		file.write(pack('3f', *self.offset))
+		file.write(pack('B', self.interruptable))
+
+		if self.uk is not None:
+			file.write(pack('B', self.uk))
+
+		file.write(pack('i', self.variant_count))
+		for variant in self.variants:
+			variant.write(file)
+
+	def size(self) -> int:
+		size = calcsize('fifffff') + calcsize('3f') + calcsize('B')
+		if self.uk is not None:
+			size += calcsize('B')
+		size += calcsize('i')
+		for variant in self.variants:
+			size += variant.size()
+		return size
+
+@dataclass(eq=False, repr=False)
+class SkelEff:
+	length: int = 0  # Int
+	name: str = ""  # CString split into length and name
+	keyframe_count: int = 0
+	keyframes: List[Keyframe] = field(default_factory=list)
+
+	def read(self, file: BinaryIO, type: int) -> 'SkelEff':
+		self.length = unpack('i', file.read(calcsize('i')))[0]
+		self.name = file.read(self.length).decode('utf-8').strip('\x00')
+		self.keyframe_count = unpack('i', file.read(calcsize('i')))[0]
+		self.keyframes = [Keyframe().read(file, type) for _ in range(self.keyframe_count)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('i', self.length))
+		file.write(self.name.encode('utf-8'))
+		file.write(pack('i', self.keyframe_count))
+		for keyframe in self.keyframes:
+			keyframe.write(file)
+
+	def size(self) -> int:
+		base = calcsize('ii') + self.length
+		for keyframe in self.keyframes:
+			base += keyframe.size()
+		return base
+
+@dataclass
+class SthSound:
+	sth_sound_file: int = 0 # byte
+	unknown: int = 0 # short
+	unknown_list: List[int] = field(default_factory=list, metadata={'size': 5}) # 5 ints
+	lenght: int = 0 # int
+	file_name: str = "" # CString split into length and name
+
+	def read(self, file: BinaryIO) -> 'SthSound':
+		self.sth_sound_file = unpack('B', file.read(1))[0]
+		self.unknown = unpack('h', file.read(calcsize('h')))[0]
+		self.unknown_list = list(unpack('5i', file.read(calcsize('5i'))))
+		self.lenght = unpack('i', file.read(calcsize('i')))[0]
+		self.file_name = file.read(self.lenght).decode('utf-8').strip('\x00')
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('B', self.sth_sound_file))
+		file.write(pack('h', self.unknown))
+		file.write(pack('5i', *self.unknown_list))
+		file.write(pack('i', self.lenght))
+		file.write(self.file_name.encode('utf-8'))
+
+	def size(self) -> int:
+		return 23 + self.lenght
+
+@dataclass(eq=False, repr=False)
+class UKS2:
+	unknown: int = 0  # short
+	unknown_list: List[int] = field(default_factory=list, metadata={'size': 5})  # 5 ints
+	unknown_2: int = 0  # short
+	lenght: int = 0  # short
+	sth_sound: List[SthSound] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'UKS2':
+		self.unknown = unpack('h', file.read(calcsize('h')))[0]
+		self.unknown_list = list(unpack('5i', file.read(calcsize('5i'))))
+		self.unknown_2 = unpack('h', file.read(calcsize('h')))[0]
+		self.lenght = unpack('h', file.read(calcsize('h')))[0]
+		self.sth_sound = [SthSound().read(file) for _ in range(self.lenght)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('h', self.unknown))
+		file.write(pack('5i', *self.unknown_list))
+		file.write(pack('h', self.unknown_2))
+		file.write(pack('h', self.lenght))
+		for sth_sound in self.sth_sound:
+			sth_sound.write(file)
+
+	def size(self) -> int:
+		return 26 + sum(sth_sound.size() for sth_sound in self.sth_sound)
+
+@dataclass(eq=False, repr=False)
+class UKS1:
+	unknown: int = 0  # short
+	unknown_list: List[int] = field(default_factory=list, metadata={'size': 5})  # 5 ints
+	unknown_2: int = 0  # short
+	length: int = 0  # short
+	unknown_structs: List[UKS2] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'UKS1':
+		self.unknown = unpack('h', file.read(calcsize('h')))[0]
+		self.unknown_list = list(unpack('5i', file.read(calcsize('5i'))))
+		self.unknown_2 = unpack('h', file.read(calcsize('h')))[0]
+		self.length = unpack('h', file.read(calcsize('h')))[0]
+		self.unknown_structs = [UKS2().read(file) for _ in range(self.length)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('h', self.unknown))
+		file.write(pack('5i', *self.unknown_list))
+		file.write(pack('h', self.unknown_2))
+		file.write(pack('h', self.length))
+		for unknown_struct in self.unknown_structs:
+			unknown_struct.write(file)
+
+	def size(self) -> int:
+		return 26 + sum(unknown_struct.size() for unknown_struct in self.unknown_structs)
+
+@dataclass(eq=False, repr=False)
+class UKS3:
+	unknown: int = 0  # short
+	unknown_list: List[int] = field(default_factory=list, metadata={'size': 5})  # 5 ints
+	unknown_2: int = 0  # short
+	lenght: int = 0  # short
+	sth_sound: List[SthSound] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'UKS3':
+		self.unknown = unpack('h', file.read(calcsize('h')))[0]
+		self.unknown_list = list(unpack('5i', file.read(calcsize('5i'))))
+		self.unknown_2 = unpack('h', file.read(calcsize('h')))[0]
+		self.lenght = unpack('h', file.read(calcsize('h')))[0]
+		self.sth_sound = [SthSound().read(file) for _ in range(self.lenght)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:
+		file.write(pack('h', self.unknown))
+		file.write(pack('5i', *self.unknown_list))
+		file.write(pack('h', self.unknown_2))
+		file.write(pack('h', self.lenght))
+		for sth_sound in self.sth_sound:
+			sth_sound.write(file)
+
+	def size(self) -> int:
+		return 26 + sum(sth_sound.size() for sth_sound in self.sth_sound)
+
+@dataclass(eq=False, repr=False)
+class EffectSet:
+	type: int = 0  # Short
+	checksum_length: int = 0  # Int
+	checksum: str = ""  # CString split into length and name
+	length: int = 0
+	skel_effekts: List[SkelEff] = field(default_factory=list)
+	unknown: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0])  # Vector3
+	length4: int = 0 # short
+	unknown4: List[UKS3] = field(default_factory=list)
+	lenght3: int = 0 # short
+	unknown3: List[UKS1] = field(default_factory=list)
+
+	def read(self, file: BinaryIO) -> 'EffectSet':
+		self.type = unpack('h', file.read(calcsize('h')))[0]
+		self.checksum_length = unpack('i', file.read(calcsize('i')))[0]
+		self.checksum = file.read(self.checksum_length).decode('utf-8').strip('\x00')
+
+		if self.type in [10, 11, 12]:
+			if self.type == 10:
+				self.unknown = list(unpack('5f', file.read(calcsize('5f'))))
+
+			self.length = unpack('i', file.read(calcsize('i')))[0]
+			self.skel_effekts = [SkelEff().read(file, self.type) for _ in range(self.length)]
+			self.length4 = unpack('h', file.read(calcsize('h')))[0]
+			self.unknown4 = [UKS3().read(file) for _ in range(self.length4)]
+			self.lenght3 = unpack('h', file.read(calcsize('h')))[0]
+			self.unknown3 = [UKS1().read(file) for _ in range(self.lenght3)]
+		return self
+
+	def write(self, file: BinaryIO) -> None:#
+		file.write(pack('h', self.type))
+		file.write(pack('i', self.checksum_length))
+		file.write(self.checksum.encode('utf-8'))
+		if self.type in [10, 11, 12]:
+			if self.type == 10:
+				file.write(pack('5f', *self.unknown))
+			file.write(pack('i', self.length))
+			for skel_eff in self.skel_effekts:
+				skel_eff.write(file)
+			file.write(pack('h', self.length4))
+			for unknown in self.unknown4:
+				unknown.write(file)
+			file.write(pack('h', self.lenght3))
+			for unknown in self.unknown3:
+				unknown.write(file)
+
+	def size(self) -> int:
+		base = 6 + self.checksum_length
+		if self.type in [10, 11, 12]:
+			if self.type == 10:
+				base += calcsize('5f')
+			base += calcsize('i')
+			for skel_eff in self.skel_effekts:
+				base += skel_eff.size()
+			base += calcsize('h')
+			for unknown in self.unknown4:
+				base += unknown.size()
+			base += calcsize('h')
+			for unknown in self.unknown3:
+				base += unknown.size()
+		return base
 
 dataclass(eq=False, repr=False)
 class SMeshState:
@@ -1955,6 +2332,8 @@ class DRS:
 	collision_shape: CollisionShape = None
 	mesh_set_grid: MeshSetGrid = None
 	cdrw_locator_list: CDrwLocatorList = None
+	effect_set: EffectSet = None
+	animation_timings: AnimationTimings = None
 
 	def read(self, file_name: str) -> 'DRS':
 		reader = FileReader(file_name)
@@ -1972,13 +2351,13 @@ class DRS:
 			100449016: 'cgeo_mesh_node',
 			-761174227: 'csk_skin_info_node',
 			-2110567991: 'csk_skeleton_node',
-			# -1403092629: 'animation_timings_node',
+			-1403092629: 'animation_timings_node',
 			-1340635850: 'cdsp_joint_map_node',
 			-933519637: 'cgeo_obb_tree_node',
 			-183033339: 'drw_resource_meta_node',
 			1396683476: 'cgeo_primitive_container_node',
 			268607026: 'collision_shape_node',
-			# 688490554: 'effect_set_node',
+			688490554: 'effect_set_node',
 			154295579: 'mesh_set_grid_node',
 			735146985: 'cdrw_locator_list_node'
 		}
@@ -2002,7 +2381,7 @@ class DRS:
 			"DrwResourceMeta": 'drw_resource_meta_node',
 			"CGeoPrimitiveContainer": 'cgeo_primitive_container_node',
 			"CollisionShape": 'collision_shape_node',
-			# "EffectSet": 'effect_set_node',
+			"EffectSet": 'effect_set_node',
 			"MeshSetGrid": 'mesh_set_grid_node',
 			"CDrwLocatorList": 'cdrw_locator_list_node'
 		}
@@ -2104,7 +2483,7 @@ class BMS:
 		for _ in range(self.node_count - 1):
 			node = Node().read(reader)
 			setattr(self, node_map.get(node.name, ''), node)
-   
+
 		for key, value in node_map.items():
 			# remove _node from the value
 			node_info: NodeInformation = getattr(self, value, None)
