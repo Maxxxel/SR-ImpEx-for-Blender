@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from os import read
 from struct import calcsize, pack, unpack
 from typing import List, Union, BinaryIO, Optional
 from mathutils import Vector, Matrix, Quaternion
@@ -1950,6 +1951,7 @@ class DRS:
 	cgeo_primitive_container: CGeoPrimitiveContainer = None
 	collision_shape: CollisionShape = None
 	mesh_set_grid: MeshSetGrid = None
+	cdrw_locator_list: CDrwLocatorList = None
 
 	def read(self, file_name: str) -> 'DRS':
 		reader = FileReader(file_name)
@@ -2055,3 +2057,57 @@ class DRS:
 				node_info.data_object.write(writer)
 
 		writer.close()
+
+@dataclass(eq=False, repr=False)
+class BMS:
+	magic: int = -981667554
+	number_of_models: int = 1
+	node_information_offset: int = -1
+	node_hierarchy_offset: int = -1
+	node_count: int = 1
+	root_node: RootNode = RootNode()
+	node_informations: List[NodeInformation] = field(default_factory=lambda: [RootNodeInformation()])
+	nodes: List[Node] = field(default_factory=lambda: [RootNode()])
+	state_based_mesh_set_node: NodeInformation = None
+	state_based_mesh_set: StateBasedMeshSet = None
+
+	def read(self, file_name: str) -> 'BMS':
+		reader = FileReader(file_name)
+		self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count = unpack('iiiii', reader.read(calcsize('iiiii')))
+
+		if self.magic != -981667554 or self.node_count < 1:
+			raise TypeError(f"This is not a valid file. Magic: {self.magic}, NodeCount: {self.node_count}")
+
+		reader.seek(self.node_information_offset)
+		self.node_informations[0] = RootNodeInformation().read(reader)
+
+		node_information_map = {
+			120902304: 'state_based_mesh_set_node',
+		}
+
+		for _ in range(self.node_count - 1):
+			node_info = NodeInformation().read(reader)
+			setattr(self, node_information_map.get(node_info.magic, ''), node_info)
+
+		reader.seek(self.node_hierarchy_offset)
+		self.nodes[0] = RootNode().read(reader)
+
+		reader.seek(self.node_hierarchy_offset)
+		node_map = {
+			"StateBasedMeshSet": 'state_based_mesh_set_node',
+		}
+
+		for _ in range(self.node_count - 1):
+			node = Node().read(reader)
+			setattr(self, node_map.get(node.name, ''), node)
+   
+		for key, value in node_map.items():
+			# remove _node from the value
+			node_info: NodeInformation = getattr(self, value, None)
+			index = value.replace('_node', '')
+			if node_info is not None:
+				reader.seek(node_info.offset)
+				setattr(self, index, globals()[key]().read(reader))
+
+		reader.close()
+		return self

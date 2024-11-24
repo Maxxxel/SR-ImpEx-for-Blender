@@ -11,7 +11,7 @@ from bpy_extras.io_utils import axis_conversion
 import bmesh
 import xml.etree.ElementTree as ET
 
-from .drs_definitions import DRS, CDspMeshFile, CylinderShape, Face, BattleforgeMesh, DRSBone, CSkSkeleton, Bone, BoneVertex, BoxShape, SphereShape, CSkSkinInfo, CGeoMesh, BoneWeight, CGeoOBBTree, OBBNode, CMatCoordinateSystem, CDspJointMap, MeshData, Vertex, LevelOfDetail, EmptyString, Flow, Textures, Texture, Refraction, Materials, DrwResourceMeta, JointGroup, Vector3, Vector4
+from .drs_definitions import DRS, BMS, CDspMeshFile, CylinderShape, Face, BattleforgeMesh, DRSBone, CSkSkeleton, Bone, BoneVertex, BoxShape, MeshGridModule, SLocator, SphereShape, CSkSkinInfo, CGeoMesh, BoneWeight, CGeoOBBTree, OBBNode, CMatCoordinateSystem, CDspJointMap, MeshData, StateBasedMeshSet, Vertex, LevelOfDetail, EmptyString, Flow, Textures, Texture, Refraction, Materials, DrwResourceMeta, JointGroup, Vector3, Vector4
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA, SKAKeyframe
 
@@ -32,6 +32,14 @@ def show_message_box(message = "", title = "Message Box", icon = 'INFO', final =
 		bpy.ops.my_category.show_messages('INVOKE_DEFAULT', messages=final_message)
 		pass
 
+def find_or_create_collection(source_collection: bpy.types.Collection, collection_name: str) -> bpy.types.Collection:
+	collection = source_collection.children.get(collection_name)
+	if collection is None:
+		collection = bpy.data.collections.new(collection_name)
+		source_collection.children.link(collection)
+
+	return collection
+
 def apply_transformations(obj: bpy.types.Object, global_matrix: Matrix, apply_transform: bool, edit_scale=True) -> None:
 	if apply_transform:
 		obj.matrix_world = global_matrix @ obj.matrix_world
@@ -39,25 +47,25 @@ def apply_transformations(obj: bpy.types.Object, global_matrix: Matrix, apply_tr
 			obj.scale = (1, -1, 1)
 
 def mirror_object_by_vector(obj, vector):
-    """
-    Mirrors an object across a vector.
+	"""
+	Mirrors an object across a vector.
 
-    :param obj: The object to mirror.
-    :param vector: The vector to mirror across (mathutils.Vector).
-    """
-    # Normalize the vector to create a plane of reflection
-    vector = vector.normalized()
-    
-    # Create the reflection matrix
-    reflection_matrix = Matrix((
-        (1 - 2 * vector.x ** 2, -2 * vector.x * vector.y, -2 * vector.x * vector.z, 0),
-        (-2 * vector.x * vector.y, 1 - 2 * vector.y ** 2, -2 * vector.y * vector.z, 0),
-        (-2 * vector.x * vector.z, -2 * vector.y * vector.z, 1 - 2 * vector.z ** 2, 0),
-        (0, 0, 0, 1)
-    ))
-    
-    # Apply the reflection matrix to the object's transformation
-    obj.matrix_world = reflection_matrix @ obj.matrix_world
+	:param obj: The object to mirror.
+	:param vector: The vector to mirror across (mathutils.Vector).
+	"""
+	# Normalize the vector to create a plane of reflection
+	vector = vector.normalized()
+
+	# Create the reflection matrix
+	reflection_matrix = Matrix((
+		(1 - 2 * vector.x ** 2, -2 * vector.x * vector.y, -2 * vector.x * vector.z, 0),
+		(-2 * vector.x * vector.y, 1 - 2 * vector.y ** 2, -2 * vector.y * vector.z, 0),
+		(-2 * vector.x * vector.z, -2 * vector.y * vector.z, 1 - 2 * vector.z ** 2, 0),
+		(0, 0, 0, 1)
+	))
+
+	# Apply the reflection matrix to the object's transformation
+	obj.matrix_world = reflection_matrix @ obj.matrix_world
 
 def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Mesh:
 	battleforge_mesh_data: BattleforgeMesh = mesh_file.meshes[mesh_index]
@@ -159,15 +167,6 @@ def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> 
 
 		bone_data.bind_loc = matrix_local.to_translation()
 		bone_data.bind_rot = matrix_local.to_quaternion()
-
-def pretty_print_bone_tree(bone_list: list[DRSBone], indent: int = 0, bone_data: DRSBone = None) -> None:
-	if bone_data is None:
-		bone_data = bone_list[0]
-
-	print("  " * indent + str(bone_data.identifier) + ": " + bone_data.name)
-
-	for child_bone in [b for b in bone_list if b.parent == bone_data.identifier]:
-		pretty_print_bone_tree(bone_list, indent + 1, child_bone)
 
 def create_bone_tree(armature_data: bpy.types.Armature, bone_list: list[DRSBone], bone_data: DRSBone):
 	edit_bones = armature_data.edit_bones
@@ -417,23 +416,6 @@ def get_bone_fcurves(action: bpy.types.Action, pose_bone: bpy.types.PoseBone) ->
 
 	return fcurves
 
-# def set_keyframe_tangent(keyframe_point: bpy.types.Keyframe, tan_value: float) -> None:
-# 	if tan_value is None:
-# 		return
-
-# 	# Calculate handle positions based on tan_value
-# 	frame = keyframe_point.co[0]
-# 	value = keyframe_point.co[1]
-# 	handle_offset = 0.2  # Adjust this calculation based on how tan_value relates to the slope
-
-# 	# Left handle
-# 	keyframe_point.handle_left_type = 'FREE'
-# 	keyframe_point.handle_left = (frame - 0.1, value - handle_offset * tan_value)
-
-# 	# Right handle
-# 	keyframe_point.handle_right_type = 'FREE'
-# 	keyframe_point.handle_right = (frame + 0.1, value + handle_offset * tan_value)
-
 def insert_keyframes(fcurves: dict[str, bpy.types.FCurve], frame_data: SKAKeyframe, frame: int, animation_type: int, bind_rot: Quaternion, bind_loc: Vector) -> None:
 	if animation_type == 0:
 		# Location
@@ -526,7 +508,279 @@ def create_bone_weights(mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mes
 
 	return bone_weights
 
-def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True, import_debris=False, import_construction=False) -> None:
+def import_state_based_mesh_set(state_based_mesh_set: StateBasedMeshSet, source_collection: bpy.types.Collection, dir_name: str, bmg_file: DRS, global_matrix: Matrix, apply_transform: bool, import_collision_shape: bool, import_animation: bool, fps_selection: str, base_name: str, armature_object: bpy.types.Object, bone_list: list[DRSBone], slocator: SLocator = None, prefix: str = "") -> None:
+	# Get individual mesh states
+	for mesh_set in state_based_mesh_set.mesh_states:
+		if mesh_set.has_files:
+			# Create a new Collection for the State
+			state_collection_name = f"{prefix}Mesh_State_{mesh_set.state_num}"
+			state_collection = find_or_create_collection(source_collection, state_collection_name)
+			# Load the DRS Files
+			drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_set.drs_file))
+
+			if drs_file.csk_skeleton is not None and armature_object is None:
+				# Create the Armature Data
+				armature_data: bpy.types.Armature = bpy.data.armatures.new("CSkSkeleton")
+				# Create the Armature Object and add the Armature Data to it
+				armature_object: bpy.types.Object = bpy.data.objects.new("Armature", armature_data)
+				# Link the Armature Object to the Source Collection
+				source_collection.objects.link(armature_object)
+				# Create the Skeleton
+				bone_list = init_bones(drs_file.csk_skeleton)
+				# Directly set armature data to edit mode
+				bpy.context.view_layer.objects.active = armature_object
+				bpy.ops.object.mode_set(mode='EDIT')
+				# Create the Bone Tree without using bpy.ops or context
+				create_bone_tree(armature_data, bone_list, bone_list[0])
+				# Restore armature data mode to OBJECT
+				bpy.ops.object.mode_set(mode='OBJECT')
+				record_bind_pose(bone_list, armature_data)
+				# Add the Animations to the Armature Object
+				if bmg_file.animation_set is not None:
+					# Apply the Transformations to the Armature Object
+					apply_transformations(armature_object, global_matrix, apply_transform)
+
+			if drs_file.csk_skin_info is not None:
+				# Create the Bone Weights
+				bone_weights = create_bone_weights(drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh)
+
+			# Create a Mesh Collection to store the Mesh Objects
+			mesh_collection: bpy.types.Collection = bpy.data.collections.new("Meshes_Collection")
+			state_collection.children.link(mesh_collection)
+			for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
+				offset = 0 if mesh_index == 0 else drs_file.cdsp_mesh_file.meshes[mesh_index - 1].vertex_count
+				# Create the Mesh Data
+				mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
+				# Create the Mesh Object and add the Mesh Data to it
+				mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{mesh_index}", mesh_data)
+				# Add the Bone Weights to the Mesh Object
+				if drs_file.csk_skin_info is not None:
+					cdsp_mesh_file_data = drs_file.cdsp_mesh_file.meshes[mesh_index]
+					# Dictionary to store bone groups and weights
+					bone_vertex_dict = {}
+					# Iterate over vertices and collect them by group_id and weight
+					for vidx in range(offset, offset + cdsp_mesh_file_data.vertex_count):
+						bone_weight_data = bone_weights[vidx]
+
+						for _ in range(4):  # Assuming 4 weights per vertex
+							group_id = bone_weight_data.indices[_]
+							weight = bone_weight_data.weights[_]
+
+							if weight > 0:  # Only consider non-zero weights
+								if group_id not in bone_vertex_dict:
+									bone_vertex_dict[group_id] = {}
+
+								if weight not in bone_vertex_dict[group_id]:
+									bone_vertex_dict[group_id][weight] = []
+
+								bone_vertex_dict[group_id][weight].append(vidx - offset)
+					# Now process each bone group and add all the vertices in a single call
+					for group_id, weight_data in bone_vertex_dict.items():
+						bone_name = bone_list[group_id].name
+
+						# Create or retrieve the vertex group for the bone
+						if bone_name not in mesh_object.vertex_groups:
+							vertex_group = mesh_object.vertex_groups.new(name=bone_name)
+						else:
+							vertex_group = mesh_object.vertex_groups[bone_name]
+
+						# Add vertices with the same weight in one call
+						for weight, vertex_indices in weight_data.items():
+							vertex_group.add(vertex_indices, weight, 'ADD')
+				# Check if the Mesh has a Skeleton and modify the Mesh Object accordingly
+				if drs_file.csk_skeleton is not None:
+					# Set the Armature Object as the Parent of the Mesh Object
+					mesh_object.parent = armature_object
+					# Add the Armature Modifier to the Mesh Object
+					modifier = mesh_object.modifiers.new(type="ARMATURE", name='Armature')
+					modifier.object = armature_object
+				else:
+					# Apply the Transformations to the Mesh Object when no Skeleton is present else we transform the armature
+					apply_transformations(mesh_object, global_matrix, apply_transform)
+				if slocator is not None:
+					location = (slocator.cmat_coordinate_system.position.x, slocator.cmat_coordinate_system.position.y, slocator.cmat_coordinate_system.position.z)
+					rotation = slocator.cmat_coordinate_system.matrix.matrix
+					rotation_matrix = [list(rotation[i:i+3]) for i in range(0, len(rotation), 3)]
+					transposed_rotation = Matrix(rotation_matrix).transposed()
+					# Create a new Matrix with the Location and Rotation
+					local_matrix = Matrix.Translation(location) @ transposed_rotation.to_4x4()
+					# Apply the Local Matrix to the Mesh Object
+					if apply_transform:
+						mesh_object.matrix_world = global_matrix @ local_matrix
+						mirror_object_by_vector(mesh_object, Vector((0, 0, 1)))
+					else:
+						mesh_object.matrix_world = local_matrix
+				# Create the Material Data
+				material_data = create_material(dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name)
+				# Assign the Material to the Mesh
+				mesh_data.materials.append(material_data)
+				# Link the Mesh Object to the Source Collection
+				mesh_collection.objects.link(mesh_object)
+
+			if drs_file.collision_shape is not None and import_collision_shape:
+				# Create a Collision Shape Collection to store the Collision Shape Objects
+				collision_shape_collection: bpy.types.Collection = bpy.data.collections.new("CollisionShapes_Collection")
+				state_collection.children.link(collision_shape_collection)
+				# Create a Box Collection to store the Box Objects
+				box_collection: bpy.types.Collection = bpy.data.collections.new("Boxes_Collection")
+				collision_shape_collection.children.link(box_collection)
+				for _ in range(drs_file.collision_shape.box_count):
+					box_object = create_collision_shape_box_object(drs_file.collision_shape.boxes[_], _)
+					box_collection.objects.link(box_object)
+					apply_transformations(box_object, global_matrix, apply_transform)
+					# TODO: WORKAROUND: Make the Box's Z-Location negative to flip the Axis
+					box_object.location = (box_object.location.x, box_object.location.y, -box_object.location.z)
+
+				# Create a Sphere Collection to store the Sphere Objects
+				sphere_collection: bpy.types.Collection = bpy.data.collections.new("Spheres_Collection")
+				collision_shape_collection.children.link(sphere_collection)
+				for _ in range(drs_file.collision_shape.sphere_count):
+					sphere_object = create_collision_shape_sphere_object(drs_file.collision_shape.spheres[_], _)
+					sphere_collection.objects.link(sphere_object)
+					apply_transformations(sphere_object, global_matrix, apply_transform)
+
+				# Create a Cylinder Collection to store the Cylinder Objects
+				cylinder_collection: bpy.types.Collection = bpy.data.collections.new("Cylinders_Collection")
+				collision_shape_collection.children.link(cylinder_collection)
+				for _ in range(drs_file.collision_shape.cylinder_count):
+					cylinder_object = create_collision_shape_cylinder_object(drs_file.collision_shape.cylinders[_], _)
+					cylinder_collection.objects.link(cylinder_object)
+					apply_transformations(cylinder_object, global_matrix, apply_transform)
+
+			if bmg_file.animation_set is not None and armature_object is not None and import_animation:
+				# Set the FPS for the Animation
+				bpy.context.scene.render.fps = int(fps_selection)
+				bpy.ops.object.mode_set(mode='POSE')
+				for animation_key in bmg_file.animation_set.mode_animation_keys:
+					for variant in animation_key.animation_set_variants:
+						ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
+						create_animation(ska_file, armature_object, bone_list, variant.file)
+
+	# Get individual desctruction States
+	for destruction_state in state_based_mesh_set.destruction_states:
+		state_collection_name = f"{prefix}Destruction_State_{destruction_state.state_num}"
+		state_collection = find_or_create_collection(source_collection, state_collection_name)
+		# Load the XML File
+		xml_file_path = os.path.join(dir_name, destruction_state.file_name)
+		# Read the file without any imports
+		with open(xml_file_path, 'r', encoding='utf-8') as file:
+			xml_file = file.read()
+		# Parse the XML File
+		xml_root = ET.fromstring(xml_file)
+		for element in xml_root.findall(".//Element[@type='PhysicObject']"):
+			resource = element.attrib.get("resource")
+			name = element.attrib.get("name")
+			if resource and name:
+				drs_file: DRS = DRS().read(os.path.join(dir_name, "meshes", resource))
+				for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
+					# Create the Mesh Data
+					mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
+					# Create the Mesh Object and add the Mesh Data to it
+					mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{name}", mesh_data)
+					apply_transformations(mesh_object, global_matrix, apply_transform)
+					# Create the Material Data
+					material_data = create_material(dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name + "_" + name)
+					# Assign the Material to the Mesh
+					mesh_data.materials.append(material_data)
+					# Link the Mesh Object to the Source Collection
+					state_collection.objects.link(mesh_object)
+
+def import_mesh_set_grid(bmg_file: DRS, source_collection: bpy.types.Collection, dir_name: str, base_name: str, global_matrix: Matrix, apply_transform: bool, import_collision_shape: bool, import_animation: bool, fps_selection: str, armature_object: bpy.types.Object = None, bone_list: list[DRSBone] = None) -> None:
+	for module in bmg_file.mesh_set_grid.mesh_modules:
+		if module.has_mesh_set:
+			import_state_based_mesh_set(module.state_based_mesh_set, source_collection, dir_name, bmg_file, global_matrix, apply_transform, import_collision_shape, import_animation, fps_selection, base_name, armature_object, bone_list)
+
+def import_csk_skeleton(source_collection: bpy.types.Collection, drs_file: DRS) -> Tuple[bpy.types.Object, list[DRSBone]]:
+	# Create the Armature Data
+	armature_data: bpy.types.Armature = bpy.data.armatures.new("CSkSkeleton")
+	# Create the Armature Object and add the Armature Data to it
+	armature_object: bpy.types.Object = bpy.data.objects.new("Armature", armature_data)
+	# Link the Armature Object to the Source Collection
+	source_collection.objects.link(armature_object)
+	# Create the Skeleton
+	bone_list = init_bones(drs_file.csk_skeleton)
+	# Directly set armature data to edit mode
+	bpy.context.view_layer.objects.active = armature_object
+	bpy.ops.object.mode_set(mode='EDIT')
+	# Create the Bone Tree without using bpy.ops or context
+	create_bone_tree(armature_data, bone_list, bone_list[0])
+	# Restore armature data mode to OBJECT
+	bpy.ops.object.mode_set(mode='OBJECT')
+	record_bind_pose(bone_list, armature_data)
+	return armature_object, bone_list
+
+def import_collision_shape(source_collection: bpy.types.Collection, drs_file: DRS, global_matrix: Matrix, apply_transform: bool) -> None:
+	# Create a Collision Shape Collection to store the Collision Shape Objects
+	collision_shape_collection: bpy.types.Collection = bpy.data.collections.new("CollisionShapes_Collection")
+	source_collection.children.link(collision_shape_collection)
+	# Create a Box Collection to store the Box Objects
+	box_collection: bpy.types.Collection = bpy.data.collections.new("Boxes_Collection")
+	collision_shape_collection.children.link(box_collection)
+	for _ in range(drs_file.collision_shape.box_count):
+		box_object = create_collision_shape_box_object(drs_file.collision_shape.boxes[_], _)
+		box_collection.objects.link(box_object)
+		apply_transformations(box_object, global_matrix, apply_transform)
+		# TODO: WORKAROUND: Make the Box's Z-Location negative to flip the Axis
+		box_object.location = (box_object.location.x, box_object.location.y, -box_object.location.z)
+
+	# Create a Sphere Collection to store the Sphere Objects
+	sphere_collection: bpy.types.Collection = bpy.data.collections.new("Spheres_Collection")
+	collision_shape_collection.children.link(sphere_collection)
+	for _ in range(drs_file.collision_shape.sphere_count):
+		sphere_object = create_collision_shape_sphere_object(drs_file.collision_shape.spheres[_], _)
+		sphere_collection.objects.link(sphere_object)
+		apply_transformations(sphere_object, global_matrix, apply_transform)
+
+	# Create a Cylinder Collection to store the Cylinder Objects
+	cylinder_collection: bpy.types.Collection = bpy.data.collections.new("Cylinders_Collection")
+	collision_shape_collection.children.link(cylinder_collection)
+	for _ in range(drs_file.collision_shape.cylinder_count):
+		cylinder_object = create_collision_shape_cylinder_object(drs_file.collision_shape.cylinders[_], _)
+		cylinder_collection.objects.link(cylinder_object)
+		apply_transformations(cylinder_object, global_matrix, apply_transform)
+
+def import_cdsp_mesh_file(mesh_index: int, mesh_file: CDspMeshFile) -> Tuple[bpy.types.Object, bpy.types.Mesh]:
+	# Create the Mesh Data
+	mesh_data = create_static_mesh(mesh_file, mesh_index)
+	# Create the Mesh Object and add the Mesh Data to it
+	mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{mesh_index}", mesh_data)
+
+	return mesh_object, mesh_data
+
+def add_skin_weights_to_mesh(mesh_object: bpy.types.Object, bone_list: list[DRSBone], bone_weights: list[BoneWeight], offset: int, cdsp_mesh_file_data: BattleforgeMesh) -> None:
+	# Dictionary to store bone groups and weights
+	bone_vertex_dict = {}
+	# Iterate over vertices and collect them by group_id and weight
+	for vidx in range(offset, offset + cdsp_mesh_file_data.vertex_count):
+		bone_weight_data = bone_weights[vidx]
+
+		for _ in range(4): # Assuming 4 weights per vertex
+			group_id = bone_weight_data.indices[_]
+			weight = bone_weight_data.weights[_]
+
+			if weight > 0: # Only consider non-zero weights
+				if group_id not in bone_vertex_dict:
+					bone_vertex_dict[group_id] = {}
+
+				if weight not in bone_vertex_dict[group_id]:
+					bone_vertex_dict[group_id][weight] = []
+
+				bone_vertex_dict[group_id][weight].append(vidx - offset)
+	# Now process each bone group and add all the vertices in a single call
+	for group_id, weight_data in bone_vertex_dict.items():
+		bone_name = bone_list[group_id].name
+
+		# Create or retrieve the vertex group for the bone
+		if bone_name not in mesh_object.vertex_groups:
+			vertex_group = mesh_object.vertex_groups.new(name=bone_name)
+		else:
+			vertex_group = mesh_object.vertex_groups[bone_name]
+
+		# Add vertices with the same weight in one call
+		for weight, vertex_indices in weight_data.items():
+			vertex_group.add(vertex_indices, weight, 'ADD')
+
+def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True, import_debris=False, import_construction=False, import_modules=True) -> None:
  	# reset messages
 	global messages
 	messages = []
@@ -539,81 +793,31 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 	source_collection: bpy.types.Collection = bpy.data.collections.new("DRSModel_" + base_name)
 	context.collection.children.link(source_collection)
 
+	# Create the Armature Object if a Skeleton is present
 	if drs_file.csk_skeleton is not None:
-		# Create the Armature Data
-		armature_data: bpy.types.Armature = bpy.data.armatures.new("CSkSkeleton")
-		# Create the Armature Object and add the Armature Data to it
-		armature_object: bpy.types.Object = bpy.data.objects.new("Armature", armature_data)
-		# Link the Armature Object to the Source Collection
-		source_collection.objects.link(armature_object)
-		# Create the Skeleton
-		bone_list = init_bones(drs_file.csk_skeleton)
-		# Directly set armature data to edit mode
-		bpy.context.view_layer.objects.active = armature_object
-		bpy.ops.object.mode_set(mode='EDIT')
-		# Create the Bone Tree without using bpy.ops or context
-		# pretty_print_bone_tree(bone_list)
-		create_bone_tree(armature_data, bone_list, bone_list[0])
-		# Restore armature data mode to OBJECT
-		bpy.ops.object.mode_set(mode='OBJECT')
-		record_bind_pose(bone_list, armature_data)
+		armature_object, bone_list = import_csk_skeleton(source_collection, drs_file)
 		# Add the Animations to the Armature Object
 		if drs_file.animation_set is not None:
 			# Apply the Transformations to the Armature Object
 			apply_transformations(armature_object, global_matrix, apply_transform)
 
+	# Create the Skin Weights
 	if drs_file.csk_skin_info is not None:
-		# Create the Bone Weights
 		bone_weights = create_bone_weights(drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh)
 
 	# Create a Mesh Collection to store the Mesh Objects
 	mesh_collection: bpy.types.Collection = bpy.data.collections.new("Meshes_Collection")
 	source_collection.children.link(mesh_collection)
+	# Create the Mesh Objects
 	for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
 		offset = 0 if mesh_index == 0 else drs_file.cdsp_mesh_file.meshes[mesh_index - 1].vertex_count
-		# Create the Mesh Data
-		mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
-		# Create the Mesh Object and add the Mesh Data to it
-		mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{mesh_index}", mesh_data)
+		mesh_object, mesh_data = import_cdsp_mesh_file(mesh_index, drs_file.cdsp_mesh_file)
 		# Add the Bone Weights to the Mesh Object
 		if drs_file.csk_skin_info is not None:
-			cdsp_mesh_file_data = drs_file.cdsp_mesh_file.meshes[mesh_index]
-			# Dictionary to store bone groups and weights
-			bone_vertex_dict = {}
-			# Iterate over vertices and collect them by group_id and weight
-			for vidx in range(offset, offset + cdsp_mesh_file_data.vertex_count):
-				bone_weight_data = bone_weights[vidx]
-
-				for _ in range(4):  # Assuming 4 weights per vertex
-					group_id = bone_weight_data.indices[_]
-					weight = bone_weight_data.weights[_]
-
-					if weight > 0:  # Only consider non-zero weights
-						if group_id not in bone_vertex_dict:
-							bone_vertex_dict[group_id] = {}
-
-						if weight not in bone_vertex_dict[group_id]:
-							bone_vertex_dict[group_id][weight] = []
-
-						bone_vertex_dict[group_id][weight].append(vidx - offset)
-			# Now process each bone group and add all the vertices in a single call
-			for group_id, weight_data in bone_vertex_dict.items():
-				bone_name = bone_list[group_id].name
-
-				# Create or retrieve the vertex group for the bone
-				if bone_name not in mesh_object.vertex_groups:
-					vertex_group = mesh_object.vertex_groups.new(name=bone_name)
-				else:
-					vertex_group = mesh_object.vertex_groups[bone_name]
-
-				# Add vertices with the same weight in one call
-				for weight, vertex_indices in weight_data.items():
-					vertex_group.add(vertex_indices, weight, 'ADD')
+			add_skin_weights_to_mesh(mesh_object, bone_list, bone_weights, offset, drs_file.cdsp_mesh_file.meshes[mesh_index])
 		# Check if the Mesh has a Skeleton and modify the Mesh Object accordingly
 		if drs_file.csk_skeleton is not None:
-			# Set the Armature Object as the Parent of the Mesh Object
 			mesh_object.parent = armature_object
-			# Add the Armature Modifier to the Mesh Object
 			modifier = mesh_object.modifiers.new(type="ARMATURE", name='Armature')
 			modifier.object = armature_object
 		else:
@@ -626,36 +830,11 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 		# Link the Mesh Object to the Source Collection
 		mesh_collection.objects.link(mesh_object)
 
+	# Create the Collision Shape Objects
 	if drs_file.collision_shape is not None and import_collision_shape:
-		# Create a Collision Shape Collection to store the Collision Shape Objects
-		collision_shape_collection: bpy.types.Collection = bpy.data.collections.new("CollisionShapes_Collection")
-		source_collection.children.link(collision_shape_collection)
-		# Create a Box Collection to store the Box Objects
-		box_collection: bpy.types.Collection = bpy.data.collections.new("Boxes_Collection")
-		collision_shape_collection.children.link(box_collection)
-		for _ in range(drs_file.collision_shape.box_count):
-			box_object = create_collision_shape_box_object(drs_file.collision_shape.boxes[_], _)
-			box_collection.objects.link(box_object)
-			apply_transformations(box_object, global_matrix, apply_transform)
-			# TODO: WORKAROUND: Make the Box's Z-Location negative to flip the Axis
-			box_object.location = (box_object.location.x, box_object.location.y, -box_object.location.z)
+		import_collision_shape(source_collection, drs_file, global_matrix, apply_transform)
 
-		# Create a Sphere Collection to store the Sphere Objects
-		sphere_collection: bpy.types.Collection = bpy.data.collections.new("Spheres_Collection")
-		collision_shape_collection.children.link(sphere_collection)
-		for _ in range(drs_file.collision_shape.sphere_count):
-			sphere_object = create_collision_shape_sphere_object(drs_file.collision_shape.spheres[_], _)
-			sphere_collection.objects.link(sphere_object)
-			apply_transformations(sphere_object, global_matrix, apply_transform)
-
-		# Create a Cylinder Collection to store the Cylinder Objects
-		cylinder_collection: bpy.types.Collection = bpy.data.collections.new("Cylinders_Collection")
-		collision_shape_collection.children.link(cylinder_collection)
-		for _ in range(drs_file.collision_shape.cylinder_count):
-			cylinder_object = create_collision_shape_cylinder_object(drs_file.collision_shape.cylinders[_], _)
-			cylinder_collection.objects.link(cylinder_object)
-			apply_transformations(cylinder_object, global_matrix, apply_transform)
-
+	# Create the Animation Objects
 	if drs_file.animation_set is not None and armature_object is not None and import_animation:
 		# Set the FPS for the Animation
 		bpy.context.scene.render.fps = int(fps_selection)
@@ -665,6 +844,24 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 				ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
 				create_animation(ska_file, armature_object, bone_list, variant.file)
 
+	if import_modules:
+		for slocator in drs_file.cdrw_locator_list.slocators:
+			if slocator.file_name_length > 0:
+				if slocator.class_type == "Module1":
+					module_collection = find_or_create_collection(source_collection, "Modules1")
+					# Load the BMS Files (replace.module with .bms)
+					module_file_name = slocator.file_name.replace(".module", ".bms")
+					module: BMS = BMS().read(os.path.join(dir_name, module_file_name))
+					module_name = slocator.class_type + "_" + str(slocator.sub_id)
+					import_state_based_mesh_set(module.state_based_mesh_set, module_collection, dir_name, drs_file, global_matrix, apply_transform, import_collision_shape, import_animation, fps_selection, module_name, armature_object, bone_list, slocator, "Module_1_")
+				elif slocator.class_type == "Module2":
+					module_collection = find_or_create_collection(source_collection, "Modules2")
+					# Load the BMS Files (replace.module with .bms)
+					module_file_name = slocator.file_name.replace(".module", ".bms")
+					module: BMS = BMS().read(os.path.join(dir_name, module_file_name))
+					module_name = slocator.class_type + "_" + str(slocator.sub_id)
+					import_state_based_mesh_set(module.state_based_mesh_set, module_collection, dir_name, drs_file, global_matrix, apply_transform, import_collision_shape, import_animation, fps_selection, module_name, armature_object, bone_list, slocator, "Module_2_")
+	
 	# Return to the Object Mode
 	bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -673,7 +870,7 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 	# Show the Messages
 	return {'FINISHED'}
 
-def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True, import_debris=True, import_construction=True) -> None:
+def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, global_matrix=Matrix.Identity(4), import_collision_shape=False, fps_selection=30, import_animation=True, import_debris=True, import_construction=True, import_modules=False) -> None:
 	dir_name = os.path.dirname(filepath)
 	base_name = os.path.basename(filepath).split(".")[0]
 	source_collection: bpy.types.Collection = bpy.data.collections.new("DRSModel_" + base_name)
@@ -737,170 +934,9 @@ def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, glob
 			cylinder_collection.objects.link(cylinder_object)
 			apply_transformations(cylinder_object, global_matrix, apply_transform)
 
-	for module in bmg_file.mesh_set_grid.mesh_modules:
-		if module.has_mesh_set:
-			# Get individual mesh states
-			for mesh_set in module.state_based_mesh_set.mesh_states:
-				if mesh_set.has_files:
-					# Create a new Collection for the State
-					state_collection: bpy.types.Collection = bpy.data.collections.new(f"Mesh_State_{mesh_set.state_num}") # pylint: disable=E1111
-					source_collection.children.link(state_collection)
-					# Load the DRS Files
-					drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_set.drs_file))
-
-					if drs_file.csk_skeleton is not None and armature_object is None:
-						# Create the Armature Data
-						armature_data: bpy.types.Armature = bpy.data.armatures.new("CSkSkeleton")
-						# Create the Armature Object and add the Armature Data to it
-						armature_object: bpy.types.Object = bpy.data.objects.new("Armature", armature_data)
-						# Link the Armature Object to the Source Collection
-						source_collection.objects.link(armature_object)
-						# Create the Skeleton
-						bone_list = init_bones(drs_file.csk_skeleton)
-						# Directly set armature data to edit mode
-						bpy.context.view_layer.objects.active = armature_object
-						bpy.ops.object.mode_set(mode='EDIT')
-						# Create the Bone Tree without using bpy.ops or context
-						create_bone_tree(armature_data, bone_list, bone_list[0])
-						# Restore armature data mode to OBJECT
-						bpy.ops.object.mode_set(mode='OBJECT')
-						record_bind_pose(bone_list, armature_data)
-						# Add the Animations to the Armature Object
-						if bmg_file.animation_set is not None:
-							# Apply the Transformations to the Armature Object
-							apply_transformations(armature_object, global_matrix, apply_transform)
-
-					if drs_file.csk_skin_info is not None:
-						# Create the Bone Weights
-						bone_weights = create_bone_weights(drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh)
-
-					# Create a Mesh Collection to store the Mesh Objects
-					mesh_collection: bpy.types.Collection = bpy.data.collections.new("Meshes_Collection")
-					state_collection.children.link(mesh_collection)
-					for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-						offset = 0 if mesh_index == 0 else drs_file.cdsp_mesh_file.meshes[mesh_index - 1].vertex_count
-						# Create the Mesh Data
-						mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
-						# Create the Mesh Object and add the Mesh Data to it
-						mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{mesh_index}", mesh_data)
-						# Add the Bone Weights to the Mesh Object
-						if drs_file.csk_skin_info is not None:
-							cdsp_mesh_file_data = drs_file.cdsp_mesh_file.meshes[mesh_index]
-							# Dictionary to store bone groups and weights
-							bone_vertex_dict = {}
-							# Iterate over vertices and collect them by group_id and weight
-							for vidx in range(offset, offset + cdsp_mesh_file_data.vertex_count):
-								bone_weight_data = bone_weights[vidx]
-
-								for _ in range(4):  # Assuming 4 weights per vertex
-									group_id = bone_weight_data.indices[_]
-									weight = bone_weight_data.weights[_]
-
-									if weight > 0:  # Only consider non-zero weights
-										if group_id not in bone_vertex_dict:
-											bone_vertex_dict[group_id] = {}
-
-										if weight not in bone_vertex_dict[group_id]:
-											bone_vertex_dict[group_id][weight] = []
-
-										bone_vertex_dict[group_id][weight].append(vidx - offset)
-							# Now process each bone group and add all the vertices in a single call
-							for group_id, weight_data in bone_vertex_dict.items():
-								bone_name = bone_list[group_id].name
-
-								# Create or retrieve the vertex group for the bone
-								if bone_name not in mesh_object.vertex_groups:
-									vertex_group = mesh_object.vertex_groups.new(name=bone_name)
-								else:
-									vertex_group = mesh_object.vertex_groups[bone_name]
-
-								# Add vertices with the same weight in one call
-								for weight, vertex_indices in weight_data.items():
-									vertex_group.add(vertex_indices, weight, 'ADD')
-						# Check if the Mesh has a Skeleton and modify the Mesh Object accordingly
-						if drs_file.csk_skeleton is not None:
-							# Set the Armature Object as the Parent of the Mesh Object
-							mesh_object.parent = armature_object
-							# Add the Armature Modifier to the Mesh Object
-							modifier = mesh_object.modifiers.new(type="ARMATURE", name='Armature')
-							modifier.object = armature_object
-						else:
-							# Apply the Transformations to the Mesh Object when no Skeleton is present else we transform the armature
-							apply_transformations(mesh_object, global_matrix, apply_transform)
-						# Create the Material Data
-						material_data = create_material(dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name)
-						# Assign the Material to the Mesh
-						mesh_data.materials.append(material_data)
-						# Link the Mesh Object to the Source Collection
-						mesh_collection.objects.link(mesh_object)
-
-					if drs_file.collision_shape is not None and import_collision_shape:
-						# Create a Collision Shape Collection to store the Collision Shape Objects
-						collision_shape_collection: bpy.types.Collection = bpy.data.collections.new("CollisionShapes_Collection")
-						state_collection.children.link(collision_shape_collection)
-						# Create a Box Collection to store the Box Objects
-						box_collection: bpy.types.Collection = bpy.data.collections.new("Boxes_Collection")
-						collision_shape_collection.children.link(box_collection)
-						for _ in range(drs_file.collision_shape.box_count):
-							box_object = create_collision_shape_box_object(drs_file.collision_shape.boxes[_], _)
-							box_collection.objects.link(box_object)
-							apply_transformations(box_object, global_matrix, apply_transform)
-							# TODO: WORKAROUND: Make the Box's Z-Location negative to flip the Axis
-							box_object.location = (box_object.location.x, box_object.location.y, -box_object.location.z)
-
-						# Create a Sphere Collection to store the Sphere Objects
-						sphere_collection: bpy.types.Collection = bpy.data.collections.new("Spheres_Collection")
-						collision_shape_collection.children.link(sphere_collection)
-						for _ in range(drs_file.collision_shape.sphere_count):
-							sphere_object = create_collision_shape_sphere_object(drs_file.collision_shape.spheres[_], _)
-							sphere_collection.objects.link(sphere_object)
-							apply_transformations(sphere_object, global_matrix, apply_transform)
-
-						# Create a Cylinder Collection to store the Cylinder Objects
-						cylinder_collection: bpy.types.Collection = bpy.data.collections.new("Cylinders_Collection")
-						collision_shape_collection.children.link(cylinder_collection)
-						for _ in range(drs_file.collision_shape.cylinder_count):
-							cylinder_object = create_collision_shape_cylinder_object(drs_file.collision_shape.cylinders[_], _)
-							cylinder_collection.objects.link(cylinder_object)
-							apply_transformations(cylinder_object, global_matrix, apply_transform)
-
-					if bmg_file.animation_set is not None and armature_object is not None and import_animation:
-						# Set the FPS for the Animation
-						bpy.context.scene.render.fps = int(fps_selection)
-						bpy.ops.object.mode_set(mode='POSE')
-						for animation_key in bmg_file.animation_set.mode_animation_keys:
-							for variant in animation_key.animation_set_variants:
-								ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
-								create_animation(ska_file, armature_object, bone_list, variant.file)
-			# Get individual desctruction States
-			if import_debris:
-				for destruction_state in module.state_based_mesh_set.destruction_states:
-					state_collection: bpy.types.Collection = bpy.data.collections.new(f"Destruction_State_Meshes{destruction_state.state_num}")
-					source_collection.children.link(state_collection)
-					# Load the XML File
-					xml_file_path = os.path.join(dir_name, destruction_state.file_name)
-					# Read the file without any imports
-					with open(xml_file_path, 'r', encoding='utf-8') as file:
-						xml_file = file.read()
-					# Parse the XML File
-					xml_root = ET.fromstring(xml_file)
-					for element in xml_root.findall(".//Element[@type='PhysicObject']"):
-						resource = element.attrib.get("resource")
-						name = element.attrib.get("name")
-						if resource and name:
-							drs_file: DRS = DRS().read(os.path.join(dir_name, "meshes", resource))
-							for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-								# Create the Mesh Data
-								mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
-								# Create the Mesh Object and add the Mesh Data to it
-								mesh_object: bpy.types.Object = bpy.data.objects.new(f"CDspMeshFile_{name}", mesh_data)
-								apply_transformations(mesh_object, global_matrix, apply_transform)
-								# Create the Material Data
-								material_data = create_material(dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name + "_" + name)
-								# Assign the Material to the Mesh
-								mesh_data.materials.append(material_data)
-								# Link the Mesh Object to the Source Collection
-								state_collection.objects.link(mesh_object)
+	# Import Mesh Set Grid
+	if bmg_file.mesh_set_grid is not None and import_debris:
+		import_mesh_set_grid(bmg_file, source_collection, dir_name, base_name, global_matrix, apply_transform, import_collision_shape, import_animation, fps_selection, armature_object, bone_list)
 
 	# Import Construction
 	if import_construction:

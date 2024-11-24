@@ -91,6 +91,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 	# use_animation_smoothing: BoolProperty(name="Use Animation Smoothing", description="Use animation smoothing", default=True) # type: ignore
 	import_animation: BoolProperty(name="Import Animation", description="Import animation", default=True) # type: ignore
 	import_debris: BoolProperty(name="Import Debris", description="Import debris for bmg files", default=True) # type: ignore
+	import_modules: BoolProperty(name="Import Modules", description="Import modules for drs files", default=True) # type: ignore
 	import_construction: BoolProperty(name="Import Construction", description="Import construction for bmg files", default=True) # type: ignore
 
 	def execute(self, context):
@@ -103,6 +104,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 		keywords["import_animation"] = self.import_animation
 		keywords["import_debris"] = self.import_debris
 		keywords["import_construction"] = self.import_construction
+		keywords["import_modules"] = self.import_modules
 
 		if self.clear_scene:
 			# Delete all collections
