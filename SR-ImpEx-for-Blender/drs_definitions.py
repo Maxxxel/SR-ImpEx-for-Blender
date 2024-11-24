@@ -399,13 +399,16 @@ class Bone:
 	def read(self, file: BinaryIO) -> 'Bone':
 		self.version, self.identifier, self.name_length = unpack('iii', file.read(calcsize('iii')))
 		self.name = unpack(f'{self.name_length}s', file.read(calcsize(f'{self.name_length}s')))[0].decode('utf-8').strip('\x00')
-		# Fix Name. building_bandits_air_defense_launcher_ replace with ""
+		# Bone Name Fixes
 		self.name = self.name.replace("building_bandits_air_defense_launcher_", "")
+		self.name = self.name.replace("building_nature_versatile_tower_", "")
+		if len(self.name) > 63:
+			self.name = str(hash(self.name))
 		self.child_count = unpack('i', file.read(calcsize('i')))[0]
 		self.children = list(unpack(f'{self.child_count}i', file.read(calcsize(f'{self.child_count}i'))))
 		return self
 
-	def write(self, file: BinaryIO) -> None:
+	def write(self, file: BinaryIO) -> None:	
 		file.write(pack(f'iiii{self.name_length}s{self.child_count}i', self.version, self.identifier, self.name_length, self.name.encode('utf-8'), self.child_count, *self.children))
 
 	def size(self) -> int:
@@ -2070,6 +2073,7 @@ class BMS:
 	nodes: List[Node] = field(default_factory=lambda: [RootNode()])
 	state_based_mesh_set_node: NodeInformation = None
 	state_based_mesh_set: StateBasedMeshSet = None
+	animation_set: AnimationSet = None # Fake Object
 
 	def read(self, file_name: str) -> 'BMS':
 		reader = FileReader(file_name)
