@@ -19,7 +19,12 @@ MagicValues = {
 	"CDspMeshFile": -1900395636,
 	"DrwResourceMeta": -183033339,
 	"collisionShape": 268607026,
-	"CGeoPrimitiveContainer": 1396683476
+	"CGeoPrimitiveContainer": 1396683476,
+	"CSkSkeleton": -2110567991,
+	"CDrwLocatorList": 735146985,
+	"AnimationSet": -475734043,
+	"AnimationTimings": -1403092629,
+	"EffectSet": 688490554,
 }
 
 AnimationType = {
@@ -122,6 +127,7 @@ class NodeInformation:
 
 	def __post_init__(self):
 		self.magic = MagicValues.get(self.data_object.__class__.__name__, 0) if self.data_object else 0
+		print(f"NodeInformation Magic: {self.magic} for {self.data_object.__class__.__name__} with data_object: {self.data_object}")
 		self.node_size = self.data_object.size() if self.data_object else 0
 
 	def read(self, file: BinaryIO) -> 'NodeInformation':
@@ -130,7 +136,8 @@ class NodeInformation:
 		return self
 
 	def write(self, file: BinaryIO) -> None:
-		file.write(pack('iiii16b', self.magic, self.identifier, self.offset, self.node_size, *self.spacer))
+		file.write(pack('iiii', self.magic, self.identifier, self.offset, self.node_size))
+		file.write(pack('16b', *self.spacer))
 
 	def update_offset(self, offset: int) -> None:
 		self.offset = offset
@@ -416,7 +423,7 @@ class Bone:
 		file.write(pack(f'{self.child_count}i', *self.children))
 
 	def size(self) -> int:
-		return calcsize(f'iiii{self.name_length}s{self.child_count}i')
+		return calcsize('iii') + self.name_length + calcsize('i') + calcsize(f'{self.child_count}i')
 
 @dataclass(eq=False, repr=False)
 class BoneMatrix:
@@ -1247,7 +1254,9 @@ class DrwResourceMeta:
 
 	def write(self, file: BinaryIO) -> None:
 		"""Writes the DrwResourceMeta to the buffer"""
-		file.write(pack(f'2ii{self.length}s', *self.unknown, self.length, self.hash.encode('utf-8')))
+		file.write(pack('2i', *self.unknown))
+		file.write(pack('i', self.length))
+		file.write(self.hash.encode('utf-8'))
 
 	def size(self) -> int:
 		"""Returns the size of the DrwResourceMeta"""
@@ -1675,7 +1684,10 @@ class AnimationSet:
 
 	def write(self, file: BinaryIO) -> 'AnimationSet':
 		"""Writes the AnimationSet to the buffer"""
-		file.write(pack('i11siff', self.length, self.magic.encode('utf-8'), self.version, self.default_run_speed, self.default_walk_speed))
+		file.write(pack('i', self.length))
+		file.write(pack('11s', self.magic.encode('utf-8')))
+		file.write(pack('i', self.version))
+		file.write(pack('ff', self.default_run_speed, self.default_walk_speed))
 
 		if self.version == 2:
 			file.write(pack('i', self.mode_animation_key_count))
@@ -1864,14 +1876,13 @@ class StructV3:
 	def read(self, file: BinaryIO) -> 'StructV3':
 		"""Reads the StructV3 from the buffer"""
 		self.length = unpack('i', file.read(calcsize('i')))[0]
-		self.unknown = [unpack('i', file.read(calcsize('i')))[0] for _ in range(self.length)]
+		self.unknown = [unpack('i', file.read(calcsize('i')))[0] for _ in range(2)]
 		return self
 
 	def write(self, file: BinaryIO) -> 'StructV3':
 		'''Writes the StructV3 to the buffer'''
 		file.write(pack('i', self.length))
-		for unknown in self.unknown:
-			file.write(pack('i', unknown))
+		file.write(pack(f'{2}i', *self.unknown))
 
 	def size(self) -> int:
 		'''Returns the size of the StructV3'''
@@ -2404,8 +2415,8 @@ class DRS:
 	def push_node(self, name: str, data_object):
 		new_node = Node(self.node_count, name)
 		self.nodes.append(new_node)
-		self.node_information_offset += new_node.size()
-		self.data_offset += new_node.size()
+		# self.node_information_offset += new_node.size()
+		# self.data_offset += new_node.size()
 		self.node_informations[0].node_information_count += 1
 		self.push_node_information(self.node_informations[0].node_information_count, data_object)
 		self.node_count += 1
@@ -2413,30 +2424,43 @@ class DRS:
 	def push_node_information(self, identifier: int, data_object):
 		new_node_information = NodeInformation(identifier=identifier, data_object=data_object)
 		self.node_informations.append(new_node_information)
-		self.data_offset += new_node_information.size()
+		# self.data_offset += new_node_information.size()
 
 	def save(self, file_name: str):
 		writer = FileWriter(file_name)
+		# calculate the offsets
+		# Node Information Offset = 20 (Header) + All Data Objects
+		# Node Hierarchy Offset = Node Information Offset + 32 (root node) + All Node Informations + 21 (root node)
+		self.node_information_offset = 20
+		for node_info in self.node_informations:
+			self.node_information_offset += node_info.node_size
+		self.node_hierarchy_offset = self.node_information_offset + 32 + (self.node_count - 1) * 32
 		writer.write(pack('iiiii', self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count))
 
-		write_offset_before = writer.tell()
-		for node in self.nodes:
-			node.write(writer)
-			difference = writer.tell() - write_offset_before
-			write_offset_before = writer.tell()
+		data_offsets = []
 
-		for node_info in self.node_informations:
-			if node_info.data_object is None:
-				node_info.write(writer)
-				continue
-			node_info.update_offset(self.data_offset)
-			self.data_offset += node_info.node_size
-			node_info.write(writer)
-
+		# Write the Data
 		for node_info in self.node_informations:
 			if node_info.data_object is not None:
-				print(f"Writing Node {node_info.data_object.__class__.__name__} at Position {node_info.offset} with Size {node_info.node_size}. We are at {writer.tell()}")
+				print(f"Writing Data {node_info.data_object.__class__.__name__} with Size {node_info.node_size}. We are at {writer.tell()}")
+				data_offsets.append((node_info.data_object.__class__.__name__, writer.tell()))
 				node_info.data_object.write(writer)
+
+		# Write the Node Informations
+		for node_info in self.node_informations:
+			if node_info.data_object is None:
+				node_info.write(writer) # Write the Root Node Information
+				continue
+			# find the offset by name in the data_offsets
+			data_offsets = dict(data_offsets)
+			data_offset = data_offsets.get(node_info.data_object.__class__.__name__, 0)
+			node_info.update_offset(data_offset)
+			self.data_offset += node_info.node_size
+			node_info.write(writer) # Write the Node Information
+
+		# Write the Nodes
+		for node in self.nodes:
+			node.write(writer)
 
 		writer.close()
 
