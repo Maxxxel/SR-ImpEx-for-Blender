@@ -48,6 +48,39 @@ LocatorClass = {
 	29: "FxbAtt"
 }
 
+# Also Node Order
+InformationIndices = {
+	"AnimatedUnit": {
+		"CGeoMesh": 1,
+		"CGeoOBBTree": 8,
+		"CDspJointMap": 7,
+		"CSkSkinInfo": 9,
+		"CSkSkeleton": 4,
+		"CDspMeshFile": 5,
+		"CDrwLocatorList": 3,
+		"DrwResourceMeta": 11,
+		"AnimationSet": 10,
+		"AnimationTimings": 6,
+		"EffectSet": 2
+	},
+}
+
+WriteOrder = {
+	"AnimatedUnit": [
+		"CDspJointMap",
+		"CSkSkinInfo",
+		"CSkSkeleton",
+		"CDspMeshFile",
+		"CDrwLocatorList",
+		"DrwResourceMeta",
+		"CGeoOBBTree",
+		"CGeoMesh",
+		"AnimationSet",
+		"AnimationTimings",
+		"EffectSet"
+	]
+}
+
 @dataclass(eq=False, repr=False)
 class RootNode:
 	identifier: int = 0
@@ -100,6 +133,7 @@ class RootNodeInformation:
 	zero: int = 0
 	data_object: None = None # Placeholder
 	node_size: int = 0
+	node_name = ""
 
 	def read(self, file: BinaryIO) -> 'RootNodeInformation':
 		self.zeroes = unpack('16b', file.read(calcsize('16b')))
@@ -123,12 +157,10 @@ class NodeInformation:
 	offset: int = -1
 	node_size: int = field(init=False)
 	spacer: List[int] = field(default_factory=lambda: [0] * 16)
-	data_object: Optional[object] = None
+	node_name: str = ""
 
 	def __post_init__(self):
-		self.magic = MagicValues.get(self.data_object.__class__.__name__, 0) if self.data_object else 0
-		print(f"NodeInformation Magic: {self.magic} for {self.data_object.__class__.__name__} with data_object: {self.data_object}")
-		self.node_size = self.data_object.size() if self.data_object else 0
+		self.magic = MagicValues.get(self.node_name) if self.node_name else 0
 
 	def read(self, file: BinaryIO) -> 'NodeInformation':
 		self.magic, self.identifier, self.offset, self.node_size = unpack('iiii', file.read(calcsize('iiii')))
@@ -2311,9 +2343,9 @@ class DRS:
 	keywords: object = None
 	magic: int = -981667554
 	number_of_models: int = 1
-	node_information_offset: int = 41
+	node_information_offset: int = 20
 	node_hierarchy_offset: int = 20
-	data_offset: int = 73
+	data_offset: int = 20 # 20 = Default Data Offset
 	node_count: int = 1
 	nodes: List[Node] = field(default_factory=lambda: [RootNode()])
 	node_informations: List[Union[NodeInformation, RootNodeInformation]] = field(default_factory=lambda: [RootNodeInformation()])
@@ -2345,6 +2377,39 @@ class DRS:
 	cdrw_locator_list: CDrwLocatorList = None
 	effect_set: EffectSet = None
 	animation_timings: AnimationTimings = None
+	model_type: str = None
+
+	def __post_init__(self):
+		self.nodes = [RootNode()]
+		if self.model_type is not None:
+			if self.model_type == "AnimatedUnit":
+				model_struct = InformationIndices[self.model_type]
+				# Prefill the node_informations with the RootNodeInformation and empty NodeInformations
+				self.node_informations = [RootNodeInformation(node_information_count=len(model_struct))]
+				self.node_count = len(model_struct) + 1
+				for _ in range(len(model_struct)):
+					self.node_informations.append(NodeInformation())
+
+				for index, (node_name, info_index) in enumerate(model_struct.items()):
+					node = Node(info_index, node_name)
+					self.nodes.append(node)
+					node_info = NodeInformation(identifier = index + 1, node_name = node_name)
+					self.node_informations[info_index] = node_info
+
+	def push_node_infos(self, class_name: str, data_object: object):
+		# Get the right node from self.node_informations
+		for node_info in self.node_informations:
+			if node_info.node_name == class_name:
+				node_info.data_object = data_object
+				node_info.node_size = data_object.size()
+				break
+
+	def update_offsets(self):
+		for node_name in WriteOrder[self.model_type]:
+			# get the right node_infortmation froms self.node_informations
+			node_information = next((node_info for node_info in self.node_informations if node_info.node_name == node_name), None)
+			node_information.offset = self.data_offset
+			self.data_offset += node_information.node_size
 
 	def read(self, file_name: str) -> 'DRS':
 		reader = FileReader(file_name)
@@ -2412,53 +2477,25 @@ class DRS:
 		reader.close()
 		return self
 
-	def push_node(self, name: str, data_object):
-		new_node = Node(self.node_count, name)
-		self.nodes.append(new_node)
-		# self.node_information_offset += new_node.size()
-		# self.data_offset += new_node.size()
-		self.node_informations[0].node_information_count += 1
-		self.push_node_information(self.node_informations[0].node_information_count, data_object)
-		self.node_count += 1
-
-	def push_node_information(self, identifier: int, data_object):
-		new_node_information = NodeInformation(identifier=identifier, data_object=data_object)
-		self.node_informations.append(new_node_information)
-		# self.data_offset += new_node_information.size()
-
 	def save(self, file_name: str):
 		writer = FileWriter(file_name)
-		# calculate the offsets
-		# Node Information Offset = 20 (Header) + All Data Objects
-		# Node Hierarchy Offset = Node Information Offset + 32 (root node) + All Node Informations + 21 (root node)
-		self.node_information_offset = 20
+
 		for node_info in self.node_informations:
 			self.node_information_offset += node_info.node_size
 		self.node_hierarchy_offset = self.node_information_offset + 32 + (self.node_count - 1) * 32
 		writer.write(pack('iiiii', self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count))
 
-		data_offsets = []
+		# Write Data Packets (in correct Order)
+		for node_name in WriteOrder[self.model_type]:
+			# get the right node from self.node_informations
+			node_information = next((node_info for node_info in self.node_informations if node_info.node_name == node_name), None)
+			node_information.data_object.write(writer)
 
-		# Write the Data
+		# Write Node Informations
 		for node_info in self.node_informations:
-			if node_info.data_object is not None:
-				print(f"Writing Data {node_info.data_object.__class__.__name__} with Size {node_info.node_size}. We are at {writer.tell()}")
-				data_offsets.append((node_info.data_object.__class__.__name__, writer.tell()))
-				node_info.data_object.write(writer)
+			node_info.write(writer)
 
-		# Write the Node Informations
-		for node_info in self.node_informations:
-			if node_info.data_object is None:
-				node_info.write(writer) # Write the Root Node Information
-				continue
-			# find the offset by name in the data_offsets
-			data_offsets = dict(data_offsets)
-			data_offset = data_offsets.get(node_info.data_object.__class__.__name__, 0)
-			node_info.update_offset(data_offset)
-			self.data_offset += node_info.node_size
-			node_info.write(writer) # Write the Node Information
-
-		# Write the Nodes
+		# Write Node Hierarchy
 		for node in self.nodes:
 			node.write(writer)
 

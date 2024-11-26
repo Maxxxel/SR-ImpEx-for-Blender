@@ -142,7 +142,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	forward_direction: EnumProperty(name="Forward Direction", description="Select the forward direction for the animation", items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', ''), ('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', '')], default='X') # type: ignore # ignore
 	up_direction: EnumProperty(name="Up Direction", description="Select the up direction for the animation", items=[('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', ''), ('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')], default='Z') # type: ignore # ignore
 	automatic_naming: BoolProperty(name="Automatic Naming", description="Names the exported file automatically based on the selection and model name, else the name from the save-path is taken.", default=True) # type: ignore # ignore
-	model_type: EnumProperty(name="Model Type", description="Select the model type", items=[('unit', 'Unit', ''), ('building', 'Building', ''), ('object', 'Object', '')], default='object') # type: ignore # ignore
+	model_type: EnumProperty(name="Model Type", description="Select the model type", items=[('AnimatedUnit', 'Animated Unit', ''), ('building', 'Building', ''), ('object', 'Object', '')], default='object') # type: ignore # ignore
 
 	def execute(self, context):
 		keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
@@ -242,7 +242,7 @@ def register():
 	AlxRegisterClassQueue()
 	bpy.utils.register_class(ImportBFModel)
 	bpy.utils.register_class(ExportBFModel)
-	bpy.utils.register_class(NewBFScene)
+	# bpy.utils.register_class(NewBFScene)
 	bpy.utils.register_class(ShowMessagesOperator)
 	bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
@@ -251,7 +251,7 @@ def unregister():
 	AlxUnregisterClassQueue()
 	bpy.utils.unregister_class(ImportBFModel)
 	bpy.utils.unregister_class(ExportBFModel)
-	bpy.utils.unregister_class(NewBFScene)
+	# bpy.utils.unregister_class(NewBFScene)
 	bpy.utils.unregister_class(ShowMessagesOperator)
 	bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
