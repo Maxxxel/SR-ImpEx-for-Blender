@@ -11,7 +11,7 @@ from bpy_extras.io_utils import axis_conversion
 import bmesh
 import xml.etree.ElementTree as ET
 
-from .drs_definitions import DRS, BMS, CDspMeshFile, CylinderShape, Face, BattleforgeMesh, DRSBone, CSkSkeleton, Bone, BoneVertex, BoxShape, MeshGridModule, SLocator, SphereShape, CSkSkinInfo, CGeoMesh, BoneWeight, CGeoOBBTree, OBBNode, CMatCoordinateSystem, CDspJointMap, MeshData, StateBasedMeshSet, Vertex, LevelOfDetail, EmptyString, Flow, Textures, Texture, Refraction, Materials, DrwResourceMeta, JointGroup, Vector3, Vector4
+from .drs_definitions import DRS, BMS, CDspMeshFile, CylinderShape, Face, BattleforgeMesh, DRSBone, CSkSkeleton, Bone, BoneVertex, BoxShape, MeshGridModule, SLocator, SphereShape, CSkSkinInfo, CGeoAABox, CGeoMesh, BoneWeight, CGeoOBBTree, OBBNode, CMatCoordinateSystem, CDspJointMap, MeshData, StateBasedMeshSet, Vertex, LevelOfDetail, EmptyString, Flow, Textures, Texture, Refraction, Materials, DrwResourceMeta, JointGroup, Vector3, Vector4, InformationIndices, WriteOrder, CollisionShape
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA, SKAKeyframe
 
@@ -30,7 +30,6 @@ def show_message_box(message = "", title = "Message Box", icon = 'INFO', final =
 		for message in messages:
 			final_message += f"{message[1]}: {message[0]}\n"
 		bpy.ops.my_category.show_messages('INVOKE_DEFAULT', messages=final_message)
-		pass
 
 def find_or_create_collection(source_collection: bpy.types.Collection, collection_name: str) -> bpy.types.Collection:
 	collection = source_collection.children.get(collection_name)
@@ -710,7 +709,7 @@ def import_csk_skeleton(source_collection: bpy.types.Collection, drs_file: DRS) 
 	record_bind_pose(bone_list, armature_data)
 	return armature_object, bone_list
 
-def import_collision_shape(source_collection: bpy.types.Collection, drs_file: DRS, global_matrix: Matrix, apply_transform: bool) -> None:
+def import_collision_shapes(source_collection: bpy.types.Collection, drs_file: DRS, global_matrix: Matrix, apply_transform: bool) -> None:
 	# Create a Collision Shape Collection to store the Collision Shape Objects
 	collision_shape_collection: bpy.types.Collection = bpy.data.collections.new("CollisionShapes_Collection")
 	source_collection.children.link(collision_shape_collection)
@@ -833,7 +832,7 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 
 	# Create the Collision Shape Objects
 	if drs_file.collision_shape is not None and import_collision_shape:
-		import_collision_shape(source_collection, drs_file, global_matrix, apply_transform)
+		import_collision_shapes(source_collection, drs_file, global_matrix, apply_transform)
 
 	# Create the Animation Objects
 	if drs_file.animation_set is not None and armature_object is not None and import_animation:
@@ -845,7 +844,7 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 				ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
 				create_animation(ska_file, armature_object, bone_list, variant.file)
 
-	if import_modules:
+	if import_modules and drs_file.cdrw_locator_list is not None:
 		for slocator in drs_file.cdrw_locator_list.slocators:
 			if slocator.file_name_length > 0:
 				if slocator.class_type == "Module1":
@@ -1010,7 +1009,7 @@ def triangulate(meshes_collection: bpy.types.Collection) -> None:
 			bm.to_mesh(me)
 			bm.free()
 
-def verify_models(meshes_collection: bpy.types.Collection) -> bool:
+def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
 	'''Check if the Models are valid for the game. This includes the following checks:
 	- Check if the Meshes have more than 32767 Vertices'''
 	unified_mesh: bmesh.types.BMesh = bmesh.new()
@@ -1165,9 +1164,12 @@ def create_cdsp_joint_map(meshes_collection: bpy.types.Collection) -> Tuple[CDsp
 	# Loop the meshes
 	for child in meshes_collection.objects:
 		if child.type == "MESH":
-			_joint_map.joint_group_count += 1
 			# Get the Vertex Groups
 			_vertex_groups = child.vertex_groups
+
+			if len(_vertex_groups) == 0:
+				break
+			_joint_map.joint_group_count += 1
 			# Init the Bone ID Counter
 			_bone_id = 0
 			# Init the temp JointGroups List
@@ -1616,6 +1618,73 @@ def create_cdsp_mesh_file(meshes_collection: bpy.types.Collection, model_name: s
 
 	return _cdsp_meshfile
 
+def create_box_shape(box: bpy.types.Object) -> BoxShape:
+	"""Create a BoxShape from a Blender Object previously created by create_collision_shape_box_object."""
+	# Instantiate the new BoxShape and its sub-components.
+	_box_shape = BoxShape()
+	_box_shape.coord_system = CMatCoordinateSystem()
+	_box_shape.geo_aabox = CGeoAABox()
+	
+	# Extract the transformation from the object's world matrix.
+	# The rotation part (a 3x3 matrix) and the translation (a vector) directly correspond
+	# to the coordinate system used during creation.
+	world_matrix = box.matrix_world
+	rotation = world_matrix.to_3x3()
+	translation = world_matrix.to_translation()
+	
+	# Set the coordinate system position.
+	_box_shape.coord_system.position = Vector3(translation.x, translation.y, translation.z)
+	# Flatten the 3x3 rotation matrix into a row-major list of 9 floats.
+	_box_shape.coord_system.matrix.matrix = [
+		rotation[0][0], rotation[0][1], rotation[0][2],
+		rotation[1][0], rotation[1][1], rotation[1][2],
+		rotation[2][0], rotation[2][1], rotation[2][2]
+	]
+	
+	# Compute the axis aligned bounding box from the object's mesh vertices (in local space).
+	# These vertices were created directly from the original AABox corners.
+	vertices = [v.co for v in box.data.vertices]
+	if not vertices:
+		raise ValueError("The object has no vertices to compute a bounding box from.")
+	
+	# Determine the minimum and maximum extents along each axis.
+	min_x = min(v.x for v in vertices)
+	min_y = min(v.y for v in vertices)
+	min_z = min(v.z for v in vertices)
+	max_x = max(v.x for v in vertices)
+	max_y = max(v.y for v in vertices)
+	max_z = max(v.z for v in vertices)
+	
+	_box_shape.geo_aabox.lower_left_corner = Vector3(min_x, min_y, min_z)
+	_box_shape.geo_aabox.upper_right_corner = Vector3(max_x, max_y, max_z)
+	
+	return _box_shape
+
+def create_collision_shape(meshes_collection: bpy.types.Collection) -> CollisionShape:
+	'''Create a Collision Shape from a Collection of Collision Shapes.'''
+	_collision_shape = CollisionShape()
+	collision_collection = get_collision_collection(meshes_collection)
+	for child in collision_collection.children:
+		if child.name.startswith("Boxes_Collection"):
+			if len(child.objects) > 0:
+				for box in child.objects:
+					if box.type == "MESH":
+						_collision_shape.box_count += 1
+						_collision_shape.boxes.append(create_box_shape(box))
+		if child.name.startswith("Spheres_Collection"):
+			if len(child.objects) > 0:
+				for sphere in child.objects:
+					if sphere.type == "MESH":
+						_collision_shape.sphere_count += 1
+						_collision_shape.spheres.append(create_sphere_shape(sphere))
+		if child.name.startswith("Cylinders_Collection"):
+			if len(child.objects) > 0:
+				for cylinder in child.objects:
+					if cylinder.type == "MESH":
+						_collision_shape.cylinder_count += 1
+						_collision_shape.cylinders.append(create_cylinder_shape(cylinder))
+	return _collision_shape
+
 def copy_objects(from_col: bpy.types.Collection, to_col: bpy.types.Collection, linked: bool, dupe_lut: dict[bpy.types.Object, bpy.types.Object]) -> None:
 	for o in from_col.objects:
 		dupe = o.copy()
@@ -1659,10 +1728,73 @@ def copy(parent: bpy.types.Collection, collection: bpy.types.Collection, linked:
 
 	return new_coll
 
-def verify_collections(source_collection: bpy.types.Collection) -> bool:
-	# Meshes Collection with atleast one Mesh and atleast one Material. Material needs to have a DRS_Base_Node
-	# If armature we need a Skeleton with bones and at least one Animation. Also the Meshes need to have Bone Weights
-	return True # TODO: Implement
+def verify_collections(source_collection: bpy.types.Collection, model_type: str) -> bool:
+	# First Check if the selected Collection is a valid Collection by name DRSModel_...
+	if not source_collection.name.startswith("DRSModel_"):
+		show_message_box("The selected Collection is not a valid Collection. Please select a Collection with the name DRSModel_...", "Error", "ERROR")
+		return False
+
+	# Check if the Collection has the correct Children
+	nodes = InformationIndices[model_type]
+	for node in nodes:
+		if node == "CGeoMesh" or node == "CGeoOBBTree" or node == "CDspJointMap" or node == "CDspMeshFile":
+			mesh_collection = get_meshes_collection(source_collection)
+			
+			if mesh_collection is None:
+				show_message_box("No Meshes Collection found!", "Error", "ERROR")
+				return False
+
+			# Check if the Meshes Collection has Meshes
+			if len(mesh_collection.objects) == 0:
+				show_message_box("No Meshes found in the Meshes Collection!", "Error", "ERROR")
+				return False
+
+			# Check if every mesh has a material
+			for mesh in mesh_collection.objects:
+				if mesh.type == "MESH":
+					if len(mesh.material_slots) == 0:
+						show_message_box("No Material found for Mesh " + mesh.name + "!", "Error", "ERROR")
+						return False
+					else:
+						# print all the nodes with names and types we have in the material
+						material_nodes = mesh.material_slots[0].material.node_tree.nodes
+						for node in material_nodes:
+							if node.type == "Group" and node.label != "DRSMaterial":
+								show_message_box(f"Node {node.name} is not a DRSMaterial node!", "Error", "ERROR")
+								return False
+		if node == "collisionShape":
+			collision_collection = get_collision_collection(source_collection)
+
+			if collision_collection is None:
+				show_message_box("No Collision Collection found! But is required for a model with collision shapes!", "Error", "ERROR")
+				return False
+
+			# Get Boxes, Spheres and Cylinders Collections from the Collision Collection
+			boxes_collection = None
+			spheres_collection = None
+			cylinders_collection = None
+			for child in collision_collection.children:
+				if child.name.startswith("Boxes_Collection"):
+					boxes_collection = child
+				if child.name.startswith("Spheres_Collection"):
+					spheres_collection = child
+				if child.name.startswith("Cylinders_Collection"):
+					cylinders_collection = child
+			# Check if at least one of the Collision Shapes is present
+			if boxes_collection is None and spheres_collection is None and cylinders_collection is None:
+				show_message_box("No Collision Shapes found in the Collision Collection!", "Error", "ERROR")
+				return False
+			# Check if at least one of the Collision Shapes has Collision Shapes (mesh)
+			found_collision_shapes = False
+			for collision_shape in [boxes_collection, spheres_collection, cylinders_collection]:
+				if collision_shape is not None and len(collision_shape.objects) > 0:
+					found_collision_shapes = True
+					break
+			if not found_collision_shapes:
+				show_message_box("No Collision Shapes found in the Collision Collection!", "Error", "ERROR")
+				return False
+
+	return True
 
 def get_meshes_collection(source_collection: bpy.types.Collection) -> bpy.types.Collection:
 	for collection in source_collection.children:
@@ -1670,138 +1802,331 @@ def get_meshes_collection(source_collection: bpy.types.Collection) -> bpy.types.
 			return collection
 	return None
 
+def get_collision_collection(source_collection: bpy.types.Collection) -> bpy.types.Collection:
+	for collection in source_collection.children:
+		if collection.name.startswith("CollisionShapes_Collection"):
+			return collection
+	return None
+
 def abort(keep_debug_collections: bool, source_collection_copy: bpy.types.Collection) -> dict:
-	if not keep_debug_collections:
+	if not keep_debug_collections and source_collection_copy is not None:
 		bpy.data.collections.remove(source_collection_copy)
+
+	show_message_box(final=True)
 
 	return {"CANCELLED"}
 
-def test_export(context: bpy.types.Context, filepath: str, use_apply_transform: bool, split_mesh_by_uv_islands: bool, keep_debug_collections: bool, export_animation: bool, forward_direction: str, up_direction: str, automatic_naming: bool, temporary_file_path: str, model_type: str) -> dict:
-	original_file: DRS = DRS().read(file_name=temporary_file_path)
+# def test_export(context: bpy.types.Context, filepath: str, use_apply_transform: bool, split_mesh_by_uv_islands: bool, keep_debug_collections: bool, export_animation: bool, forward_direction: str, up_direction: str, automatic_naming: bool, temporary_file_path: str, model_type: str) -> dict:
+	# original_file: DRS = DRS().read(file_name=temporary_file_path)
 	# file_name = os.path.basename(filepath).split(".")[0] + ".drs"
-	new_drs_file: DRS = DRS(model_type=model_type)
-	new_drs_file.push_node_infos("CGeoMesh", original_file.cgeo_mesh)
-	new_drs_file.push_node_infos("CGeoOBBTree", original_file.cgeo_obb_tree)
-	new_drs_file.push_node_infos("CDspJointMap", original_file.cdsp_joint_map)
-	new_drs_file.push_node_infos("CDspMeshFile", original_file.cdsp_mesh_file)
-	new_drs_file.push_node_infos("DrwResourceMeta", original_file.drw_resource_meta)
-	new_drs_file.push_node_infos("CDrwLocatorList", original_file.cdrw_locator_list)
-	new_drs_file.push_node_infos("CSkSkeleton", original_file.csk_skeleton)
-	new_drs_file.push_node_infos("CSkSkinInfo", original_file.csk_skin_info)
-	new_drs_file.push_node_infos("AnimationSet", original_file.animation_set)
-	new_drs_file.push_node_infos("AnimationTimings", original_file.animation_timings)
-	new_drs_file.push_node_infos("EffectSet", original_file.effect_set)
-	new_drs_file.update_offsets()
-	new_drs_file.save(filepath)
+	# new_drs_file: DRS = DRS(model_type=model_type)
+	# new_drs_file.push_node_infos("CGeoMesh", original_file.cgeo_mesh)
+	# new_drs_file.push_node_infos("CGeoOBBTree", original_file.cgeo_obb_tree)
+	# new_drs_file.push_node_infos("CDspJointMap", original_file.cdsp_joint_map)
+	# new_drs_file.push_node_infos("CDspMeshFile", original_file.cdsp_mesh_file)
+	# new_drs_file.push_node_infos("DrwResourceMeta", original_file.drw_resource_meta)
+	# new_drs_file.push_node_infos("CDrwLocatorList", original_file.cdrw_locator_list)
+	# new_drs_file.push_node_infos("CSkSkeleton", original_file.csk_skeleton)
+	# new_drs_file.push_node_infos("CSkSkinInfo", original_file.csk_skin_info)
+	# new_drs_file.push_node_infos("AnimationSet", original_file.animation_set)
+	# new_drs_file.push_node_infos("AnimationTimings", original_file.animation_timings)
+	# new_drs_file.push_node_infos("EffectSet", original_file.effect_set)
+	# new_drs_file.update_offsets()
+	# new_drs_file.save(filepath)
 
-def save_drs(context: bpy.types.Context, filepath: str, use_apply_transform: bool, split_mesh_by_uv_islands: bool, keep_debug_collections: bool, export_animation: bool, forward_direction: str, up_direction: str, automatic_naming: bool, model_type: str) -> dict:
-	# Reset messages
+# def save_drs(context: bpy.types.Context, filepath: str, use_apply_transform: bool, split_mesh_by_uv_islands: bool, keep_debug_collections: bool, export_animation: bool, forward_direction: str, up_direction: str, automatic_naming: bool, model_type: str, temporary_file_path: str = None) -> dict:
+	# # Reset messages
+	# global messages
+	# messages = []
+	# # The Collection we want to Export needs to be selected, so we search for it
+	# source_collection = bpy.context.view_layer.active_layer_collection.collection
+
+	# # verify the collection
+	# if not verify_collections(source_collection):
+	# 	print("Collection Verification failed!")
+	# 	return abort(keep_debug_collections, None)
+
+	# # We dont want to modify the original Collection so we create a copy
+	# source_collection_copy = copy(context.scene.collection, source_collection)
+	# source_collection_copy.name += ".copy"
+
+	# # Get the Meshes Collection
+	# meshes_collection = get_meshes_collection(source_collection_copy)
+
+	# if meshes_collection is None:
+	# 	show_message_box("No Meshes Collection found!", "Error", "ERROR")
+	# 	print("No Meshes Collection found!")
+	# 	return abort(keep_debug_collections, source_collection_copy)
+
+	# # Be sure that there are only triangles in the Meshes
+	# triangulate(source_collection_copy)
+
+	# # Verify the Models
+	# if not verify_mesh_vertex_count(meshes_collection):
+	# 	print("Model Verification failed!")
+	# 	return abort(keep_debug_collections, source_collection_copy)
+
+	# # Split the Meshes by UV Islands
+	# if split_mesh_by_uv_islands:
+	# 	split_meshes_by_uv_islands(meshes_collection)
+
+	# # Check if there is an Armature in the Collection
+	# # armature_object = None
+	# # if export_animation:
+	# # 	for obj in source_collection_copy.objects:
+	# # 		if obj.type == "ARMATURE":
+	# # 			armature_object = obj
+	# # 			break
+	# # 	if armature_object is None:
+	# # 		show_message_box("No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection.", "Error", "ERROR")
+	# # 		print("No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection.")
+	# # 		return abort(keep_debug_collections, source_collection_copy)
+
+	# # First we need to set the origin of all meshes to the center of the scene
+	# set_origin_to_world_origin(meshes_collection)
+
+	# if use_apply_transform:
+	# 	# Apply the transformations to the Collection
+	# 	m = axis_conversion(
+	#   		from_forward=forward_direction,
+	# 		from_up=up_direction,
+	# 		to_forward='-Z',
+	# 		to_up='Y').to_4x4()
+
+	# 	for obj in source_collection_copy.all_objects:
+	# 		if obj.type == "ARMATURE":
+	# 			obj.matrix_world = m @ obj.matrix_world
+	# 			# mirror around X
+	# 			obj.scale.x *= -1
+
+	# # Create an empty DRS File with the Model Type
+	# new_drs_file: DRS = DRS(model_type=model_type)
+
+	# # Name of the Model
+	# model_name = ""
+	# folder_path = os.path.dirname(filepath)
+	# if automatic_naming:
+	# 	model_name = model_type + "_" + os.path.basename(filepath).split(".")[0]
+	# else:
+	# 	# model name from the file path
+	# 	model_name = os.path.basename(filepath).split(".")[0]
+
+	# # Create a unified mesh from all meshes
+	# unified_mesh = create_unified_mesh(meshes_collection)
+
+	# # Depening on the Model Type we need to create different Nodes
+	# nodes = InformationIndices[model_type] 
+	# for node in nodes:
+	# 	if node == "CGeoMesh":
+	#         # Needs an excisting Mesh (a Collection named CDspMeshFile in Blender)
+	# 		new_drs_file.cgeo_mesh = create_cgeo_mesh(unified_mesh)
+	# 		new_drs_file.push_node_infos("CGeoMesh", new_drs_file.cgeo_mesh)
+	# 	elif node == "CGeoOBBTree":
+	#         # Needs an excisting Mesh (a Collection named CDspMeshFile in Blender)
+	# 		new_drs_file.cgeo_obb_tree = create_cgeo_obb_tree(unified_mesh)
+	# 		new_drs_file.push_node_infos("CGeoOBBTree", new_drs_file.cgeo_obb_tree)
+	# 	elif node == "CDspJointMap":
+	#         # Needs an excisting Mesh (a Collection named CDspMeshFile in Blender)
+	# 		new_drs_file.cdsp_joint_map, bone_map = create_cdsp_joint_map(meshes_collection)
+	# 		new_drs_file.push_node_infos("CDspJointMap", new_drs_file.cdsp_joint_map)
+	# 	elif node == "CDspMeshFile":
+	#         # Needs an excisting Mesh (a Collection named CDspMeshFile in Blender)
+	# 		cdsp_mesh_file = create_cdsp_mesh_file(meshes_collection, model_name, folder_path)
+	# 		if cdsp_mesh_file is None:
+	# 			return abort(keep_debug_collections, source_collection_copy)
+	# 		new_drs_file.cdsp_mesh_file = cdsp_mesh_file
+	# 		new_drs_file.push_node_infos("CDspMeshFile", new_drs_file.cdsp_mesh_file)
+	# 	elif node == "DrwResourceMeta":
+	#         # Empty Node
+	# 		new_drs_file.drw_resource_meta = DrwResourceMeta()
+	# 		new_drs_file.push_node_infos("DrwResourceMeta", new_drs_file.drw_resource_meta)
+
+	# new_drs_file.update_offsets()
+
+	# # Export the DRS File to folder path with the model name
+	# new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+
+	# # Remove the copied Collection
+	# if not keep_debug_collections:
+	# 	bpy.data.collections.remove(source_collection_copy)
+
+	# # Show the Messages
+	# show_message_box(final=True)
+	# return {"FINISHED"}
+
+def save_drs(context: bpy.types.Context, filepath: str, use_apply_transform: bool, split_mesh_by_uv_islands: bool, keep_debug_collections: bool, export_animation: bool, forward_direction: str, up_direction: str, automatic_naming: bool, model_type: str, temporary_file_path: str = None) -> dict:
 	global messages
 	messages = []
-	# The Collection we want to Export needs to be selected, so we search for it
+	
+	# === PRE-VALIDITY CHECKS =================================================
+	# Ensure active collection is valid
 	source_collection = bpy.context.view_layer.active_layer_collection.collection
-
-	# verify the collection
-	if not verify_collections(source_collection):
+	if not verify_collections(source_collection, model_type):
 		return abort(keep_debug_collections, None)
-
-	# We dont want to modify the original Collection so we create a copy
-	source_collection_copy = copy(context.scene.collection, source_collection)
-	source_collection_copy.name += ".copy"
-
-	# Get the Meshes Collection
+	
+	# Create a safe copy of the collection for export
+	try:
+		source_collection_copy = copy(context.scene.collection, source_collection)
+		source_collection_copy.name += ".copy"
+	except Exception as e:
+		show_message_box(f"Failed to duplicate collection: {e}", "Collection Copy Error", 'ERROR')
+		return abort(keep_debug_collections, None)
+	
+	# === MESH PREPARATION =====================================================
 	meshes_collection = get_meshes_collection(source_collection_copy)
-
-	if meshes_collection is None:
-		show_message_box("No Meshes Collection found!", "Error", "ERROR")
+	try:
+		triangulate(source_collection_copy)
+	except Exception as e:
+		show_message_box(f"Error during triangulation: {e}", "Triangulation Error", 'ERROR')
 		return abort(keep_debug_collections, source_collection_copy)
-
-	# Be sure that there are only triangles in the Meshes
-	triangulate(source_collection_copy)
-
-	# Verify the Models
-	if not verify_models(meshes_collection):
+	
+	if not verify_mesh_vertex_count(meshes_collection):
+		show_message_box("Model verification failed: one or more meshes are invalid or exceed vertex limits.", "Model Verification Error", 'ERROR')
 		return abort(keep_debug_collections, source_collection_copy)
-
-	# Split the Meshes by UV Islands
+	
 	if split_mesh_by_uv_islands:
-		split_meshes_by_uv_islands(meshes_collection)
-
-	# What we need in every DRS File (*created by this sript): CGeoMesh*, CGeoOBBTree (empty)*, CDspJointMap*, CDspMeshFile, DrwResourceMeta*
-	# What we need in skinned DRS Files: CSkSkinInfo, CSkSkeleton, AnimationSet, AnimationTimings
-
-	# Check if there is an Armature in the Collection
-	armature_object = None
-	if export_animation:
-		for obj in source_collection_copy.objects:
-			if obj.type == "ARMATURE":
-				armature_object = obj
-				break
-		if armature_object is None:
-			show_message_box("No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection.", "Error", "ERROR")
+		try:
+			split_meshes_by_uv_islands(meshes_collection)
+		except Exception as e:
+			show_message_box(f"Error splitting meshes by UV islands: {e}", "UV Island Error", 'ERROR')
 			return abort(keep_debug_collections, source_collection_copy)
-
-	# First we need to set the origin of all meshes to the center of the scene
-	set_origin_to_world_origin(meshes_collection)
-
-	if use_apply_transform:
-		# Apply the transformations to the Collection
-		m = axis_conversion(
-	  		from_forward=forward_direction,
-			from_up=up_direction,
-			to_forward='-Z',
-			to_up='Y').to_4x4()
-
-		for obj in source_collection_copy.all_objects:
-			if obj.type == "ARMATURE":
-				obj.matrix_world = m @ obj.matrix_world
-				# mirror around X
-				obj.scale.x *= -1
-
-	# Create an empty DRS File
-	new_drs_file: DRS = DRS()
-
-	# Name of the Model
-	model_name = ""
-	folder_path = os.path.dirname(filepath)
-	if automatic_naming:
-		model_name = model_type + "_" + os.path.basename(filepath).split(".")[0]
-	else:
-		# model name from the file path
-		model_name = os.path.basename(filepath).split(".")[0]
-
-	# Create a unified mesh from all meshes
-	unified_mesh = create_unified_mesh(meshes_collection)
-
-	# Create the CGeoMesh
-	new_drs_file.cgeo_mesh = create_cgeo_mesh(unified_mesh)
-	new_drs_file.push_node("CGeoMesh", new_drs_file.cgeo_mesh)
-	# Create the CGeoOBBTree
-	new_drs_file.cgeo_obb_tree = create_cgeo_obb_tree(unified_mesh)
-	new_drs_file.push_node("CGeoOBBTree", new_drs_file.cgeo_obb_tree)
-	# Create the CDspJointMap (from vertex groups)
-	new_drs_file.cdsp_joint_map, bone_map = create_cdsp_joint_map(meshes_collection)
-	new_drs_file.push_node("CDspJointMap", new_drs_file.cdsp_joint_map)
-	# Create the CDspMeshFile
-	cdsp_mesh_file = create_cdsp_mesh_file(meshes_collection, model_name, folder_path)
-	if cdsp_mesh_file is None:
+	
+	try:
+		set_origin_to_world_origin(meshes_collection)
+	except Exception as e:
+		show_message_box(f"Error setting origin for meshes: {e}", "Origin Error", 'ERROR')
 		return abort(keep_debug_collections, source_collection_copy)
-	new_drs_file.cdsp_mesh_file = cdsp_mesh_file
-	new_drs_file.push_node("CDspMeshFile", new_drs_file.cdsp_mesh_file)
-	# Create the DrwResourceMeta
-	new_drs_file.drw_resource_meta = DrwResourceMeta()
-	new_drs_file.push_node("DrwResourceMeta", new_drs_file.drw_resource_meta)
+	
+	# === APPLY TRANSFORMATIONS =================================================
+	if use_apply_transform:
+		try:
+			m = axis_conversion(
+				from_forward=forward_direction,
+				from_up=up_direction,
+				to_forward='-Z',
+				to_up='Y').to_4x4()
+			for obj in source_collection_copy.all_objects:
+				if obj.type == "ARMATURE":
+					obj.matrix_world = m @ obj.matrix_world
+					obj.scale.x *= -1  # mirror around X-axis
+		except Exception as e:
+			show_message_box(f"Error applying transformations: {e}", "Transformation Error", 'ERROR')
+			return abort(keep_debug_collections, source_collection_copy)
+	
+	# === CREATE DRS STRUCTURE =================================================
+	folder_path = os.path.dirname(filepath)
+	model_name = (model_type + "_" + os.path.basename(filepath).split(".")[0]) if automatic_naming else os.path.basename(filepath).split(".")[0]
+	
+	new_drs_file: DRS = DRS(model_type=model_type)
+	try:
+		unified_mesh = create_unified_mesh(meshes_collection)
+	except Exception as e:
+		show_message_box(f"Error creating unified mesh: {e}", "Unified Mesh Error", 'ERROR')
+		return abort(keep_debug_collections, source_collection_copy)
+	
+	nodes = InformationIndices[model_type]
+	for node in nodes:
+		if node == "CGeoMesh":
+			new_drs_file.cgeo_mesh = create_cgeo_mesh(unified_mesh)
+			new_drs_file.push_node_infos("CGeoMesh", new_drs_file.cgeo_mesh)
+		elif node == "CGeoOBBTree":
+			new_drs_file.cgeo_obb_tree = create_cgeo_obb_tree(unified_mesh)
+			new_drs_file.push_node_infos("CGeoOBBTree", new_drs_file.cgeo_obb_tree)
+		elif node == "CDspJointMap":
+			new_drs_file.cdsp_joint_map, bone_map = create_cdsp_joint_map(meshes_collection)
+			new_drs_file.push_node_infos("CDspJointMap", new_drs_file.cdsp_joint_map)
+		elif node == "CDspMeshFile":
+			cdsp_mesh_file = create_cdsp_mesh_file(meshes_collection, model_name, folder_path)
+			if cdsp_mesh_file is None:
+				show_message_box("Failed to create CDspMeshFile.", "Mesh File Error", 'ERROR')
+				return abort(keep_debug_collections, source_collection_copy)
+			new_drs_file.cdsp_mesh_file = cdsp_mesh_file
+			new_drs_file.push_node_infos("CDspMeshFile", new_drs_file.cdsp_mesh_file)
+		elif node == "DrwResourceMeta":
+			new_drs_file.drw_resource_meta = DrwResourceMeta()
+			new_drs_file.push_node_infos("DrwResourceMeta", new_drs_file.drw_resource_meta)
+		elif node == "collisionShape":
+			new_drs_file.collision_shape = create_collision_shape(source_collection_copy)
+			new_drs_file.push_node_infos("collisionShape", new_drs_file.collision_shape)
 
-	# Export the DRS File to folder path with the model name
-	new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
-
-	# Remove the copied Collection
+	new_drs_file.update_offsets()
+	
+	# === SAVE THE DRS FILE ====================================================
+	try:
+		new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+	except Exception as e:
+		show_message_box(f"Error saving DRS file: {e}", "Save Error", 'ERROR')
+		print(f"Error saving DRS file: {e}")
+		return abort(keep_debug_collections, source_collection_copy)
+	
+	# === CLEANUP & FINALIZE ===================================================
 	if not keep_debug_collections:
 		bpy.data.collections.remove(source_collection_copy)
-
-	# Show the Messages
-	show_message_box(final=True)
+	
+	show_message_box("Export completed successfully.", "Export Complete", 'INFO')
 	return {"FINISHED"}
 
+def create_new_bf_scene(scene_type: str, collision_support: bool):
+	"""
+	Create the new Battleforge scene structure with the following hierarchy:
+	  - DRSModel_<scene_type>
+		 ├── Meshes_Collection
+		 └── CollisionShapes_Collection (if collision_support is True)
+			  ├── Boxes_Collection
+			  ├── Spheres_Collection
+			  └── Cylinders_Collection
+	"""
+
+	# Create the main collection with a name based on the scene type.
+	main_collection_name = f"DRSModel_{scene_type}_CHANGENAME"
+	main_collection = bpy.data.collections.new(main_collection_name)
+	bpy.context.scene.collection.children.link(main_collection)
+
+	# Create and link the Meshes_Collection.
+	meshes_collection = bpy.data.collections.new("Meshes_Collection")
+	main_collection.children.link(meshes_collection)
+
+	if collision_support:
+		# Create the CollisionShapes_Collection and its subcollections.
+		collision_collection = bpy.data.collections.new("CollisionShapes_Collection")
+		main_collection.children.link(collision_collection)
+
+		boxes_collection = bpy.data.collections.new("Boxes_Collection")
+		collision_collection.children.link(boxes_collection)
+
+		spheres_collection = bpy.data.collections.new("Spheres_Collection")
+		collision_collection.children.link(spheres_collection)
+
+		cylinders_collection = bpy.data.collections.new("Cylinders_Collection")
+		collision_collection.children.link(cylinders_collection)
+
+	list_pathes = [
+		("Battleforge Assets", resource_dir + "/assets"),
+	]
+
+	offset = len(bpy.context.preferences.filepaths.asset_libraries)
+	index = offset
+
+	for path in list_pathes:
+		if offset == 0:
+			# Add them without any Checks
+			bpy.ops.preferences.asset_library_add(directory = path[1])
+			# give a name to your asset dir
+			bpy.context.preferences.filepaths.asset_libraries[index].name = path[0]
+			index += 1
+			print("Added Asset Library: " + path[0])
+		else:
+			for i in range(len(bpy.context.preferences.filepaths.asset_libraries)):
+				user_path_name = bpy.context.preferences.filepaths.asset_libraries[i].name
+
+				if user_path_name != path[0]:
+					bpy.ops.preferences.asset_library_add(directory = path[1])
+					# give a name to your asset dir
+					bpy.context.preferences.filepaths.asset_libraries[index].name = path[0]
+					index += 1
+					print("Added Asset Library: " + path[0])
+				else:
+					print("Asset Library already exists: " + path[0])
 # TODO: Always improt to Main Scene
 # TODO: Only one time import Collision Meshes
+# TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile

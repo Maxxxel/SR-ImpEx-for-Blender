@@ -1,0 +1,15 @@
+
+('CGeoOBBTree5', 'CDspJointMap4', 'CDspMeshFile3', 'CDrwLocatorList2', 'DrwResourceMeta6', '0'), Count: 4
+
+('CGeoOBBTree4', 'CDspJointMap3', 'CDspMeshFile2', 'collisionShape6', 'collisionShape7', 'DrwResourceMeta5', '0'), Count: 13
+
+('CGeoOBBTree5', 'CDspMeshFile3', 'CDspJointMap4', 'CDrwLocatorList2', 'collisionShape7', 'collisionShape8', 'DrwResourceMeta6', '0'), Count: 1
+
+('CGeoOBBTree2', 'CDspJointMap3', 'CDspMeshFile4', 'DrwResourceMeta5', 'CGeoPrimitiveContainer6', 'AnimationTimings7', 'AnimationSet8', '0'), Count: 1
+
+('CGeoOBBTree6', 'CDspJointMap5', 'CDspMeshFile4', 'CDrwLocatorList2', 'DrwResourceMeta7', 'CGeoPrimitiveContainer3', 'collisionShape8', '0'), Count: 16
+
+('CGeoOBBTree6', 'CDspJointMap5', 'CSkSkinInfo7', 'CSkSkeleton2', 'CDspMeshFile3', 'DrwResourceMeta9', 'AnimationSet8', 'AnimationTimings4', '0'), Count: 4
+('CGeoOBBTree6', 'CDspJointMap5', 'CSkSkinInfo7', 'CSkSkeleton3', 'CDspMeshFile4', 'DrwResourceMeta8', 'CGeoPrimitiveContainer2', 'collisionShape9', '0'), Count: 1
+('CGeoOBBTree7', 'CDspJointMap6', 'CSkSkinInfo8', 'CSkSkeleton3', 'CDspMeshFile4', 'DrwResourceMeta10', 'AnimationSet9', 'AnimationTimings5', 'CGeoPrimitiveContainer2', 'collisionShape11', '0'), Count: 8
+('CGeoOBBTree9', 'CDspJointMap8', 'CSkSkinInfo10', 'CSkSkeleton5', 'CDspMeshFile6', 'CDrwLocatorList3', 'DrwResourceMeta12', 'AnimationSet11', 'AnimationTimings7', 'EffectSet2', 'CGeoPrimitiveContainer4', 'collisionShape13', '0'), Count: 1

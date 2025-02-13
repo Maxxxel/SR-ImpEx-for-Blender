@@ -18,15 +18,15 @@ import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper, orientation_helper, axis_conversion
 from bpy_types import Operator, Panel, PropertyGroup, UIList
-from .drs_utility import load_drs, save_drs, load_bmg, test_export
+from .drs_utility import load_drs, save_drs, load_bmg, create_new_bf_scene
 from .drs_definitions import DRS
 
 bl_info = {
 	"name" : "Battleforge Tools",
 	"author" : "Maxxxel",
 	"description" : "Addon for importing and exporting Battleforge drs/bmg files",
-	"blender" : (4, 0, 0),
-	"version" : (2, 5, 1),
+	"blender" : (4, 3, 0),
+	"version" : (2, 5, 2),
 	"location" : "File > Import",
 	"warning" : "",
 	"category" : "Import-Export",
@@ -142,7 +142,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	forward_direction: EnumProperty(name="Forward Direction", description="Select the forward direction for the animation", items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', ''), ('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', '')], default='X') # type: ignore # ignore
 	up_direction: EnumProperty(name="Up Direction", description="Select the up direction for the animation", items=[('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', ''), ('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')], default='Z') # type: ignore # ignore
 	automatic_naming: BoolProperty(name="Automatic Naming", description="Names the exported file automatically based on the selection and model name, else the name from the save-path is taken.", default=True) # type: ignore # ignore
-	model_type: EnumProperty(name="Model Type", description="Select the model type", items=[('AnimatedUnit', 'Animated Unit', ''), ('building', 'Building', ''), ('object', 'Object', '')], default='object') # type: ignore # ignore
+	model_type: EnumProperty(name="Model Type", description="Select the model type", items=[('AnimatedUnit', 'Animated Unit', ''), ('building', 'Building', ''), ('StaticObjectNoCollision', 'Static Object (no collision)', ''), ('StaticObjectCollision', 'Static Object (with collision)', '')], default='StaticObjectNoCollision') # type: ignore # ignore
 
 	def execute(self, context):
 		keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
@@ -154,20 +154,42 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 		keywords["up_direction"] = self.up_direction
 		keywords["automatic_naming"] = self.automatic_naming
 		keywords["temporary_file_path"] = temporary_file_path
-		# save_drs(context, **keywords)
-		test_export(context, **keywords)
+		save_drs(context, **keywords)
+		# test_export(context, **keywords)
 		return {'FINISHED'}
 
-class NewBFScene(bpy.types.Operator):
-	'''Create a new Battleforge scene'''
+class NewBFScene(bpy.types.Operator, ImportHelper):
+	'''Create a new Battleforge scene with selectable type and collision support'''
 	bl_idname = "scene.new_bf_scene"
 	bl_label = "New Battleforge Scene"
 	bl_options = {'REGISTER', 'UNDO'}
 
+	scene_type: EnumProperty(
+		 name="Scene Type",
+		 description="Select the type of scene to create",
+		 items=[
+			 ('object', "Static Object", "Create a static object scene"),
+			 ('object', "Animated Object", "Create an animated object scene")
+		 ],
+		 default='object'
+	)
+
+	collision_support: BoolProperty(
+		 name="Collision Support",
+		 description="Include collision shape collections",
+		 default=False
+	)
+
+	def draw(self, context):
+		 layout = self.layout
+		 layout.prop(self, "scene_type")
+		 layout.prop(self, "collision_support")
+
 	def execute(self, context):
-		# Load the default scene from resources
-		bpy.ops.wm.open_mainfile(filepath=resource_dir + "/default_scene.blend")
-		return {'FINISHED'}
+		 from . import drs_utility  # assuming your utility functions are in drs_utility.py
+		 drs_utility.create_new_bf_scene(self.scene_type, self.collision_support)
+		 self.report({'INFO'}, "New Battleforge scene created.")
+		 return {'FINISHED'}
 
 # class ShowMessagesOperator(bpy.types.Operator):
 #     """Display collected messages in a popup dialog."""
@@ -242,7 +264,7 @@ def register():
 	AlxRegisterClassQueue()
 	bpy.utils.register_class(ImportBFModel)
 	bpy.utils.register_class(ExportBFModel)
-	# bpy.utils.register_class(NewBFScene)
+	bpy.utils.register_class(NewBFScene)
 	bpy.utils.register_class(ShowMessagesOperator)
 	bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
@@ -251,7 +273,7 @@ def unregister():
 	AlxUnregisterClassQueue()
 	bpy.utils.unregister_class(ImportBFModel)
 	bpy.utils.unregister_class(ExportBFModel)
-	# bpy.utils.unregister_class(NewBFScene)
+	bpy.utils.unregister_class(NewBFScene)
 	bpy.utils.unregister_class(ShowMessagesOperator)
 	bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 	bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)

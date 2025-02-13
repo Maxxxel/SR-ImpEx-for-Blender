@@ -12,6 +12,42 @@ def read_drs_header(reader: BufferedReader) -> dict:
 
 	return header
 
+def read_cdrw_locator(reader: BufferedReader) -> dict:
+	magic: int = int.from_bytes(reader.read(4), byteorder='little', signed=True)
+	version: int = int.from_bytes(reader.read(4), byteorder='little')
+	length: int =  int.from_bytes(reader.read(4), byteorder='little')
+	slocators = []
+	if magic != 281702437:
+		print(f"CDRW Locator magic is not correct: {magic}")
+		return None
+
+	for _ in range(length):
+		cmat_coordinate_system = int.from_bytes(reader.read(48), byteorder='little')
+		class_id: int = int.from_bytes(reader.read(4), byteorder='little')
+		sub_id: int = int.from_bytes(reader.read(4), byteorder='little', signed=True)
+		if sub_id < 0:
+			sub_id = 1000
+		file_name_length: int = int.from_bytes(reader.read(4), byteorder='little')
+		file_name: str = reader.read(file_name_length).decode("utf-8")
+		uk_int: int = int.from_bytes(reader.read(4), byteorder='little')
+
+		slocator = {
+			"cmat_coordinate_system": cmat_coordinate_system,
+			"class_id": class_id,
+			"sub_id": sub_id,
+			"file_name": file_name,
+		}
+		if version == 5:
+			slocator["uk_int"] = uk_int
+		slocators.append(slocator)
+
+	return {
+		"magic": magic,
+		"version": version,
+		"length": length,
+		"slocators": slocators,
+	}
+
 def read_drs_file(reader: BufferedReader, header: dict) -> dict:
 	# Move to the node information offset
 	reader.seek(header["node_information_offset"])
@@ -29,7 +65,7 @@ def read_drs_file(reader: BufferedReader, header: dict) -> dict:
 	# Read the node information
 	for _ in range(rote_node["node_information_count"]):
 		node = {
-			"magic": int.from_bytes(reader.read(4), byteorder='little'),
+			"magic": int.from_bytes(reader.read(4), byteorder='little', signed=True),
 			"identifier": int.from_bytes(reader.read(4), byteorder='little'),
 			"offset": int.from_bytes(reader.read(4), byteorder='little'),
 			"node_size": int.from_bytes(reader.read(4), byteorder='little'),
@@ -51,9 +87,10 @@ def read_drs_file(reader: BufferedReader, header: dict) -> dict:
 
 	# Read the name of the root node as a string
 	root_node["name"] = reader.read(root_node["length"]).decode("utf-8")
+	node_hierarchy.append(root_node)
 
 	# Read the node hierarchy
-	for _ in range(header["node_count"]):
+	for _ in range(header["node_count"] - 1):
 		node = {
 			"info_index": int.from_bytes(reader.read(4), byteorder='little'),
 			"length": int.from_bytes(reader.read(4), byteorder='little'),
@@ -67,10 +104,30 @@ def read_drs_file(reader: BufferedReader, header: dict) -> dict:
 
 		node_hierarchy.append(node)
 
+	cdrw_locator = None
+	# Find the offset and size of the CDRW Locator by checking the node info and node hierarchy. Node hierarchy has the name and info index, while node info has the offset and size.
+	for node in node_hierarchy:
+		if node["name"] == "CDrwLocatorList":
+			# get the node by accessing the array at index -1
+			cdrw_locator_info = node_information[node["info_index"] - 1]
+			if cdrw_locator_info is not None:
+				# Read the CDRW Locator
+				reader.seek(cdrw_locator_info["offset"])
+				try:
+					cdrw_locator = read_cdrw_locator(reader)
+		
+					if cdrw_locator is not None:
+						for locator in cdrw_locator["slocators"]:
+							if locator["file_name"] != "":
+								print(f"{reader.name} -> locator file name: {locator['file_name']} -> class id: {locator['class_id']} -> sub id: {locator['sub_id']}")
+				except Exception as e:
+					print(f"Error reading CDRW Locator in file: {reader.name}")
+
 	# Return the DRS file
 	return {
 		"node_information": node_information,
 		"node_hierarchy": node_hierarchy,
+		"cdrw_locator": cdrw_locator,
 	}
 
 def compare_node_infos(original: dict, modified: dict):
@@ -206,7 +263,7 @@ def extract_type_from_path(file_path: str) -> str:
 
 def create_statistics(drs_data_list: list):
 	node_combination_stats = {}
-	
+
 	for drs_data in drs_data_list:
 		node_hierarchy = drs_data["node_hierarchy"]
 		file_type = extract_type_from_path(drs_data["file_path"])
@@ -228,6 +285,56 @@ def create_statistics(drs_data_list: list):
 	for combination, count in node_combination_stats.items():
 		print(f"{combination}, Count: {count}")
 
+def create_locator_stats(drs_data_list: list):
+	class_locator_stats = {}
+
+	for drs_data in drs_data_list:
+		cdrw_locator = drs_data["cdrw_locator"]
+		if cdrw_locator is not None:
+			for locator in cdrw_locator["slocators"]:
+				# Create or reuse the index for the class id. If new create a new dictionary base dof the sub id
+				if not locator["class_id"] in class_locator_stats:
+					class_locator_stats[locator["class_id"]] = {}
+				
+				if not locator["sub_id"] in class_locator_stats[locator["class_id"]]:
+					# create a new sub id array
+					class_locator_stats[locator["class_id"]][locator["sub_id"]] = []
+	 
+				# Write the locator to the list
+				fileName = drs_data["file_path"]
+				fileName = fileName.split("\\")[-1]
+				class_locator_stats[locator["class_id"]][locator["sub_id"]].append({"drs file name": fileName, "locator file name": locator["file_name"]})
+	
+	# Print statistics about locators
+	# Write to file
+	# Sort the lists by class id
+	class_locator_stats = dict(sorted(class_locator_stats.items(), key=lambda item: item[0]))
+
+	# Purge duplicates
+	with open("locator_stats.txt", "w") as file:
+		seen = set()  # Set to store unique entries
+		for class_id, sub_ids in class_locator_stats.items():
+			# Sort the lists by sub id
+			sub_ids = dict(sorted(sub_ids.items(), key=lambda item: item[0]))
+			for sub_id, file_names in sub_ids.items():
+				for data in file_names:
+					drs_file_name = data["drs file name"]
+					locator_file_name = data["locator file name"]
+					if sub_id == 1000:
+						sub_id = -1
+					
+					# Create a unique identifier for each entry
+					entry = (class_id, sub_id, drs_file_name, locator_file_name)
+					
+					# Only write if the entry is unique
+					if entry not in seen:
+						seen.add(entry)
+						file.write(f"Class ID: {class_id}, Sub ID: {sub_id}, DRS File Name: {drs_file_name}, Locator File Name: {locator_file_name}\n")
+					else:
+						print(f"Duplicate entry found: {entry}")
+
+	# No need to explicitly close the file; 'with' handles it
+
 def read_and_analyze_drs_files(root_folder: str):
 	drs_files = get_all_drs_files(root_folder)
 	drs_data_list = []
@@ -240,7 +347,8 @@ def read_and_analyze_drs_files(root_folder: str):
 			drs_data_list.append(drs_data)
 
 	# Create statistics about the order of nodes
-	create_statistics(drs_data_list)
+	# create_statistics(drs_data_list)
+	create_locator_stats(drs_data_list)
 
 if __name__ == "__main__":
 	# compare_files()

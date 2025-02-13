@@ -63,6 +63,22 @@ InformationIndices = {
 		"AnimationTimings": 6,
 		"EffectSet": 2
 	},
+	"StaticObjectCollision": {
+		"CGeoMesh": 1,
+		"CGeoOBBTree": 5,
+		"CDspJointMap": 4,
+		"CDspMeshFile": 3,
+		"DrwResourceMeta": 6,
+		"CGeoPrimitiveContainer": 2,
+		"collisionShape": 7
+	},
+	"StaticObjectNoCollision": {
+		"CGeoMesh": 1,
+		"CGeoOBBTree": 4,
+		"CDspJointMap": 3,
+		"CDspMeshFile": 2,
+		"DrwResourceMeta": 5
+	}
 }
 
 WriteOrder = {
@@ -78,6 +94,22 @@ WriteOrder = {
 		"AnimationSet",
 		"AnimationTimings",
 		"EffectSet"
+	],
+	"StaticObjectCollision": [
+		"CDspJointMap",
+		"CDspMeshFile",
+		"DrwResourceMeta",
+		"CGeoPrimitiveContainer",
+		"CGeoOBBTree",
+		"CGeoMesh",
+		"collisionShape"
+	],
+	"StaticObjectNoCollision": [
+		"CDspJointMap",
+		"CDspMeshFile",
+		"DrwResourceMeta",
+		"CGeoOBBTree",
+		"CGeoMesh"
 	]
 }
 
@@ -2382,19 +2414,21 @@ class DRS:
 	def __post_init__(self):
 		self.nodes = [RootNode()]
 		if self.model_type is not None:
-			if self.model_type == "AnimatedUnit":
-				model_struct = InformationIndices[self.model_type]
-				# Prefill the node_informations with the RootNodeInformation and empty NodeInformations
-				self.node_informations = [RootNodeInformation(node_information_count=len(model_struct))]
-				self.node_count = len(model_struct) + 1
-				for _ in range(len(model_struct)):
-					self.node_informations.append(NodeInformation())
+			model_struct = InformationIndices[self.model_type]
+			# Prefill the node_informations with the RootNodeInformation and empty NodeInformations
+			self.node_informations = [RootNodeInformation(node_information_count=len(model_struct))]
+			self.node_count = len(model_struct) + 1
+			for _ in range(len(model_struct)):
+				self.node_informations.append(NodeInformation())
 
-				for index, (node_name, info_index) in enumerate(model_struct.items()):
-					node = Node(info_index, node_name)
-					self.nodes.append(node)
-					node_info = NodeInformation(identifier = index + 1, node_name = node_name)
-					self.node_informations[info_index] = node_info
+			for index, (node_name, info_index) in enumerate(model_struct.items()):
+				node = Node(info_index, node_name)
+				self.nodes.append(node)
+				node_info = NodeInformation(identifier = index + 1, node_name = node_name)
+				# Fix for missing node_size as size is 0 and not Note for CGeoPrimitiveContainer
+				if node_name == "CGeoPrimitiveContainer":
+					node_info.node_size = 0
+				self.node_informations[info_index] = node_info
 
 	def push_node_infos(self, class_name: str, data_object: object):
 		# Get the right node from self.node_informations
@@ -2489,7 +2523,9 @@ class DRS:
 		for node_name in WriteOrder[self.model_type]:
 			# get the right node from self.node_informations
 			node_information = next((node_info for node_info in self.node_informations if node_info.node_name == node_name), None)
-			node_information.data_object.write(writer)
+
+			if node_name != "CGeoPrimitiveContainer":
+				node_information.data_object.write(writer)
 
 		# Write Node Informations
 		for node_info in self.node_informations:
@@ -2555,3 +2591,5 @@ class BMS:
 
 		reader.close()
 		return self
+
+# 143,70 mm - 43,60
