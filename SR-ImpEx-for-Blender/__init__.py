@@ -138,7 +138,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 	use_apply_transform : BoolProperty(name="Apply Transform", description="Workaround for object transformations importing incorrectly", default=True) # type: ignore # ignore
 	split_mesh_by_uv_islands : BoolProperty(name="Split Mesh by UV Islands", description="Split mesh by UV islands", default=False) # type: ignore # ignore
 	keep_debug_collections : BoolProperty(name="Keep Debug Collection", description="Keep debug collection in the scene", default=False) # type: ignore # ignore
-	export_animation : BoolProperty(name="Export Animation", description="Export animation", default=True) # type: ignore # ignore
+	export_animation : BoolProperty(name="Export Animation", description="Export animation", default=False) # type: ignore # ignore
 	forward_direction: EnumProperty(name="Forward Direction", description="Select the forward direction for the animation", items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', ''), ('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', '')], default='X') # type: ignore # ignore
 	up_direction: EnumProperty(name="Up Direction", description="Select the up direction for the animation", items=[('-X', '-X', ''), ('-Y', '-Y', ''), ('-Z', '-Z', ''), ('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')], default='Z') # type: ignore # ignore
 	automatic_naming: BoolProperty(name="Automatic Naming", description="Names the exported file automatically based on the selection and model name, else the name from the save-path is taken.", default=True) # type: ignore # ignore

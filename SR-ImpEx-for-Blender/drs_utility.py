@@ -6,6 +6,7 @@ import subprocess
 from collections import  defaultdict
 from typing import Tuple, List
 from mathutils import Matrix, Vector, Quaternion
+# pylint: disable=fixme, import-error
 import bpy
 from bpy_extras.io_utils import axis_conversion
 import bmesh
@@ -861,7 +862,7 @@ def load_drs(context: bpy.types.Context, filepath="", apply_transform=True, glob
 					module: BMS = BMS().read(os.path.join(dir_name, module_file_name))
 					module_name = slocator.class_type + "_" + str(slocator.sub_id)
 					import_state_based_mesh_set(module.state_based_mesh_set, module_collection, dir_name, drs_file, global_matrix, apply_transform, import_collision_shape, import_animation, fps_selection, import_debris, module_name, armature_object, bone_list, slocator, "Module_2_")
-	
+
 	# Return to the Object Mode
 	bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -981,7 +982,7 @@ def load_bmg(context: bpy.types.Context, filepath="", apply_transform=True, glob
 						slocator_collection.objects.link(mesh_object)
 				else:
 					show_message_box(f"Construction file {slocator.file_name} has an unsupported file ending.", "Error", 'ERROR')
-				
+
 	# Return to the Object Mode
 	if bpy.context.object:
 		if bpy.context.object.mode == 'EDIT':
@@ -1624,14 +1625,14 @@ def create_box_shape(box: bpy.types.Object) -> BoxShape:
 	_box_shape = BoxShape()
 	_box_shape.coord_system = CMatCoordinateSystem()
 	_box_shape.geo_aabox = CGeoAABox()
-	
+
 	# Extract the transformation from the object's world matrix.
 	# The rotation part (a 3x3 matrix) and the translation (a vector) directly correspond
 	# to the coordinate system used during creation.
 	world_matrix = box.matrix_world
 	rotation = world_matrix.to_3x3()
 	translation = world_matrix.to_translation()
-	
+
 	# Set the coordinate system position.
 	_box_shape.coord_system.position = Vector3(translation.x, translation.y, translation.z)
 	# Flatten the 3x3 rotation matrix into a row-major list of 9 floats.
@@ -1640,13 +1641,13 @@ def create_box_shape(box: bpy.types.Object) -> BoxShape:
 		rotation[1][0], rotation[1][1], rotation[1][2],
 		rotation[2][0], rotation[2][1], rotation[2][2]
 	]
-	
+
 	# Compute the axis aligned bounding box from the object's mesh vertices (in local space).
 	# These vertices were created directly from the original AABox corners.
 	vertices = [v.co for v in box.data.vertices]
 	if not vertices:
 		raise ValueError("The object has no vertices to compute a bounding box from.")
-	
+
 	# Determine the minimum and maximum extents along each axis.
 	min_x = min(v.x for v in vertices)
 	min_y = min(v.y for v in vertices)
@@ -1654,10 +1655,10 @@ def create_box_shape(box: bpy.types.Object) -> BoxShape:
 	max_x = max(v.x for v in vertices)
 	max_y = max(v.y for v in vertices)
 	max_z = max(v.z for v in vertices)
-	
+
 	_box_shape.geo_aabox.lower_left_corner = Vector3(min_x, min_y, min_z)
 	_box_shape.geo_aabox.upper_right_corner = Vector3(max_x, max_y, max_z)
-	
+
 	return _box_shape
 
 def create_collision_shape(meshes_collection: bpy.types.Collection) -> CollisionShape:
@@ -1739,7 +1740,7 @@ def verify_collections(source_collection: bpy.types.Collection, model_type: str)
 	for node in nodes:
 		if node == "CGeoMesh" or node == "CGeoOBBTree" or node == "CDspJointMap" or node == "CDspMeshFile":
 			mesh_collection = get_meshes_collection(source_collection)
-			
+
 			if mesh_collection is None:
 				show_message_box("No Meshes Collection found!", "Error", "ERROR")
 				return False
@@ -1915,7 +1916,7 @@ def abort(keep_debug_collections: bool, source_collection_copy: bpy.types.Collec
 	# unified_mesh = create_unified_mesh(meshes_collection)
 
 	# # Depening on the Model Type we need to create different Nodes
-	# nodes = InformationIndices[model_type] 
+	# nodes = InformationIndices[model_type]
 	# for node in nodes:
 	# 	if node == "CGeoMesh":
 	#         # Needs an excisting Mesh (a Collection named CDspMeshFile in Blender)
@@ -1957,73 +1958,114 @@ def abort(keep_debug_collections: bool, source_collection_copy: bpy.types.Collec
 def save_drs(context: bpy.types.Context, filepath: str, use_apply_transform: bool, split_mesh_by_uv_islands: bool, keep_debug_collections: bool, export_animation: bool, forward_direction: str, up_direction: str, automatic_naming: bool, model_type: str, temporary_file_path: str = None) -> dict:
 	global messages
 	messages = []
-	
+
 	# === PRE-VALIDITY CHECKS =================================================
 	# Ensure active collection is valid
 	source_collection = bpy.context.view_layer.active_layer_collection.collection
 	if not verify_collections(source_collection, model_type):
 		return abort(keep_debug_collections, None)
-	
+
 	# Create a safe copy of the collection for export
 	try:
 		source_collection_copy = copy(context.scene.collection, source_collection)
 		source_collection_copy.name += ".copy"
 	except Exception as e:
-		show_message_box(f"Failed to duplicate collection: {e}", "Collection Copy Error", 'ERROR')
+		show_message_box(f"Failed to duplicate collection: {e}. Type {type(e)}", "Collection Copy Error", 'ERROR')
 		return abort(keep_debug_collections, None)
-	
+
 	# === MESH PREPARATION =====================================================
 	meshes_collection = get_meshes_collection(source_collection_copy)
 	try:
 		triangulate(source_collection_copy)
 	except Exception as e:
-		show_message_box(f"Error during triangulation: {e}", "Triangulation Error", 'ERROR')
+		show_message_box(f"Error during triangulation: {e}. Type {type(e)}", "Triangulation Error", 'ERROR')
 		return abort(keep_debug_collections, source_collection_copy)
-	
+
 	if not verify_mesh_vertex_count(meshes_collection):
 		show_message_box("Model verification failed: one or more meshes are invalid or exceed vertex limits.", "Model Verification Error", 'ERROR')
 		return abort(keep_debug_collections, source_collection_copy)
-	
+
 	if split_mesh_by_uv_islands:
 		try:
 			split_meshes_by_uv_islands(meshes_collection)
 		except Exception as e:
 			show_message_box(f"Error splitting meshes by UV islands: {e}", "UV Island Error", 'ERROR')
 			return abort(keep_debug_collections, source_collection_copy)
-	
+
+	# Check if there is an Armature in the Collection
+	armature_object = None
+	if export_animation:
+		for obj in source_collection_copy.objects:
+			if obj.type == "ARMATURE":
+				armature_object = obj
+				break
+		if armature_object is None:
+			show_message_box("No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection.", "Error", "ERROR")
+			print("No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection.")
+			return abort(keep_debug_collections, source_collection_copy)
+
 	try:
 		set_origin_to_world_origin(meshes_collection)
 	except Exception as e:
-		show_message_box(f"Error setting origin for meshes: {e}", "Origin Error", 'ERROR')
+		show_message_box(f"Error setting origin for meshes: {e}. Type {type(e)}", "Origin Error", 'ERROR')
 		return abort(keep_debug_collections, source_collection_copy)
-	
+
 	# === APPLY TRANSFORMATIONS =================================================
 	if use_apply_transform:
 		try:
+			# Compute the conversion matrix.
 			m = axis_conversion(
 				from_forward=forward_direction,
 				from_up=up_direction,
 				to_forward='-Z',
-				to_up='Y').to_4x4()
+				to_up='Y'
+			).to_4x4()
+
+			# Reverse the negative Y scale on non-armature objects.
+			# (On import you set obj.scale = (1, -1, 1); here, multiplying Y by -1 resets it to (1, 1, 1).)
 			for obj in source_collection_copy.all_objects:
-				if obj.type == "ARMATURE":
-					obj.matrix_world = m @ obj.matrix_world
+				if obj.type != "ARMATURE":
+					obj.scale.y *= -1
+
+			# First update every object's matrix_world with the conversion matrix.
+			# (This updates the visual transform.)
+			for obj in source_collection_copy.all_objects:
+				obj.matrix_world = m @ obj.matrix_world
+				# Optionally handle mirror for armatures.
+				if armature_object and obj.type == "ARMATURE":
 					obj.scale.x *= -1  # mirror around X-axis
+
+			# Now "bake" the transformation into each mesh's data.
+			# Deselect everything.
+			bpy.ops.object.select_all(action='DESELECT')
+			# Gather all mesh objects from the temporary collection.
+			mesh_objects = [obj for obj in source_collection_copy.all_objects if obj.type == 'MESH']
+			# Select all mesh objects.
+			for obj in mesh_objects:
+				obj.select_set(True)
+			# Set an active object (required by the operator).
+			if mesh_objects:
+				bpy.context.view_layer.objects.active = mesh_objects[0]
+				# Apply location, rotation, and scale.
+				bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+				# Optionally, deselect afterwards.
+				bpy.ops.object.select_all(action='DESELECT')
+
 		except Exception as e:
 			show_message_box(f"Error applying transformations: {e}", "Transformation Error", 'ERROR')
 			return abort(keep_debug_collections, source_collection_copy)
-	
+
 	# === CREATE DRS STRUCTURE =================================================
 	folder_path = os.path.dirname(filepath)
 	model_name = (model_type + "_" + os.path.basename(filepath).split(".")[0]) if automatic_naming else os.path.basename(filepath).split(".")[0]
-	
+
 	new_drs_file: DRS = DRS(model_type=model_type)
 	try:
 		unified_mesh = create_unified_mesh(meshes_collection)
 	except Exception as e:
-		show_message_box(f"Error creating unified mesh: {e}", "Unified Mesh Error", 'ERROR')
+		show_message_box(f"Error creating unified mesh: {e}. Type {type(e)}", "Unified Mesh Error", 'ERROR')
 		return abort(keep_debug_collections, source_collection_copy)
-	
+
 	nodes = InformationIndices[model_type]
 	for node in nodes:
 		if node == "CGeoMesh":
@@ -2050,19 +2092,19 @@ def save_drs(context: bpy.types.Context, filepath: str, use_apply_transform: boo
 			new_drs_file.push_node_infos("collisionShape", new_drs_file.collision_shape)
 
 	new_drs_file.update_offsets()
-	
+
 	# === SAVE THE DRS FILE ====================================================
 	try:
 		new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
 	except Exception as e:
-		show_message_box(f"Error saving DRS file: {e}", "Save Error", 'ERROR')
+		show_message_box(f"Error saving DRS file: {e}. Type {type(e)}", "Save Error", 'ERROR')
 		print(f"Error saving DRS file: {e}")
 		return abort(keep_debug_collections, source_collection_copy)
-	
+
 	# === CLEANUP & FINALIZE ===================================================
 	if not keep_debug_collections:
 		bpy.data.collections.remove(source_collection_copy)
-	
+
 	show_message_box("Export completed successfully.", "Export Complete", 'INFO')
 	return {"FINISHED"}
 

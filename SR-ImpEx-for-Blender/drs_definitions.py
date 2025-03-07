@@ -452,7 +452,6 @@ class MeshData:
 
 	def size(self) -> int:
 		s = calcsize('ii') + self.vertex_size * len(self.vertices)
-		print(f"MeshData Size: {s}")
 		return s
 
 @dataclass(eq=False, repr=False)
@@ -1038,15 +1037,15 @@ class OBBNode:
 
 	def read(self, file: BinaryIO) -> 'OBBNode':
 		self.oriented_bounding_box = CMatCoordinateSystem().read(file)
-		self.unknown1, self.unknown2, self.unknown3, self.node_depth, self.current_triangle_count, self.minimum_triangles_found = unpack('4H2i', file.read(calcsize('4H2i')))
+		self.unknown1, self.unknown2, self.unknown3, self.node_depth, self.current_triangle_count, self.minimum_triangles_found = unpack('4H2I', file.read(calcsize('4H2I')))
 		return self
 
 	def write(self, file: BinaryIO) -> None:
 		self.oriented_bounding_box.write(file)
-		file.write(pack('4H2i', self.unknown1, self.unknown2, self.unknown3, self.node_depth, self.current_triangle_count, self.minimum_triangles_found))
+		file.write(pack('4H2I', self.unknown1, self.unknown2, self.unknown3, self.node_depth, self.current_triangle_count, self.minimum_triangles_found))
 
 	def size(self) -> int:
-		return self.oriented_bounding_box.size() + calcsize('4H2i')
+		return self.oriented_bounding_box.size() + calcsize('4H2I')
 
 @dataclass(eq=False, repr=False)
 class CGeoOBBTree:
@@ -1281,27 +1280,30 @@ class CollisionShape:
 
 	def read(self, file: BinaryIO) -> 'CollisionShape':
 		self.version = unpack('B', file.read(calcsize('B')))
-		self.box_count = unpack('i', file.read(calcsize('i')))[0]
+		self.box_count = unpack('I', file.read(calcsize('I')))[0]
 		self.boxes = [BoxShape().read(file) for _ in range(self.box_count)]
-		self.sphere_count = unpack('i', file.read(calcsize('i')))[0]
+		self.sphere_count = unpack('I', file.read(calcsize('I')))[0]
 		self.spheres = [SphereShape().read(file) for _ in range(self.sphere_count)]
-		self.cylinder_count = unpack('i', file.read(calcsize('i')))[0]
+		self.cylinder_count = unpack('I', file.read(calcsize('I')))[0]
 		self.cylinders = [CylinderShape().read(file) for _ in range(self.cylinder_count)]
 		return self
 
 	def write(self, file: BinaryIO) -> None:
-		file.write(pack('Bi', self.version, self.box_count))
+		file.write(pack('B', self.version))
+		file.write(pack('I', self.box_count))
 		for box in self.boxes:
 			box.write(file)
-		file.write(pack('i', self.sphere_count))
+
+		file.write(pack('I', self.sphere_count))
 		for sphere in self.spheres:
 			sphere.write(file)
-		file.write(pack('i', self.cylinder_count))
+
+		file.write(pack('I', self.cylinder_count))
 		for cylinder in self.cylinders:
 			cylinder.write(file)
 
 	def size(self) -> int:
-		return (calcsize('Biii') + sum(box.size() for box in self.boxes) + sum(sphere.size() for sphere in self.spheres) + sum(cylinder.size() for cylinder in self.cylinders))
+		return (calcsize('B') + calcsize('III') + sum(box.size() for box in self.boxes) + sum(sphere.size() for sphere in self.spheres) + sum(cylinder.size() for cylinder in self.cylinders))
 
 @dataclass(eq=False, repr=False)
 class DrwResourceMeta:
@@ -2247,7 +2249,7 @@ class EffectSet:
 				base += unknown.size()
 		return base
 
-dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False)
 class SMeshState:
 	state_num: int = 0 # Int
 	has_files: int = 0 # Short
@@ -2283,7 +2285,7 @@ class DestructionState:
 		self.file_name = unpack(f'{self.file_name_length}s', file.read(calcsize(f'{self.file_name_length}s')))[0].decode('utf-8').strip('\x00')
 		return self
 
-dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False)
 class StateBasedMeshSet:
 	uk: int = 1 # Short
 	uk2: int = 10 # Int
@@ -2305,7 +2307,7 @@ class StateBasedMeshSet:
 	def write(self, file: BinaryIO) -> 'StateBasedMeshSet':
 		pass
 
-dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False)
 class MeshGridModule:
 	uk: int = 0 # Short
 	has_mesh_set: int = 0 # Byte
@@ -2447,7 +2449,7 @@ class DRS:
 
 	def read(self, file_name: str) -> 'DRS':
 		reader = FileReader(file_name)
-		self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count = unpack('iiiii', reader.read(calcsize('iiiii')))
+		self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count = unpack('iiiiI', reader.read(calcsize('iiiiI')))
 
 		if self.magic != -981667554 or self.node_count < 1:
 			raise TypeError(f"This is not a valid file. Magic: {self.magic}, NodeCount: {self.node_count}")
@@ -2517,7 +2519,7 @@ class DRS:
 		for node_info in self.node_informations:
 			self.node_information_offset += node_info.node_size
 		self.node_hierarchy_offset = self.node_information_offset + 32 + (self.node_count - 1) * 32
-		writer.write(pack('iiiii', self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count))
+		writer.write(pack('iiiiI', self.magic, self.number_of_models, self.node_information_offset, self.node_hierarchy_offset, self.node_count))
 
 		# Write Data Packets (in correct Order)
 		for node_name in WriteOrder[self.model_type]:
@@ -2591,5 +2593,3 @@ class BMS:
 
 		reader.close()
 		return self
-
-# 143,70 mm - 43,60
