@@ -14,6 +14,7 @@ class FileReader:
     def tell(self):
         return self.file.tell()
 
+
 class FileWriter:
     def __init__(self, file_name: str):
         self.file = open(file_name, 'wb')

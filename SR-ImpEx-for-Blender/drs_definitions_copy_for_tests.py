@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
 from typing import List, Union, BinaryIO, Optional
-from mathutils import Vector, Matrix, Quaternion
 from .file_io import FileReader, FileWriter
 
 
@@ -367,11 +366,11 @@ class Vector3:
     x: float = 0.0
     y: float = 0.0
     z: float = 0.0
-    xyz: Vector = field(default_factory=lambda: Vector((0, 0, 0)))
+    xyz: list = field(default_factory=lambda: [0.0] * 3)
 
     def read(self, file: BinaryIO) -> "Vector3":
         self.x, self.y, self.z = unpack("3f", file.read(calcsize("3f")))
-        self.xyz = Vector((self.x, self.y, self.z))
+        self.xyz = [self.x, self.y, self.z]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -596,10 +595,10 @@ class DRSBone:
         self.identifier: int
         self.name: str
         self.parent: int = -1
-        self.bone_matrix: Matrix
+        self.bone_matrix: Matrix4x4
         self.children: List[int]
-        self.bind_loc: Vector
-        self.bind_rot: Quaternion
+        self.bind_loc: Vector3
+        self.bind_rot: Vector4
 
 
 class BoneWeight:
@@ -617,7 +616,7 @@ class CSkSkeleton:
     bone_count: int = 0
     bones: List[Bone] = field(default_factory=list)
     super_parent: "Matrix4x4" = field(
-        default_factory=lambda: Matrix(
+        default_factory=lambda: Matrix4x4(
             ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))
         )
     )
