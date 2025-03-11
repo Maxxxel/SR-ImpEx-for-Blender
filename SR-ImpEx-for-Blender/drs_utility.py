@@ -84,144 +84,6 @@ def find_or_create_collection(
     return collection
 
 
-def apply_transform_from_game_engine_to_blender(
-    source_collection: bpy.types.Collection,
-    armature_object: bpy.types.Object,
-    apply_transform: bool,
-) -> None:
-    """
-    Transforms the object's coordinate system from the game engine's to Blender's.
-
-    The transformation applies:
-      - Mirror along Y-axis (s y -1),
-      - Rotation of -90° about the X-axis (r x -90),
-      - Rotation of 90° about the Z-axis (r z 90).
-
-    If an armature_object is provided, the transformation is applied to the armature and
-    collision shapes. Otherwise, it is applied to meshes in the 'Meshes_Collection' sub-collection
-    and collision shapes.
-
-    Args:
-        source_collection (bpy.types.Collection): The parent collection containing sub-collections.
-        armature_object (bpy.types.Object): The armature object to transform (if available).
-        apply_transform (bool): Global switch; if False, no transformation is performed.
-    """
-    if not apply_transform:
-        return
-
-    # Create the composite transformation: mirror on Y, then rotate -90° about X, then 90° about Z.
-    mirror_y = Matrix.Scale(-1, 4, (0, 1, 0))
-    rot_x = Matrix.Rotation(radians(-90), 4, "X")
-    rot_z = Matrix.Rotation(radians(90), 4, "Z")
-    transform = rot_z @ rot_x @ mirror_y
-
-    # Ensure we're in Object Mode.
-    if bpy.context.object and bpy.context.object.mode != "OBJECT":
-        print("[INFO] Switching to OBJECT mode.")
-        bpy.ops.object.mode_set(mode="OBJECT")
-
-    # Apply transformation to the armature if provided, else to meshes.
-    if armature_object is not None:
-        print(f"Applying transformation to armature: {armature_object.name}")
-        armature_object.matrix_world = transform @ armature_object.matrix_world
-        bpy.context.view_layer.objects.active = armature_object
-        armature_object.select_set(True)
-    else:
-        meshes_collection = get_meshes_collection(source_collection)
-        if meshes_collection is None:
-            print("Meshes_Collection sub-collection not found.")
-            return
-        for obj in meshes_collection.objects:
-            print(f"Applying transformation to mesh: {obj.name}")
-            obj.matrix_world = transform @ obj.matrix_world
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
-            # bpy.ops.object.transform_apply(location=False, rotation=True, scale=True) # Needed at all?
-
-    # Process collision shapes collection, if it exists.
-    collision_shapes_collection = get_collision_collection(source_collection)
-    if collision_shapes_collection:
-        for child in collision_shapes_collection.children:
-            for obj in child.objects:
-                print(f"Applying transformation to collision shape: {obj.name}")
-                obj.matrix_world = transform @ obj.matrix_world
-                bpy.context.view_layer.objects.active = obj
-                obj.select_set(True)
-                bpy.ops.object.transform_apply(
-                    location=False, rotation=True, scale=True
-                )
-
-
-def apply_transform_from_blender_to_game_engine(
-    source_collection: bpy.types.Collection, apply_transform: bool
-) -> None:
-    """
-    Transforms all objects within the given collection from Blender's coordinate system
-    to the game engine's coordinate system. This operation applies the inverse of the
-    composite transformation defined for the game engine-to-Blender conversion.
-
-    The transformation used for game engine → Blender is:
-      - Mirror along Y-axis (s y -1)
-      - Rotate -90° about the X-axis (r x -90)
-      - Rotate 90° about the Z-axis (r z 90)
-
-    The transformation for Blender → game engine is the inverse of the above.
-
-    Args:
-            source_collection (bpy.types.Collection): The collection containing objects to transform.
-            apply_transform (bool): Global switch; if False, no transformation is performed.
-    """
-    print("[INFO] Applying transformation from Blender to game engine.")
-    if not apply_transform:
-        print("[INFO] Transformation disabled.")
-        return
-
-    # Define the composite transformation from game engine to Blender.
-    mirror_y = Matrix.Scale(-1, 4, (0, 1, 0))
-    rot_x = Matrix.Rotation(radians(-90), 4, "X")
-    rot_z = Matrix.Rotation(radians(90), 4, "Z")
-    transform = rot_z @ rot_x @ mirror_y
-
-    # Invert the transformation for Blender → game engine conversion.
-    transform_inv = transform.inverted()
-
-    # Ensure we're in Object Mode.
-    if bpy.context.object and bpy.context.object.mode != "OBJECT":
-        print("[INFO] Switching to OBJECT mode.")
-        bpy.ops.object.mode_set(mode="OBJECT")
-
-    # Retrieve the 'Meshes_Collection' sub-collection.
-    meshes_collection = get_meshes_collection(source_collection)
-    if meshes_collection is None:
-        print("Meshes_Collection sub-collection not found.")
-        return
-
-    # Iterate over all objects in the source collection.
-    for obj in meshes_collection.objects:
-        # Debug: print the original matrix
-        print(f"Object {obj.name} original matrix_world:\n{obj.matrix_world}")
-
-        # Apply the inverse transformation.
-        obj.matrix_world = transform_inv @ obj.matrix_world
-
-        # Debug: print the new matrix.
-        print(f"Object {obj.name} new matrix_world:\n{obj.matrix_world}")
-
-        # Set the object active and selected.
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-
-        # Apply the transformation to bake changes.
-        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-
-        # Debug: print the matrix after applying transform.
-        print(
-            f"Object {obj.name} matrix_world after transform_apply:\n{obj.matrix_world}"
-        )
-
-    print("[INFO] Transformation complete.")
-
-
 def mirror_object_by_vector(obj, vector):
     """
     Mirrors an object across a vector.
@@ -259,6 +121,70 @@ def mirror_object_by_vector(obj, vector):
 
     # Apply the reflection matrix to the object's transformation
     obj.matrix_world = reflection_matrix @ obj.matrix_world
+
+
+def get_conversion_matrix(invert: bool = False) -> Matrix:
+    # Mirror along Y-axis, then rotate -90° about X, then 90° about Z
+    mirror_y = Matrix.Scale(-1, 4, (0, 1, 0))
+    rot_x = Matrix.Rotation(radians(-90), 4, "X")
+    rot_z = Matrix.Rotation(radians(90), 4, "Z")
+    transform = rot_z @ rot_x @ mirror_y
+    return transform.inverted() if invert else transform
+
+
+def apply_transformation_to_objects(
+    objects, transform: Matrix, apply_operator: bool = False
+):
+    for obj in objects:
+        print(f"Applying transformation to: {obj.name}")
+        obj.matrix_world = transform @ obj.matrix_world
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        if apply_operator:
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+
+def apply_transformation(
+    source_collection: bpy.types.Collection,
+    armature_object: bpy.types.Object = None,
+    apply_transform: bool = True,
+    invert: bool = False,
+    operator_on_meshes: bool = False,
+    operator_on_collision: bool = False,
+) -> None:
+    if not apply_transform:
+        return
+
+    # Ensure we are in OBJECT mode
+    if bpy.context.object and bpy.context.object.mode != "OBJECT":
+        print("[INFO] Switching to OBJECT mode.")
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+    # Get the transformation matrix based on direction
+    transform = get_conversion_matrix(invert)
+
+    # Apply transformation to armature if provided, otherwise to meshes
+    if armature_object is not None:
+        print(f"Applying transformation to armature: {armature_object.name}")
+        armature_object.matrix_world = transform @ armature_object.matrix_world
+        bpy.context.view_layer.objects.active = armature_object
+        armature_object.select_set(True)
+    else:
+        meshes_collection = get_meshes_collection(source_collection)
+        if meshes_collection is None:
+            print("Meshes_Collection sub-collection not found.")
+        else:
+            apply_transformation_to_objects(
+                meshes_collection.objects, transform, operator_on_meshes
+            )
+
+    # Process collision shapes if available
+    collision_collection = get_collision_collection(source_collection)
+    if collision_collection:
+        for child in collision_collection.children:
+            apply_transformation_to_objects(
+                child.objects, transform, operator_on_collision
+            )
 
 
 def get_meshes_collection(
@@ -555,6 +481,23 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
                     print("Added Asset Library: " + path[0])
                 else:
                     print("Asset Library already exists: " + path[0])
+
+
+def get_base_transform(coord_system) -> Matrix:
+    rotation_flat = coord_system.matrix.matrix  # Expects 9 elements (flattened 3x3)
+    position = coord_system.position  # Expected to have attributes x, y, z
+
+    rot_mat = Matrix(
+        (
+            (rotation_flat[0], rotation_flat[1], rotation_flat[2], 0.0),
+            (rotation_flat[3], rotation_flat[4], rotation_flat[5], 0.0),
+            (rotation_flat[6], rotation_flat[7], rotation_flat[8], 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+        )
+    )
+    transform = rot_mat.copy()
+    transform.translation = Vector((position.x, position.y, position.z))
+    return transform
 
 
 # endregion
@@ -923,25 +866,7 @@ def create_collision_shape_box_object(
     box_shape_mesh_data.from_pydata(vertices, [], faces)
     box_shape_mesh_data.update()
 
-    rotation_matrix = box_shape.coord_system.matrix.matrix  # Matrix3x3
-    position = box_shape.coord_system.position  # Vector3
-
-    # Convert the rotation matrix to a Blender-compatible format
-    rot_mat = Matrix(
-        (
-            (rotation_matrix[0], rotation_matrix[1], rotation_matrix[2], 0.0),
-            (rotation_matrix[3], rotation_matrix[4], rotation_matrix[5], 0.0),
-            (rotation_matrix[6], rotation_matrix[7], rotation_matrix[8], 0.0),
-            (0.0, 0.0, 0.0, 1.0),
-        )
-    )
-
-    # Create a translation vector
-    # in Battleforge the Y-Axis is Up, but we do that later when we apply the global matrix
-    translation_vec = Vector((position.x, position.y, position.z))
-    # Combine rotation and translation into a transformation matrix
-    transform_matrix = rot_mat
-    transform_matrix.translation = translation_vec
+    transform_matrix = get_base_transform(box_shape.coord_system)
 
     # Assign the transformation matrix to the object's world matrix
     box_object.matrix_world = transform_matrix
@@ -963,27 +888,7 @@ def create_collision_shape_sphere_object(
     bm = bmesh.new()  # pylint: disable=E1111
     segments = 32
     radius = sphere_shape.geo_sphere.radius
-    # center = sphere_shape.geo_sphere.center # should always be (0, 0, 0) so we ignore it
-
-    rotation_matrix = sphere_shape.coord_system.matrix.matrix  # Matrix3x3
-    position = sphere_shape.coord_system.position  # Vector3
-
-    # Convert the rotation matrix to a Blender-compatible format
-    rot_mat = Matrix(
-        (
-            (rotation_matrix[0], rotation_matrix[1], rotation_matrix[2], 0.0),
-            (rotation_matrix[3], rotation_matrix[4], rotation_matrix[5], 0.0),
-            (rotation_matrix[6], rotation_matrix[7], rotation_matrix[8], 0.0),
-            (0.0, 0.0, 0.0, 1.0),
-        )
-    )
-
-    # Create a translation vector
-    # in Battleforge the Y-Axis is Up, but we do that later when we apply the global matrix
-    translation_vec = Vector((position.x, position.y, position.z))
-    # Combine rotation and translation into a transformation matrix
-    transform_matrix = rot_mat
-    transform_matrix.translation = translation_vec
+    transform_matrix = get_base_transform(sphere_shape.coord_system)
 
     # Create the sphere using bmesh
     bmesh.ops.create_uvsphere(
@@ -1017,29 +922,13 @@ def create_collision_shape_cylinder_object(
     segments = 32
     radius = cylinder_shape.geo_cylinder.radius
     depth = cylinder_shape.geo_cylinder.height
-
-    rotation_matrix = cylinder_shape.coord_system.matrix.matrix  # Matrix3x3
-    position = cylinder_shape.coord_system.position  # Vector3
-
-    # Convert the rotation matrix to a Blender-compatible format
-    rot_mat = Matrix(
-        (
-            (rotation_matrix[0], rotation_matrix[1], rotation_matrix[2], 0.0),
-            (rotation_matrix[3], rotation_matrix[4], rotation_matrix[5], 0.0),
-            (rotation_matrix[6], rotation_matrix[7], rotation_matrix[8], 0.0),
-            (0.0, 0.0, 0.0, 1.0),
-        )
-    )
-
-    # Create a translation vector
-    # in Battleforge the Y-Axis is Up, but we do that later when we apply the global matrix
-    translation_vec = Vector((position.x, position.y, position.z))
-    transform_matrix = rot_mat
+    base_transform = get_base_transform(cylinder_shape.coord_system)
+    base_translation = base_transform.to_translation()
     # We need to rotate the cylinder by 90 degrees cause the cylinder is always created along the z axis, but we need it along the y axis for imported models
-    rot_mat = Matrix.Rotation(radians(90), 4, "X")
-    transform_matrix = rot_mat @ transform_matrix
-    # Combine rotation and translation into a transformation matrix
-    transform_matrix.translation = translation_vec
+    additional_rot = Matrix.Rotation(radians(90), 4, "X")
+    new_rotation = additional_rot @ base_transform
+    transform_matrix = new_rotation.to_4x4()
+    transform_matrix.translation = base_translation.copy()
     # Add half the height to the translation to center the cylinder
     transform_matrix.translation.y += depth / 2
 
@@ -1638,8 +1527,8 @@ def load_drs(
                     )
 
     # Apply the Transformations to the Source Collection
-    apply_transform_from_game_engine_to_blender(
-        source_collection, armature_object, apply_transform
+    apply_transformation(
+        source_collection, armature_object, apply_transform, False, True, True
     )
 
     # Assure Object Mode
@@ -2815,8 +2704,8 @@ def save_drs(
         return abort(keep_debug_collections, source_collection_copy)
 
     # === APPLY TRANSFORMATIONS =================================================
-    apply_transform_from_blender_to_game_engine(
-        source_collection_copy, use_apply_transform
+    apply_transformation(
+        source_collection_copy, armature_object, use_apply_transform, True, True, True
     )
 
     # === CREATE DRS STRUCTURE =================================================
@@ -2898,3 +2787,4 @@ def save_drs(
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
+# 2827 Lines -> 2790 Lines (-37 Lines)
