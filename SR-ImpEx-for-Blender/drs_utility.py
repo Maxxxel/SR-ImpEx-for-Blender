@@ -8,9 +8,14 @@ from typing import Tuple, List
 import xml.etree.ElementTree as ET
 from mathutils import Matrix, Vector, Quaternion
 import bpy
-import bmesh
+from bmesh.ops import (
+    triangulate as tri,
+    remove_doubles,
+    split_edges,
+    create_uvsphere,
+    create_cone,
+)
 
-from .message_logger import MessageLogger
 from .drs_definitions import (
     DRS,
     BMS,
@@ -60,6 +65,8 @@ from .transform_utils import (
     get_meshes_collection,
     get_collision_collection,
 )
+from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
+from .message_logger import MessageLogger
 
 logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -147,51 +154,37 @@ def copy(
 def triangulate(meshes_collection: bpy.types.Collection) -> None:
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
-            # Select the object
-            me = obj.data
-
-            # Get a BMesh representation
-            bm = bmesh.new()  # pylint: disable=E1111
-            bm.from_mesh(me)
-
-            # Triangulate the mesh
-            bmesh.ops.triangulate(bm, faces=bm.faces[:])  # pylint: disable=E1111, E1120
-            # V2.79 : bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method=0, ngon_method=0)
-
-            # Finish up, write the bmesh back to the mesh
-            bm.to_mesh(me)
-            bm.free()
+            with new_bmesh_from_object(obj) as bm:
+                tri(bm, faces=bm.faces[:])  # pylint: disable=E1111, E1120
+                # V2.79 : bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method=0, ngon_method=0)
 
 
 def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
     """Check if the Models are valid for the game. This includes the following checks:
     - Check if the Meshes have more than 32767 Vertices"""
-    unified_mesh: bmesh.types.BMesh = bmesh.new()
+    with new_bmesh() as unified_mesh:
+        for obj in meshes_collection.objects:
+            if obj.type == "MESH":
+                if len(obj.data.vertices) > 32767:
+                    logger.log(
+                        f"Mesh '{obj.name}' has more than 32767 Vertices. This is not supported by the game.",
+                        "Error",
+                        "ERROR",
+                    )
+                    return False
+                unified_mesh.from_mesh(obj.data)
 
-    for obj in meshes_collection.objects:
-        if obj.type == "MESH":
-            if len(obj.data.vertices) > 32767:
-                logger.log(
-                    f"Mesh '{obj.name}' has more than 32767 Vertices. This is not supported by the game.",
-                    "Error",
-                    "ERROR",
-                )
-                return False
-            unified_mesh.from_mesh(obj.data)
+        unified_mesh.verts.ensure_lookup_table()
+        unified_mesh.verts.index_update()
+        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=0.0001)
 
-    unified_mesh.verts.ensure_lookup_table()
-    unified_mesh.verts.index_update()
-    bmesh.ops.remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=0.0001)
-
-    if len(unified_mesh.verts) > 32767:
-        logger.log(
-            "The unified Mesh has more than 32767 Vertices. This is not supported by the game.",
-            "Error",
-            "ERROR",
-        )
-        return False
-
-    unified_mesh.free()
+        if len(unified_mesh.verts) > 32767:
+            logger.log(
+                "The unified Mesh has more than 32767 Vertices. This is not supported by the game.",
+                "Error",
+                "ERROR",
+            )
+            return False
 
     return True
 
@@ -202,23 +195,22 @@ def split_meshes_by_uv_islands(meshes_collection: bpy.types.Collection) -> None:
         if obj.type == "MESH":
             bpy.context.view_layer.objects.active = obj
             with ensure_mode("EDIT"):
-                bm = bmesh.from_edit_mesh(obj.data)  # pylint: disable=E1111
-                # old seams
-                old_seams = [e for e in bm.edges if e.seam]
-                # unmark
-                for e in old_seams:
-                    e.seam = False
-                # mark seams from uv islands
-                bpy.ops.mesh.select_all(action="SELECT")
-                bpy.ops.uv.select_all(action="SELECT")
-                bpy.ops.uv.seams_from_islands()
-                seams = [e for e in bm.edges if e.seam]
-                # split on seams
-                bmesh.ops.split_edges(bm, edges=seams)  # pylint: disable=E1120
-                # re instate old seams.. could clear new seams.
-                for e in old_seams:
-                    e.seam = True
-                bmesh.update_edit_mesh(obj.data)
+                with edit_bmesh_from_object(obj) as bm:
+                    # old seams
+                    old_seams = [e for e in bm.edges if e.seam]
+                    # unmark
+                    for e in old_seams:
+                        e.seam = False
+                    # mark seams from uv islands
+                    bpy.ops.mesh.select_all(action="SELECT")
+                    bpy.ops.uv.select_all(action="SELECT")
+                    bpy.ops.uv.seams_from_islands()
+                    seams = [e for e in bm.edges if e.seam]
+                    # split on seams
+                    split_edges(bm, edges=seams)  # pylint: disable=E1120
+                    # re instate old seams.. could clear new seams.
+                    for e in old_seams:
+                        e.seam = True
 
 
 def set_origin_to_world_origin(meshes_collection: bpy.types.Collection) -> None:
@@ -764,24 +756,23 @@ def create_collision_shape_sphere_object(
         f"CollisionSphere_{index}", sphere_shape_mesh_data
     )
 
-    bm = bmesh.new()  # pylint: disable=E1111
-    segments = 32
-    radius = sphere_shape.geo_sphere.radius
-    transform_matrix = get_base_transform(sphere_shape.coord_system)
+    with new_bmesh() as bm:
+        segments = 32
+        radius = sphere_shape.geo_sphere.radius
+        transform_matrix = get_base_transform(sphere_shape.coord_system)
 
-    # Create the sphere using bmesh
-    bmesh.ops.create_uvsphere(
-        bm,
-        u_segments=segments,
-        v_segments=segments,
-        radius=radius,
-        matrix=transform_matrix,
-        calc_uvs=False,
-    )
+        # Create the sphere using bmesh
+        create_uvsphere(
+            bm,
+            u_segments=segments,
+            v_segments=segments,
+            radius=radius,
+            matrix=transform_matrix,
+            calc_uvs=False,
+        )
 
-    # Finish up, write the bmesh into the mesh
-    bm.to_mesh(sphere_shape_mesh_data)
-    bm.free()
+        # Finish up, write the bmesh into the mesh
+        bm.to_mesh(sphere_shape_mesh_data)
 
     # Display the object as wired
     sphere_object.display_type = "WIRE"
@@ -797,36 +788,35 @@ def create_collision_shape_cylinder_object(
         f"CollisionCylinder_{index}", cylinder_shape_mesh_data
     )
 
-    bm = bmesh.new()  # pylint: disable=E1111
-    segments = 32
-    radius = cylinder_shape.geo_cylinder.radius
-    depth = cylinder_shape.geo_cylinder.height
-    base_transform = get_base_transform(cylinder_shape.coord_system)
-    base_translation = base_transform.to_translation()
-    # We need to rotate the cylinder by 90 degrees cause the cylinder is always created along the z axis, but we need it along the y axis for imported models
-    additional_rot = Matrix.Rotation(radians(90), 4, "X")
-    new_rotation = additional_rot @ base_transform
-    transform_matrix = new_rotation.to_4x4()
-    transform_matrix.translation = base_translation.copy()
-    # Add half the height to the translation to center the cylinder
-    transform_matrix.translation.y += depth / 2
+    with new_bmesh() as bm:
+        segments = 32
+        radius = cylinder_shape.geo_cylinder.radius
+        depth = cylinder_shape.geo_cylinder.height
+        base_transform = get_base_transform(cylinder_shape.coord_system)
+        base_translation = base_transform.to_translation()
+        # We need to rotate the cylinder by 90 degrees cause the cylinder is always created along the z axis, but we need it along the y axis for imported models
+        additional_rot = Matrix.Rotation(radians(90), 4, "X")
+        new_rotation = additional_rot @ base_transform
+        transform_matrix = new_rotation.to_4x4()
+        transform_matrix.translation = base_translation.copy()
+        # Add half the height to the translation to center the cylinder
+        transform_matrix.translation.y += depth / 2
 
-    # Create the cylinder using bmesh
-    bmesh.ops.create_cone(
-        bm,
-        cap_ends=True,
-        cap_tris=False,
-        segments=segments,
-        radius1=radius,  # Diameter at the bottom
-        radius2=radius,  # Diameter at the top (same for cylinder)
-        depth=depth,
-        matrix=transform_matrix,
-        calc_uvs=False,
-    )
+        # Create the cylinder using bmesh
+        create_cone(
+            bm,
+            cap_ends=True,
+            cap_tris=False,
+            segments=segments,
+            radius1=radius,  # Diameter at the bottom
+            radius2=radius,  # Diameter at the top (same for cylinder)
+            depth=depth,
+            matrix=transform_matrix,
+            calc_uvs=False,
+        )
 
-    # Finish up, write the bmesh into the mesh
-    bm.to_mesh(cylinder_shape_mesh_data)
-    bm.free()
+        # Finish up, write the bmesh into the mesh
+        bm.to_mesh(cylinder_shape_mesh_data)
 
     # Display the object as wired
     cylinder_object.display_type = "WIRE"
@@ -1745,23 +1735,21 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
     if len(meshes_collection.objects) == 1:
         return meshes_collection.objects[0].data
 
-    bm: bmesh.types.BMesh = bmesh.new()
+    with new_bmesh() as bm:
+        for mesh in meshes_collection.objects:
+            if mesh.type == "MESH":
+                bm.from_mesh(mesh.data)
 
-    for mesh in meshes_collection.objects:
-        if mesh.type == "MESH":
-            bm.from_mesh(mesh.data)
+        # Count Faces and Vertices before removing doubles
+        face_count = len(bm.faces)
+        vertex_count = len(bm.verts)
 
-    # Count Faces and Vertices before removing doubles
-    face_count = len(bm.faces)
-    vertex_count = len(bm.verts)
+        # Remove Duplicates by lowest possible float
+        remove_doubles(bm, verts=bm.verts, dist=0.0001)
 
-    # Remove Duplicates by lowest possible float
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
-
-    # Create the new Mesh
-    unified_mesh = bpy.data.meshes.new("unified_mesh")
-    bm.to_mesh(unified_mesh)
-    bm.free()
+        # Create the new Mesh
+        unified_mesh = bpy.data.meshes.new("unified_mesh")
+        bm.to_mesh(unified_mesh)
 
     # Count Faces and Vertices after removing doubles
     face_count_after = len(unified_mesh.polygons)
@@ -2597,4 +2585,4 @@ def save_drs(
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
-# 2827 Lines -> 2600 Lines (-227 Lines)
+# 2827 Lines -> 2588 Lines (-239 Lines)
