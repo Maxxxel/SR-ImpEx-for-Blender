@@ -505,6 +505,49 @@ def get_base_transform(coord_system) -> Matrix:
 # region Import DRS Model to Blender
 
 
+def build_bone_weight_mapping(
+    bone_weights: list[BoneWeight], offset: int, vertex_count: int
+) -> dict[int, dict[float, list[int]]]:
+    mapping: dict[int, dict[float, list[int]]] = {}
+    for vidx in range(offset, offset + vertex_count):
+        bw = bone_weights[vidx]
+        for i in range(4):  # Assuming 4 weights per vertex
+            group_id = bw.indices[i]
+            weight = bw.weights[i]
+            if weight > 0:  # Only process non-zero weights
+                mapping.setdefault(group_id, {}).setdefault(weight, []).append(
+                    vidx - offset
+                )
+    return mapping
+
+
+def add_skin_weights_to_mesh(
+    mesh_object: bpy.types.Object,
+    bone_list: list[DRSBone],
+    bone_weights: list[BoneWeight],
+    offset: int,
+    cdsp_mesh_file_data: BattleforgeMesh,
+) -> None:
+    # Use the helper to build the mapping for the current mesh.
+    mapping = build_bone_weight_mapping(
+        bone_weights, offset, cdsp_mesh_file_data.vertex_count
+    )
+
+    # Iterate over each bone group in the mapping.
+    for group_id, weight_data in mapping.items():
+        bone_name = bone_list[group_id].name
+
+        # Create or retrieve the vertex group for the bone.
+        if bone_name not in mesh_object.vertex_groups:
+            vertex_group = mesh_object.vertex_groups.new(name=bone_name)
+        else:
+            vertex_group = mesh_object.vertex_groups[bone_name]
+
+        # Add vertices to the vertex group for each weight.
+        for weight, vertex_indices in weight_data.items():
+            vertex_group.add(vertex_indices, weight, "ADD")
+
+
 def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> None:
     # Record bind pose transform to parent space
     # Used to set pose bones for animation
@@ -728,46 +771,6 @@ def import_cdsp_mesh_file(
     )
 
     return mesh_object, mesh_data
-
-
-def add_skin_weights_to_mesh(
-    mesh_object: bpy.types.Object,
-    bone_list: list[DRSBone],
-    bone_weights: list[BoneWeight],
-    offset: int,
-    cdsp_mesh_file_data: BattleforgeMesh,
-) -> None:
-    # Dictionary to store bone groups and weights
-    bone_vertex_dict = {}
-    # Iterate over vertices and collect them by group_id and weight
-    for vidx in range(offset, offset + cdsp_mesh_file_data.vertex_count):
-        bone_weight_data = bone_weights[vidx]
-
-        for _ in range(4):  # Assuming 4 weights per vertex
-            group_id = bone_weight_data.indices[_]
-            weight = bone_weight_data.weights[_]
-
-            if weight > 0:  # Only consider non-zero weights
-                if group_id not in bone_vertex_dict:
-                    bone_vertex_dict[group_id] = {}
-
-                if weight not in bone_vertex_dict[group_id]:
-                    bone_vertex_dict[group_id][weight] = []
-
-                bone_vertex_dict[group_id][weight].append(vidx - offset)
-    # Now process each bone group and add all the vertices in a single call
-    for group_id, weight_data in bone_vertex_dict.items():
-        bone_name = bone_list[group_id].name
-
-        # Create or retrieve the vertex group for the bone
-        if bone_name not in mesh_object.vertex_groups:
-            vertex_group = mesh_object.vertex_groups.new(name=bone_name)
-        else:
-            vertex_group = mesh_object.vertex_groups[bone_name]
-
-        # Add vertices with the same weight in one call
-        for weight, vertex_indices in weight_data.items():
-            vertex_group.add(vertex_indices, weight, "ADD")
 
 
 def create_material(
@@ -1195,40 +1198,13 @@ def import_state_based_mesh_set(
                 )
                 # Add the Bone Weights to the Mesh Object
                 if drs_file.csk_skin_info is not None:
-                    cdsp_mesh_file_data = drs_file.cdsp_mesh_file.meshes[mesh_index]
-                    # Dictionary to store bone groups and weights
-                    bone_vertex_dict = {}
-                    # Iterate over vertices and collect them by group_id and weight
-                    for vidx in range(
-                        offset, offset + cdsp_mesh_file_data.vertex_count
-                    ):
-                        bone_weight_data = bone_weights[vidx]
-
-                        for _ in range(4):  # Assuming 4 weights per vertex
-                            group_id = bone_weight_data.indices[_]
-                            weight = bone_weight_data.weights[_]
-
-                            if weight > 0:  # Only consider non-zero weights
-                                if group_id not in bone_vertex_dict:
-                                    bone_vertex_dict[group_id] = {}
-
-                                if weight not in bone_vertex_dict[group_id]:
-                                    bone_vertex_dict[group_id][weight] = []
-
-                                bone_vertex_dict[group_id][weight].append(vidx - offset)
-                    # Now process each bone group and add all the vertices in a single call
-                    for group_id, weight_data in bone_vertex_dict.items():
-                        bone_name = bone_list[group_id].name
-
-                        # Create or retrieve the vertex group for the bone
-                        if bone_name not in mesh_object.vertex_groups:
-                            vertex_group = mesh_object.vertex_groups.new(name=bone_name)
-                        else:
-                            vertex_group = mesh_object.vertex_groups[bone_name]
-
-                        # Add vertices with the same weight in one call
-                        for weight, vertex_indices in weight_data.items():
-                            vertex_group.add(vertex_indices, weight, "ADD")
+                    add_skin_weights_to_mesh(
+                        mesh_object,
+                        bone_list,
+                        bone_weights,
+                        offset,
+                        drs_file.cdsp_mesh_file.meshes[mesh_index],
+                    )
                 # Check if the Mesh has a Skeleton and modify the Mesh Object accordingly
                 if drs_file.csk_skeleton is not None:
                     # Set the Armature Object as the Parent of the Mesh Object
@@ -2787,4 +2763,4 @@ def save_drs(
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
-# 2827 Lines -> 2790 Lines (-37 Lines)
+# 2827 Lines -> 2766 Lines (-61 Lines)
