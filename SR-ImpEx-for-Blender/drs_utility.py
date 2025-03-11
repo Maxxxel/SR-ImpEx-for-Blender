@@ -66,6 +66,7 @@ from .transform_utils import (
     get_collision_collection,
 )
 from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
+from .animation_utils import create_animation
 from .message_logger import MessageLogger
 
 logger = MessageLogger()
@@ -868,120 +869,6 @@ def import_collision_shapes(
             drs_file.collision_shape.cylinders[_], _
         )
         cylinder_collection.objects.link(cylinder_object)
-
-
-def create_action(
-    armature_object: bpy.types.Object, animation_name: str, repeat: bool = False
-) -> bpy.types.Action:
-    armature_action = bpy.data.actions.new(name=animation_name)
-    armature_action.use_cyclic = repeat
-    armature_object.animation_data.action = armature_action
-    return armature_action
-
-
-def get_bone_fcurves(
-    action: bpy.types.Action, pose_bone: bpy.types.PoseBone
-) -> dict[str, bpy.types.FCurve]:
-    fcurves = {}
-    data_path_prefix = f'pose.bones["{pose_bone.name}"].'
-
-    # Location F-Curves (x, y, z)
-    for i, axis in enumerate("xyz"):
-        fcurve = action.fcurves.new(data_path=data_path_prefix + "location", index=i)
-        fcurves[f"location_{axis}"] = fcurve
-
-    # Rotation F-Curves (quaternion w, x, y, z)
-    for i, axis in enumerate("wxyz"):
-        fcurve = action.fcurves.new(
-            data_path=data_path_prefix + "rotation_quaternion", index=i
-        )
-        fcurves[f"rotation_{axis}"] = fcurve
-
-    return fcurves
-
-
-def insert_keyframes(
-    fcurves: dict[str, bpy.types.FCurve],
-    frame_data: SKAKeyframe,
-    frame: int,
-    animation_type: int,
-    bind_rot: Quaternion,
-    bind_loc: Vector,
-) -> None:
-    if animation_type == 0:
-        # Location
-        translation_vector = bind_rot.conjugated() @ (
-            Vector((frame_data.x, frame_data.y, frame_data.z)) - bind_loc
-        )
-        for axis, value in zip("xyz", translation_vector):
-            fcurve = fcurves[f"location_{axis}"]
-            kp = fcurve.keyframe_points.insert(frame, value)
-            kp.interpolation = "BEZIER"
-    elif animation_type == 1:
-        # Rotation
-        rotation_quaternion = bind_rot.conjugated() @ Quaternion(
-            (-frame_data.w, frame_data.x, frame_data.y, frame_data.z)
-        )
-        for axis, value in zip("wxyz", rotation_quaternion):
-            fcurve = fcurves[f"rotation_{axis}"]
-            kp = fcurve.keyframe_points.insert(frame, value)
-            kp.interpolation = "BEZIER"
-
-
-def add_animation_to_nla_track(
-    armature_object: bpy.types.Object, action: bpy.types.Action
-) -> None:
-    new_track = armature_object.animation_data.nla_tracks.new()
-    new_track.name = action.name
-    new_strip = new_track.strips.new(action.name, 0, action)
-    new_strip.name = action.name
-    new_strip.repeat = True
-    new_track.lock, new_track.mute = False, False
-
-
-def create_animation(
-    ska_file: SKA,
-    armature_object: bpy.types.Object,
-    bone_list: list[DRSBone],
-    animation_name: str,
-):
-    fps = bpy.context.scene.render.fps
-
-    armature_object.animation_data_create()
-    new_action = create_action(armature_object, animation_name, repeat=ska_file.repeat)
-
-    # Prepare F-Curves for all bones
-    bone_fcurves_map: dict[str, bpy.types.FCurve] = {}
-
-    for bone in bone_list:
-        pose_bone = armature_object.pose.bones.get(bone.name)
-        if pose_bone:
-            bone_fcurves_map[bone.ska_identifier] = get_bone_fcurves(
-                new_action, pose_bone
-            )
-        else:
-            logger.log(f"Bone {bone.name} not found in armature.", "Warning", "WARNING")
-
-    for header_data in ska_file.headers:
-        fcurves = bone_fcurves_map.get(header_data.bone_id)
-        bone = next(
-            (b for b in bone_list if b.ska_identifier == header_data.bone_id), None
-        )
-        if not fcurves or not bone:
-            continue
-
-        bind_rot = bone.bind_rot
-        bind_loc = bone.bind_loc
-        header_type = header_data.type
-
-        for idx in range(header_data.tick, header_data.tick + header_data.interval):
-            frame_data = ska_file.keyframes[idx]
-            frame = ska_file.times[idx] * ska_file.duration * fps
-
-            insert_keyframes(
-                fcurves, frame_data, frame, header_type, bind_rot, bind_loc
-            )
-    add_animation_to_nla_track(armature_object, new_action)
 
 
 def import_state_based_mesh_set(
@@ -2585,4 +2472,4 @@ def save_drs(
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
-# 2827 Lines -> 2588 Lines (-239 Lines)
+# 2827 Lines -> 2475 Lines (-352 Lines)
