@@ -11,6 +11,7 @@ from mathutils import Matrix, Vector, Quaternion
 import bpy
 import bmesh
 
+from .message_logger import MessageLogger
 from .drs_definitions import (
     DRS,
     BMS,
@@ -54,24 +55,10 @@ from .drs_definitions import (
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA, SKAKeyframe
 
+logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
-messages = []
 
 # region General Helper Functions
-
-
-def show_message_box(message="", title="Message Box", icon="INFO", final=False):
-    global messages  # pylint: disable=global-variable-not-assigned
-    # We store the messages in a list to display them all at once
-    if message != "":
-        messages.append((message, title, icon))
-
-    if final:
-        # Display messages using the operator defined in __init__.py
-        final_message: str = ""
-        for message in messages:
-            final_message += f"{message[1]}: {message[0]}\n"
-        # bpy.ops.my_category.show_messages("INVOKE_DEFAULT", messages=final_message)
 
 
 @contextmanager
@@ -151,7 +138,6 @@ def apply_transformation_to_objects(
     objects, transform: Matrix, apply_operator: bool = False
 ):
     for obj in objects:
-        print(f"Applying transformation to: {obj.name}")
         obj.matrix_world = transform @ obj.matrix_world
         bpy.context.view_layer.objects.active = obj
         obj.select_set(True)
@@ -175,7 +161,6 @@ def apply_transformation(
 
     # Apply transformation to armature if provided, otherwise to meshes
     if armature_object is not None:
-        print(f"Applying transformation to armature: {armature_object.name}")
         armature_object.matrix_world = transform @ armature_object.matrix_world
         bpy.context.view_layer.objects.active = armature_object
         armature_object.select_set(True)
@@ -221,7 +206,7 @@ def abort(
     if not keep_debug_collections and source_collection_copy is not None:
         bpy.data.collections.remove(source_collection_copy)
 
-    show_message_box(final=True)
+    logger.display()
 
     return {"CANCELLED"}
 
@@ -308,8 +293,8 @@ def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
             if len(obj.data.vertices) > 32767:
-                show_message_box(
-                    "One Mesh has more than 32767 Vertices. This is not supported by the game.",
+                logger.log(
+                    f"Mesh '{obj.name}' has more than 32767 Vertices. This is not supported by the game.",
                     "Error",
                     "ERROR",
                 )
@@ -321,7 +306,7 @@ def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
     bmesh.ops.remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=0.0001)
 
     if len(unified_mesh.verts) > 32767:
-        show_message_box(
+        logger.log(
             "The unified Mesh has more than 32767 Vertices. This is not supported by the game.",
             "Error",
             "ERROR",
@@ -405,7 +390,7 @@ def get_image_and_pixels(map_node, map_name):
     from_node = map_node.links[0].from_node
     if from_node.type in {"SEPRGB", "SEPARATE_COLOR"}:
         if not from_node.inputs[0].is_linked:
-            show_message_box(
+            logger.log(
                 f"The {map_name} input is not linked. Please connect an Image Node!",
                 "Info",
                 "INFO",
@@ -417,7 +402,7 @@ def get_image_and_pixels(map_node, map_name):
         img = getattr(from_node, "image", None)
 
     if img is None or not img.pixels:
-        show_message_box(
+        logger.log(
             f"The {map_name} is set, but the Image is None. Please disconnect the Image from the Node if you don't want to use it!",
             "Info",
             "INFO",
@@ -461,14 +446,14 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
         cylinders_collection = bpy.data.collections.new("Cylinders_Collection")
         collision_collection.children.link(cylinders_collection)
 
-    list_pathes = [
+    list_paths = [
         ("Battleforge Assets", resource_dir + "/assets"),
     ]
 
     offset = len(bpy.context.preferences.filepaths.asset_libraries)
     index = offset
 
-    for path in list_pathes:
+    for path in list_paths:
         if offset == 0:
             # Add them without any Checks
             bpy.ops.preferences.asset_library_add(directory=path[1])
@@ -1101,9 +1086,7 @@ def create_animation(
                 new_action, pose_bone
             )
         else:
-            show_message_box(
-                f"Bone {bone.name} not found in armature.", "Warning", "WARNING"
-            )
+            logger.log(f"Bone {bone.name} not found in armature.", "Warning", "WARNING")
 
     for header_data in ska_file.headers:
         fcurves = bone_fcurves_map.get(header_data.bone_id)
@@ -1369,9 +1352,6 @@ def load_drs(
     import_debris=False,
     import_modules=True,
 ) -> None:
-    # reset messages
-    global messages  # pylint: disable=global-statement
-    messages = []
     # Load time measurement
     start_time = time.time()
     base_name = os.path.basename(filepath).split(".")[0]
@@ -1515,13 +1495,12 @@ def load_drs(
     )
 
     # Print the Time Measurement
-    show_message_box(
+    logger.log(
         f"Imported {base_name} in {time.time() - start_time:.2f} seconds.",
         "Import Time",
         "INFO",
-        True,
     )
-    # Show the Messages
+    logger.display()
     return {"FINISHED"}
 
 
@@ -1755,7 +1734,7 @@ def load_bmg(
                         # Link the Mesh Object to the Source Collection
                         slocator_collection.objects.link(mesh_object)
                 else:
-                    show_message_box(
+                    logger.log(
                         f"Construction file {slocator.file_name} has an unsupported file ending.",
                         "Error",
                         "ERROR",
@@ -1774,7 +1753,7 @@ def verify_collections(
 ) -> bool:
     # First Check if the selected Collection is a valid Collection by name DRSModel_...
     if not source_collection.name.startswith("DRSModel_"):
-        show_message_box(
+        logger.log(
             "The selected Collection is not a valid Collection. Please select a Collection with the name DRSModel_...",
             "Error",
             "ERROR",
@@ -1793,12 +1772,12 @@ def verify_collections(
             mesh_collection = get_meshes_collection(source_collection)
 
             if mesh_collection is None:
-                show_message_box("No Meshes Collection found!", "Error", "ERROR")
+                logger.log("No Meshes Collection found!", "Error", "ERROR")
                 return False
 
             # Check if the Meshes Collection has Meshes
             if len(mesh_collection.objects) == 0:
-                show_message_box(
+                logger.log(
                     "No Meshes found in the Meshes Collection!", "Error", "ERROR"
                 )
                 return False
@@ -1807,10 +1786,8 @@ def verify_collections(
             for mesh in mesh_collection.objects:
                 if mesh.type == "MESH":
                     if len(mesh.material_slots) == 0:
-                        show_message_box(
-                            "No Material found for Mesh " + mesh.name + "!",
-                            "Error",
-                            "ERROR",
+                        logger.log(
+                            f"No Material found for Mesh {mesh.name}!", "Error", "ERROR"
                         )
                         return False
                     else:
@@ -1818,7 +1795,7 @@ def verify_collections(
                         material_nodes = mesh.material_slots[0].material.node_tree.nodes
                         for node in material_nodes:
                             if node.type == "Group" and node.label != "DRSMaterial":
-                                show_message_box(
+                                logger.log(
                                     f"Node {node.name} is not a DRSMaterial node!",
                                     "Error",
                                     "ERROR",
@@ -1828,7 +1805,7 @@ def verify_collections(
             collision_collection = get_collision_collection(source_collection)
 
             if collision_collection is None:
-                show_message_box(
+                logger.log(
                     "No Collision Collection found! But is required for a model with collision shapes!",
                     "Error",
                     "ERROR",
@@ -1852,7 +1829,7 @@ def verify_collections(
                 and spheres_collection is None
                 and cylinders_collection is None
             ):
-                show_message_box(
+                logger.log(
                     "No Collision Shapes found in the Collision Collection!",
                     "Error",
                     "ERROR",
@@ -1869,7 +1846,7 @@ def verify_collections(
                     found_collision_shapes = True
                     break
             if not found_collision_shapes:
-                show_message_box(
+                logger.log(
                     "No Collision Shapes found in the Collision Collection!",
                     "Error",
                     "ERROR",
@@ -1907,7 +1884,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
     vertex_count_after = len(unified_mesh.vertices)
 
     # Show the Message Box
-    show_message_box(
+    logger.log(
         f"Unified Mesh has {face_count_after} Faces and {vertex_count_after} Vertices after removing duplicates. The original Mesh had {face_count} Faces and {vertex_count} Vertices.",
         "Unified Mesh",
         "INFO",
@@ -2055,14 +2032,14 @@ def set_color_map(
                 )
                 os.remove(temp_path)
             else:
-                show_message_box(
+                logger.log(
                     "The color_map Texture is not an Image or the Image is None!",
                     "Error",
                     "ERROR",
                 )
                 return False
     else:
-        show_message_box(
+        logger.log(
             "The color_map is not linked. Please check the Material Node.",
             "Error",
             "ERROR",
@@ -2117,19 +2094,19 @@ def set_normal_map(
                 )
                 os.remove(temp_path)
             else:
-                show_message_box(
+                logger.log(
                     "The normal_map Texture is not an Image or the Image is None!",
                     "Info",
                     "INFO",
                 )
         else:
-            show_message_box(
+            logger.log(
                 "The normal_map is not linked. Please check the Material Node if this is intended.",
                 "Info",
                 "INFO",
             )
     else:
-        show_message_box(
+        logger.log(
             "The normal_map is None. Please check the Material Node if this is intended.",
             "Info",
             "INFO",
@@ -2165,7 +2142,7 @@ def set_metallic_roughness_emission_map(
             width, height = img.size
             break
     else:
-        show_message_box(
+        logger.log(
             "No Image is set for the parameter map. Please set an Image!",
             "Info",
             "INFO",
@@ -2613,11 +2590,7 @@ def save_drs(
         source_collection_copy = copy(context.scene.collection, source_collection)
         source_collection_copy.name += ".copy"
     except Exception as e:  # pylint: disable=broad-except
-        show_message_box(
-            f"Failed to duplicate collection: {e}. Type {type(e)}",
-            "Collection Copy Error",
-            "ERROR",
-        )
+        logger.log(f"Failed to duplicate collection: {e}. Type {type(e)}", "ERROR")
         return abort(keep_debug_collections, None)
 
     # === MESH PREPARATION =====================================================
@@ -2625,15 +2598,11 @@ def save_drs(
     try:
         triangulate(source_collection_copy)
     except Exception as e:  # pylint: disable=broad-except
-        show_message_box(
-            f"Error during triangulation: {e}. Type {type(e)}",
-            "Triangulation Error",
-            "ERROR",
-        )
+        logger.log(f"Error during triangulation: {e}", "Triangulation Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
 
     if not verify_mesh_vertex_count(meshes_collection):
-        show_message_box(
+        logger.log(
             "Model verification failed: one or more meshes are invalid or exceed vertex limits.",
             "Model Verification Error",
             "ERROR",
@@ -2644,7 +2613,7 @@ def save_drs(
         try:
             split_meshes_by_uv_islands(meshes_collection)
         except Exception as e:  # pylint: disable=broad-except
-            show_message_box(
+            logger.log(
                 f"Error splitting meshes by UV islands: {e}", "UV Island Error", "ERROR"
             )
             return abort(keep_debug_collections, source_collection_copy)
@@ -2657,24 +2626,17 @@ def save_drs(
                 armature_object = obj
                 break
         if armature_object is None:
-            show_message_box(
+            logger.log(
                 "No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection.",
                 "Error",
                 "ERROR",
-            )
-            print(
-                "No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection."
             )
             return abort(keep_debug_collections, source_collection_copy)
 
     try:
         set_origin_to_world_origin(meshes_collection)
     except Exception as e:  # pylint: disable=broad-except
-        show_message_box(
-            f"Error setting origin for meshes: {e}. Type {type(e)}",
-            "Origin Error",
-            "ERROR",
-        )
+        logger.log(f"Error setting origin for meshes: {e}", "Origin Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
 
     # === APPLY TRANSFORMATIONS =================================================
@@ -2694,11 +2656,7 @@ def save_drs(
     try:
         unified_mesh = create_unified_mesh(meshes_collection)
     except Exception as e:  # pylint: disable=broad-except
-        show_message_box(
-            f"Error creating unified mesh: {e}. Type {type(e)}",
-            "Unified Mesh Error",
-            "ERROR",
-        )
+        logger.log(f"Error creating unified mesh: {e}", "Unified Mesh Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
 
     nodes = InformationIndices[model_type]
@@ -2718,9 +2676,7 @@ def save_drs(
                 meshes_collection, model_name, folder_path
             )
             if cdsp_mesh_file is None:
-                show_message_box(
-                    "Failed to create CDspMeshFile.", "Mesh File Error", "ERROR"
-                )
+                logger.log("Failed to create CDspMeshFile.", "Mesh File Error", "ERROR")
                 return abort(keep_debug_collections, source_collection_copy)
             new_drs_file.cdsp_mesh_file = cdsp_mesh_file
             new_drs_file.push_node_infos("CDspMeshFile", new_drs_file.cdsp_mesh_file)
@@ -2741,17 +2697,15 @@ def save_drs(
     try:
         new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
     except Exception as e:  # pylint: disable=broad-except
-        show_message_box(
-            f"Error saving DRS file: {e}. Type {type(e)}", "Save Error", "ERROR"
-        )
-        print(f"Error saving DRS file: {e}")
+        logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:
         bpy.data.collections.remove(source_collection_copy)
 
-    show_message_box("Export completed successfully.", "Export Complete", "INFO")
+    logger.log("Export completed successfully.", "Export Complete", "INFO")
+    logger.display()
     return {"FINISHED"}
 
 
@@ -2761,4 +2715,4 @@ def save_drs(
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
-# 2827 Lines -> 2764 Lines (-63 Lines)
+# 2827 Lines -> 2718 Lines (-109 Lines)
