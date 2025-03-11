@@ -6,7 +6,6 @@ import subprocess
 from collections import defaultdict
 from typing import Tuple, List
 import xml.etree.ElementTree as ET
-from contextlib import contextmanager
 from mathutils import Matrix, Vector, Quaternion
 import bpy
 import bmesh
@@ -54,25 +53,18 @@ from .drs_definitions import (
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA, SKAKeyframe
+from .transform_utils import (
+    ensure_mode,
+    mirror_object_by_vector,
+    apply_transformation,
+    get_meshes_collection,
+    get_collision_collection,
+)
 
 logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
 # region General Helper Functions
-
-
-@contextmanager
-def ensure_mode(desired_mode: str):
-    # Get current mode; if no active object, default to 'OBJECT'
-    current_mode = bpy.context.object.mode if bpy.context.object else "OBJECT"
-    if current_mode != desired_mode:
-        bpy.ops.object.mode_set(mode=desired_mode)
-    try:
-        yield
-    finally:
-        # Restore the original mode if it was changed
-        if bpy.context.object and bpy.context.object.mode != current_mode:
-            bpy.ops.object.mode_set(mode=current_mode)
 
 
 def find_or_create_collection(
@@ -84,120 +76,6 @@ def find_or_create_collection(
         source_collection.children.link(collection)
 
     return collection
-
-
-def mirror_object_by_vector(obj, vector):
-    """
-    Mirrors an object across a vector.
-
-    :param obj: The object to mirror.
-    :param vector: The vector to mirror across (mathutils.Vector).
-    """
-    # Normalize the vector to create a plane of reflection
-    vector = vector.normalized()
-
-    # Create the reflection matrix
-    reflection_matrix = Matrix(
-        (
-            (
-                1 - 2 * vector.x**2,
-                -2 * vector.x * vector.y,
-                -2 * vector.x * vector.z,
-                0,
-            ),
-            (
-                -2 * vector.x * vector.y,
-                1 - 2 * vector.y**2,
-                -2 * vector.y * vector.z,
-                0,
-            ),
-            (
-                -2 * vector.x * vector.z,
-                -2 * vector.y * vector.z,
-                1 - 2 * vector.z**2,
-                0,
-            ),
-            (0, 0, 0, 1),
-        )
-    )
-
-    # Apply the reflection matrix to the object's transformation
-    obj.matrix_world = reflection_matrix @ obj.matrix_world
-
-
-def get_conversion_matrix(invert: bool = False) -> Matrix:
-    # Mirror along Y-axis, then rotate -90° about X, then 90° about Z
-    mirror_y = Matrix.Scale(-1, 4, (0, 1, 0))
-    rot_x = Matrix.Rotation(radians(-90), 4, "X")
-    rot_z = Matrix.Rotation(radians(90), 4, "Z")
-    transform = rot_z @ rot_x @ mirror_y
-    return transform.inverted() if invert else transform
-
-
-def apply_transformation_to_objects(
-    objects, transform: Matrix, apply_operator: bool = False
-):
-    for obj in objects:
-        obj.matrix_world = transform @ obj.matrix_world
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-        if apply_operator:
-            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-
-
-def apply_transformation(
-    source_collection: bpy.types.Collection,
-    armature_object: bpy.types.Object = None,
-    apply_transform: bool = True,
-    invert: bool = False,
-    operator_on_meshes: bool = False,
-    operator_on_collision: bool = False,
-) -> None:
-    if not apply_transform:
-        return
-
-    # Get the transformation matrix based on direction
-    transform = get_conversion_matrix(invert)
-
-    # Apply transformation to armature if provided, otherwise to meshes
-    if armature_object is not None:
-        armature_object.matrix_world = transform @ armature_object.matrix_world
-        bpy.context.view_layer.objects.active = armature_object
-        armature_object.select_set(True)
-    else:
-        meshes_collection = get_meshes_collection(source_collection)
-        if meshes_collection is None:
-            print("Meshes_Collection sub-collection not found.")
-        else:
-            apply_transformation_to_objects(
-                meshes_collection.objects, transform, operator_on_meshes
-            )
-
-    # Process collision shapes if available
-    collision_collection = get_collision_collection(source_collection)
-    if collision_collection:
-        for child in collision_collection.children:
-            apply_transformation_to_objects(
-                child.objects, transform, operator_on_collision
-            )
-
-
-def get_meshes_collection(
-    source_collection: bpy.types.Collection,
-) -> bpy.types.Collection:
-    for collection in source_collection.children:
-        if collection.name.startswith("Meshes_Collection"):
-            return collection
-    return None
-
-
-def get_collision_collection(
-    source_collection: bpy.types.Collection,
-) -> bpy.types.Collection:
-    for collection in source_collection.children:
-        if collection.name.startswith("CollisionShapes_Collection"):
-            return collection
-    return None
 
 
 def abort(
@@ -460,7 +338,7 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
             # give a name to your asset dir
             bpy.context.preferences.filepaths.asset_libraries[index].name = path[0]
             index += 1
-            print("Added Asset Library: " + path[0])
+            logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
         else:
             for _, user_path in enumerate(
                 bpy.context.preferences.filepaths.asset_libraries
@@ -472,9 +350,11 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
                         path[0]
                     )
                     index += 1
-                    print("Added Asset Library: " + path[0])
+                    logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
                 else:
-                    print("Asset Library already exists: " + path[0])
+                    logger.log(
+                        "Asset Library already exists: " + path[0], "Info", "INFO"
+                    )
 
 
 def get_base_transform(coord_system) -> Matrix:
@@ -656,7 +536,11 @@ def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
     for bone in bone_list:
         if bone.parent == -1 and bone.identifier != 0:
             bone.parent = 0
-            print(f"Bone {bone.name} has no parent, setting it to the root bone.")
+            logger.log(
+                "Bone {bone.name} has no parent, setting it to the root bone.",
+                "Info",
+                "INFO",
+            )
 
     # Return the BoneList
     return bone_list
@@ -1992,7 +1876,7 @@ def set_color_map(
     folder_path: str,
 ) -> bool:
     if color_map is None:
-        show_message_box(
+        logger.log(
             "The color_map is None. Please check the Material Node.", "Error", "ERROR"
         )
         return False
@@ -2576,8 +2460,6 @@ def save_drs(
     automatic_naming: bool,
     model_type: str,
 ) -> dict:
-    global messages  # pylint: disable=global-statement
-    messages = []
 
     # === PRE-VALIDITY CHECKS =================================================
     # Ensure active collection is valid
@@ -2715,4 +2597,4 @@ def save_drs(
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
-# 2827 Lines -> 2718 Lines (-109 Lines)
+# 2827 Lines -> 2600 Lines (-227 Lines)
