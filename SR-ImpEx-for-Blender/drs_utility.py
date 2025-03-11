@@ -6,6 +6,7 @@ import subprocess
 from collections import defaultdict
 from typing import Tuple, List
 import xml.etree.ElementTree as ET
+from contextlib import contextmanager
 from mathutils import Matrix, Vector, Quaternion
 import bpy
 import bmesh
@@ -71,6 +72,20 @@ def show_message_box(message="", title="Message Box", icon="INFO", final=False):
         for message in messages:
             final_message += f"{message[1]}: {message[0]}\n"
         # bpy.ops.my_category.show_messages("INVOKE_DEFAULT", messages=final_message)
+
+
+@contextmanager
+def ensure_mode(desired_mode: str):
+    # Get current mode; if no active object, default to 'OBJECT'
+    current_mode = bpy.context.object.mode if bpy.context.object else "OBJECT"
+    if current_mode != desired_mode:
+        bpy.ops.object.mode_set(mode=desired_mode)
+    try:
+        yield
+    finally:
+        # Restore the original mode if it was changed
+        if bpy.context.object and bpy.context.object.mode != current_mode:
+            bpy.ops.object.mode_set(mode=current_mode)
 
 
 def find_or_create_collection(
@@ -154,11 +169,6 @@ def apply_transformation(
 ) -> None:
     if not apply_transform:
         return
-
-    # Ensure we are in OBJECT mode
-    if bpy.context.object and bpy.context.object.mode != "OBJECT":
-        print("[INFO] Switching to OBJECT mode.")
-        bpy.ops.object.mode_set(mode="OBJECT")
 
     # Get the transformation matrix based on direction
     transform = get_conversion_matrix(invert)
@@ -328,25 +338,24 @@ def split_meshes_by_uv_islands(meshes_collection: bpy.types.Collection) -> None:
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
             bpy.context.view_layer.objects.active = obj
-            bpy.ops.object.mode_set(mode="EDIT")
-            bm = bmesh.from_edit_mesh(obj.data)  # pylint: disable=E1111
-            # old seams
-            old_seams = [e for e in bm.edges if e.seam]
-            # unmark
-            for e in old_seams:
-                e.seam = False
-            # mark seams from uv islands
-            bpy.ops.mesh.select_all(action="SELECT")
-            bpy.ops.uv.select_all(action="SELECT")
-            bpy.ops.uv.seams_from_islands()
-            seams = [e for e in bm.edges if e.seam]
-            # split on seams
-            bmesh.ops.split_edges(bm, edges=seams)  # pylint: disable=E1120
-            # re instate old seams.. could clear new seams.
-            for e in old_seams:
-                e.seam = True
-            bmesh.update_edit_mesh(obj.data)
-            bpy.ops.object.mode_set(mode="OBJECT")
+            with ensure_mode("EDIT"):
+                bm = bmesh.from_edit_mesh(obj.data)  # pylint: disable=E1111
+                # old seams
+                old_seams = [e for e in bm.edges if e.seam]
+                # unmark
+                for e in old_seams:
+                    e.seam = False
+                # mark seams from uv islands
+                bpy.ops.mesh.select_all(action="SELECT")
+                bpy.ops.uv.select_all(action="SELECT")
+                bpy.ops.uv.seams_from_islands()
+                seams = [e for e in bm.edges if e.seam]
+                # split on seams
+                bmesh.ops.split_edges(bm, edges=seams)  # pylint: disable=E1120
+                # re instate old seams.. could clear new seams.
+                for e in old_seams:
+                    e.seam = True
+                bmesh.update_edit_mesh(obj.data)
 
 
 def set_origin_to_world_origin(meshes_collection: bpy.types.Collection) -> None:
@@ -681,11 +690,9 @@ def import_csk_skeleton(
     bone_list = init_bones(drs_file.csk_skeleton)
     # Directly set armature data to edit mode
     bpy.context.view_layer.objects.active = armature_object
-    bpy.ops.object.mode_set(mode="EDIT")
-    # Create the Bone Tree without using bpy.ops or context
-    create_bone_tree(armature_data, bone_list, bone_list[0])
-    # Restore armature data mode to OBJECT
-    bpy.ops.object.mode_set(mode="OBJECT")
+    with ensure_mode("EDIT"):
+        # Create the Bone Tree without using bpy.ops or context
+        create_bone_tree(armature_data, bone_list, bone_list[0])
     record_bind_pose(bone_list, armature_data)
     return armature_object, bone_list
 
@@ -1163,11 +1170,9 @@ def import_state_based_mesh_set(
                 bone_list = init_bones(drs_file.csk_skeleton)
                 # Directly set armature data to edit mode
                 bpy.context.view_layer.objects.active = armature_object
-                bpy.ops.object.mode_set(mode="EDIT")
-                # Create the Bone Tree without using bpy.ops or context
-                create_bone_tree(armature_data, bone_list, bone_list[0])
-                # Restore armature data mode to OBJECT
-                bpy.ops.object.mode_set(mode="OBJECT")
+                with ensure_mode("EDIT"):
+                    # Create the Bone Tree without using bpy.ops or context
+                    create_bone_tree(armature_data, bone_list, bone_list[0])
                 record_bind_pose(bone_list, armature_data)
                 # Add the Animations to the Armature Object
                 if bmg_file.animation_set is not None:
@@ -1298,13 +1303,15 @@ def import_state_based_mesh_set(
             ):
                 # Set the FPS for the Animation
                 bpy.context.scene.render.fps = int(fps_selection)
-                bpy.ops.object.mode_set(mode="POSE")
-                for animation_key in bmg_file.animation_set.mode_animation_keys:
-                    for variant in animation_key.animation_set_variants:
-                        ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
-                        create_animation(
-                            ska_file, armature_object, bone_list, variant.file
-                        )
+                with ensure_mode("POSE"):
+                    for animation_key in bmg_file.animation_set.mode_animation_keys:
+                        for variant in animation_key.animation_set_variants:
+                            ska_file: SKA = SKA().read(
+                                os.path.join(dir_name, variant.file)
+                            )
+                            create_animation(
+                                ska_file, armature_object, bone_list, variant.file
+                            )
 
     # Get individual desctruction States
     if import_debris:
@@ -1442,11 +1449,11 @@ def load_drs(
     ):
         # Set the FPS for the Animation
         bpy.context.scene.render.fps = int(fps_selection)
-        bpy.ops.object.mode_set(mode="POSE")
-        for animation_key in drs_file.animation_set.mode_animation_keys:
-            for variant in animation_key.animation_set_variants:
-                ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
-                create_animation(ska_file, armature_object, bone_list, variant.file)
+        with ensure_mode("POSE"):
+            for animation_key in drs_file.animation_set.mode_animation_keys:
+                for variant in animation_key.animation_set_variants:
+                    ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
+                    create_animation(ska_file, armature_object, bone_list, variant.file)
 
     if import_modules and drs_file.cdrw_locator_list is not None:
         for slocator in drs_file.cdrw_locator_list.slocators:
@@ -1506,11 +1513,6 @@ def load_drs(
     apply_transformation(
         source_collection, armature_object, apply_transform, False, True, True
     )
-
-    # Assure Object Mode
-    if bpy.context.mode != "OBJECT":
-        print("Switching to Object Mode")
-        bpy.ops.object.mode_set(mode="OBJECT")
 
     # Print the Time Measurement
     show_message_box(
@@ -1758,10 +1760,6 @@ def load_bmg(
                         "Error",
                         "ERROR",
                     )
-
-    # Return to the Object Mode
-    if bpy.context.object.mode != "OBJECT":
-        bpy.ops.object.mode_set(mode="OBJECT")
 
     return {"FINISHED"}
 
@@ -2763,4 +2761,4 @@ def save_drs(
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
-# 2827 Lines -> 2766 Lines (-61 Lines)
+# 2827 Lines -> 2764 Lines (-63 Lines)
