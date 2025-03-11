@@ -1519,8 +1519,6 @@ def load_drs(
         armature_object, bone_list = import_csk_skeleton(source_collection, drs_file)
         # Add the Animations to the Armature Object
         if drs_file.animation_set is not None:
-            # Apply the Transformations to the Armature Object
-            # apply_transformations(armature_object, global_matrix, apply_transform)
             pass
 
     # Create the Skin Weights
@@ -1735,7 +1733,6 @@ def load_bmg(
             mesh_object: bpy.types.Object = bpy.data.objects.new(
                 f"GroundDecal{mesh_index}", mesh_data
             )
-            # apply_transformations(mesh_object, global_matrix, apply_transform)
             # Create the Material Data
             material_data = create_material(
                 dir_name,
