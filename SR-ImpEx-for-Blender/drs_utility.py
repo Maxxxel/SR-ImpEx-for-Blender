@@ -323,30 +323,35 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
     offset = len(bpy.context.preferences.filepaths.asset_libraries)
     index = offset
 
-    for path in list_paths:
-        if offset == 0:
-            # Add them without any Checks
-            bpy.ops.preferences.asset_library_add(directory=path[1])
-            # give a name to your asset dir
-            bpy.context.preferences.filepaths.asset_libraries[index].name = path[0]
-            index += 1
-            logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
-        else:
-            for _, user_path in enumerate(
-                bpy.context.preferences.filepaths.asset_libraries
-            ):
-                if user_path.name != path[0]:
-                    bpy.ops.preferences.asset_library_add(directory=path[1])
-                    # give a name to your asset dir
-                    bpy.context.preferences.filepaths.asset_libraries[index].name = (
-                        path[0]
-                    )
-                    index += 1
-                    logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
-                else:
-                    logger.log(
-                        "Asset Library already exists: " + path[0], "Info", "INFO"
-                    )
+    try:
+        for path in list_paths:
+            if offset == 0:
+                # Add them without any Checks
+                bpy.ops.preferences.asset_library_add(directory=path[1])
+                # give a name to your asset dir
+                bpy.context.preferences.filepaths.asset_libraries[index].name = path[0]
+                index += 1
+                logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
+            else:
+                for _, user_path in enumerate(
+                    bpy.context.preferences.filepaths.asset_libraries
+                ):
+                    if user_path.name != path[0]:
+                        bpy.ops.preferences.asset_library_add(directory=path[1])
+                        # give a name to your asset dir
+                        bpy.context.preferences.filepaths.asset_libraries[
+                            index
+                        ].name = path[0]
+                        index += 1
+                        logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
+                    else:
+                        logger.log(
+                            "Asset Library already exists: " + path[0], "Info", "INFO"
+                        )
+    except Exception as e:
+        logger.log(f"Error while adding Asset Libraries: {e}", "Error", "ERROR")
+
+    logger.display()
 
 
 def get_base_transform(coord_system) -> Matrix:
