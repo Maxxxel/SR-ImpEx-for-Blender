@@ -205,7 +205,13 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         # type: ignore # ignore
         name="Split Mesh by UV Islands",
         description="Split mesh by UV islands",
-        default=False,
+        default=True,
+    )
+    flip_normals: BoolProperty(
+        # type: ignore # ignore
+        name="Flip Normals",
+        description="Flip normals if you see them 'blue' in Blender",
+        default=True,
     )
     keep_debug_collections: BoolProperty(
         # type: ignore # ignore
@@ -245,6 +251,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
         keywords["use_apply_transform"] = self.use_apply_transform
         keywords["split_mesh_by_uv_islands"] = self.split_mesh_by_uv_islands
+        keywords["flip_normals"] = self.flip_normals
         keywords["keep_debug_collections"] = self.keep_debug_collections
         keywords["export_animation"] = self.export_animation
         keywords["automatic_naming"] = self.automatic_naming

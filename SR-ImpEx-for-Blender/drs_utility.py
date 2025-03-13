@@ -1860,7 +1860,7 @@ def set_normal_map(
     model_name: str,
     folder_path: str,
     bool_param_bit_flag: int,
-) -> None:
+) -> int:
     if normal_map_node is None:
         logger.log(
             "The color_map is None. Please check the Material Node.", "Error", "ERROR"
@@ -1895,7 +1895,7 @@ def set_normal_map(
         )
         return False
 
-    return True
+    return bool_param_bit_flag
 
 
 def set_metallic_roughness_emission_map(
@@ -1907,7 +1907,7 @@ def set_metallic_roughness_emission_map(
     model_name: str,
     folder_path: str,
     bool_param_bit_flag: int,
-) -> None:
+) -> int:
 
     # Check if any of the maps are linked
     if not any(
@@ -1942,7 +1942,7 @@ def set_metallic_roughness_emission_map(
     metallic_map_texture.length = len(metallic_map_texture.name)
     metallic_map_texture.identifier = 1936745324
     new_mesh.textures.textures.append(metallic_map_texture)
-    bool_param_bit_flag += 0b10000000000000000
+    bool_param_bit_flag += 10000000000000000
 
     # Combine the images into a new image
     new_img = bpy.data.images.new(
@@ -1973,14 +1973,25 @@ def set_metallic_roughness_emission_map(
         logger.log(f"Conversion failed for the parameter map: {output_str}", "Error")
         return False
 
-    return True
+    return bool_param_bit_flag
 
 
 def create_mesh(
-    mesh: bpy.types.Mesh, mesh_index: int, model_name: str, folder_path: str
+    mesh: bpy.types.Mesh,
+    mesh_index: int,
+    model_name: str,
+    folder_path: str,
+    flip_normals: bool,
 ) -> BattleforgeMesh:
     """Create a Battleforge Mesh from a Blender Mesh Object."""
+    if flip_normals:
+        with ensure_mode("EDIT"):
+            bpy.ops.mesh.select_all(action="SELECT")
+            bpy.ops.mesh.flip_normals()
+            bpy.ops.mesh.select_all(action="DESELECT")
+
     mesh.data.calc_tangents()
+
     new_mesh = BattleforgeMesh()
     new_mesh.vertex_count = len(mesh.data.vertices)
     new_mesh.face_count = len(mesh.data.polygons)
@@ -2094,12 +2105,12 @@ def create_mesh(
         return None
 
     # Check if the Normal Map is set
-    set_normal_map(
+    bool_param_bit_flag = set_normal_map(
         normal_map, new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag
     )
 
     # Check if the Metallic, Roughness and Emission Map is set
-    set_metallic_roughness_emission_map(
+    bool_param_bit_flag = set_metallic_roughness_emission_map(
         metallic_map,
         roughness_map,
         emission_map,
@@ -2128,7 +2139,10 @@ def create_mesh(
 
 
 def create_cdsp_mesh_file(
-    meshes_collection: bpy.types.Collection, model_name: str, filepath: str
+    meshes_collection: bpy.types.Collection,
+    model_name: str,
+    filepath: str,
+    flip_normals: bool,
 ) -> CDspMeshFile:
     """Create a CDspMeshFile from a Collection of Meshes."""
     _cdsp_meshfile = CDspMeshFile()
@@ -2136,7 +2150,9 @@ def create_cdsp_mesh_file(
 
     for mesh in meshes_collection.objects:
         if mesh.type == "MESH":
-            _mesh = create_mesh(mesh, _cdsp_meshfile.mesh_count, model_name, filepath)
+            _mesh = create_mesh(
+                mesh, _cdsp_meshfile.mesh_count, model_name, filepath, flip_normals
+            )
             if _mesh is None:
                 return
             _cdsp_meshfile.meshes.append(_mesh)
@@ -2340,6 +2356,7 @@ def save_drs(
     filepath: str,
     use_apply_transform: bool,
     split_mesh_by_uv_islands: bool,
+    flip_normals: bool,
     keep_debug_collections: bool,
     export_animation: bool,
     automatic_naming: bool,
@@ -2440,7 +2457,7 @@ def save_drs(
             new_drs_file.push_node_infos("CDspJointMap", new_drs_file.cdsp_joint_map)
         elif node == "CDspMeshFile":
             cdsp_mesh_file = create_cdsp_mesh_file(
-                meshes_collection, model_name, folder_path
+                meshes_collection, model_name, folder_path, flip_normals
             )
             if cdsp_mesh_file is None:
                 logger.log("Failed to create CDspMeshFile.", "Mesh File Error", "ERROR")
