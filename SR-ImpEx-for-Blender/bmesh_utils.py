@@ -1,7 +1,7 @@
 # bmesh_utils.py
+from contextlib import contextmanager
 import bmesh
 import bpy
-from contextlib import contextmanager
 
 
 @contextmanager

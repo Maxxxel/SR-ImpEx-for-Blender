@@ -132,17 +132,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         description="Import collision shapes",
         default=True,
     )  # type: ignore
-    fps_selection: EnumProperty(
-        name="FPS Selection",
-        description="Select the FPS for the animation",
-        items=[
-            # type: ignore
-            ("15", "15 FPS", ""),
-            ("30", "30 FPS", ""),
-            ("60", "60 FPS", ""),
-        ],
-        default="30",
-    )
     # use_animation_smoothing: BoolProperty(name="Use Animation Smoothing", description="Use animation smoothing", default=True) # type: ignore
     import_animation: BoolProperty(
         name="Import Animation", description="Import animation", default=True
@@ -166,7 +155,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             ignore=("filter_glob", "clear_scene", "create_size_reference")
         )
         keywords["import_collision_shape"] = self.import_collision_shape
-        keywords["fps_selection"] = self.fps_selection
         keywords["import_animation"] = self.import_animation
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction
@@ -260,7 +248,6 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         keywords["keep_debug_collections"] = self.keep_debug_collections
         keywords["export_animation"] = self.export_animation
         keywords["automatic_naming"] = self.automatic_naming
-        keywords["temporary_file_path"] = temporary_file_path
         save_drs(context, **keywords)
         # test_export(context, **keywords)
         return {"FINISHED"}

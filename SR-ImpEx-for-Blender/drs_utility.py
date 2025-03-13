@@ -3,10 +3,11 @@ from os.path import dirname, realpath
 from math import radians
 import time
 import subprocess
+import tempfile
 from collections import defaultdict
 from typing import Tuple, List
 import xml.etree.ElementTree as ET
-from mathutils import Matrix, Vector, Quaternion
+from mathutils import Matrix, Vector
 import bpy
 from bmesh.ops import (
     triangulate as tri,
@@ -57,13 +58,11 @@ from .drs_definitions import (
     CollisionShape,
 )
 from .drs_material import DRSMaterial
-from .ska_definitions import SKA, SKAKeyframe
+from .ska_definitions import SKA
 from .transform_utils import (
     ensure_mode,
-    mirror_object_by_vector,
     apply_transformation,
-    get_meshes_collection,
-    get_collision_collection,
+    get_collection,
 )
 from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
 from .animation_utils import create_animation
@@ -367,6 +366,154 @@ def get_base_transform(coord_system) -> Matrix:
     return transform
 
 
+def process_module_import(
+    slocator,
+    source_collection,
+    armature_object,
+    dir_name,
+    drs_file,
+    import_animation,
+    import_debris,
+):
+    # Determine module type and choose the correct collection name.
+    module_type = slocator.class_type  # e.g., "Module1" or "Module2"
+    module_collection_name = "Modules1" if module_type == "Module1" else "Modules2"
+    module_collection = find_or_create_collection(
+        source_collection, module_collection_name
+    )
+
+    # Replace the module extension with .bms and read the module file.
+    module_file_name = slocator.file_name.replace(".module", ".bms")
+    module = BMS().read(os.path.join(dir_name, module_file_name))
+
+    # Build a module-specific name and prefix.
+    module_name = f"{module_type}_{slocator.sub_id}"
+    prefix = "Module_1_" if module_type == "Module1" else "Module_2_"
+
+    # Call the existing state-based mesh importer with the proper parameters.
+    import_state_based_mesh_set(
+        module.state_based_mesh_set,
+        module_collection,
+        armature_object,
+        dir_name,
+        drs_file,
+        import_animation,
+        import_debris,
+        module_name,
+        slocator,
+        prefix,
+    )
+
+
+def process_debris_import(state_based_mesh_set, source_collection, dir_name, base_name):
+    for destruction_state in state_based_mesh_set.destruction_states:
+        state_collection_name = f"Destruction_State_{destruction_state.state_num}"
+        state_collection = find_or_create_collection(
+            source_collection, state_collection_name
+        )
+
+        # Load and parse the XML file.
+        xml_file_path = os.path.join(dir_name, destruction_state.file_name)
+        with open(xml_file_path, "r", encoding="utf-8") as file:
+            xml_file = file.read()
+        xml_root = ET.fromstring(xml_file)
+
+        # Loop through PhysicObject elements and create meshes.
+        for element in xml_root.findall(".//Element[@type='PhysicObject']"):
+            resource = element.attrib.get("resource")
+            name = element.attrib.get("name")
+            if resource and name:
+                debris_drs_file = DRS().read(os.path.join(dir_name, "meshes", resource))
+                for mesh_index in range(debris_drs_file.cdsp_mesh_file.mesh_count):
+                    # Create the mesh data and object.
+                    mesh_data = create_static_mesh(
+                        debris_drs_file.cdsp_mesh_file, mesh_index
+                    )
+                    mesh_object = bpy.data.objects.new(
+                        f"CDspMeshFile_{name}", mesh_data
+                    )
+
+                    # Create and assign the material.
+                    material = create_material(
+                        dir_name,
+                        mesh_index,
+                        debris_drs_file.cdsp_mesh_file.meshes[mesh_index],
+                        f"{base_name}_{name}",
+                    )
+                    mesh_data.materials.append(material)
+
+                    # Link the debris mesh object to the collection.
+                    state_collection.objects.link(mesh_object)
+
+
+def convert_image_to_dds(
+    img: bpy.types.Image,
+    output_filename: str,
+    folder_path: str,
+    dxt_format: str = "DXT5",
+    extra_args: list[str] = None,
+):
+    # Create a temporary PNG file in the system temporary directory
+    # temp_dir = tempfile.gettempdir()
+    # We will use the addonbs temp directory instead
+    temp_dir = os.path.join(resource_dir, "temp")
+    # Ensure no accidental quotes are present in the filename
+    temp_filename = output_filename + ".png"
+    temp_filename = temp_filename.strip('"').strip("'")
+    temp_path = os.path.join(temp_dir, temp_filename)
+
+    # Save the image as PNG using Blender's save_render function
+    img.file_format = "PNG"
+    print("Saving Image as PNG to: " + temp_path)
+    img.save(filepath=temp_path)
+
+    # Build the argument list for texconv.exe
+    texconv_exe = os.path.join(resource_dir, "texconv.exe")
+    args = [texconv_exe, "-ft", "dds", "-f", dxt_format, "-dx9", "-pow2", "-srgb"]
+
+    if extra_args:
+        args.extend(extra_args)
+
+    args.extend(
+        [
+            "-y",
+            output_filename + ".dds",
+            "-o",
+            folder_path,
+            temp_path,
+        ]
+    )
+
+    final_cmd = subprocess.list2cmdline(args)
+
+    result = subprocess.run(
+        final_cmd,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        errors="replace",
+        shell=False,
+    )
+
+    # Construct the expected output DDS file path.
+    output_path = os.path.join(folder_path, output_filename + ".dds")
+
+    # Check if output file exists; if so, override the return code to 0.
+    if os.path.exists(output_path):
+        print("Output Path Exists")
+        ret_code = 0
+    else:
+        print("Output Path Does Not Exist")
+        ret_code = result.returncode
+
+    # Clean up the temporary PNG file.
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+
+    return (ret_code, result.stdout, result.stderr)
+
+
 # endregion
 
 # region Import DRS Model to Blender
@@ -642,6 +789,83 @@ def import_cdsp_mesh_file(
     return mesh_object, mesh_data
 
 
+def create_mesh_object(
+    drs_file: DRS,
+    mesh_index,
+    dir_name,
+    base_name,
+    bone_list=None,
+    bone_weights=None,
+    armature_object=None,
+    transform_matrix=None,
+):
+    # Calculate vertex offset based on the previous meshes.
+    offset = (
+        0
+        if mesh_index == 0
+        else drs_file.cdsp_mesh_file.meshes[mesh_index - 1].vertex_count
+    )
+
+    # Create the mesh data using your existing helper.
+    mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
+
+    # Create the mesh object.
+    mesh_object = bpy.data.objects.new(f"CDspMeshFile_{mesh_index}", mesh_data)
+
+    # Add skin weights if available.
+    if drs_file.csk_skin_info and bone_weights and bone_list:
+        add_skin_weights_to_mesh(
+            mesh_object,
+            bone_list,
+            bone_weights,
+            offset,
+            drs_file.cdsp_mesh_file.meshes[mesh_index],
+        )
+
+    # Link armature if a skeleton exists.
+    if drs_file.csk_skeleton and armature_object:
+        mesh_object.parent = armature_object
+        modifier = mesh_object.modifiers.new(type="ARMATURE", name="Armature")
+        modifier.object = armature_object
+
+    # Apply transformation if provided.
+    if transform_matrix is not None:
+        mesh_object.matrix_world = transform_matrix
+
+    # Create and assign material.
+    material = create_material(
+        dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name
+    )
+    mesh_data.materials.append(material)
+
+    return mesh_object, mesh_data
+
+
+def setup_armature(
+    source_collection, drs_file: DRS
+) -> Tuple[bpy.types.Object, list[DRSBone]]:
+    armature_object, bone_list = None, None
+    if drs_file.csk_skeleton is not None:
+        armature_object, bone_list = import_csk_skeleton(source_collection, drs_file)
+        # Optionally: add any shared animation setup here.
+    return armature_object, bone_list
+
+
+def apply_slocator_transform(mesh_object, slocator):
+    location = (
+        slocator.cmat_coordinate_system.position.x,
+        slocator.cmat_coordinate_system.position.y,
+        slocator.cmat_coordinate_system.position.z,
+    )
+    # Convert the flat rotation list into a 3x3 Matrix.
+    rotation_vals = slocator.cmat_coordinate_system.matrix.matrix
+    rotation_matrix = Matrix(
+        [list(rotation_vals[i : i + 3]) for i in range(0, len(rotation_vals), 3)]
+    ).transposed()
+    local_matrix = Matrix.Translation(location) @ rotation_matrix.to_4x4()
+    mesh_object.matrix_world = local_matrix
+
+
 def create_material(
     dir_name: str, mesh_index: int, mesh_data: BattleforgeMesh, base_name: str
 ) -> bpy.types.Material:
@@ -874,27 +1098,27 @@ def import_collision_shapes(
 def import_state_based_mesh_set(
     state_based_mesh_set: StateBasedMeshSet,
     source_collection: bpy.types.Collection,
+    armature_object: bpy.types.Object,
     dir_name: str,
     bmg_file: DRS,
-    global_matrix: Matrix,
-    apply_transform: bool,
-    import_collision_shape: bool,
     import_animation: bool,
-    fps_selection: str,
     import_debris: bool,
     base_name: str,
-    armature_object: bpy.types.Object,
-    bone_list: list[DRSBone],
     slocator: SLocator = None,
     prefix: str = "",
-) -> None:
+) -> bpy.types.Object:
     # Get individual mesh states
+    # Create a Mesh Collection to store the Mesh Objects
+    mesh_collection: bpy.types.Collection = bpy.data.collections.new(
+        "Meshes_Collection"
+    )
+    source_collection.children.link(mesh_collection)
     for mesh_set in state_based_mesh_set.mesh_states:
         if mesh_set.has_files:
             # Create a new Collection for the State
             state_collection_name = f"{prefix}Mesh_State_{mesh_set.state_num}"
             state_collection = find_or_create_collection(
-                source_collection, state_collection_name
+                mesh_collection, state_collection_name
             )
             # Load the DRS Files
             drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_set.drs_file))
@@ -928,11 +1152,6 @@ def import_state_based_mesh_set(
                     drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh
                 )
 
-            # Create a Mesh Collection to store the Mesh Objects
-            mesh_collection: bpy.types.Collection = bpy.data.collections.new(
-                "Meshes_Collection"
-            )
-            state_collection.children.link(mesh_collection)
             for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
                 offset = (
                     0
@@ -979,11 +1198,11 @@ def import_state_based_mesh_set(
                         Matrix.Translation(location) @ transposed_rotation.to_4x4()
                     )
                     # Apply the Local Matrix to the Mesh Object
-                    if apply_transform:
-                        mesh_object.matrix_world = global_matrix @ local_matrix
-                        mirror_object_by_vector(mesh_object, Vector((0, 0, 1)))
-                    else:
-                        mesh_object.matrix_world = local_matrix
+                    # if apply_transform:
+                    #     mesh_object.matrix_world = global_matrix @ local_matrix
+                    #     mirror_object_by_vector(mesh_object, Vector((0, 0, 1)))
+                    # else:
+                    mesh_object.matrix_world = local_matrix
                 # Create the Material Data
                 material_data = create_material(
                     dir_name,
@@ -994,59 +1213,14 @@ def import_state_based_mesh_set(
                 # Assign the Material to the Mesh
                 mesh_data.materials.append(material_data)
                 # Link the Mesh Object to the Source Collection
-                mesh_collection.objects.link(mesh_object)
-
-            if drs_file.collision_shape is not None and import_collision_shape:
-                # Create a Collision Shape Collection to store the Collision Shape Objects
-                collision_shape_collection: bpy.types.Collection = (
-                    bpy.data.collections.new("CollisionShapes_Collection")
-                )
-                state_collection.children.link(collision_shape_collection)
-                # Create a Box Collection to store the Box Objects
-                box_collection: bpy.types.Collection = bpy.data.collections.new(
-                    "Boxes_Collection"
-                )
-                collision_shape_collection.children.link(box_collection)
-                for _ in range(drs_file.collision_shape.box_count):
-                    box_object = create_collision_shape_box_object(
-                        drs_file.collision_shape.boxes[_], _
-                    )
-                    box_collection.objects.link(box_object)
-                    # TODO: WORKAROUND: Make the Box's Z-Location negative to flip the Axis
-                    box_object.location = (
-                        box_object.location.x,
-                        box_object.location.y,
-                        -box_object.location.z,
-                    )
-
-                # Create a Sphere Collection to store the Sphere Objects
-                sphere_collection: bpy.types.Collection = bpy.data.collections.new(
-                    "Spheres_Collection"
-                )
-                collision_shape_collection.children.link(sphere_collection)
-                for _ in range(drs_file.collision_shape.sphere_count):
-                    sphere_object = create_collision_shape_sphere_object(
-                        drs_file.collision_shape.spheres[_], _
-                    )
-                    sphere_collection.objects.link(sphere_object)
-
-                # Create a Cylinder Collection to store the Cylinder Objects
-                cylinder_collection: bpy.types.Collection = bpy.data.collections.new(
-                    "Cylinders_Collection"
-                )
-                collision_shape_collection.children.link(cylinder_collection)
-                for _ in range(drs_file.collision_shape.cylinder_count):
-                    cylinder_object = create_collision_shape_cylinder_object(
-                        drs_file.collision_shape.cylinders[_], _
-                    )
-                    cylinder_collection.objects.link(cylinder_object)
+                state_collection.objects.link(mesh_object)
             if (
                 bmg_file.animation_set is not None
                 and armature_object is not None
                 and import_animation
             ):
                 # Set the FPS for the Animation
-                bpy.context.scene.render.fps = int(fps_selection)
+                bpy.context.scene.render.fps = 30
                 with ensure_mode("POSE"):
                     for animation_key in bmg_file.animation_set.mode_animation_keys:
                         for variant in animation_key.animation_set_variants:
@@ -1059,137 +1233,71 @@ def import_state_based_mesh_set(
 
     # Get individual desctruction States
     if import_debris:
-        for destruction_state in state_based_mesh_set.destruction_states:
-            state_collection_name = (
-                f"{prefix}Destruction_State_{destruction_state.state_num}"
-            )
-            state_collection = find_or_create_collection(
-                source_collection, state_collection_name
-            )
-            # Load the XML File
-            xml_file_path = os.path.join(dir_name, destruction_state.file_name)
-            # Read the file without any imports
-            with open(xml_file_path, "r", encoding="utf-8") as file:
-                xml_file = file.read()
-            # Parse the XML File
-            xml_root = ET.fromstring(xml_file)
-            for element in xml_root.findall(".//Element[@type='PhysicObject']"):
-                resource = element.attrib.get("resource")
-                name = element.attrib.get("name")
-                if resource and name:
-                    drs_file: DRS = DRS().read(
-                        os.path.join(dir_name, "meshes", resource)
-                    )
-                    for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-                        # Create the Mesh Data
-                        mesh_data = create_static_mesh(
-                            drs_file.cdsp_mesh_file, mesh_index
-                        )
-                        # Create the Mesh Object and add the Mesh Data to it
-                        mesh_object: bpy.types.Object = bpy.data.objects.new(
-                            f"CDspMeshFile_{name}", mesh_data
-                        )
-                        # Create the Material Data
-                        material_data = create_material(
-                            dir_name,
-                            mesh_index,
-                            drs_file.cdsp_mesh_file.meshes[mesh_index],
-                            base_name + "_" + name,
-                        )
-                        # Assign the Material to the Mesh
-                        mesh_data.materials.append(material_data)
-                        # Link the Mesh Object to the Source Collection
-                        state_collection.objects.link(mesh_object)
+        destruction_collection: bpy.types.Collection = bpy.data.collections.new(
+            "Destruction_State_Collection"
+        )
+        source_collection.children.link(destruction_collection)
+        process_debris_import(
+            state_based_mesh_set, destruction_collection, dir_name, base_name
+        )
+
+    return armature_object
 
 
 def load_drs(
     context: bpy.types.Context,
     filepath="",
     apply_transform=True,
-    global_matrix=Matrix.Identity(4),
     import_collision_shape=False,
-    fps_selection=30,
     import_animation=True,
     import_debris=False,
     import_modules=True,
 ) -> None:
-    # Load time measurement
+
     start_time = time.time()
     base_name = os.path.basename(filepath).split(".")[0]
     dir_name = os.path.dirname(filepath)
     drs_file: DRS = DRS().read(filepath)
-    bone_list = None
-    bone_weights = None
-    armature_object = None
 
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
     )
     context.collection.children.link(source_collection)
 
-    # Create the Armature Object if a Skeleton is present
-    if drs_file.csk_skeleton is not None:
-        armature_object, bone_list = import_csk_skeleton(source_collection, drs_file)
-        # Add the Animations to the Armature Object
-        if drs_file.animation_set is not None:
-            pass
+    armature_object, bone_list = setup_armature(source_collection, drs_file)
 
-    # Create the Skin Weights
+    bone_weights = None
     if drs_file.csk_skin_info is not None:
         bone_weights = create_bone_weights(
             drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh
         )
 
-    # Create a Mesh Collection to store the Mesh Objects
     mesh_collection: bpy.types.Collection = bpy.data.collections.new(
         "Meshes_Collection"
     )
     source_collection.children.link(mesh_collection)
-    # Create the Mesh Objects
+
     for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-        offset = (
-            0
-            if mesh_index == 0
-            else drs_file.cdsp_mesh_file.meshes[mesh_index - 1].vertex_count
+        mesh_object, _ = create_mesh_object(
+            drs_file,
+            mesh_index,
+            dir_name,
+            base_name,
+            bone_list,
+            bone_weights,
+            armature_object,
         )
-        mesh_object, mesh_data = import_cdsp_mesh_file(
-            mesh_index, drs_file.cdsp_mesh_file
-        )
-        # Add the Bone Weights to the Mesh Object
-        if drs_file.csk_skin_info is not None and bone_list is not None:
-            add_skin_weights_to_mesh(
-                mesh_object,
-                bone_list,
-                bone_weights,
-                offset,
-                drs_file.cdsp_mesh_file.meshes[mesh_index],
-            )
-        # Check if the Mesh has a Skeleton and modify the Mesh Object accordingly
-        if drs_file.csk_skeleton is not None:
-            mesh_object.parent = armature_object
-            modifier = mesh_object.modifiers.new(type="ARMATURE", name="Armature")
-            modifier.object = armature_object
-        # Create the Material Data
-        material_data = create_material(
-            dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name
-        )
-        # Assign the Material to the Mesh
-        mesh_data.materials.append(material_data)
-        # Link the Mesh Object to the Source Collection
         mesh_collection.objects.link(mesh_object)
 
-    # Create the Collision Shape Objects
     if drs_file.collision_shape is not None and import_collision_shape:
         import_collision_shapes(source_collection, drs_file)
 
-    # Create the Animation Objects
     if (
         drs_file.animation_set is not None
         and armature_object is not None
         and import_animation
     ):
-        # Set the FPS for the Animation
-        bpy.context.scene.render.fps = int(fps_selection)
+        bpy.context.scene.render.fps = 30
         with ensure_mode("POSE"):
             for animation_key in drs_file.animation_set.mode_animation_keys:
                 for variant in animation_key.animation_set_variants:
@@ -1198,57 +1306,19 @@ def load_drs(
 
     if import_modules and drs_file.cdrw_locator_list is not None:
         for slocator in drs_file.cdrw_locator_list.slocators:
-            if slocator.file_name_length > 0:
-                if slocator.class_type == "Module1":
-                    module_collection = find_or_create_collection(
-                        source_collection, "Modules1"
-                    )
-                    # Load the BMS Files (replace.module with .bms)
-                    module_file_name = slocator.file_name.replace(".module", ".bms")
-                    module: BMS = BMS().read(os.path.join(dir_name, module_file_name))
-                    module_name = slocator.class_type + "_" + str(slocator.sub_id)
-                    import_state_based_mesh_set(
-                        module.state_based_mesh_set,
-                        module_collection,
-                        dir_name,
-                        drs_file,
-                        global_matrix,
-                        apply_transform,
-                        import_collision_shape,
-                        import_animation,
-                        fps_selection,
-                        import_debris,
-                        module_name,
-                        armature_object,
-                        bone_list,
-                        slocator,
-                        "Module_1_",
-                    )
-                elif slocator.class_type == "Module2":
-                    module_collection = find_or_create_collection(
-                        source_collection, "Modules2"
-                    )
-                    # Load the BMS Files (replace.module with .bms)
-                    module_file_name = slocator.file_name.replace(".module", ".bms")
-                    module: BMS = BMS().read(os.path.join(dir_name, module_file_name))
-                    module_name = slocator.class_type + "_" + str(slocator.sub_id)
-                    import_state_based_mesh_set(
-                        module.state_based_mesh_set,
-                        module_collection,
-                        dir_name,
-                        drs_file,
-                        global_matrix,
-                        apply_transform,
-                        import_collision_shape,
-                        import_animation,
-                        fps_selection,
-                        import_debris,
-                        module_name,
-                        armature_object,
-                        bone_list,
-                        slocator,
-                        "Module_2_",
-                    )
+            if slocator.file_name_length > 0 and slocator.class_type in {
+                "Module1",
+                "Module2",
+            }:
+                process_module_import(
+                    slocator,
+                    source_collection,
+                    armature_object,
+                    dir_name,
+                    drs_file,
+                    import_animation,
+                    import_debris,
+                )
 
     # Apply the Transformations to the Source Collection
     apply_transformation(
@@ -1268,47 +1338,40 @@ def load_drs(
 def import_mesh_set_grid(
     bmg_file: DRS,
     source_collection: bpy.types.Collection,
+    armature_object: bpy.types.Object,
     dir_name: str,
     base_name: str,
-    global_matrix: Matrix,
-    apply_transform: bool,
-    import_collision_shape: bool,
     import_animation: bool,
-    fps_selection: str,
     import_debris: bool,
-    armature_object: bpy.types.Object = None,
-    bone_list: list[DRSBone] = None,
-) -> None:
+) -> bpy.types.Object:
     for module in bmg_file.mesh_set_grid.mesh_modules:
         if module.has_mesh_set:
-            import_state_based_mesh_set(
+            temp_armature_object = import_state_based_mesh_set(
                 module.state_based_mesh_set,
                 source_collection,
+                armature_object,
                 dir_name,
                 bmg_file,
-                global_matrix,
-                apply_transform,
-                import_collision_shape,
                 import_animation,
-                fps_selection,
                 import_debris,
                 base_name,
-                armature_object,
-                bone_list,
             )
+            if temp_armature_object is not None:
+                armature_object = temp_armature_object
+
+    return armature_object
 
 
 def load_bmg(
     context: bpy.types.Context,
     filepath="",
     apply_transform=True,
-    global_matrix=Matrix.Identity(4),
     import_collision_shape=False,
-    fps_selection=30,
     import_animation=True,
     import_debris=True,
     import_construction=True,
 ) -> None:
+    start_time = time.time()
     dir_name = os.path.dirname(filepath)
     base_name = os.path.basename(filepath).split(".")[0]
     source_collection: bpy.types.Collection = bpy.data.collections.new(
@@ -1317,9 +1380,8 @@ def load_bmg(
     context.collection.children.link(source_collection)
     bmg_file: DRS = DRS().read(filepath)
 
-    # Models share the same Skeleton Files, so we only need to create one Armature
+    # Models share the same Skeleton Files, so we only need to create one Armature and share it across all sub-modules!
     armature_object = None
-    bone_list = None
 
     # Ground Decal
     if bmg_file.mesh_set_grid.ground_decal is not None:
@@ -1400,20 +1462,17 @@ def load_bmg(
 
     # Import Mesh Set Grid
     if bmg_file.mesh_set_grid is not None:
-        import_mesh_set_grid(
+        armature_object = import_mesh_set_grid(
             bmg_file,
             source_collection,
+            armature_object,
             dir_name,
             base_name,
-            global_matrix,
-            apply_transform,
-            import_collision_shape,
             import_animation,
-            fps_selection,
             import_debris,
-            armature_object,
-            bone_list,
         )
+
+    print(armature_object)
 
     # Import Construction
     if import_construction:
@@ -1436,15 +1495,9 @@ def load_bmg(
                         slocator_collection,
                         construction_dir,
                         bms_file,
-                        global_matrix,
-                        apply_transform,
-                        import_collision_shape,
                         import_animation,
-                        fps_selection,
                         import_debris,
                         module_name,
-                        armature_object,
-                        bone_list,
                         slocator,
                         "Construction_",
                     )
@@ -1478,11 +1531,11 @@ def load_bmg(
                             Matrix.Translation(location) @ transposed_rotation.to_4x4()
                         )
                         # Apply the Local Matrix to the Mesh Object
-                        if apply_transform:
-                            mesh_object.matrix_world = global_matrix @ local_matrix
-                            mirror_object_by_vector(mesh_object, Vector((0, 0, 1)))
-                        else:
-                            mesh_object.matrix_world = local_matrix
+                        # if apply_transform:
+                        #     mesh_object.matrix_world = global_matrix @ local_matrix
+                        #     mirror_object_by_vector(mesh_object, Vector((0, 0, 1)))
+                        # else:
+                        mesh_object.matrix_world = local_matrix
                         # Create the Material Data
                         material_data = create_material(
                             construction_dir,
@@ -1500,6 +1553,19 @@ def load_bmg(
                         "Error",
                         "ERROR",
                     )
+
+    # Apply the Transformations to the Source Collection
+    apply_transformation(
+        source_collection, armature_object, apply_transform, False, True, True, True
+    )
+
+    # Print the Time Measurement
+    logger.log(
+        f"Imported {base_name} in {time.time() - start_time:.2f} seconds.",
+        "Import Time",
+        "INFO",
+    )
+    logger.display()
 
     return {"FINISHED"}
 
@@ -1530,7 +1596,7 @@ def verify_collections(
             or node == "CDspJointMap"
             or node == "CDspMeshFile"
         ):
-            mesh_collection = get_meshes_collection(source_collection)
+            mesh_collection = get_collection(source_collection, "Meshes_Collection")
 
             if mesh_collection is None:
                 logger.log("No Meshes Collection found!", "Error", "ERROR")
@@ -1563,7 +1629,9 @@ def verify_collections(
                                 )
                                 return False
         if node == "collisionShape":
-            collision_collection = get_collision_collection(source_collection)
+            collision_collection = get_collection(
+                source_collection, "CollisionShapes_Collection"
+            )
 
             if collision_collection is None:
                 logger.log(
@@ -1744,138 +1812,96 @@ def create_cdsp_joint_map(
 
 
 def set_color_map(
-    color_map: bpy.types.Node,
+    color_map_node: bpy.types.Node,
     new_mesh: BattleforgeMesh,
     mesh_index: int,
     model_name: str,
     folder_path: str,
 ) -> bool:
-    if color_map is None:
+    if color_map_node is None:
         logger.log(
             "The color_map is None. Please check the Material Node.", "Error", "ERROR"
         )
         return False
 
-    if color_map.is_linked:
-        new_mesh.textures.length += 1
-        color_map_texture = Texture()
-        color_map_texture.name = model_name + "_" + str(mesh_index) + "_col"
-        color_map_texture.length = len(color_map_texture.name)
-        color_map_texture.identifier = 1684432499
-        new_mesh.textures.textures.append(color_map_texture)
-
-        # Check color_map.links[0].from_node.image for the Image
-        if color_map.links[0].from_node.type == "TEX_IMAGE":
-            # Export the Image as a DDS File (DXT3)
-            img = color_map.links[0].from_node.image
-
-            if img is not None:
-                temp_path = bpy.path.abspath("//") + color_map_texture.name + ".png"
-                img.file_format = "PNG"
-                img.save(filepath=temp_path)
-                args = [
-                    "-ft",
-                    "dds",
-                    "-f",
-                    "DXT5",
-                    "-dx9",
-                    "-pow2",
-                    "-srgb",
-                    "-y",
-                    color_map_texture.name + ".dds",
-                    "-o",
-                    folder_path,
-                ]
-                subprocess.run(
-                    [resource_dir + "/texconv.exe", temp_path] + args, check=False
-                )
-                os.remove(temp_path)
-            else:
-                logger.log(
-                    "The color_map Texture is not an Image or the Image is None!",
-                    "Error",
-                    "ERROR",
-                )
-                return False
-    else:
+    img = color_map_node.links[0].from_node.image
+    if img is None:
         logger.log(
-            "The color_map is not linked. Please check the Material Node.",
+            "The color_map Texture is not an Image or the Image is None!",
             "Error",
             "ERROR",
         )
+        return False
+
+    texture_name = f"{model_name}_{mesh_index}_col"
+    # Update your new_mesh texture list as needed here
+    new_mesh.textures.length += 1
+    color_map_texture = Texture()
+    color_map_texture.name = texture_name
+    color_map_texture.length = len(color_map_texture.name)
+    color_map_texture.identifier = 1684432499
+    new_mesh.textures.textures.append(color_map_texture)
+
+    # Convert image to DDS (using DXT5 for color maps)
+    ret_code, output_str, error_str = convert_image_to_dds(
+        img, texture_name, folder_path, dxt_format="DXT5"
+    )
+    if ret_code != 0:
+        logger.log("Conversion failed for the color map.", "Error", "ERROR")
         return False
 
     return True
 
 
 def set_normal_map(
-    normal_map: bpy.types.Node,
+    normal_map_node: bpy.types.Node,
     new_mesh: BattleforgeMesh,
     mesh_index: int,
     model_name: str,
     folder_path: str,
     bool_param_bit_flag: int,
 ) -> None:
-    if normal_map is not None and normal_map.is_linked:
-        # Check normal_map.links[0].from_node.image for the Image
-        if normal_map.links[0].from_node.type == "TEX_IMAGE":
-            # Export the Image as a DDS File (DXT1)
-            img = normal_map.links[0].from_node.image
-
-            if img is not None:
-                new_mesh.textures.length += 1
-                normal_map_texture = Texture()
-                normal_map_texture.name = model_name + "_" + str(mesh_index) + "_nor"
-                normal_map_texture.length = len(normal_map_texture.name)
-                normal_map_texture.identifier = 1852992883
-                new_mesh.textures.textures.append(normal_map_texture)
-                bool_param_bit_flag += 100000000000000000
-                temp_path = bpy.path.abspath("//") + normal_map_texture.name + ".png"
-                img.file_format = "PNG"
-                img.save(filepath=temp_path)
-                args = [
-                    "-ft",
-                    "dds",
-                    "-f",
-                    "DXT1",
-                    "-dx9",
-                    "-pow2",
-                    "-srgb",
-                    "-at",
-                    "0.0",
-                    "-y",
-                    normal_map_texture.name + ".dds",
-                    "-o",
-                    folder_path,
-                ]
-                subprocess.run(
-                    [resource_dir + "/texconv.exe", temp_path] + args, check=False
-                )
-                os.remove(temp_path)
-            else:
-                logger.log(
-                    "The normal_map Texture is not an Image or the Image is None!",
-                    "Info",
-                    "INFO",
-                )
-        else:
-            logger.log(
-                "The normal_map is not linked. Please check the Material Node if this is intended.",
-                "Info",
-                "INFO",
-            )
-    else:
+    if normal_map_node is None:
         logger.log(
-            "The normal_map is None. Please check the Material Node if this is intended.",
-            "Info",
-            "INFO",
+            "The color_map is None. Please check the Material Node.", "Error", "ERROR"
         )
+        return False
+
+    img = normal_map_node.links[0].from_node.image
+    if img is None:
+        logger.log(
+            "The color_map Texture is not an Image or the Image is None!",
+            "Error",
+            "ERROR",
+        )
+        return False
+
+    texture_name = f"{model_name}_{mesh_index}_nor"
+    new_mesh.textures.length += 1
+    normal_map_texture = Texture()
+    normal_map_texture.name = texture_name
+    normal_map_texture.length = len(normal_map_texture.name)
+    normal_map_texture.identifier = 1852992883
+    new_mesh.textures.textures.append(normal_map_texture)
+    bool_param_bit_flag += 100000000000000000
+
+    # Convert image to DDS (using DXT1 for color maps)
+    ret_code, output_str, error_str = convert_image_to_dds(
+        img, texture_name, folder_path, dxt_format="DXT1", extra_args=["-at", "0.0"]
+    )
+    if ret_code != 0:
+        logger.log(
+            f"Conversion failed for the normal map: {output_str}", "Error", "ERROR"
+        )
+        return False
+
+    return True
 
 
 def set_metallic_roughness_emission_map(
-    metallic_map: bpy.types.Node,
-    roughness_map: bpy.types.Node,
-    emission_map: bpy.types.Node,
+    metallic_map_node: bpy.types.Node,
+    roughness_map_node: bpy.types.Node,
+    emission_map_node: bpy.types.Node,
     new_mesh: BattleforgeMesh,
     mesh_index: int,
     model_name: str,
@@ -1886,14 +1912,14 @@ def set_metallic_roughness_emission_map(
     # Check if any of the maps are linked
     if not any(
         map_node and map_node.is_linked
-        for map_node in [metallic_map, roughness_map, emission_map]
+        for map_node in [metallic_map_node, roughness_map_node, emission_map_node]
     ):
         return
 
     # Retrieve images and pixels
-    img_r, pixels_r = get_image_and_pixels(metallic_map, "metallic_map")
-    img_g, pixels_g = get_image_and_pixels(roughness_map, "roughness_map")
-    img_a, pixels_a = get_image_and_pixels(emission_map, "emission_map")
+    img_r, pixels_r = get_image_and_pixels(metallic_map_node, "metallic_map")
+    img_g, pixels_g = get_image_and_pixels(roughness_map_node, "roughness_map")
+    img_a, pixels_a = get_image_and_pixels(emission_map_node, "emission_map")
 
     # Determine image dimensions
     for img in [img_r, img_g, img_a]:
@@ -1912,7 +1938,7 @@ def set_metallic_roughness_emission_map(
     new_mesh.textures.length += 1
     texture_name = f"{model_name}_{mesh_index}_par"
     metallic_map_texture = Texture()
-    metallic_map_texture.name = model_name + "_" + str(mesh_index) + "_par"
+    metallic_map_texture.name = texture_name
     metallic_map_texture.length = len(metallic_map_texture.name)
     metallic_map_texture.identifier = 1936745324
     new_mesh.textures.textures.append(metallic_map_texture)
@@ -1929,10 +1955,10 @@ def set_metallic_roughness_emission_map(
         new_pixels.extend(
             [
                 pixels_r[i] if pixels_r else 0,  # Red channel
-                pixels_g[i] if pixels_g else 0,  # Green channel
+                pixels_g[i + 1] if pixels_g else 0,  # Green channel
                 # Blue channel (placeholder for Fluid Map)
                 0,
-                pixels_a[i] if pixels_a else 0,  # Alpha channel
+                pixels_a[i + 3] if pixels_a else 0,  # Alpha channel
             ]
         )
 
@@ -1940,32 +1966,14 @@ def set_metallic_roughness_emission_map(
     new_img.file_format = "PNG"
     new_img.update()
 
-    # Save the combined image
-    temp_path = bpy.path.abspath(f"//{texture_name}.png")
-    new_img.save_render(filepath=temp_path)
+    ret_code, output_str, err_str = convert_image_to_dds(
+        new_img, texture_name, folder_path, dxt_format="DXT5", extra_args=["-bc", "d"]
+    )
+    if ret_code != 0:
+        logger.log(f"Conversion failed for the parameter map: {output_str}", "Error")
+        return False
 
-    # Convert the image to DDS format using texconv.exe
-    texconv_exe = os.path.join(resource_dir, "texconv.exe")
-    # output_path = os.path.join(folder_path, f"{texture_name}.dds")
-    args = [
-        texconv_exe,
-        "-ft",
-        "dds",
-        "-f",
-        "DXT5",
-        "-dx9",
-        "-bc",
-        "d",
-        "-pow2",
-        "-y",
-        "-o",
-        folder_path,
-        temp_path,
-    ]
-    subprocess.run(args, check=False)
-
-    # Clean up the temporary PNG file
-    os.remove(temp_path)
+    return True
 
 
 def create_mesh(
@@ -2300,7 +2308,9 @@ def create_cylinder_shape(cylinder: bpy.types.Object) -> CylinderShape:
 def create_collision_shape(meshes_collection: bpy.types.Collection) -> CollisionShape:
     """Create a Collision Shape from a Collection of Collision Shapes."""
     _collision_shape = CollisionShape()
-    collision_collection = get_collision_collection(meshes_collection)
+    collision_collection = get_collection(
+        meshes_collection, "CollisionShapes_Collection"
+    )
     for child in collision_collection.children:
         if child.name.startswith("Boxes_Collection"):
             if len(child.objects) > 0:
@@ -2351,7 +2361,7 @@ def save_drs(
         return abort(keep_debug_collections, None)
 
     # === MESH PREPARATION =====================================================
-    meshes_collection = get_meshes_collection(source_collection_copy)
+    meshes_collection = get_collection(source_collection_copy, "Meshes_Collection")
     try:
         triangulate(source_collection_copy)
     except Exception as e:  # pylint: disable=broad-except
@@ -2472,4 +2482,6 @@ def save_drs(
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
+# TODO: Check if BMGs Collision Shape is always the same as the sub-modules one
+# TODO: Fix Collision Shapes for Complex Buildings and SLocators
 # 2827 Lines -> 2475 Lines (-352 Lines)

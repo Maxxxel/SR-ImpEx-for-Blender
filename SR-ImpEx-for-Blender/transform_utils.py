@@ -1,8 +1,8 @@
 # transform_utils.py
-import bpy
 from math import radians
-from mathutils import Matrix, Vector
 from contextlib import contextmanager
+from mathutils import Matrix, Vector
+import bpy
 
 
 @contextmanager
@@ -79,18 +79,12 @@ def apply_transformation_to_objects(
             bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
 
 
-def get_meshes_collection(source_collection) -> bpy.types.Collection:
-    """Return the sub-collection whose name starts with 'Meshes_Collection'."""
+def get_collection(
+    source_collection: bpy.types.Collection, name: str
+) -> bpy.types.Collection:
+    """Return the sub-collection whose name matches the provided name."""
     for collection in source_collection.children:
-        if collection.name.startswith("Meshes_Collection"):
-            return collection
-    return None
-
-
-def get_collision_collection(source_collection) -> bpy.types.Collection:
-    """Return the sub-collection whose name starts with 'CollisionShapes_Collection'."""
-    for collection in source_collection.children:
-        if collection.name.startswith("CollisionShapes_Collection"):
+        if collection.name.startswith(name):
             return collection
     return None
 
@@ -102,6 +96,7 @@ def apply_transformation(
     invert=False,
     operator_on_meshes=False,
     operator_on_collision=False,
+    operator_on_ground_decal=False,
 ) -> None:
     """
     Applies a composite transformation to objects in the source collection or to a provided armature.
@@ -117,15 +112,34 @@ def apply_transformation(
         bpy.context.view_layer.objects.active = armature_object
         armature_object.select_set(True)
     else:
-        meshes_collection = get_meshes_collection(source_collection)
+        meshes_collection = get_collection(source_collection, "Meshes_Collection")
         if meshes_collection:
             apply_transformation_to_objects(
                 meshes_collection.objects, transform, operator_on_meshes
             )
 
-    collision_collection = get_collision_collection(source_collection)
+    collision_collection = get_collection(
+        source_collection, "CollisionShapes_Collection"
+    )
     if collision_collection:
         for child in collision_collection.children:
             apply_transformation_to_objects(
                 child.objects, transform, operator_on_collision
+            )
+
+    ground_decal_collection = get_collection(
+        source_collection, "GroundDecal_Collection"
+    )
+    if ground_decal_collection:
+        apply_transformation_to_objects(
+            ground_decal_collection.objects, transform, operator_on_ground_decal
+        )
+
+    destruction_states_collection = get_collection(
+        source_collection, "Destruction_State_Collection"
+    )
+    if destruction_states_collection:
+        for child in destruction_states_collection.children:
+            apply_transformation_to_objects(
+                child.objects, transform, apply_operator=True
             )
