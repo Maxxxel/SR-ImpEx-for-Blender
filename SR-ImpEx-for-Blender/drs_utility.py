@@ -1262,7 +1262,7 @@ def load_drs(
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
     )
-    context.collection.children.link(source_collection)
+    context.scene.collection.children.link(source_collection)
 
     armature_object, bone_list = setup_armature(source_collection, drs_file)
 
@@ -2478,10 +2478,8 @@ def save_drs(
 
 # endregion
 
-# TODO: Always import to Main Scene
 # TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
-# TODO: Alpha Export in par map is wrong (for bone xxl 007 its full black when it should be transparent)
 # TODO: Check if BMGs Collision Shape is always the same as the sub-modules one
 # TODO: Fix Collision Shapes for Complex Buildings and SLocators
 # 2827 Lines -> 2475 Lines (-352 Lines)
