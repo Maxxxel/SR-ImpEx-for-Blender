@@ -344,10 +344,12 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
                         ].name = path[0]
                         index += 1
                         logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
+                        break
                     else:
                         logger.log(
                             "Asset Library already exists: " + path[0], "Info", "INFO"
                         )
+                        break
     except Exception as e:
         logger.log(f"Error while adding Asset Libraries: {e}", "Error", "ERROR")
 
@@ -874,7 +876,23 @@ def apply_slocator_transform(mesh_object, slocator):
 def create_material(
     dir_name: str, mesh_index: int, mesh_data: BattleforgeMesh, base_name: str
 ) -> bpy.types.Material:
-    drs_material: "DRSMaterial" = DRSMaterial(f"MaterialData_{base_name}_{mesh_index}")
+    modules = []
+
+    for texture in mesh_data.textures.textures:
+        if texture.length > 0:
+            match texture.identifier:
+                case 1684432499:
+                    modules.append("_col")
+                case 1936745324:
+                    modules.append("_par")
+                case 1852992883:
+                    modules.append("_nor")
+                case 1919116143:
+                    modules.append("_ref")
+
+    drs_material: "DRSMaterial" = DRSMaterial(
+        f"MaterialData_{base_name}_{mesh_index}", modules=modules
+    )
 
     for texture in mesh_data.textures.textures:
         if texture.length > 0:
@@ -885,42 +903,10 @@ def create_material(
                     drs_material.set_parameter_map(texture.name, dir_name)
                 case 1852992883:
                     drs_material.set_normal_map(texture.name, dir_name)
-
-    # Fluid is hard to add, prolly only as an hardcoded animation, there is no GIF support
-
-    # Scratch
-
-    # Environment can be ignored, its only used for Rendering
-
-    # Refraction
-    # for Tex in mesh_data.Textures.Textures:
-    # 	if Tex.Identifier == 1919116143 and Tex.Length > 0:
-    # 		refraction_mapNode = NewMaterial.node_tree.nodes.new('ShaderNodeTexImage')
-    # 		refraction_mapNode.location = Vector((-700.0, -900.0))
-    # 		refraction_mapNode.image = load_image(os.path.basename(Tex.Name + ".dds"), dir_name, check_existing=True, place_holder=False, recursive=False)
-    # 		RefBSDF = NewMaterial.node_tree.nodes.new('ShaderNodeBsdfRefraction')
-    # 		RefBSDF.location = Vector((-250.0, -770.0))
-    # 		NewMaterial.node_tree.links.new(RefBSDF.inputs['Color'], refraction_mapNode.outputs['Color'])
-    # 		MixNode = NewMaterial.node_tree.nodes.new('ShaderNodeMixShader')
-    # 		MixNode.location = Vector((0.0, 200.0))
-    # 		NewMaterial.node_tree.links.new(MixNode.inputs[1], RefBSDF.outputs[0])
-    # 		NewMaterial.node_tree.links.new(MixNode.inputs[2], BSDF.outputs[0])
-    # 		NewMaterial.node_tree.links.new(MixNode.outputs[0], NewMaterial.node_tree.nodes['Material Output'].inputs[0])
-    # 		MixNodeAlpha = NewMaterial.node_tree.nodes.new('ShaderNodeMixRGB')
-    # 		MixNodeAlpha.location = Vector((-250.0, -1120.0))
-    # 		MixNodeAlpha.use_alpha = True
-    # 		MixNodeAlpha.blend_type = 'SUBTRACT'
-    # 		# Set the Factor to 0.2, so the Refraction is not too strong
-    # 		MixNodeAlpha.inputs[0].default_value = 0.2
-    # 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[1], color_mapNode.outputs['Alpha'])
-    # 		NewMaterial.node_tree.links.new(MixNodeAlpha.inputs[2], refraction_mapNode.outputs['Alpha'])
-    # 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], MixNodeAlpha.outputs[0])
-    # 	else:
-    # 		NewMaterial.node_tree.links.new(BSDF.inputs['Alpha'], color_mapNode.outputs['Alpha'])
-
-    # if mesh_data.Refraction.Length == 1:
-    # 	_RGB = mesh_data.Refraction.RGB
-    # What to do here?
+                case 1919116143:
+                    drs_material.set_refraction_map(
+                        texture.name, dir_name, mesh_data.refraction.rgb
+                    )
 
     return drs_material.material
 
@@ -2505,3 +2491,8 @@ def save_drs(
 # TODO: Check if BMGs Collision Shape is always the same as the sub-modules one
 # TODO: Fix Collision Shapes for Complex Buildings and SLocators
 # 2827 Lines -> 2475 Lines (-352 Lines)
+# TODO: Collision Shapes on Export
+# TODO: Refraction Map
+# TODO: OBBMap
+# TODO: Check if refraction scale is always 1.0
+# TODO: 1. Collsion Shapes, 2. Refraction Map, 3. OBBMap
