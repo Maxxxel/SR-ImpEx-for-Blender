@@ -275,7 +275,6 @@ def available_actions(self, context):
 
     # If no actions are available, provide a default fallback
     if not actions:
-        print("No actions available")
         return [("None", "No actions available", "")]
 
     # Otherwise, dynamically construct the EnumProperty items
