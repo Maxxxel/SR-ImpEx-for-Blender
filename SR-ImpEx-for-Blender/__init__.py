@@ -18,13 +18,14 @@ import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 from .drs_utility import load_drs, save_drs, load_bmg, create_new_bf_scene
+from .ska_utility import export_ska, get_actions
 
 bl_info = {
     "name": "Battleforge Tools",
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files",
     "blender": (4, 3, 0),
-    "version": (2, 5, 6),
+    "version": (2, 6, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -260,6 +261,67 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         return {"FINISHED"}
 
 
+def update_filename(self, context):
+    if self.action and self.action != "None":
+        # Ensure we are currently in FILE_BROWSER space
+        if context.space_data and context.space_data.type == "FILE_BROWSER":
+            params = context.space_data.params
+            if params:
+                params.filename = bpy.path.ensure_ext(self.action, ".ska")
+
+
+def available_actions(self, context):
+    actions = get_actions()  # Your function that returns a list of action names
+
+    # If no actions are available, provide a default fallback
+    if not actions:
+        print("No actions available")
+        return [("None", "No actions available", "")]
+
+    # Otherwise, dynamically construct the EnumProperty items
+    return [(act, act, "") for act in actions]
+
+
+class ExportSKAFile(bpy.types.Operator, ExportHelper):
+    """Export a Battleforge ska animation file"""
+
+    bl_idname = "export_animation.ska"
+    bl_label = "Export SKA"
+    filename_ext = ".ska"
+
+    filter_glob: StringProperty(
+        # type: ignore # ignore
+        default="*.ska",
+        options={"HIDDEN"},
+        maxlen=255,
+    )
+
+    # Create an enum with all the actions for the selected object
+    action: EnumProperty(
+        name="Action",
+        description="Select the action to export",
+        items=available_actions,  # Note: Pass the function, not the call result!
+        update=update_filename,
+    )
+
+    def invoke(self, context, event):
+        actions = get_actions()
+        if actions:
+            self.action = actions[0]
+            self.filepath = bpy.path.ensure_ext(self.action, ".ska")
+        else:
+            self.filepath = "untitled.ska"
+
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
+
+        export_ska(context, **keywords)
+        return {"FINISHED"}
+
+
 class NewBFScene(bpy.types.Operator, ImportHelper):
     """Create a new Battleforge scene with selectable type and collision support"""
 
@@ -355,6 +417,17 @@ def menu_func_export(self, _context):
         + "."
         + str(bl_info["version"][2]),
     )
+    self.layout.operator(
+        ExportSKAFile.bl_idname,
+        text="Battleforge Animation (.ska) - "
+        + (is_dev_version and "DEV" or "")
+        + " v"
+        + str(bl_info["version"][0])
+        + "."
+        + str(bl_info["version"][1])
+        + "."
+        + str(bl_info["version"][2]),
+    )
 
 
 def alx_register_class_queue():
@@ -382,6 +455,7 @@ def register():
     alx_register_class_queue()
     bpy.utils.register_class(ImportBFModel)
     bpy.utils.register_class(ExportBFModel)
+    bpy.utils.register_class(ExportSKAFile)
     bpy.utils.register_class(NewBFScene)
     bpy.utils.register_class(ShowMessagesOperator)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
@@ -392,6 +466,7 @@ def unregister():
     alx_unregister_class_queue()
     bpy.utils.unregister_class(ImportBFModel)
     bpy.utils.unregister_class(ExportBFModel)
+    bpy.utils.unregister_class(ExportSKAFile)
     bpy.utils.unregister_class(NewBFScene)
     bpy.utils.unregister_class(ShowMessagesOperator)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
