@@ -349,7 +349,7 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
                             "Asset Library already exists: " + path[0], "Info", "INFO"
                         )
                         break
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Error while adding Asset Libraries: {e}", "Error", "ERROR")
 
     logger.display()
@@ -1833,7 +1833,7 @@ def set_color_map(
     new_mesh.textures.textures.append(color_map_texture)
 
     # Convert image to DDS (using DXT5 for color maps)
-    ret_code, output_str, error_str = convert_image_to_dds(
+    ret_code, _, _ = convert_image_to_dds(
         img, texture_name, folder_path, dxt_format="DXT5"
     )
     if ret_code != 0:
@@ -1876,7 +1876,7 @@ def set_normal_map(
     bool_param_bit_flag += 100000000000000000
 
     # Convert image to DDS (using DXT1 for color maps)
-    ret_code, output_str, error_str = convert_image_to_dds(
+    ret_code, output_str, _ = convert_image_to_dds(
         img, texture_name, folder_path, dxt_format="DXT1", extra_args=["-at", "0.0"]
     )
     if ret_code != 0:
@@ -1956,7 +1956,7 @@ def set_metallic_roughness_emission_map(
     new_img.file_format = "PNG"
     new_img.update()
 
-    ret_code, output_str, err_str = convert_image_to_dds(
+    ret_code, output_str, _ = convert_image_to_dds(
         new_img, texture_name, folder_path, dxt_format="DXT5", extra_args=["-bc", "d"]
     )
     if ret_code != 0:
@@ -2002,7 +2002,7 @@ def set_refraction_color_and_map(
     refraction_map_texture.identifier = 1919116143
     new_mesh.textures.textures.append(refraction_map_texture)
     # Convert image to DDS (using DXT5 for color maps)
-    ret_code, output_str, error_str = convert_image_to_dds(
+    ret_code, _, _ = convert_image_to_dds(
         img, texture_name, folder_path, dxt_format="DXT5"
     )
     if ret_code != 0:
