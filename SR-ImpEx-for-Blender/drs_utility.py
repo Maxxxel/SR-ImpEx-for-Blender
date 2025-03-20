@@ -2112,17 +2112,19 @@ def create_mesh(
 
     if flu_map is None or flu_map.is_linked is False:
         # -86061055: no MaterialStuff, no Fluid, no String, no LOD
-        new_mesh.material_parameters = -86061055
+        new_mesh.material_parameters = -86061055  # Hex: 0xFADED001
     else:
         # -86061050: All Materials
-        new_mesh.material_parameters = -86061050
-        new_mesh.material_stuff = 0
+        new_mesh.material_parameters = -86061050  # Hex: 0xFADED006
+        new_mesh.material_stuff = 0  # Added for Hex 0xFADED004+
         # Level of Detail
-        new_mesh.level_of_detail = LevelOfDetail()
+        new_mesh.level_of_detail = LevelOfDetail()  # Added for Hex 0xFADED002+
         # Empty String
-        new_mesh.empty_string = EmptyString()
+        new_mesh.empty_string = EmptyString()  # Added for Hex 0xFADED003+
         # Flow
-        new_mesh.flow = Flow()  # Maybe later we can add some flow data in blender
+        new_mesh.flow = (
+            Flow()
+        )  # Maybe later we can add some flow data in blender. Added for Hex 0xFADED006
 
     # Individual Material Parameters depending on the MaterialID:
     new_mesh.bool_parameter = 0
