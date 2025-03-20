@@ -974,7 +974,7 @@ class BattleforgeMesh:
     mesh_data: List[MeshData] = field(default_factory=list)
     bounding_box_lower_left_corner: Vector3 = field(default_factory=Vector3)
     bounding_box_upper_right_corner: Vector3 = field(default_factory=Vector3)
-    material_id: int = 0
+    material_id: int = 25702
     material_parameters: int = 0
     material_stuff: int = 0
     bool_parameter: int = 0

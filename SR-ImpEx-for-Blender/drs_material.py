@@ -179,6 +179,7 @@ class DRSMaterial:
             self.refraction_bsdf = nodes.new("ShaderNodeBsdfGlass")
             self.refraction_bsdf.inputs["IOR"].default_value = 1.5
             self.refraction_bsdf.location = Vector((-300.0, -300.0))
+            self.refraction_bsdf.distribution = "BECKMANN"
             self.mix_transparent_refraction = nodes.new("ShaderNodeMixShader")
             self.mix_transparent_refraction.location = Vector((-100.0, 0.0))
             self.final_mix_shader = nodes.new("ShaderNodeMixShader")
@@ -218,6 +219,10 @@ class DRSMaterial:
             links.new(inp["IN-Refraction Color"], self.transparent_bsdf.inputs["Color"])
             links.new(
                 inp["IN-Roughness [green]"], self.refraction_bsdf.inputs["Roughness"]
+            )
+            links.new(
+                self._normal_map_node.outputs["Normal"],
+                self.refraction_bsdf.inputs["Normal"],
             )
             links.new(
                 inp["IN-Refraction Map"],

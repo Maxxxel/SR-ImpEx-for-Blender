@@ -3,7 +3,6 @@ from os.path import dirname, realpath
 from math import radians
 import time
 import subprocess
-import tempfile
 from collections import defaultdict
 from typing import Tuple, List
 import xml.etree.ElementTree as ET
@@ -1967,6 +1966,52 @@ def set_metallic_roughness_emission_map(
     return bool_param_bit_flag
 
 
+def set_refraction_color_and_map(
+    refraction_color_node: bpy.types.Node,
+    refraction_map_node: bpy.types.Node,
+    new_mesh: BattleforgeMesh,
+    mesh_index: int,
+    model_name: str,
+    folder_path: str,
+) -> List[float]:
+    # Check if the Refraction Color is set
+    if refraction_color_node is None:
+        return [0.0, 0.0, 0.0]
+
+    refraction_color_parent = refraction_color_node.links[0].from_node
+    rgb = list(refraction_color_parent.outputs[0].default_value)
+    # Delete the Alpha Channel
+    del rgb[3]
+
+    refraction_map_parent = refraction_map_node.links[0].from_node
+    img = refraction_map_parent.image
+
+    if img is None:
+        logger.log(
+            "The refraction_map Texture is not an Image or the Image is None!",
+            "Error",
+            "ERROR",
+        )
+        return [0.0, 0.0, 0.0]
+
+    texture_name = f"{model_name}_{mesh_index}_ref"
+    new_mesh.textures.length += 1
+    refraction_map_texture = Texture()
+    refraction_map_texture.name = texture_name
+    refraction_map_texture.length = len(refraction_map_texture.name)
+    refraction_map_texture.identifier = 1919116143
+    new_mesh.textures.textures.append(refraction_map_texture)
+    # Convert image to DDS (using DXT5 for color maps)
+    ret_code, output_str, error_str = convert_image_to_dds(
+        img, texture_name, folder_path, dxt_format="DXT5"
+    )
+    if ret_code != 0:
+        logger.log("Conversion failed for the refraction map.", "Error", "ERROR")
+        return [0.0, 0.0, 0.0]
+
+    return rgb
+
+
 def create_mesh(
     mesh: bpy.types.Mesh,
     mesh_index: int,
@@ -2042,32 +2087,27 @@ def create_mesh(
     material_nodes: List[bpy.types.Node] = mesh_material.node_tree.nodes
     # Find the DRS Node
     color_map = None
+    # alpha_map = None # Needed?
     metallic_map = None
     roughness_map = None
     emission_map = None
     normal_map = None
-    # scratch_map = None
-    # distortion_map = None
-    # refraction_map = None
-    # refraction_color = None
+    refraction_map = None
+    refraction_color = None
     flu_map = None
 
     for node in material_nodes:
         if node.type == "GROUP":
             if node.node_tree.name.find("DRS") != -1:
                 color_map = node.inputs[0]
-                # ColorAlpha = Node.inputs[1] # We don't need this
+                # alpha_map = node.inputs[1] # Needed?
                 metallic_map = node.inputs[2]
                 roughness_map = node.inputs[3]
                 emission_map = node.inputs[4]
                 normal_map = node.inputs[5]
-                # scratch_map = Node.inputs[6]
-                # distortion_map = Node.inputs[7]
-                # refraction_map = Node.inputs[8]
-                # RefractionAlpha = Node.inputs[9] # We don't need this
-                # refraction_color = Node.inputs[10]
-                # flu_map = Node.inputs[11]
-                # FluAlpha = Node.inputs[12] # We don't need this
+                if len(node.inputs) > 6:
+                    refraction_color = node.inputs[6]
+                    refraction_map = node.inputs[7]
                 break
 
     if flu_map is None or flu_map.is_linked is False:
@@ -2078,9 +2118,8 @@ def create_mesh(
         new_mesh.material_parameters = -86061050
         new_mesh.material_stuff = 0
         # Level of Detail
-        new_mesh.level_of_detail = LevelOfDetail()  # We don't need to update the LOD
+        new_mesh.level_of_detail = LevelOfDetail()
         # Empty String
-        # We don't need to update the Empty String
         new_mesh.empty_string = EmptyString()
         # Flow
         new_mesh.flow = Flow()  # Maybe later we can add some flow data in blender
@@ -2118,8 +2157,9 @@ def create_mesh(
     # Refraction
     refraction = Refraction()
     refraction.length = 1
-    # refraction.rgb = list(refraction_color.default_value)[:3] # Default is 0, 0, 0 # TODO: We need to get the color from the Node
-    refraction.rgb = [0, 0, 0]
+    refraction.rgb = set_refraction_color_and_map(
+        refraction_color, refraction_map, new_mesh, mesh_index, model_name, folder_path
+    )
     new_mesh.refraction = refraction
 
     # Materials
@@ -2496,3 +2536,4 @@ def save_drs(
 # TODO: OBBMap
 # TODO: Check if refraction scale is always 1.0
 # TODO: 1. Collsion Shapes, 2. Refraction Map, 3. OBBMap
+# TODO: Multi-Mesh Texture Packing
