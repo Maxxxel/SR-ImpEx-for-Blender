@@ -72,6 +72,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
 
     # Get the frames per second of the current scene
     fps = bpy.context.scene.render.fps
+    duration = action.frame_range[1] / fps
 
     # Get the Bones of the Armature
     armature = get_current_armature()
@@ -81,27 +82,13 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     location_fcurves: dict[str, list[bpy.types.FCurve]] = defaultdict(list)
     rotation_fcurves: dict[str, list[bpy.types.FCurve]] = defaultdict(list)
     # Print Number of Curves
-    logger.log(f"Number of fcurves in {action_name}: {len(action.fcurves)}")
-    # for fcurve in action.fcurves:
-    #     if fcurve.data_path.endswith("location"):
-    #         location_fcurves[fcurve.data_path].append(fcurve)
-    #     elif fcurve.data_path.endswith("rotation_quaternion"):
-    #         rotation_fcurves[fcurve.data_path].append(fcurve)
-    #     else:
-    #         logger.log(f"Skipping fcurve {fcurve.data_path}")
-
-    for index, fcurve in enumerate(action.fcurves):
+    for fcurve in action.fcurves:
         if fcurve.data_path.endswith("location"):
-            print(f"Location fcurve {index}: {fcurve.data_path}")
             location_fcurves[fcurve.data_path].append(fcurve)
         elif fcurve.data_path.endswith("rotation_quaternion"):
-            print(f"Rotation fcurve {index}: {fcurve.data_path}")
             rotation_fcurves[fcurve.data_path].append(fcurve)
         else:
             logger.log(f"Skipping fcurve {fcurve.data_path}")
-
-    print(f"Number of location fcurves: {len(location_fcurves)}")
-    print(f"Number of rotation fcurves: {len(rotation_fcurves)}")
 
     # Assure we have the same sizes
     assert len(location_fcurves) == len(
@@ -137,7 +124,10 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                 coordinate = kp.co[1]  # X | Y | Z value over time
                 if axis_index == 0:
                     x_array.append(coordinate)
-                    bone_lib[bone_name]["loc_per_time"]["times"].append(kp.co[0] / fps)
+                    time = kp.co[0] / fps
+                    # make it relative to the duration
+                    time = time / duration
+                    bone_lib[bone_name]["loc_per_time"]["times"].append(time)
                 elif axis_index == 1:
                     y_array.append(coordinate)
                 elif axis_index == 2:
@@ -172,7 +162,10 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                 coordinate = kp.co[1]  # W | X | Y | Z value over time
                 if axis_index == 0:
                     w_array.append(coordinate)
-                    bone_lib[bone_name]["rot_per_time"]["times"].append(kp.co[0] / fps)
+                    time = kp.co[0] / fps
+                    # make it relative to the duration
+                    time = time / duration
+                    bone_lib[bone_name]["rot_per_time"]["times"].append(time)
                 elif axis_index == 1:
                     x_array.append(coordinate)
                 elif axis_index == 2:
@@ -252,8 +245,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     ska_file = SKA()
     # We will sue type 6 for now
     ska_file.type = 6
-    ska_file.duration = action.frame_range[1] / fps
-    ska_file.repeat = 0  # TODO: get this from the action
+    ska_file.duration = duration
+    ska_file.repeat = 1  # TODO: get this from the action
     ska_file.stutter_mode = 2  # smooth animation
     ska_file.zeroes = [0, 0, 0]
     ska_file.header_count = len(headers)
