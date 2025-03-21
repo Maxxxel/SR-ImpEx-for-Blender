@@ -1,5 +1,5 @@
 from typing import BinaryIO
-from struct import calcsize, unpack
+from struct import calcsize, unpack, pack
 from dataclasses import dataclass, field
 from .file_io import FileReader
 
@@ -17,6 +17,12 @@ class SKAHeader:
         self.type = unpack("I", file.read(calcsize("I")))[0]
         self.bone_id = unpack("i", file.read(calcsize("i")))[0]
         return self
+
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.tick))
+        file.write(pack("I", self.interval))
+        file.write(pack("I", self.type))
+        file.write(pack("i", self.bone_id))
 
 
 @dataclass(eq=False, repr=False)
@@ -44,10 +50,25 @@ class SKAKeyframe:
         ) = data
         return self
 
+    def write(self, file: BinaryIO) -> None:
+        file.write(
+            pack(
+                "8f",
+                self.x,
+                self.y,
+                self.z,
+                self.w,
+                self.tan_x,
+                self.tan_y,
+                self.tan_z,
+                self.tan_w,
+            )
+        )
+
 
 @dataclass(eq=False, repr=False)
 class SKA:
-    magic: int = 0xA7148107
+    magic: int = -1491828473
     type: int = 0  # uint
     header_count: int = 0
     headers: list[SKAHeader] = field(default_factory=list)
@@ -115,3 +136,45 @@ class SKA:
         else:
             print(f"Unknown SKA type: {self.type}.")
         return self
+
+    def write(self, file_name: str) -> None:
+        with open(file_name, "wb") as file:
+            file.write(pack("i", self.magic))
+            file.write(pack("I", self.type))
+            if self.type == 2:
+                file.write(pack("i", self.unused1))
+            elif self.type == 3:
+                file.write(pack("i", self.unused1))
+                file.write(pack("i", self.unused2))
+            elif self.type == 4:
+                file.write(pack("i", self.unused1))
+                file.write(pack("i", self.unused2))
+                file.write(pack("i", self.unused3))
+                file.write(pack("i", self.unused4))
+            elif self.type == 5:
+                file.write(pack("i", self.unused1))
+                file.write(pack("i", self.unused2))
+                file.write(pack("i", self.unused3))
+                file.write(pack("i", self.unused4))
+                file.write(pack("i", len(self.unused6)))
+                for unused in self.unused6:
+                    file.write(pack("i", unused))
+            elif self.type == 6 or self.type == 7:
+                file.write(pack("i", self.header_count))
+                for header in self.headers:
+                    header.write(file)
+                file.write(pack("i", self.time_count))
+                for time in self.times:
+                    file.write(pack("f", time))
+                for keyframe in self.keyframes:
+                    keyframe.write(file)
+                file.write(pack("f", self.duration))
+                file.write(pack("i", self.repeat))
+                file.write(pack("i", self.stutter_mode))
+                file.write(pack("i", self.unused1))
+                if self.type == 7:
+                    file.write(pack("i", self.unused2))
+                for zero in self.zeroes:
+                    file.write(pack("i", zero))
+            else:
+                print(f"Unknown SKA type: {self.type}.")
