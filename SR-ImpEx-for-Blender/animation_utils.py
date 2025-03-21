@@ -40,7 +40,7 @@ def get_bone_fcurves(
 def insert_keyframes(
     fcurves: dict[str, bpy.types.FCurve],
     frame_data: SKAKeyframe,
-    frame: int,
+    frame: float,
     animation_type: int,
     bind_rot: Quaternion,
     bind_loc: Vector,
@@ -108,6 +108,7 @@ def create_animation(ska_file, armature_object, bone_list, animation_name: str) 
         for idx in range(header.tick, header.tick + header.interval):
             frame_data = ska_file.keyframes[idx]
             frame = ska_file.times[idx] * ska_file.duration * fps
+
             insert_keyframes(
                 fcurves, frame_data, frame, header.type, bone.bind_rot, bone.bind_loc
             )

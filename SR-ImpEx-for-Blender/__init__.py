@@ -317,7 +317,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
     def execute(self, context):
         keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
 
-        export_ska(context, **keywords)
+        export_ska(context, self.filepath, self.action)
         return {"FINISHED"}
 
 
