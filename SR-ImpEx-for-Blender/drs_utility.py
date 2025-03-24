@@ -561,6 +561,12 @@ def add_skin_weights_to_mesh(
         if bone_name not in mesh_object.vertex_groups:
             vertex_group = mesh_object.vertex_groups.new(name=bone_name)
         else:
+            # We should never reach this point, but it's good to have a fallback.
+            logger.log(
+                f"Vertex group for bone {bone_name} already exists. Skipping creation. Please inform Maxxxel.",
+                "Info",
+                "INFO",
+            )
             vertex_group = mesh_object.vertex_groups[bone_name]
 
         # Add vertices to the vertex group for each weight.
@@ -806,11 +812,11 @@ def create_mesh_object(
     transform_matrix=None,
 ):
     # Calculate vertex offset based on the previous meshes.
-    offset = (
-        0
-        if mesh_index == 0
-        else drs_file.cdsp_mesh_file.meshes[mesh_index - 1].vertex_count
-    )
+    offset = 0
+
+    if mesh_index > 0:
+        for i in range(mesh_index):
+            offset += drs_file.cdsp_mesh_file.meshes[i].vertex_count
 
     # Create the mesh data using your existing helper.
     mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
@@ -820,6 +826,7 @@ def create_mesh_object(
 
     # Add skin weights if available.
     if drs_file.csk_skin_info and bone_weights and bone_list:
+        print(f"Adding skin weights to mesh {mesh_index}. Starting at vertex {offset}.")
         add_skin_weights_to_mesh(
             mesh_object,
             bone_list,
