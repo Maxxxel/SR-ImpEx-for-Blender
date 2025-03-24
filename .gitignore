@@ -3,5 +3,8 @@
 /__pycache__
 /env
 /archive
-
+/sr_impex/sr_impex_updater*
+/sr_impex/__pycache__
+/sr_impex/debug*
+*.code-workspace
 *.pyc
