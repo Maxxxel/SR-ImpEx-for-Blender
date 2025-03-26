@@ -15,6 +15,7 @@ from bmesh.ops import (
     create_uvsphere,
     create_cone,
 )
+import bmesh.types
 
 from .drs_definitions import (
     DRS,
@@ -28,6 +29,7 @@ from .drs_definitions import (
     Bone,
     BoneVertex,
     BoxShape,
+    Matrix3x3,
     SLocator,
     SphereShape,
     CGeoCylinder,
@@ -1247,6 +1249,7 @@ def load_drs(
     apply_transform=True,
     import_collision_shape=False,
     import_animation=True,
+    import_animation_type="FRAMES",
     import_debris=False,
     import_modules=True,
 ) -> None:
@@ -1299,7 +1302,13 @@ def load_drs(
             for animation_key in drs_file.animation_set.mode_animation_keys:
                 for variant in animation_key.animation_set_variants:
                     ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
-                    create_animation(ska_file, armature_object, bone_list, variant.file)
+                    create_animation(
+                        ska_file,
+                        armature_object,
+                        bone_list,
+                        variant.file,
+                        import_animation_type,
+                    )
 
     if import_modules and drs_file.cdrw_locator_list is not None:
         for slocator in drs_file.cdrw_locator_list.slocators:
@@ -1468,8 +1477,6 @@ def load_bmg(
             import_animation,
             import_debris,
         )
-
-    print(armature_object)
 
     # Import Construction
     if import_construction:
@@ -2539,10 +2546,5 @@ def save_drs(
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
 # TODO: Check if BMGs Collision Shape is always the same as the sub-modules one
 # TODO: Fix Collision Shapes for Complex Buildings and SLocators
-# 2827 Lines -> 2475 Lines (-352 Lines)
-# TODO: Collision Shapes on Export
-# TODO: Refraction Map
-# TODO: OBBMap
 # TODO: Check if refraction scale is always 1.0
-# TODO: 1. Collsion Shapes, 2. Refraction Map, 3. OBBMap
-# TODO: Multi-Mesh Texture Packing
+# # TODO: Multi-Mesh Texture Packing

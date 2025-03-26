@@ -143,3 +143,10 @@ def apply_transformation(
             apply_transformation_to_objects(
                 child.objects, transform, apply_operator=True
             )
+
+    obb_collection = get_collection(source_collection, "OBB_Collection")
+    if obb_collection:
+        for child in obb_collection.children:
+            apply_transformation_to_objects(
+                child.objects, transform, apply_operator=True
+            )

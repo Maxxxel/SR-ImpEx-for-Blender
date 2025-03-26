@@ -350,9 +350,11 @@ class Vector4:
     y: float = 0.0
     z: float = 0.0
     w: float = 0.0
+    xyz: Vector = field(default_factory=lambda: Vector((0, 0, 0)))
 
     def read(self, file: BinaryIO) -> "Vector4":
         self.x, self.y, self.z, self.w = unpack("4f", file.read(calcsize("4f")))
+        self.xyz = Vector((self.x, self.y, self.z))
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -399,9 +401,19 @@ class Matrix4x4:
 @dataclass(eq=False, repr=False)
 class Matrix3x3:
     matrix: tuple = ((0, 0, 0), (0, 0, 0), (0, 0, 0))
+    math_matrix: Matrix = field(
+        default_factory=lambda: Matrix(((0, 0, 0), (0, 0, 0), (0, 0, 0)))
+    )
 
     def read(self, file: BinaryIO) -> "Matrix3x3":
         self.matrix = unpack("9f", file.read(calcsize("9f")))
+        self.math_matrix = Matrix(
+            (
+                (self.matrix[0], self.matrix[1], self.matrix[2]),
+                (self.matrix[3], self.matrix[4], self.matrix[5]),
+                (self.matrix[6], self.matrix[7], self.matrix[8]),
+            )
+        )
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -1156,22 +1168,22 @@ class OBBNode:
     oriented_bounding_box: CMatCoordinateSystem = field(
         default_factory=CMatCoordinateSystem
     )
-    unknown1: int = 0
-    unknown2: int = 0
-    unknown3: int = 0
+    first_child_index: int = 0
+    second_child_index: int = 0
+    skip_pointer: int = 0
     node_depth: int = 0
-    current_triangle_count: int = 0
-    minimum_triangles_found: int = 0
+    triangle_offset: int = 0
+    total_triangles: int = 0
 
     def read(self, file: BinaryIO) -> "OBBNode":
         self.oriented_bounding_box = CMatCoordinateSystem().read(file)
         (
-            self.unknown1,
-            self.unknown2,
-            self.unknown3,
+            self.first_child_index,
+            self.second_child_index,
+            self.skip_pointer,
             self.node_depth,
-            self.current_triangle_count,
-            self.minimum_triangles_found,
+            self.triangle_offset,
+            self.total_triangles,
         ) = unpack("4H2I", file.read(calcsize("4H2I")))
         return self
 
@@ -1180,12 +1192,12 @@ class OBBNode:
         file.write(
             pack(
                 "4H2I",
-                self.unknown1,
-                self.unknown2,
-                self.unknown3,
+                self.first_child_index,
+                self.second_child_index,
+                self.skip_pointer,
                 self.node_depth,
-                self.current_triangle_count,
-                self.minimum_triangles_found,
+                self.triangle_offset,
+                self.total_triangles,
             )
         )
 

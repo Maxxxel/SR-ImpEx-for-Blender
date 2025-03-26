@@ -108,6 +108,15 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
     import_animation: BoolProperty(
         name="Import Animation", description="Import animation", default=True
     )  # type: ignore
+    import_animation_type: EnumProperty(  # type: ignore
+        name="Animation Type",
+        description="Select the animation type to import",
+        items=[
+            ("FRAMES", "Frames", "Import animation in frames"),
+            ("SECONDS", "Seconds", "Import animation in seconds"),
+        ],
+        default="FRAMES",
+    )
     import_debris: BoolProperty(
         name="Import Debris", description="Import debris for bmg files", default=True
     )  # type: ignore
@@ -129,6 +138,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         )
         keywords["import_collision_shape"] = self.import_collision_shape
         keywords["import_animation"] = self.import_animation
+        keywords["import_animation_type"] = self.import_animation_type
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction
         keywords["import_debris"] = self.import_debris
