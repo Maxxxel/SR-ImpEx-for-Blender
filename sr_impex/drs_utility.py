@@ -472,7 +472,6 @@ def convert_image_to_dds(
 
     # Save the image as PNG using Blender's save_render function
     img.file_format = "PNG"
-    print("Saving Image as PNG to: " + temp_path)
     img.save(filepath=temp_path)
 
     # Build the argument list for texconv.exe
@@ -509,10 +508,8 @@ def convert_image_to_dds(
 
     # Check if output file exists; if so, override the return code to 0.
     if os.path.exists(output_path):
-        print("Output Path Exists")
         ret_code = 0
     else:
-        print("Output Path Does Not Exist")
         ret_code = result.returncode
 
     # Clean up the temporary PNG file.
@@ -828,7 +825,6 @@ def create_mesh_object(
 
     # Add skin weights if available.
     if drs_file.csk_skin_info and bone_weights and bone_list:
-        print(f"Adding skin weights to mesh {mesh_index}. Starting at vertex {offset}.")
         add_skin_weights_to_mesh(
             mesh_object,
             bone_list,
@@ -1250,6 +1246,7 @@ def load_drs(
     import_collision_shape=False,
     import_animation=True,
     import_animation_type="FRAMES",
+    import_animation_fps=30,
     import_debris=False,
     import_modules=True,
 ) -> None:
@@ -1297,11 +1294,12 @@ def load_drs(
         and armature_object is not None
         and import_animation
     ):
-        bpy.context.scene.render.fps = 30
+        bpy.context.scene.render.fps = import_animation_fps
         with ensure_mode("POSE"):
             for animation_key in drs_file.animation_set.mode_animation_keys:
                 for variant in animation_key.animation_set_variants:
                     ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
+                    # Create the Animation
                     create_animation(
                         ska_file,
                         armature_object,

@@ -1,6 +1,8 @@
 # animation_utils.py
+import math
 import bpy
 from mathutils import Quaternion, Vector
+
 from .ska_definitions import SKAKeyframe, SKA
 
 
@@ -95,6 +97,7 @@ def create_animation(
     fps = bpy.context.scene.render.fps
     armature_object.animation_data_create()
     action = create_action(armature_object, animation_name, repeat=ska_file.repeat)
+    action["original_durion"] = ska_file.duration
 
     # Map bones to their fcurves using bone identifiers.
     bone_fcurve_map = {}
@@ -114,7 +117,7 @@ def create_animation(
         for idx in range(header.tick, header.tick + header.interval):
             frame_data = ska_file.keyframes[idx]
             if import_animation_type == "FRAMES":
-                frame = idx - header.tick + 1
+                frame = round(ska_file.times[idx] * ska_file.duration * fps)
             elif import_animation_type == "SECONDS":
                 frame = ska_file.times[idx] * ska_file.duration * fps
 
