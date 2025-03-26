@@ -13,7 +13,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 7, 0),
+    "version": (2, 7, 1),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -108,6 +108,22 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
     import_animation: BoolProperty(
         name="Import Animation", description="Import animation", default=True
     )  # type: ignore
+    import_animation_type: EnumProperty(  # type: ignore
+        name="Animation Type",
+        description="Select the animation type to import",
+        items=[
+            ("FRAMES", "Frames", "Import animation in frames"),
+            ("SECONDS", "Seconds", "Import animation in seconds"),
+        ],
+        default="FRAMES",
+    )
+    import_animation_fps: IntProperty(  # type: ignore
+        name="Animation FPS",
+        description="FPS for the imported animation",
+        default=30,
+        min=1,
+        max=120,
+    )
     import_debris: BoolProperty(
         name="Import Debris", description="Import debris for bmg files", default=True
     )  # type: ignore
@@ -129,6 +145,8 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         )
         keywords["import_collision_shape"] = self.import_collision_shape
         keywords["import_animation"] = self.import_animation
+        keywords["import_animation_type"] = self.import_animation_type
+        keywords["import_animation_fps"] = self.import_animation_fps
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction
         keywords["import_debris"] = self.import_debris

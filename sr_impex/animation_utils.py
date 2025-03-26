@@ -1,7 +1,9 @@
 # animation_utils.py
+import math
 import bpy
 from mathutils import Quaternion, Vector
-from .ska_definitions import SKAKeyframe
+
+from .ska_definitions import SKAKeyframe, SKA
 
 
 def create_action(
@@ -81,7 +83,13 @@ def add_animation_to_nla_track(
     track.mute = False
 
 
-def create_animation(ska_file, armature_object, bone_list, animation_name: str) -> None:
+def create_animation(
+    ska_file: SKA,
+    armature_object: bpy.types.Object,
+    bone_list: list,
+    animation_name: str,
+    import_animation_type: str,
+) -> None:
     """
     High-level routine to create an animation on the armature from a SKA file.
     Prepares F-Curves for each bone and inserts keyframes based on the SKA keyframes.
@@ -89,6 +97,7 @@ def create_animation(ska_file, armature_object, bone_list, animation_name: str) 
     fps = bpy.context.scene.render.fps
     armature_object.animation_data_create()
     action = create_action(armature_object, animation_name, repeat=ska_file.repeat)
+    action["original_durion"] = ska_file.duration
 
     # Map bones to their fcurves using bone identifiers.
     bone_fcurve_map = {}
@@ -107,7 +116,10 @@ def create_animation(ska_file, armature_object, bone_list, animation_name: str) 
             continue
         for idx in range(header.tick, header.tick + header.interval):
             frame_data = ska_file.keyframes[idx]
-            frame = ska_file.times[idx] * ska_file.duration * fps
+            if import_animation_type == "FRAMES":
+                frame = round(ska_file.times[idx] * ska_file.duration * fps)
+            elif import_animation_type == "SECONDS":
+                frame = ska_file.times[idx] * ska_file.duration * fps
 
             insert_keyframes(
                 fcurves, frame_data, frame, header.type, bone.bind_rot, bone.bind_loc
