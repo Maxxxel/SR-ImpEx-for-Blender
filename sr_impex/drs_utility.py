@@ -1190,6 +1190,7 @@ def import_state_based_mesh_set(
     dir_name: str,
     bmg_file: DRS,
     import_animation: bool,
+    animation_type: str,
     import_debris: bool,
     base_name: str,
     slocator: SLocator = None,
@@ -1239,6 +1240,9 @@ def import_state_based_mesh_set(
                 bone_weights = create_bone_weights(
                     drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh
                 )
+
+            if drs_file.collision_shape is not None:
+                import_collision_shapes(state_collection, drs_file)
 
             for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
                 offset = (
@@ -1307,8 +1311,6 @@ def import_state_based_mesh_set(
                 and armature_object is not None
                 and import_animation
             ):
-                # Set the FPS for the Animation
-                bpy.context.scene.render.fps = 30
                 with ensure_mode("POSE"):
                     for animation_key in bmg_file.animation_set.mode_animation_keys:
                         for variant in animation_key.animation_set_variants:
@@ -1316,7 +1318,11 @@ def import_state_based_mesh_set(
                                 os.path.join(dir_name, variant.file)
                             )
                             create_animation(
-                                ska_file, armature_object, bone_list, variant.file
+                                ska_file,
+                                armature_object,
+                                bone_list,
+                                variant.file,
+                                animation_type,
                             )
 
     # Get individual desctruction States
@@ -1348,6 +1354,7 @@ def load_drs(
     base_name = os.path.basename(filepath).split(".")[0]
     dir_name = os.path.dirname(filepath)
     drs_file: DRS = DRS().read(filepath)
+    bpy.context.scene.render.fps = import_animation_fps
 
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
@@ -1387,7 +1394,6 @@ def load_drs(
         and armature_object is not None
         and import_animation
     ):
-        bpy.context.scene.render.fps = import_animation_fps
         with ensure_mode("POSE"):
             for animation_key in drs_file.animation_set.mode_animation_keys:
                 for variant in animation_key.animation_set_variants:
@@ -1439,6 +1445,7 @@ def import_mesh_set_grid(
     dir_name: str,
     base_name: str,
     import_animation: bool,
+    animation_type: str,
     import_debris: bool,
 ) -> bpy.types.Object:
     for module in bmg_file.mesh_set_grid.mesh_modules:
@@ -1450,6 +1457,7 @@ def import_mesh_set_grid(
                 dir_name,
                 bmg_file,
                 import_animation,
+                animation_type,
                 import_debris,
                 base_name,
             )
@@ -1465,12 +1473,15 @@ def load_bmg(
     apply_transform=True,
     import_collision_shape=False,
     import_animation=True,
+    import_animation_type="FRAMES",
+    import_animation_fps=30,
     import_debris=True,
     import_construction=True,
 ) -> None:
     start_time = time.time()
     dir_name = os.path.dirname(filepath)
     base_name = os.path.basename(filepath).split(".")[0]
+    bpy.context.scene.render.fps = import_animation_fps
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
     )
@@ -1566,6 +1577,7 @@ def load_bmg(
             dir_name,
             base_name,
             import_animation,
+            import_animation_type,
             import_debris,
         )
 
@@ -2618,8 +2630,5 @@ def save_drs(
 
 # endregion
 
-# TODO: Only one time import Collision Meshes
 # TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
-# TODO: Check if BMGs Collision Shape is always the same as the sub-modules one
 # TODO: Fix Collision Shapes for Complex Buildings and SLocators
-# TODO: Check if refraction scale is always 1.0

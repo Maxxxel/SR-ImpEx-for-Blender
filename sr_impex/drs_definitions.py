@@ -383,7 +383,7 @@ class Vector3:
         return calcsize("3f")
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class Matrix4x4:
     matrix: tuple = ((0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0))
 
@@ -398,7 +398,7 @@ class Matrix4x4:
         return calcsize("16f")
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class Matrix3x3:
     matrix: tuple = ((0, 0, 0), (0, 0, 0), (0, 0, 0))
     math_matrix: Matrix = field(
@@ -423,7 +423,7 @@ class Matrix3x3:
         return calcsize("9f")
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class CMatCoordinateSystem:
     matrix: Matrix3x3 = field(default_factory=Matrix3x3)
     position: Vector3 = field(default_factory=Vector3)
@@ -716,7 +716,7 @@ class Material:
     metalness: float = 0.0
     reflectivity: float = 0.0
     emissivity: float = 0.0
-    refraction_scale: float = 0.0
+    refraction_scale: float = 0.0  # 0.0 - 1.0 -> Dont know when to use
     distortion_mesh_scale: float = 0.0
     scratch: float = 0.0
     specular_scale: float = 0.0
@@ -1381,7 +1381,7 @@ class CGeoAABox:
         return self.lower_left_corner.size() + self.upper_right_corner.size()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class BoxShape:
     coord_system: CMatCoordinateSystem = field(default_factory=CMatCoordinateSystem)
     geo_aabox: CGeoAABox = field(default_factory=CGeoAABox)
@@ -1399,7 +1399,7 @@ class BoxShape:
         return self.coord_system.size() + self.geo_aabox.size()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class CGeoCylinder:
     center: Vector3 = field(default_factory=Vector3)
     height: float = 0.0
@@ -1418,7 +1418,7 @@ class CGeoCylinder:
         return self.center.size() + calcsize("ff")
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class CylinderShape:
     coord_system: CMatCoordinateSystem = field(default_factory=CMatCoordinateSystem)
     geo_cylinder: CGeoCylinder = field(default_factory=CGeoCylinder)
@@ -1436,7 +1436,7 @@ class CylinderShape:
         return self.coord_system.size() + self.geo_cylinder.size()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class CGeoSphere:
     radius: float = 0.0
     center: Vector3 = field(default_factory=Vector3)
@@ -1454,7 +1454,7 @@ class CGeoSphere:
         return calcsize("f") + self.center.size()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class SphereShape:
     coord_system: CMatCoordinateSystem = field(default_factory=CMatCoordinateSystem)
     geo_sphere: CGeoSphere = field(default_factory=CGeoSphere)
@@ -1472,7 +1472,7 @@ class SphereShape:
         return self.coord_system.size() + self.geo_sphere.size()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=True, repr=False)
 class CollisionShape:
     version: int = 1
     box_count: int = 0
