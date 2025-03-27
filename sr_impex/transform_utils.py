@@ -97,6 +97,7 @@ def apply_transformation(
     operator_on_meshes=False,
     operator_on_collision=False,
     operator_on_ground_decal=False,
+    operator_on_slocators=False,
 ) -> None:
     """
     Applies a composite transformation to objects in the source collection or to a provided armature.
@@ -106,25 +107,70 @@ def apply_transformation(
         return
 
     transform = get_conversion_matrix(invert)
+    meshes_collection = get_collection(source_collection, "Meshes_Collection")
 
     if armature_object is not None:
         armature_object.matrix_world = transform @ armature_object.matrix_world
         bpy.context.view_layer.objects.active = armature_object
         armature_object.select_set(True)
+        # Loop the child collections
+        for child in meshes_collection.children:
+            # Check if there is a CollsionShapes_Collection inside the child
+            collision_collection = get_collection(child, "CollisionShapes_Collection")
+            if collision_collection:
+                if (
+                    len(collision_collection.objects) == 0
+                    and len(collision_collection.children) > 0
+                ):
+                    for grandchild in collision_collection.children:
+                        apply_transformation_to_objects(
+                            grandchild.objects, transform, operator_on_collision
+                        )
     else:
-        meshes_collection = get_collection(source_collection, "Meshes_Collection")
         if meshes_collection:
-            apply_transformation_to_objects(
-                meshes_collection.objects, transform, operator_on_meshes
-            )
+            if (
+                len(meshes_collection.objects) == 0
+                and len(meshes_collection.children) > 0
+            ):
+                for child in meshes_collection.children:
+                    apply_transformation_to_objects(
+                        child.objects, transform, operator_on_meshes
+                    )
+            else:
+                apply_transformation_to_objects(
+                    meshes_collection.objects, transform, operator_on_meshes
+                )
+            # Loop the child collections
+            for child in meshes_collection.children:
+                # Check if there is a CollsionShapes_Collection inside the child
+                collision_collection = get_collection(
+                    child, "CollisionShapes_Collection"
+                )
+                if collision_collection:
+                    if (
+                        len(collision_collection.objects) == 0
+                        and len(collision_collection.children) > 0
+                    ):
+                        for grandchild in collision_collection.children:
+                            apply_transformation_to_objects(
+                                grandchild.objects, transform, operator_on_collision
+                            )
 
     collision_collection = get_collection(
         source_collection, "CollisionShapes_Collection"
     )
     if collision_collection:
-        for child in collision_collection.children:
+        if (
+            len(collision_collection.objects) == 0
+            and len(collision_collection.children) > 0
+        ):
+            for child in collision_collection.children:
+                apply_transformation_to_objects(
+                    child.objects, transform, operator_on_collision
+                )
+        else:
             apply_transformation_to_objects(
-                child.objects, transform, operator_on_collision
+                collision_collection.objects, transform, operator_on_collision
             )
 
     ground_decal_collection = get_collection(
@@ -150,3 +196,9 @@ def apply_transformation(
             apply_transformation_to_objects(
                 child.objects, transform, apply_operator=True
             )
+
+    slocator_collection = get_collection(source_collection, "SLocators_Collection")
+    if slocator_collection:
+        apply_transformation_to_objects(
+            slocator_collection.objects, transform, operator_on_slocators
+        )

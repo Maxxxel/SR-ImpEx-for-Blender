@@ -8,3 +8,4 @@
 /sr_impex/debug*
 *.code-workspace
 *.pyc
+create_release_package.py

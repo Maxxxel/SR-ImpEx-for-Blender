@@ -13,7 +13,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 7, 1),
+    "version": (2, 7, 2),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -216,11 +216,6 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         description="Export animation",
         default=False,
     )
-    automatic_naming: BoolProperty(
-        name="Automatic Naming",
-        description="Names the exported file automatically based on the selection and model name, else the name from the save-path is taken.",
-        default=True,
-    )  # type: ignore # ignore
     model_type: EnumProperty(
         name="Model Type",
         description="Select the model type",
@@ -238,6 +233,22 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         default="StaticObjectNoCollision",
     )
 
+    def invoke(self, context, event):
+        # Retrieve the active collection from the active layer collection
+        active_coll = context.view_layer.active_layer_collection.collection
+        coll_name = active_coll.name
+
+        # Strip off the "DRSModel_" prefix if present
+        if coll_name.startswith("DRSModel_"):
+            model_name = coll_name[9:]
+        else:
+            model_name = "you havent selected a DRS model collection"
+
+        # Update the file name with the model name
+        self.filepath = bpy.path.ensure_ext(model_name, ".drs")
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
     def execute(self, context):
         keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
         keywords["use_apply_transform"] = self.use_apply_transform
@@ -245,9 +256,17 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         keywords["flip_normals"] = self.flip_normals
         keywords["keep_debug_collections"] = self.keep_debug_collections
         keywords["export_animation"] = self.export_animation
-        keywords["automatic_naming"] = self.automatic_naming
+        keywords["model_type"] = self.model_type
+
+        # update model_name by file_path
+        model_name = os.path.basename(self.filepath)
+        # remove the extension
+        model_name = os.path.splitext(model_name)[0]
+        keywords["model_name"] = model_name
+
+        self.filepath = bpy.path.ensure_ext(self.filepath, ".drs")
+
         save_drs(context, **keywords)
-        # test_export(context, **keywords)
         return {"FINISHED"}
 
 
@@ -441,58 +460,3 @@ def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     bpy.utils.unregister_class(MyAddonPreferences)
-
-
-def export_install_package() -> None:
-    # I want to zip everything inside the src folder to the root of the project named SR-ImpEx-for-Blender-{version}.zip
-    # I also want to choose what not to zip, following the .gitignore file
-    import zipfile  # pylint: disable=import-outside-toplevel
-
-    # Get the current version
-    current_version = (
-        f"{bl_info['version'][0]}.{bl_info['version'][1]}.{bl_info['version'][2]}"
-    )
-
-    # Get the root and source paths
-    root_path = os.path.join(dirname(realpath(__file__)), "../")
-    source_path = os.path.join(root_path, "sr_impex/")
-    destination_path = os.path.join(
-        root_path, f"SR-ImpEx-for-Blender-{current_version}.zip"
-    )
-
-    # Read ignore list from .gitignore
-    with open(os.path.join(root_path, ".gitignore"), "r") as file:
-        ignore_list = [
-            line.strip() for line in file if line.strip() and not line.startswith("#")
-        ]
-
-    # Create the zip file
-    with zipfile.ZipFile(destination_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(source_path):
-            for file in files:
-                full_path = os.path.join(root, file)
-                # Calculate relative path from the project root
-                rel_path = os.path.relpath(full_path, root_path)
-
-                # Determine whether to skip the file based on .gitignore rules
-                skip = False
-                # Simple fnmatch matching: remove a leading "/" from each pattern
-                for pattern in ignore_list:
-                    pattern = pattern.lstrip("/")
-                    if fnmatch.fnmatch(rel_path, pattern):
-                        skip = True
-                        break
-
-                if skip:
-                    print(f"Skipping {rel_path}")
-                    continue
-
-                # Add file to zip using the relative path
-                zipf.write(full_path, rel_path)
-
-    print(f"Package created: {destination_path}")
-
-
-# Only enable this for export of the zip package for a new release.
-# if True:
-#     export_install_package()

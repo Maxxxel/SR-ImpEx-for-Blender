@@ -121,6 +121,8 @@ def create_animation(
             elif import_animation_type == "SECONDS":
                 frame = ska_file.times[idx] * ska_file.duration * fps
 
+            if frame is None:
+                raise ValueError(f"Invalid frame value for keyframe {idx}: {frame}")
             insert_keyframes(
                 fcurves, frame_data, frame, header.type, bone.bind_rot, bone.bind_loc
             )
