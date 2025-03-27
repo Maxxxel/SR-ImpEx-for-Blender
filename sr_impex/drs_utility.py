@@ -1,6 +1,7 @@
 import os
 from os.path import dirname, realpath
 from math import radians
+from re import S
 import time
 import hashlib
 import subprocess
@@ -1192,6 +1193,7 @@ def import_state_based_mesh_set(
     import_animation: bool,
     animation_type: str,
     import_debris: bool,
+    import_collision_shape: bool,
     base_name: str,
     slocator: SLocator = None,
     prefix: str = "",
@@ -1241,7 +1243,7 @@ def import_state_based_mesh_set(
                     drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh
                 )
 
-            if drs_file.collision_shape is not None:
+            if drs_file.collision_shape is not None and import_collision_shape:
                 import_collision_shapes(state_collection, drs_file)
 
             for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
@@ -1447,6 +1449,7 @@ def import_mesh_set_grid(
     import_animation: bool,
     animation_type: str,
     import_debris: bool,
+    import_collision_shape: bool,
 ) -> bpy.types.Object:
     for module in bmg_file.mesh_set_grid.mesh_modules:
         if module.has_mesh_set:
@@ -1459,6 +1462,7 @@ def import_mesh_set_grid(
                 import_animation,
                 animation_type,
                 import_debris,
+                import_collision_shape,
                 base_name,
             )
             if temp_armature_object is not None:
@@ -1579,19 +1583,37 @@ def load_bmg(
             import_animation,
             import_animation_type,
             import_debris,
+            import_collision_shape,
         )
 
     # Import Construction
     if import_construction:
         slocator_collection: bpy.types.Collection = bpy.data.collections.new(
-            "SLocators"
+            "SLocators_Collection"
         )
         source_collection.children.link(slocator_collection)
         for slocator in bmg_file.mesh_set_grid.cdrw_locator_list.slocators:
             if slocator.file_name_length > 0 and slocator.class_type == "Construction":
+                location = (
+                    slocator.cmat_coordinate_system.position.x,
+                    slocator.cmat_coordinate_system.position.y,
+                    slocator.cmat_coordinate_system.position.z,
+                )
+                rotation = (
+                    slocator.cmat_coordinate_system.matrix.matrix
+                )  # Tuple ((float, float, float), (float, float, float), (float, float, float))
+                rotation_matrix = [
+                    list(rotation[i : i + 3]) for i in range(0, len(rotation), 3)
+                ]
+                transposed_rotation = Matrix(rotation_matrix).transposed()
+                # Create a new Matrix with the Location and Rotation
+                local_matrix = (
+                    Matrix.Translation(location) @ transposed_rotation.to_4x4()
+                )
                 # We need to move two directory up to find the construction folder
                 construction_dir = os.path.join(dir_name, "..", "..", "construction")
                 # Check for file ending (DRS or BMS)
+
                 if slocator.file_name.endswith(".bms"):
                     bms_file: BMS = BMS().read(
                         os.path.join(construction_dir, slocator.file_name)
@@ -1621,28 +1643,6 @@ def load_bmg(
                         mesh_object: bpy.types.Object = bpy.data.objects.new(
                             f"CDspMeshFile_{slocator.class_type}", mesh_data
                         )
-                        # We need to move and rotate the construction objects prior to applying the global matrix
-                        location = (
-                            slocator.cmat_coordinate_system.position.x,
-                            slocator.cmat_coordinate_system.position.y,
-                            slocator.cmat_coordinate_system.position.z,
-                        )
-                        rotation = slocator.cmat_coordinate_system.matrix.matrix
-                        rotation_matrix = [
-                            list(rotation[i : i + 3])
-                            for i in range(0, len(rotation), 3)
-                        ]
-                        transposed_rotation = Matrix(rotation_matrix).transposed()
-                        # Create a new Matrix with the Location and Rotation
-                        local_matrix = (
-                            Matrix.Translation(location) @ transposed_rotation.to_4x4()
-                        )
-                        # Apply the Local Matrix to the Mesh Object
-                        # if apply_transform:
-                        #     mesh_object.matrix_world = global_matrix @ local_matrix
-                        #     mirror_object_by_vector(mesh_object, Vector((0, 0, 1)))
-                        # else:
-                        mesh_object.matrix_world = local_matrix
                         # Create the Material Data
                         material_data = create_material(
                             construction_dir,
@@ -1652,6 +1652,8 @@ def load_bmg(
                         )
                         # Assign the Material to the Mesh
                         mesh_data.materials.append(material_data)
+                        # Apply the Transformations to the Mesh Object
+                        mesh_object.matrix_world = local_matrix
                         # Link the Mesh Object to the Source Collection
                         slocator_collection.objects.link(mesh_object)
                 else:
@@ -1660,10 +1662,23 @@ def load_bmg(
                         "Error",
                         "ERROR",
                     )
+            elif slocator.file_name_length > 0:
+                logger.log(
+                    f"Slocator {slocator.file_name} is not a Construction file (but {slocator.class_type}). Skipping it.",
+                    "Error",
+                    "ERROR",
+                )
 
     # Apply the Transformations to the Source Collection
     apply_transformation(
-        source_collection, armature_object, apply_transform, False, True, True, True
+        source_collection,
+        armature_object,
+        apply_transform,
+        False,
+        True,
+        True,
+        True,
+        True,
     )
 
     # Print the Time Measurement
