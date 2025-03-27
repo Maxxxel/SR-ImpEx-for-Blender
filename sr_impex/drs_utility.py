@@ -2,7 +2,9 @@ import os
 from os.path import dirname, realpath
 from math import radians
 import time
+import hashlib
 import subprocess
+from struct import pack
 from collections import defaultdict
 from typing import Tuple, List
 import xml.etree.ElementTree as ET
@@ -71,6 +73,10 @@ from .message_logger import MessageLogger
 
 logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
+texture_cache_col = {}
+texture_cache_nor = {}
+texture_cache_par = {}
+texture_cache_ref = {}
 
 # region General Helper Functions
 
@@ -517,6 +523,93 @@ def convert_image_to_dds(
         os.remove(temp_path)
 
     return (ret_code, result.stdout, result.stderr)
+
+
+def compute_texture_key(image):
+    # Check if image is valid
+    if image is None:
+        raise ValueError("Image is None")
+
+    # Force Blender to update image data if necessary
+    image.update()
+
+    try:
+        # Copy the pixel data safely
+        pixels = image.pixels[:]
+    except Exception as e:
+        raise RuntimeError(f"Failed to access image pixels: {e}")
+
+    # Pack the floats into bytes safely
+    try:
+        pixel_bytes = pack(f"{len(pixels)}f", *pixels)
+    except Exception as e:
+        raise RuntimeError(f"Failed to pack pixel data: {e}")
+
+    image_hash = hashlib.md5(pixel_bytes).hexdigest()
+    return f"{image_hash}"
+
+
+def get_cache_for_type(file_ending: str) -> dict:
+    if file_ending == "_col":
+        return texture_cache_col
+    elif file_ending == "_nor":
+        return texture_cache_nor
+    elif file_ending == "_par":
+        return texture_cache_par
+    elif file_ending == "_ref":
+        return texture_cache_ref
+    else:
+        # Fallback to a general cache if needed.
+        logger.log(
+            f"Unknown file ending '{file_ending}'. Using default cache.",
+            "Warning",
+            "WARNING",
+        )
+        return {}
+
+
+def get_converted_texture(
+    img: bpy.types.Image,
+    model_name: str,
+    mesh_index: int,
+    folder_path: str,
+    file_ending: str = "_col",
+    dxt_format: str = "DXT5",
+    extra_args: list[str] = None,
+):
+    # Select the appropriate cache based on the file ending.
+    cache = get_cache_for_type(file_ending)
+    key = compute_texture_key(img)
+
+    print(f"Generating Key for {model_name} {file_ending}: {key}")
+    if key in cache:
+        print(f"Found {model_name} {file_ending} in cache: {cache[key]}")
+        # Texture already converted, reuse the existing DDS file path.
+        return cache[key]
+
+    # If no texture of this type has been cached yet, use model_name without the mesh index.
+    # Otherwise, include the mesh_index to distinguish this texture.
+    if len(cache) == 0:
+        texture_name = f"{model_name}{file_ending}"
+    else:
+        texture_name = f"{model_name}{mesh_index}{file_ending}"
+
+    # Call your conversion function (make sure convert_image_to_dds is defined and available)
+    ret_code, _, stderr = convert_image_to_dds(
+        img, texture_name, folder_path, dxt_format, extra_args
+    )
+    if ret_code != 0:
+        logger.log(
+            f"Conversion failed for {model_name}'s {file_ending} map: {stderr}",
+            "Error",
+            "ERROR",
+        )
+        return None
+
+    # Assume the DDS file is generated as <texture_name>.dds in folder_path.
+    dds_path = os.path.join(folder_path, texture_name + ".dds")
+    cache[key] = dds_path
+    return dds_path
 
 
 # endregion
@@ -1835,22 +1928,15 @@ def set_color_map(
         )
         return False
 
-    texture_name = f"{model_name}_{mesh_index}_col"
     # Update your new_mesh texture list as needed here
     new_mesh.textures.length += 1
     color_map_texture = Texture()
-    color_map_texture.name = texture_name
+    color_map_texture.name = get_converted_texture(
+        img, model_name, mesh_index, folder_path, file_ending="_col", dxt_format="DXT5"
+    )
     color_map_texture.length = len(color_map_texture.name)
     color_map_texture.identifier = 1684432499
     new_mesh.textures.textures.append(color_map_texture)
-
-    # Convert image to DDS (using DXT5 for color maps)
-    ret_code, _, _ = convert_image_to_dds(
-        img, texture_name, folder_path, dxt_format="DXT5"
-    )
-    if ret_code != 0:
-        logger.log("Conversion failed for the color map.", "Error", "ERROR")
-        return False
 
     return True
 
@@ -1878,24 +1964,21 @@ def set_normal_map(
         )
         return False
 
-    texture_name = f"{model_name}_{mesh_index}_nor"
     new_mesh.textures.length += 1
     normal_map_texture = Texture()
-    normal_map_texture.name = texture_name
+    normal_map_texture.name = get_converted_texture(
+        img,
+        model_name,
+        mesh_index,
+        folder_path,
+        file_ending="_nor",
+        dxt_format="DXT1",
+        extra_args=["-at", "0.0"],
+    )
     normal_map_texture.length = len(normal_map_texture.name)
     normal_map_texture.identifier = 1852992883
     new_mesh.textures.textures.append(normal_map_texture)
     bool_param_bit_flag += 100000000000000000
-
-    # Convert image to DDS (using DXT1 for color maps)
-    ret_code, output_str, _ = convert_image_to_dds(
-        img, texture_name, folder_path, dxt_format="DXT1", extra_args=["-at", "0.0"]
-    )
-    if ret_code != 0:
-        logger.log(
-            f"Conversion failed for the normal map: {output_str}", "Error", "ERROR"
-        )
-        return False
 
     return bool_param_bit_flag
 
@@ -1936,19 +2019,9 @@ def set_metallic_roughness_emission_map(
         )
         return
 
-    # Update mesh textures and flags
-    new_mesh.textures.length += 1
-    texture_name = f"{model_name}_{mesh_index}_par"
-    metallic_map_texture = Texture()
-    metallic_map_texture.name = texture_name
-    metallic_map_texture.length = len(metallic_map_texture.name)
-    metallic_map_texture.identifier = 1936745324
-    new_mesh.textures.textures.append(metallic_map_texture)
-    bool_param_bit_flag += 10000000000000000
-
     # Combine the images into a new image
     new_img = bpy.data.images.new(
-        name=texture_name, width=width, height=height, alpha=True, float_buffer=False
+        name="temp_image", width=width, height=height, alpha=True, float_buffer=False
     )
     new_pixels = []
     total_pixels = width * height * 4
@@ -1968,12 +2041,22 @@ def set_metallic_roughness_emission_map(
     new_img.file_format = "PNG"
     new_img.update()
 
-    ret_code, output_str, _ = convert_image_to_dds(
-        new_img, texture_name, folder_path, dxt_format="DXT5", extra_args=["-bc", "d"]
+    # Update mesh textures and flags
+    new_mesh.textures.length += 1
+    metallic_map_texture = Texture()
+    metallic_map_texture.name = get_converted_texture(
+        new_img,
+        model_name,
+        mesh_index,
+        folder_path,
+        file_ending="_par",
+        dxt_format="DXT5",
+        extra_args=["-bc", "d"],
     )
-    if ret_code != 0:
-        logger.log(f"Conversion failed for the parameter map: {output_str}", "Error")
-        return False
+    metallic_map_texture.length = len(metallic_map_texture.name)
+    metallic_map_texture.identifier = 1936745324
+    new_mesh.textures.textures.append(metallic_map_texture)
+    bool_param_bit_flag += 10000000000000000
 
     return bool_param_bit_flag
 
@@ -2006,20 +2089,14 @@ def set_refraction_color_and_map(
         )
         return [0.0, 0.0, 0.0]
 
-    texture_name = f"{model_name}_{mesh_index}_ref"
     new_mesh.textures.length += 1
     refraction_map_texture = Texture()
-    refraction_map_texture.name = texture_name
+    refraction_map_texture.name = get_converted_texture(
+        img, model_name, mesh_index, folder_path, file_ending="_ref", dxt_format="DXT5"
+    )
     refraction_map_texture.length = len(refraction_map_texture.name)
     refraction_map_texture.identifier = 1919116143
     new_mesh.textures.textures.append(refraction_map_texture)
-    # Convert image to DDS (using DXT5 for color maps)
-    ret_code, _, _ = convert_image_to_dds(
-        img, texture_name, folder_path, dxt_format="DXT5"
-    )
-    if ret_code != 0:
-        logger.log("Conversion failed for the refraction map.", "Error", "ERROR")
-        return [0.0, 0.0, 0.0]
 
     return rgb
 
@@ -2404,10 +2481,11 @@ def save_drs(
     flip_normals: bool,
     keep_debug_collections: bool,
     export_animation: bool,
-    automatic_naming: bool,
     model_type: str,
+    model_name: str,
 ) -> dict:
-
+    """Save the DRS file."""
+    global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref
     # === PRE-VALIDITY CHECKS =================================================
     # Ensure active collection is valid
     source_collection = bpy.context.view_layer.active_layer_collection.collection
@@ -2475,11 +2553,6 @@ def save_drs(
 
     # === CREATE DRS STRUCTURE =================================================
     folder_path = os.path.dirname(filepath)
-    model_name = (
-        (model_type + "_" + os.path.basename(filepath).split(".")[0])
-        if automatic_naming
-        else os.path.basename(filepath).split(".")[0]
-    )
 
     new_drs_file: DRS = DRS(model_type=model_type)
     try:
@@ -2535,6 +2608,11 @@ def save_drs(
 
     logger.log("Export completed successfully.", "Export Complete", "INFO")
     logger.display()
+    # Clear texture Caches
+    texture_cache_col = {}
+    texture_cache_nor = {}
+    texture_cache_par = {}
+    texture_cache_ref = {}
     return {"FINISHED"}
 
 

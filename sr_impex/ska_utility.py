@@ -11,7 +11,7 @@ from .message_logger import MessageLogger
 resource_dir = dirname(realpath(__file__)) + "/resources"
 logger = MessageLogger()
 
-with open(resource_dir + "/bone_versions.json", "r") as f:
+with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
 
 

@@ -13,7 +13,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 7, 1),
+    "version": (2, 7, 2),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -216,11 +216,6 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         description="Export animation",
         default=False,
     )
-    automatic_naming: BoolProperty(
-        name="Automatic Naming",
-        description="Names the exported file automatically based on the selection and model name, else the name from the save-path is taken.",
-        default=True,
-    )  # type: ignore # ignore
     model_type: EnumProperty(
         name="Model Type",
         description="Select the model type",
@@ -238,6 +233,22 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         default="StaticObjectNoCollision",
     )
 
+    def invoke(self, context, event):
+        # Retrieve the active collection from the active layer collection
+        active_coll = context.view_layer.active_layer_collection.collection
+        coll_name = active_coll.name
+
+        # Strip off the "DRSModel_" prefix if present
+        if coll_name.startswith("DRSModel_"):
+            model_name = coll_name[9:]
+        else:
+            model_name = "you havent selected a DRS model collection"
+
+        # Update the file name with the model name
+        self.filepath = bpy.path.ensure_ext(model_name, ".drs")
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
     def execute(self, context):
         keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
         keywords["use_apply_transform"] = self.use_apply_transform
@@ -245,9 +256,17 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         keywords["flip_normals"] = self.flip_normals
         keywords["keep_debug_collections"] = self.keep_debug_collections
         keywords["export_animation"] = self.export_animation
-        keywords["automatic_naming"] = self.automatic_naming
+        keywords["model_type"] = self.model_type
+
+        # update model_name by file_path
+        model_name = os.path.basename(self.filepath)
+        # remove the extension
+        model_name = os.path.splitext(model_name)[0]
+        keywords["model_name"] = model_name
+
+        self.filepath = bpy.path.ensure_ext(self.filepath, ".drs")
+
         save_drs(context, **keywords)
-        # test_export(context, **keywords)
         return {"FINISHED"}
 
 
@@ -493,6 +512,9 @@ def export_install_package() -> None:
     print(f"Package created: {destination_path}")
 
 
-# Only enable this for export of the zip package for a new release.
-# if True:
-#     export_install_package()
+# Make export_install_package executable by calling it from the command line with the --export flag
+if __name__ == "__main__":
+    import sys
+
+    if "--export" in sys.argv:
+        export_install_package()
