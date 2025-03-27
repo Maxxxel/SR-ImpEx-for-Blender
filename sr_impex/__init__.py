@@ -1,3 +1,7 @@
+# ----------------------------------------------------
+# Auto-Update Integration: Import updater ops
+# ----------------------------------------------------
+from . import addon_updater_ops
 import os
 from os.path import dirname, realpath
 import importlib  # pylint: disable=unused-import
@@ -13,7 +17,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 7, 2),
+    "version": (2, 7, 1),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -22,13 +26,6 @@ bl_info = {
 
 is_dev_version = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
-temporary_file_path = ""
-
-
-# ----------------------------------------------------
-# Auto-Update Integration: Import updater ops
-# ----------------------------------------------------
-from . import addon_updater_ops
 
 
 # ----------------------------------------------------
@@ -109,7 +106,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         name="Import Animation", description="Import animation", default=True
     )  # type: ignore
     import_animation_type: EnumProperty(  # type: ignore
-        name="Animation Type",
+        name="Type",
         description="Select the animation type to import",
         items=[
             ("FRAMES", "Frames", "Import animation in frames"),
@@ -136,10 +133,38 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         default=True,
     )  # type: ignore
 
-    def execute(self, context):
+    def draw(self, context):
+        # Auto-Update Integration: Addon Updater by using addon_updater_ops.check_for_update_background(context) in the beginning of the function and addon_updater_ops.update_notice_box_ui(self, context) at the end of the function
+        addon_updater_ops.check_for_update_background()
+        layout = self.layout
+        layout.label(text="Import Settings", icon="IMPORT")
+        layout.prop(self, "clear_scene")
+        layout.prop(self, "apply_transform")
+        # Add a separator
+        layout.separator()
+        # Create an Animation Section
+        layout.label(text="Animation Settings", icon="ANIM_DATA")
+        layout.prop(self, "import_animation")
+        layout.prop(self, "import_animation_type")
+        layout.prop(self, "import_animation_fps")
+        # Add a separator
+        layout.separator()
+        # Create a Modules Section
+        layout.label(text="Modules Settings", icon="OBJECT_DATA")
+        layout.prop(self, "import_collision_shape")
+        layout.prop(self, "import_modules")
+        layout.prop(self, "import_construction")
+        layout.prop(self, "import_debris")
+        # layout.prop(self, "create_size_reference")
+        if addon_updater_ops.updater.update_ready == True:
+            layout.label(
+                text="Update available! Please check the preferences.",
+                icon="INFO",
+            )
+        layout.separator()
+        addon_updater_ops.update_notice_box_ui(self, context)
 
-        global temporary_file_path  # pylint: disable=global-statement
-        temporary_file_path = self.filepath
+    def execute(self, context):
         keywords: list = self.as_keywords(
             ignore=("filter_glob", "clear_scene", "create_size_reference")
         )
