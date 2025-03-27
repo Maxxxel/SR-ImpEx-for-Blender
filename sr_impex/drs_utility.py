@@ -2623,4 +2623,3 @@ def save_drs(
 # TODO: Check if BMGs Collision Shape is always the same as the sub-modules one
 # TODO: Fix Collision Shapes for Complex Buildings and SLocators
 # TODO: Check if refraction scale is always 1.0
-# # TODO: Multi-Mesh Texture Packing
