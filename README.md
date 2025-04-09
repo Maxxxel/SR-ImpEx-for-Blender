@@ -44,9 +44,10 @@ TBA
 
 ### ✅ Export Features
 
-- **File Formats**: `.drs` for static objects
+- **File Formats**: `.drs` for static and animated objects
 - **Meshes**: Geometry export
 - **Materials**: Color, Normal, Metalness, Roughness, Emission, Refraction
+- **Animations**: SKA files (editing existing or creating new ones)
 
 ---
 
@@ -60,7 +61,7 @@ Demonstration of the Battleforge Model Importer for Blender in action:
 
 ## 🔜 Roadmap (Future Development)
 
-- **Animation Editing**: Allow modification and re-exporting of existing animations.
+- **Animation Smoothing**: Export Battleforge Engine compatible smoothing values for the SKA files.
 - **Model Preservation**: Edit models while preserving untouched original data.
 - **Fluid Map**: Currently unsupported due to Blender limitations (possible future workaround as a separate animation).
 
