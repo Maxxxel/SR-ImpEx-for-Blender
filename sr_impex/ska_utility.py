@@ -219,7 +219,18 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
         for loc in data["loc_per_time"]["vec"]:
             original_loc = bind_rot @ Vector(loc) + bind_loc
             loc_keyframe = SKAKeyframe()
+            loc_keyframe.w = 1.0
             loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
+            # Get the index of loca and pull the timing value
+            index = data["loc_per_time"]["vec"].index(loc)
+            time = data["loc_per_time"]["times"][index]
+            if time == 0:
+                loc_keyframe.tan_x = 0.0
+                loc_keyframe.tan_y = 0.0
+                loc_keyframe.tan_z = 0.0
+                loc_keyframe.tan_w = 0.0
+            else:
+                pass  # TODO: implement smoothing
             keyframes.append(loc_keyframe)
 
         rot_header = SKAHeader()
@@ -241,6 +252,15 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
             # negative w to match the original implementation
             rot_keyframe.w = -rot_keyframe.w
             keyframes.append(rot_keyframe)
+            index = data["rot_per_time"]["quat"].index(quat)
+            time = data["rot_per_time"]["times"][index]
+            if time == 0:
+                rot_keyframe.tan_x = 0.0
+                rot_keyframe.tan_y = 0.0
+                rot_keyframe.tan_z = 0.0
+                rot_keyframe.tan_w = 0.0
+            else:
+                pass  # TODO: implement smoothing
 
     # Create a new SKA file and write the action data to it
     ska_file = SKA()

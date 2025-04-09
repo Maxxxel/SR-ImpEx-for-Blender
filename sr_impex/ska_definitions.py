@@ -9,20 +9,20 @@ class SKAHeader:
     tick: int = 0  # uint
     interval: int = 0  # uint
     type: int = 0  # uint
-    bone_id: int = 0  # int
+    bone_id: int = 0  # uint
 
     def read(self, file: BinaryIO) -> "SKAHeader":
         self.tick = unpack("I", file.read(calcsize("I")))[0]
         self.interval = unpack("I", file.read(calcsize("I")))[0]
         self.type = unpack("I", file.read(calcsize("I")))[0]
-        self.bone_id = unpack("i", file.read(calcsize("i")))[0]
+        self.bone_id = unpack("I", file.read(calcsize("i")))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
         file.write(pack("I", self.tick))
         file.write(pack("I", self.interval))
         file.write(pack("I", self.type))
-        file.write(pack("i", self.bone_id))
+        file.write(pack("I", self.bone_id))
 
 
 @dataclass(eq=False, repr=False)
@@ -77,9 +77,15 @@ class SKA:
     keyframes: list[SKAKeyframe] = field(default_factory=list)
     duration: float = 0.0
     repeat: int = 0
-    stutter_mode: int = 0
-    unused1: int = 0
-    unused2: int = 0
+    stutter_mode: int = (
+        0  # 0 for hit animations with just one keyframe per bone? 1 for for special moves of some models?
+    )
+    unused1: int = (
+        0  # often 1 for hit animations and for type 6 it seems to be related to the animation duration and frame length
+    )
+    unused2: int = (
+        0  # for type 7 it seems to be related to the animation duration and frame length
+    )
     unused3: int = 0
     unused4: int = 0
     unused5: int = 0

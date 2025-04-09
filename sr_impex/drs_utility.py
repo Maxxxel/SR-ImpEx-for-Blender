@@ -1,13 +1,13 @@
 import os
+import json
 from os.path import dirname, realpath
 from math import radians
-from re import S
 import time
 import hashlib
 import subprocess
 from struct import pack
 from collections import defaultdict
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Optional
 import xml.etree.ElementTree as ET
 from mathutils import Matrix, Vector
 import bpy
@@ -23,6 +23,7 @@ import bmesh.types
 from .drs_definitions import (
     DRS,
     BMS,
+    BoneMatrix,
     CDspMeshFile,
     CylinderShape,
     Face,
@@ -33,6 +34,7 @@ from .drs_definitions import (
     BoneVertex,
     BoxShape,
     Matrix3x3,
+    ModeAnimationKey,
     SLocator,
     SphereShape,
     CGeoCylinder,
@@ -60,9 +62,14 @@ from .drs_definitions import (
     Vector4,
     InformationIndices,
     CollisionShape,
+    AnimationSet,
+    AnimationTimings,
+    VertexData,
+    AnimationSetVariant,
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
+from .ska_utility import get_actions
 from .transform_utils import (
     ensure_mode,
     apply_transformation,
@@ -78,6 +85,9 @@ texture_cache_col = {}
 texture_cache_nor = {}
 texture_cache_par = {}
 texture_cache_ref = {}
+
+with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
+    bones_list = json.load(f)
 
 # region General Helper Functions
 
@@ -608,9 +618,14 @@ def get_converted_texture(
         return None
 
     # Assume the DDS file is generated as <texture_name>.dds in folder_path.
-    dds_path = os.path.join(folder_path, texture_name + ".dds")
+    dds_path = os.path.join(texture_name)
     cache[key] = dds_path
     return dds_path
+
+
+def clean_vector(vec, tol=1e-6):
+    """Set any component of vec to 0 if its absolute value is below tol."""
+    return Vector([0.0 if abs(c) < tol else c for c in vec])
 
 
 # endregion
@@ -618,53 +633,40 @@ def get_converted_texture(
 # region Import DRS Model to Blender
 
 
-def build_bone_weight_mapping(
-    bone_weights: list[BoneWeight], offset: int, vertex_count: int
-) -> dict[int, dict[float, list[int]]]:
-    mapping: dict[int, dict[float, list[int]]] = {}
-    for vidx in range(offset, offset + vertex_count):
-        bw = bone_weights[vidx]
-        for i in range(4):  # Assuming 4 weights per vertex
-            group_id = bw.indices[i]
-            weight = bw.weights[i]
-            if weight > 0:  # Only process non-zero weights
-                mapping.setdefault(group_id, {}).setdefault(weight, []).append(
-                    vidx - offset
-                )
-    return mapping
-
-
 def add_skin_weights_to_mesh(
     mesh_object: bpy.types.Object,
     bone_list: list[DRSBone],
-    bone_weights: list[BoneWeight],
-    offset: int,
+    bone_weights: list[VertexData],
+    cgeo_mesh_data: CGeoMesh,
     cdsp_mesh_file_data: BattleforgeMesh,
 ) -> None:
-    # Use the helper to build the mapping for the current mesh.
-    mapping = build_bone_weight_mapping(
-        bone_weights, offset, cdsp_mesh_file_data.vertex_count
-    )
+    vertex_to_cgeo_index = []
+    bones_names = [bone.name for bone in bone_list]
 
-    # Iterate over each bone group in the mapping.
-    for group_id, weight_data in mapping.items():
-        bone_name = bone_list[group_id].name
-
-        # Create or retrieve the vertex group for the bone.
-        if bone_name not in mesh_object.vertex_groups:
-            vertex_group = mesh_object.vertex_groups.new(name=bone_name)
-        else:
-            # We should never reach this point, but it's good to have a fallback.
+    for v in cdsp_mesh_file_data.mesh_data[0].vertices:
+        key = tuple(round(coord, 6) for coord in v.position)
+        index = cgeo_mesh_data.hash_map.get(key)
+        if index is None:
             logger.log(
-                f"Vertex group for bone {bone_name} already exists. Skipping creation. Please inform Maxxxel.",
-                "Info",
-                "INFO",
+                f"Vertex {key} not found in CGeoMesh hash map. Skipping weight assignment.",
+                "Warning",
+                "WARNING",
             )
-            vertex_group = mesh_object.vertex_groups[bone_name]
+            continue
+        vertex_to_cgeo_index.append(index)
 
-        # Add vertices to the vertex group for each weight.
-        for weight, vertex_indices in weight_data.items():
-            vertex_group.add(vertex_indices, weight, "ADD")
+    skin_data: list[VertexData] = [bone_weights[i] for i in vertex_to_cgeo_index]
+
+    for vertex_index, vertex_data in enumerate(skin_data):
+        for bone_index, weight in zip(vertex_data.bone_indices, vertex_data.weights):
+            if weight > 0:
+                bone_name = bones_names[bone_index]
+                if bone_name not in mesh_object.vertex_groups:
+                    vertex_group = mesh_object.vertex_groups.new(name=bone_name)
+                    vertex_group.add([vertex_index], weight, "ADD")
+                else:
+                    vertex_group = mesh_object.vertex_groups[bone_name]
+                    vertex_group.add([vertex_index], weight, "ADD")
 
 
 def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> None:
@@ -900,17 +902,11 @@ def create_mesh_object(
     dir_name,
     base_name,
     bone_list=None,
-    bone_weights=None,
+    bone_weights: List[VertexData] = None,
     armature_object=None,
     transform_matrix=None,
+    cgeo_mesh_data=None,
 ):
-    # Calculate vertex offset based on the previous meshes.
-    offset = 0
-
-    if mesh_index > 0:
-        for i in range(mesh_index):
-            offset += drs_file.cdsp_mesh_file.meshes[i].vertex_count
-
     # Create the mesh data using your existing helper.
     mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
 
@@ -923,7 +919,7 @@ def create_mesh_object(
             mesh_object,
             bone_list,
             bone_weights,
-            offset,
+            cgeo_mesh_data,
             drs_file.cdsp_mesh_file.meshes[mesh_index],
         )
 
@@ -1325,6 +1321,7 @@ def import_state_based_mesh_set(
                                 bone_list,
                                 variant.file,
                                 animation_type,
+                                animation_smoothing,
                             )
 
     # Get individual desctruction States
@@ -1348,6 +1345,7 @@ def load_drs(
     import_animation=True,
     import_animation_type="FRAMES",
     import_animation_fps=30,
+    animation_smoothing=True,
     import_debris=False,
     import_modules=True,
 ) -> None:
@@ -1365,16 +1363,14 @@ def load_drs(
 
     armature_object, bone_list = setup_armature(source_collection, drs_file)
 
-    bone_weights = None
-    if drs_file.csk_skin_info is not None:
-        bone_weights = create_bone_weights(
-            drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh
-        )
-
     mesh_collection: bpy.types.Collection = bpy.data.collections.new(
         "Meshes_Collection"
     )
     source_collection.children.link(mesh_collection)
+
+    skin_vertex_data = None
+    if drs_file.csk_skin_info is not None:
+        skin_vertex_data = drs_file.csk_skin_info.vertex_data
 
     for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
         mesh_object, _ = create_mesh_object(
@@ -1383,8 +1379,10 @@ def load_drs(
             dir_name,
             base_name,
             bone_list,
-            bone_weights,
+            skin_vertex_data,
             armature_object,
+            None,
+            drs_file.cgeo_mesh,
         )
         mesh_collection.objects.link(mesh_object)
 
@@ -1407,6 +1405,8 @@ def load_drs(
                         bone_list,
                         variant.file,
                         import_animation_type,
+                        import_animation_fps,
+                        animation_smoothing,
                     )
 
     if import_modules and drs_file.cdrw_locator_list is not None:
@@ -1809,9 +1809,6 @@ def verify_collections(
 
 def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Mesh:
     """Create a unified Mesh from a Collection of Meshes."""
-    if len(meshes_collection.objects) == 1:
-        return meshes_collection.objects[0].data
-
     with new_bmesh() as bm:
         for mesh in meshes_collection.objects:
             if mesh.type == "MESH":
@@ -1822,7 +1819,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
         vertex_count = len(bm.verts)
 
         # Remove Duplicates by lowest possible float
-        remove_doubles(bm, verts=bm.verts, dist=0.0001)
+        remove_doubles(bm, verts=bm.verts, dist=0.00001)
 
         # Create the new Mesh
         unified_mesh = bpy.data.meshes.new("unified_mesh")
@@ -1902,35 +1899,40 @@ def create_cgeo_obb_tree(unique_mesh: bpy.types.Mesh) -> CGeoOBBTree:
 
 
 def create_cdsp_joint_map(
-    meshes_collection: bpy.types.Collection,
-) -> Tuple[CDspJointMap, dict]:
+    add_skin_mesh: bool,
+    mesh_bone_data: List[Dict[str, int]],
+    bone_map: Dict[str, Dict[str, int]],
+) -> CDspJointMap:
     """Create a CDspJointMap. If empty is True, the CDspJointMap will be empty."""
-    _bone_map = {}
     _joint_map = CDspJointMap()
 
-    # Loop the meshes
-    for child in meshes_collection.objects:
-        if child.type == "MESH":
-            # Get the Vertex Groups
-            _vertex_groups = child.vertex_groups
-
-            if len(_vertex_groups) == 0:
-                break
+    if add_skin_mesh:
+        for _mesh_index, per_mesh_bone_data in enumerate(mesh_bone_data):
             _joint_map.joint_group_count += 1
-            # Init the Bone ID Counter
-            _bone_id = 0
-            # Init the temp JointGroups List
-            _temp_joint_group = JointGroup()  # Check this!
-            # Loop the Vertex Groups
-            for _vertex_group in _vertex_groups:
-                # Get the Bone from the Vertex Group
-                _bone_Name = _vertex_group.name
-                _temp_joint_group.joint_count += 1
-                _temp_joint_group.joints.append(_bone_id)
-                _bone_map[_bone_Name] = _bone_id
-                _bone_id += 1
-            _joint_map.joint_groups.append(_temp_joint_group)
-    return _joint_map, _bone_map
+            _joint_group = JointGroup()
+            _joint_group.joint_count = len(per_mesh_bone_data) - 1  # -1 for root_ref
+            _joint_group.joints = [-1] * _joint_group.joint_count
+            root_added = False
+            for bone_name, local_index in per_mesh_bone_data.items():
+                if bone_name != "root_ref":
+                    bone_identifier = bone_map[bone_name]["id"]
+                    _joint_group.joints[local_index] = bone_identifier
+                    if bone_identifier == 0:
+                        root_added = True
+                        # Update the root_ref in the mesh_bone_data
+                        mesh_bone_data[_mesh_index]["root_ref"] = local_index
+            _joint_map.joint_groups.append(_joint_group)
+            # Assure, that we have added the root in any case
+            if not root_added:
+                # Add the root to the end of the list
+                _joint_group.joints.extend([0])
+                _joint_group.joint_count += 1
+                # Add a note to the mesh_bone_data
+                mesh_bone_data[_mesh_index]["root_ref"] = _joint_group.joint_count - 1
+    else:
+        _joint_map.joint_group_count = 0
+        _joint_map.joint_groups = []
+    return _joint_map
 
 
 def set_color_map(
@@ -1978,14 +1980,14 @@ def set_normal_map(
 ) -> int:
     if normal_map_node is None:
         logger.log(
-            "The color_map is None. Please check the Material Node.", "Error", "ERROR"
+            "The normal_map is None. Please check the Material Node.", "Error", "ERROR"
         )
         return False
 
     img = normal_map_node.links[0].from_node.image
     if img is None:
         logger.log(
-            "The color_map Texture is not an Image or the Image is None!",
+            "The normal_map Texture is not an Image or the Image is None!",
             "Error",
             "ERROR",
         )
@@ -2134,7 +2136,8 @@ def create_mesh(
     model_name: str,
     folder_path: str,
     flip_normals: bool,
-) -> BattleforgeMesh:
+    add_skin_mesh: bool = False,
+) -> Tuple[BattleforgeMesh, Dict[str, int]]:
     """Create a Battleforge Mesh from a Blender Mesh Object."""
     if flip_normals:
         with ensure_mode("EDIT"):
@@ -2143,13 +2146,17 @@ def create_mesh(
             bpy.ops.mesh.select_all(action="DESELECT")
 
     mesh.data.calc_tangents()
+    # [bone_name] = local_index
+    # ["root_ref"] = root_ref
+    per_mesh_bone_data: Dict[str, int] = {}
+    per_mesh_bone_data["root_ref"] = -1
 
     new_mesh = BattleforgeMesh()
     new_mesh.vertex_count = len(mesh.data.vertices)
     new_mesh.face_count = len(mesh.data.polygons)
     new_mesh.faces = []
 
-    new_mesh.mesh_count = 2
+    new_mesh.mesh_count = 2 if not add_skin_mesh else 3
     new_mesh.mesh_data = []
 
     _mesh_0_data = MeshData()
@@ -2162,13 +2169,20 @@ def create_mesh(
     _mesh_1_data.revision = 12288
     _mesh_1_data.vertex_size = 24
 
+    if add_skin_mesh:
+        _mesh_2_data = MeshData()
+        _mesh_2_data.vertices = [Vertex() for _ in range(new_mesh.vertex_count)]
+        _mesh_2_data.revision = 12
+        _mesh_2_data.vertex_size = 8
+
     for _face in mesh.data.polygons:
         new_face = Face()
         new_face.indices = []
 
         for index in _face.loop_indices:
-            vertex = mesh.data.loops[index]
-            position = mesh.data.vertices[vertex.vertex_index].co
+            vertex: bpy.types.MeshLoop = mesh.data.loops[index]
+            vertex2: bpy.types.MeshVertex = mesh.data.vertices[vertex.vertex_index]
+            position = vertex2.co
             normal = vertex.normal
             uv = mesh.data.uv_layers.active.data[index].uv.copy()
             uv.y = -uv.y
@@ -2185,12 +2199,36 @@ def create_mesh(
                     tangent=tangent, bitangent=bitangent
                 )
 
+            if add_skin_mesh:
+                weights = []
+                bone_indices = []
+                for group in vertex2.groups:
+                    # Weight is between 0.0 and 1.0, we need to convert it to 0-255
+                    weight = int(group.weight * 255)
+                    bone_name = mesh.vertex_groups[group.group].name
+                    local_index = group.group
+                    # We need to use local_index and bone_name and map them into the JointMap
+                    if bone_name not in per_mesh_bone_data:
+                        per_mesh_bone_data[bone_name] = local_index
+                    weights.append(weight)
+                    bone_indices.append(local_index)
+
+                while len(weights) < 4:
+                    weights.append(0)
+                    bone_indices.append(-1)  # Root Reference, we update that later.
+
+                _mesh_2_data.vertices[vertex.vertex_index] = Vertex(
+                    raw_weights=weights, bone_indices=bone_indices
+                )
+
             new_face.indices.append(vertex.vertex_index)
 
         new_mesh.faces.append(new_face)
 
     new_mesh.mesh_data.append(_mesh_0_data)
     new_mesh.mesh_data.append(_mesh_1_data)
+    if add_skin_mesh:
+        new_mesh.mesh_data.append(_mesh_2_data)
 
     # We need to investigate the Bounding Box further, as it seems to be wrong
     (
@@ -2211,17 +2249,23 @@ def create_mesh(
     refraction_map = None
     refraction_color = None
     flu_map = None
+    skip_normal_map = True
+    skip_param_map = True
 
     for node in material_nodes:
         if node.type == "GROUP":
             if node.node_tree.name.find("DRS") != -1:
                 color_map = node.inputs[0]
                 # alpha_map = node.inputs[1] # Needed?
-                metallic_map = node.inputs[2]
-                roughness_map = node.inputs[3]
-                emission_map = node.inputs[4]
-                normal_map = node.inputs[5]
-                if len(node.inputs) > 6:
+                if len(node.inputs) >= 5:
+                    metallic_map = node.inputs[2]
+                    roughness_map = node.inputs[3]
+                    emission_map = node.inputs[4]
+                    skip_param_map = False
+                if len(node.inputs) >= 6:
+                    normal_map = node.inputs[5]
+                    skip_normal_map = False
+                if len(node.inputs) >= 8:
                     refraction_color = node.inputs[6]
                     refraction_map = node.inputs[7]
                 break
@@ -2253,21 +2297,28 @@ def create_mesh(
         return None
 
     # Check if the Normal Map is set
-    bool_param_bit_flag = set_normal_map(
-        normal_map, new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag
-    )
+    if not skip_normal_map:
+        bool_param_bit_flag = set_normal_map(
+            normal_map,
+            new_mesh,
+            mesh_index,
+            model_name,
+            folder_path,
+            bool_param_bit_flag,
+        )
 
     # Check if the Metallic, Roughness and Emission Map is set
-    bool_param_bit_flag = set_metallic_roughness_emission_map(
-        metallic_map,
-        roughness_map,
-        emission_map,
-        new_mesh,
-        mesh_index,
-        model_name,
-        folder_path,
-        bool_param_bit_flag,
-    )
+    if not skip_param_map:
+        bool_param_bit_flag = set_metallic_roughness_emission_map(
+            metallic_map,
+            roughness_map,
+            emission_map,
+            new_mesh,
+            mesh_index,
+            model_name,
+            folder_path,
+            bool_param_bit_flag,
+        )
 
     # Set the Bool Parameter by a bin -> dec conversion
     new_mesh.bool_parameter = int(str(bool_param_bit_flag), 2)
@@ -2284,7 +2335,7 @@ def create_mesh(
     # Almost no material data is used in the game, so we set it to defaults
     new_mesh.materials = Materials()
 
-    return new_mesh
+    return new_mesh, per_mesh_bone_data
 
 
 def create_cdsp_mesh_file(
@@ -2292,20 +2343,29 @@ def create_cdsp_mesh_file(
     model_name: str,
     filepath: str,
     flip_normals: bool,
-) -> CDspMeshFile:
+    add_skin_mesh: bool = False,
+) -> Tuple[CDspMeshFile, List[Dict[str, int]]]:
     """Create a CDspMeshFile from a Collection of Meshes."""
     _cdsp_meshfile = CDspMeshFile()
     _cdsp_meshfile.mesh_count = 0
 
+    mesh_bone_data: List[Dict[str, int]] = []
+
     for mesh in meshes_collection.objects:
         if mesh.type == "MESH":
-            _mesh = create_mesh(
-                mesh, _cdsp_meshfile.mesh_count, model_name, filepath, flip_normals
+            _mesh, _per_mesh_bone_data = create_mesh(
+                mesh,
+                _cdsp_meshfile.mesh_count,
+                model_name,
+                filepath,
+                flip_normals,
+                add_skin_mesh,
             )
             if _mesh is None:
                 return
             _cdsp_meshfile.meshes.append(_mesh)
             _cdsp_meshfile.mesh_count += 1
+            mesh_bone_data.append(_per_mesh_bone_data)
 
     _cdsp_meshfile.bounding_box_lower_left_corner = Vector3(0, 0, 0)
     _cdsp_meshfile.bounding_box_upper_right_corner = Vector3(0, 0, 0)
@@ -2337,7 +2397,7 @@ def create_cdsp_mesh_file(
             _mesh.bounding_box_upper_right_corner.z,
         )
 
-    return _cdsp_meshfile
+    return _cdsp_meshfile, mesh_bone_data
 
 
 def create_box_shape(box: bpy.types.Object) -> BoxShape:
@@ -2500,6 +2560,331 @@ def create_collision_shape(meshes_collection: bpy.types.Collection) -> Collision
     return _collision_shape
 
 
+def create_skin_info(
+    unified_mesh: bpy.types.Mesh,
+    meshes_collection: bpy.types.Collection,
+    bone_map: Dict[str, Dict[str, int]],
+) -> CSkSkinInfo:
+    """Create a SkinInfo."""
+    skin_info = CSkSkinInfo()
+    skin_info.vertex_data = []
+    skin_info.vertex_count += len(unified_mesh.vertices)
+
+    unified_hashtable = {}
+    for v in unified_mesh.vertices:
+        key = tuple(round(coord, 6) for coord in v.co)
+        if key not in unified_hashtable:
+            unified_hashtable[key] = v.index
+        else:
+            logger.log(
+                f"Duplicate vertex found in unified mesh: {v.co}", "Error", "ERROR"
+            )
+            return skin_info
+
+    vertex_data: List[VertexData] = [None] * len(unified_mesh.vertices)
+    for mesh in meshes_collection.objects:
+        if mesh.type == "MESH":
+            # We need to map the mesh vertex to the unified index
+            for vertex in mesh.data.vertices:
+                key = tuple(round(coord, 6) for coord in vertex.co)
+                if key in unified_hashtable:
+                    index = unified_hashtable[key]
+
+                    if vertex_data[index] is None:
+                        vertex_data[index] = VertexData(bone_indices=[], weights=[])
+
+                    # We need to get all vertex groups from the mesh and map them to the skeleton, we take the bone order from the armature
+                    for vertex_group in vertex.groups:
+                        # bone_index = vertex_group.group
+                        bone_group = vertex_group.group
+                        bone_name: str = mesh.vertex_groups[bone_group].name
+                        bone_data = bone_map.get(bone_name, -1)
+                        if bone_data == -1:
+                            logger.log(
+                                f"Bone {bone_name} not found in bone map for vertex {vertex.index}",
+                                "Error",
+                                "ERROR",
+                            )
+                            continue
+                        bone_index = bone_data["id"]
+                        bone_weight = vertex_group.weight
+                        if bone_index not in vertex_data[index].bone_indices:
+                            vertex_data[index].bone_indices.append(bone_index)
+                            vertex_data[index].weights.append(bone_weight)
+                else:
+                    logger.log(
+                        f"Vertex {vertex.index} not found in unified mesh: {vertex.co}",
+                        "Error",
+                        "ERROR",
+                    )
+                    continue
+
+    # Fill the vertex data with zeros up to 4 bones
+    for vertex in vertex_data:
+        if vertex is None:
+            continue
+        while len(vertex.bone_indices) < 4:
+            vertex.bone_indices.append(0)
+            vertex.weights.append(0.0)
+
+    skin_info.vertex_data = vertex_data
+
+    return skin_info
+
+
+def create_skeleton(
+    armature_object: bpy.types.Object,
+    bone_map: Dict[str, Dict[str, Optional[int]]],
+) -> CSkSkeleton:
+    csk_skeleton = CSkSkeleton()
+    csk_skeleton.bone_count = 0
+    csk_skeleton.bone_matrix_count = 0
+    csk_skeleton.bones = []
+    csk_skeleton.bone_matrices = []
+
+    # bones are ordered by their version number, starting with the lowest version number
+    unordered_bones = []
+    for bone in armature_object.data.bones:
+        # Get the Version from the version List
+        version = bones_list.get(bone.name, -1)
+        if version == -1:
+            logger.log(
+                f"Bone {bone.name} not found in bones list. Skipping it.",
+                "Error",
+                "ERROR",
+            )
+            continue
+        # Insert the bone into the list, sorted by version number
+        unordered_bones.append((bone.name, version))
+    # Sort the bones by version number
+    unordered_bones.sort(key=lambda x: x[1])
+
+    # Loop the sorted bones and fill the bones array
+    for bone_name, version in unordered_bones:
+        drs_bone = Bone()
+        armature_bone: bpy.types.Bone = armature_object.data.bones[bone_name]
+        drs_bone.name = bone_name
+        drs_bone.name_length = len(bone_name)
+        drs_bone.version = version
+        drs_bone.identifier = bone_map[bone_name]["id"]
+        drs_bone.child_count = len(armature_bone.children)
+        # Child IDs taken from bone_map
+        drs_bone.children = [
+            bone_map[child.name]["id"] for child in armature_bone.children
+        ]
+        csk_skeleton.bones.append(drs_bone)
+        csk_skeleton.bone_count += 1
+
+    for bone_name, _ in bone_map.items():
+        # Get the Bone from the armature object
+        armature_bone: bpy.types.Bone = armature_object.data.bones[bone_name]
+        if armature_bone is None:
+            logger.log(
+                f"Bone {bone_name} not found in armature object. Skipping it.",
+                "Error",
+                "ERROR",
+            )
+            continue
+        # Get the matrix from the armature object
+        rest_mat = armature_bone.matrix_local.copy()
+        rot = rest_mat.to_3x3()
+        loc = rest_mat.to_translation()
+        vec_3 = clean_vector(-(rot.inverted() @ loc))
+        vec_0 = clean_vector(rot[0].copy())
+        vec_1 = clean_vector(rot[1].copy())
+        vec_2 = clean_vector(rot[2].copy())
+
+        bone_vertex_0 = BoneVertex()
+        bone_vertex_0.position = Vector3(vec_0.x, vec_0.y, vec_0.z)
+        # Check for the parent bone, if it exists
+        if armature_bone.parent is not None:
+            parent_bone_name = armature_bone.parent.name
+            parent_bone_id = bone_map.get(parent_bone_name, {}).get("id", -1)
+            if parent_bone_id == -1:
+                logger.log(
+                    f"Parent Bone {parent_bone_name} not found in bone map for vertex {bone_name}. Skipping unused bone.",
+                    "Warning",
+                    "WARNING",
+                )
+                parent_bone_id = -1
+            bone_vertex_0.parent = parent_bone_id
+        else:
+            bone_vertex_0.parent = -1  # Root bone has no parent
+
+        bone_vertex_1 = BoneVertex()
+        bone_vertex_1.position = Vector3(vec_1.x, vec_1.y, vec_1.z)
+        # Here we need the index of the bone in our csk_skeleton.bones Array
+        bone_name = armature_bone.name
+        bone_index = next(
+            (i for i, b in enumerate(csk_skeleton.bones) if b.name == bone_name),
+            None,
+        )
+        if bone_index is None:
+            logger.log(
+                f"Bone {bone_name} not found in csk_skeleton.bones. Skipping it.",
+                "Error",
+                "ERROR",
+            )
+            continue
+        # We need to get the bone index from the csk_skeleton.bones array
+        bone_vertex_1.parent = bone_index
+
+        bone_vertex_2 = BoneVertex()
+        bone_vertex_2.position = Vector3(vec_2.x, vec_2.y, vec_2.z)
+        bone_vertex_2.parent = 0  # Maybe always 0?
+
+        bone_vertex_3 = BoneVertex()
+        bone_vertex_3.position = Vector3(vec_3.x, vec_3.y, vec_3.z)
+        bone_vertex_3.parent = 0  # Maybe always 0?
+
+        bone_matrix = BoneMatrix()
+        bone_matrix.bone_vertices = [
+            bone_vertex_0,
+            bone_vertex_1,
+            bone_vertex_2,
+            bone_vertex_3,
+        ]
+
+        csk_skeleton.bone_matrices.append(bone_matrix)
+        csk_skeleton.bone_matrix_count += 1
+
+    return csk_skeleton
+
+
+def create_animation_set(model_name: str) -> AnimationSet:
+    """Create an AnimationSet."""
+    animation_set = AnimationSet()
+    animation_set.version = 6
+    animation_set.default_run_speed = 4.8
+    animation_set.default_walk_speed = 2.3
+    animation_set.revision = 6
+    animation_set.mode_change_type = 0
+    animation_set.hovering_ground = 0
+    animation_set.fly_bank_scale = 1.0
+    animation_set.fly_accel_scale = 0
+    animation_set.fly_hit_scale = 1.0
+    animation_set.allign_to_terrain = 0
+    animation_set.has_atlas = 1
+    animation_set.atlas_count = 0
+    animation_set.ik_atlases = []  # Not needed here
+    animation_set.subversion = 2
+    animation_set.animation_marker_count = 0  # Not needed here
+    animation_set.animation_marker_sets = []  # Not needed here
+    animation_set.mode_animation_keys = []
+
+    # Get all Action
+    all_actions = get_actions()
+    available_action = []
+
+    # We only allow actions with the same name as the export animation name or _idle
+    for action_name in all_actions:
+        action_name_without_ska = action_name.replace(".ska", "")
+        if (
+            action_name_without_ska == model_name
+            or action_name_without_ska.find("_idle") != -1
+        ):
+            available_action.append(action_name)
+
+    if len(available_action) == 0:
+        logger.log(
+            "No valid Action found. Please check the Action Names.",
+            "Error",
+            "ERROR",
+        )
+        return animation_set
+
+    animation_set.mode_animation_key_count = 1
+    animation_key = ModeAnimationKey()
+    animation_key.type = 6
+    animation_key.length = 11
+    animation_key.file = "Battleforge"
+    animation_key.unknown = 2
+    animation_key.unknown2 = 3
+    animation_key.vis_job = 0
+    animation_key.unknown3 = 3
+    animation_key.unknown4 = 0
+    animation_key.animation_set_variants = []
+    animation_key.variant_count = 0
+
+    for action_name in available_action:
+        animation_key.variant_count += 1
+        variant = AnimationSetVariant()
+        variant.version = 4
+        variant.weight = 100 // len(available_action)
+        variant.start = 0
+        variant.end = 1
+        variant.length = len(action_name)
+        variant.file = action_name
+        animation_key.animation_set_variants.append(variant)
+
+    animation_set.mode_animation_keys.append(animation_key)
+
+    return animation_set
+
+
+def create_bone_map(
+    armature_object: bpy.types.Object,
+) -> Dict[str, Dict[str, Optional[int]]]:
+    """Create a bone map from the armature object."""
+    # We need to start at the root bone and go down the hierarchy
+    bone_map = {}
+    root_bones = [bone for bone in armature_object.data.bones if not bone.parent]
+    if not root_bones:
+        logger.log("No root bone found in the armature.", "Error", "ERROR")
+        return bone_map
+    if len(root_bones) > 1:
+        logger.log(
+            "Multiple root bones found in the armature. Only the first one will be used.",
+            "Warning",
+            "WARNING",
+        )
+
+    root_bone = root_bones[0]
+    index = 0
+
+    def traverse_bone(bone: bpy.types.Bone, parent_id: Optional[int]):
+        nonlocal index
+        current_id = index
+        # Save the current bone with its id and its parent's id (None for the root)
+        bone_map[bone.name] = {"id": current_id, "parent": parent_id}
+        index += 1
+        # Traverse children, passing the current bone's id as the parent id
+        for child in bone.children:
+            traverse_bone(child, current_id)
+
+    traverse_bone(root_bone, -1)
+    return bone_map
+
+
+def update_mesh_file_root_reference(
+    cdsp_mesh_file: CDspMeshFile, mesh_bone_data: List[Dict[str, int]]
+) -> CDspMeshFile:
+    """Update the mesh file root reference."""
+    for i, mesh in enumerate(cdsp_mesh_file.meshes):
+        # Get the bone data for this mesh
+        per_mesh_bone_data = mesh_bone_data[i]
+        # Check if the bone data is valid
+        if not per_mesh_bone_data:
+            continue
+        # Get the SkinningMeshData
+        skinning_mesh_data = mesh.mesh_data[2]
+        for j in range(len(skinning_mesh_data.vertices)):
+            # Check the 2nd, 3rd and 4th bone index for -1
+            if skinning_mesh_data.vertices[j].bone_indices[1] == -1:
+                skinning_mesh_data.vertices[j].bone_indices[1] = per_mesh_bone_data[
+                    "root_ref"
+                ]
+            if skinning_mesh_data.vertices[j].bone_indices[2] == -1:
+                skinning_mesh_data.vertices[j].bone_indices[2] = per_mesh_bone_data[
+                    "root_ref"
+                ]
+            if skinning_mesh_data.vertices[j].bone_indices[3] == -1:
+                skinning_mesh_data.vertices[j].bone_indices[3] = per_mesh_bone_data[
+                    "root_ref"
+                ]
+    return cdsp_mesh_file
+
+
 def save_drs(
     context: bpy.types.Context,
     filepath: str,
@@ -2507,7 +2892,6 @@ def save_drs(
     split_mesh_by_uv_islands: bool,
     flip_normals: bool,
     keep_debug_collections: bool,
-    export_animation: bool,
     model_type: str,
     model_name: str,
 ) -> dict:
@@ -2554,10 +2938,15 @@ def save_drs(
 
     # Check if there is an Armature in the Collection
     armature_object = None
-    if export_animation:
+    add_skin_mesh = False
+    bone_map: Dict[str, Dict[str, Optional[int]]] = {}
+    if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
         for obj in source_collection_copy.objects:
             if obj.type == "ARMATURE":
                 armature_object = obj
+                add_skin_mesh = True
+                # Create a bone map from the armature
+                bone_map = create_bone_map(armature_object)
                 break
         if armature_object is None:
             logger.log(
@@ -2588,6 +2977,18 @@ def save_drs(
         logger.log(f"Error creating unified mesh: {e}", "Unified Mesh Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
 
+    # Generate the CDspMeshFile
+    cdsp_mesh_file, mesh_bone_data = create_cdsp_mesh_file(
+        meshes_collection,
+        model_name,
+        folder_path,
+        flip_normals,
+        add_skin_mesh,
+    )
+    if cdsp_mesh_file is None:
+        logger.log("Failed to create CDspMeshFile.", "Mesh File Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
+
     nodes = InformationIndices[model_type]
     for node in nodes:
         if node == "CGeoMesh":
@@ -2597,16 +2998,15 @@ def save_drs(
             new_drs_file.cgeo_obb_tree = create_cgeo_obb_tree(unified_mesh)
             new_drs_file.push_node_infos("CGeoOBBTree", new_drs_file.cgeo_obb_tree)
         elif node == "CDspJointMap":
-            # _ = bone_map for later use
-            new_drs_file.cdsp_joint_map, _ = create_cdsp_joint_map(meshes_collection)
-            new_drs_file.push_node_infos("CDspJointMap", new_drs_file.cdsp_joint_map)
-        elif node == "CDspMeshFile":
-            cdsp_mesh_file = create_cdsp_mesh_file(
-                meshes_collection, model_name, folder_path, flip_normals
+            new_drs_file.cdsp_joint_map = create_cdsp_joint_map(
+                add_skin_mesh, mesh_bone_data, bone_map
             )
-            if cdsp_mesh_file is None:
-                logger.log("Failed to create CDspMeshFile.", "Mesh File Error", "ERROR")
-                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos("CDspJointMap", new_drs_file.cdsp_joint_map)
+            # Update CDspMeshFile with the RootReference in subMeshes
+            cdsp_mesh_file = update_mesh_file_root_reference(
+                cdsp_mesh_file, mesh_bone_data
+            )
+        elif node == "CDspMeshFile":
             new_drs_file.cdsp_mesh_file = cdsp_mesh_file
             new_drs_file.push_node_infos("CDspMeshFile", new_drs_file.cdsp_mesh_file)
         elif node == "DrwResourceMeta":
@@ -2619,15 +3019,61 @@ def save_drs(
                 source_collection_copy
             )
             new_drs_file.push_node_infos("collisionShape", new_drs_file.collision_shape)
+        elif node == "CSkSkinInfo":
+            new_drs_file.csk_skin_info = create_skin_info(
+                unified_mesh, meshes_collection, bone_map
+            )
+            if new_drs_file.csk_skin_info is None:
+                logger.log("Failed to create CSkSkinInfo.", "Skin Info Error", "ERROR")
+                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos("CSkSkinInfo", new_drs_file.csk_skin_info)
+        elif node == "CSkSkeleton":
+            new_drs_file.csk_skeleton = create_skeleton(armature_object, bone_map)
+            if new_drs_file.csk_skeleton is None:
+                logger.log("Failed to create CSkSkeleton.", "Skeleton Error", "ERROR")
+                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos("CSkSkeleton", new_drs_file.csk_skeleton)
+        elif node == "AnimationSet":
+            # Empty Set and use external EntityEditor
+            new_drs_file.animation_set = create_animation_set(model_name)
+            if new_drs_file.animation_set is None:
+                logger.log(
+                    "Failed to create AnimationSet.", "Animation Set Error", "ERROR"
+                )
+                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos("AnimationSet", new_drs_file.animation_set)
+        elif node == "AnimationTimings":
+            # Empty Set and use external EntityEditor
+            new_drs_file.animation_timings = AnimationTimings()
+            if new_drs_file.animation_timings is None:
+                logger.log(
+                    "Failed to create AnimationTimings.",
+                    "Animation Timings Error",
+                    "ERROR",
+                )
+                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos(
+                "AnimationTimings", new_drs_file.animation_timings
+            )
+        elif node == "CGeoPrimitiveContainer":
+            pass  # Nothing happens here
+        else:
+            logger.log(
+                f"Node {node} is not a valid DRS node!",
+                "Error",
+                "ERROR",
+            )
+            return abort(keep_debug_collections, source_collection_copy)
 
     new_drs_file.update_offsets()
 
     # === SAVE THE DRS FILE ====================================================
-    try:
-        new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
-    except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
-        return abort(keep_debug_collections, source_collection_copy)
+    # try:
+    #     new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    # except Exception as e:  # pylint: disable=broad-except
+    #     logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
+    #     return abort(keep_debug_collections, source_collection_copy)
+    new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:
@@ -2635,15 +3081,18 @@ def save_drs(
 
     logger.log("Export completed successfully.", "Export Complete", "INFO")
     logger.display()
-    # Clear texture Caches
+    # Cleanup
     texture_cache_col = {}
     texture_cache_nor = {}
     texture_cache_par = {}
     texture_cache_ref = {}
+    new_drs_file = None
+    unified_mesh = None
+    meshes_collection = None
+    armature_object = None
+    source_collection_copy = None
+
     return {"FINISHED"}
 
 
 # endregion
-
-# TODO: Check why Vertices in CGeoMesh are not the same as in CDspMeshFile
-# TODO: Fix Collision Shapes for Complex Buildings and SLocators
