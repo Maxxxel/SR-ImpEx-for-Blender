@@ -108,6 +108,7 @@ def apply_transformation(
 
     transform = get_conversion_matrix(invert)
     meshes_collection = get_collection(source_collection, "Meshes_Collection")
+    previous_active_object = bpy.context.view_layer.objects.active
 
     if armature_object is not None:
         armature_object.matrix_world = transform @ armature_object.matrix_world
@@ -126,6 +127,7 @@ def apply_transformation(
                         apply_transformation_to_objects(
                             grandchild.objects, transform, operator_on_collision
                         )
+        bpy.context.view_layer.objects.active = previous_active_object
     else:
         if meshes_collection:
             if (

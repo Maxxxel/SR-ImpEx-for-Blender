@@ -1,3 +1,7 @@
+# ----------------------------------------------------
+# Auto-Update Integration: Import updater ops
+# ----------------------------------------------------
+from . import addon_updater_ops
 import os
 from os.path import dirname, realpath
 import importlib  # pylint: disable=unused-import
@@ -13,7 +17,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 7, 2),
+    "version": (2, 8, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -22,13 +26,26 @@ bl_info = {
 
 is_dev_version = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
-temporary_file_path = ""
 
 
-# ----------------------------------------------------
-# Auto-Update Integration: Import updater ops
-# ----------------------------------------------------
-from . import addon_updater_ops
+def update_filename(self, context):
+    if self.action and self.action != "None":
+        # Ensure we are currently in FILE_BROWSER space
+        if context.space_data and context.space_data.type == "FILE_BROWSER":
+            params = context.space_data.params
+            if params:
+                params.filename = bpy.path.ensure_ext(self.action, ".ska")
+
+
+def available_actions(self, context):
+    actions = get_actions()  # Your function that returns a list of action names
+
+    # If no actions are available, provide a default fallback
+    if not actions:
+        return [("None", "No actions available", "")]
+
+    # Otherwise, dynamically construct the EnumProperty items
+    return [(act, act, "") for act in actions]
 
 
 # ----------------------------------------------------
@@ -109,21 +126,26 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         name="Import Animation", description="Import animation", default=True
     )  # type: ignore
     import_animation_type: EnumProperty(  # type: ignore
-        name="Animation Type",
+        name="Type",
         description="Select the animation type to import",
         items=[
             ("FRAMES", "Frames", "Import animation in frames"),
             ("SECONDS", "Seconds", "Import animation in seconds"),
         ],
-        default="FRAMES",
+        default="SECONDS",
     )
     import_animation_fps: IntProperty(  # type: ignore
         name="Animation FPS",
         description="FPS for the imported animation",
         default=30,
         min=1,
-        max=120,
+        max=100,
     )
+    animation_smoothing: BoolProperty(
+        name="Animation Smoothing",
+        description="Use animation smoothing (WIP)",
+        default=False,
+    )  # type: ignore
     import_debris: BoolProperty(
         name="Import Debris", description="Import debris for bmg files", default=True
     )  # type: ignore
@@ -136,10 +158,39 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         default=True,
     )  # type: ignore
 
-    def execute(self, context):
+    def draw(self, context):
+        # Auto-Update Integration: Addon Updater by using addon_updater_ops.check_for_update_background(context) in the beginning of the function and addon_updater_ops.update_notice_box_ui(self, context) at the end of the function
+        addon_updater_ops.check_for_update_background()
+        layout = self.layout
+        layout.label(text="Import Settings", icon="IMPORT")
+        layout.prop(self, "clear_scene")
+        layout.prop(self, "apply_transform")
+        # Add a separator
+        layout.separator()
+        # Create an Animation Section
+        layout.label(text="Animation Settings", icon="ANIM_DATA")
+        layout.prop(self, "import_animation")
+        layout.prop(self, "import_animation_type")
+        layout.prop(self, "import_animation_fps")
+        layout.prop(self, "animation_smoothing")
+        # Add a separator
+        layout.separator()
+        # Create a Modules Section
+        layout.label(text="Modules Settings", icon="OBJECT_DATA")
+        layout.prop(self, "import_collision_shape")
+        layout.prop(self, "import_modules")
+        layout.prop(self, "import_construction")
+        layout.prop(self, "import_debris")
+        # layout.prop(self, "create_size_reference")
+        if addon_updater_ops.updater.update_ready == True:
+            layout.label(
+                text="Update available! Please check the preferences.",
+                icon="INFO",
+            )
+        layout.separator()
+        addon_updater_ops.update_notice_box_ui(self, context)
 
-        global temporary_file_path  # pylint: disable=global-statement
-        temporary_file_path = self.filepath
+    def execute(self, context):
         keywords: list = self.as_keywords(
             ignore=("filter_glob", "clear_scene", "create_size_reference")
         )
@@ -147,6 +198,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         keywords["import_animation"] = self.import_animation
         keywords["import_animation_type"] = self.import_animation_type
         keywords["import_animation_fps"] = self.import_animation_fps
+        keywords["animation_smoothing"] = self.animation_smoothing
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction
         keywords["import_debris"] = self.import_debris
@@ -157,6 +209,8 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
                 bpy.data.collections.remove(collection)
             bpy.ops.object.select_all(action="SELECT")
             bpy.ops.object.delete(use_global=False)
+            # Purge unused data blocks
+            bpy.ops.outliner.orphans_purge(do_recursive=True)
 
         # Check if the file is a DRS or a BMG file
         if self.filepath.endswith(".drs"):
@@ -210,28 +264,26 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         description="Keep debug collection in the scene",
         default=False,
     )
-    export_animation: BoolProperty(
-        # type: ignore # ignore
-        name="Export Animation",
-        description="Export animation",
-        default=False,
-    )
     model_type: EnumProperty(
         name="Model Type",
         description="Select the model type",
         items=[
-            ("AnimatedUnit", "Animated Unit", ""),
-            ("building", "Building", ""),
-            (
-                # type: ignore # ignore
-                "StaticObjectNoCollision",
-                "Static Object (no collision)",
-                "",
-            ),
+            ("StaticObjectNoCollision", "Static Object (no collision)", ""),
             ("StaticObjectCollision", "Static Object (with collision)", ""),
+            ("AnimatedObjectNoCollision", "Animated Object (no collision)", ""),
+            ("AnimatedObjectCollision", "Animated Object (with collision)", ""),
         ],
         default="StaticObjectNoCollision",
     )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Export Settings", icon="EXPORT")
+        layout.prop(self, "use_apply_transform")
+        layout.prop(self, "split_mesh_by_uv_islands")
+        layout.prop(self, "flip_normals")
+        layout.prop(self, "keep_debug_collections")
+        layout.prop(self, "model_type")
 
     def invoke(self, context, event):
         # Retrieve the active collection from the active layer collection
@@ -255,7 +307,6 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         keywords["split_mesh_by_uv_islands"] = self.split_mesh_by_uv_islands
         keywords["flip_normals"] = self.flip_normals
         keywords["keep_debug_collections"] = self.keep_debug_collections
-        keywords["export_animation"] = self.export_animation
         keywords["model_type"] = self.model_type
 
         # update model_name by file_path
@@ -267,27 +318,24 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         self.filepath = bpy.path.ensure_ext(self.filepath, ".drs")
 
         save_drs(context, **keywords)
+
+        if self.model_type in {"AnimatedObjectNoCollision", "AnimatedObjectCollision"}:
+            # Get all Action
+            all_actions = get_actions()
+            export_folder = os.path.dirname(self.filepath)
+
+            # We only allow actions with the same name as the export animation name or _idle
+            for action_name in all_actions:
+                action_name_without_ska = action_name.replace(".ska", "")
+                if (
+                    action_name_without_ska == model_name
+                    or action_name_without_ska.find("_idle") != -1
+                ):
+
+                    export_ska(
+                        context, os.path.join(export_folder, action_name), action_name
+                    )
         return {"FINISHED"}
-
-
-def update_filename(self, context):
-    if self.action and self.action != "None":
-        # Ensure we are currently in FILE_BROWSER space
-        if context.space_data and context.space_data.type == "FILE_BROWSER":
-            params = context.space_data.params
-            if params:
-                params.filename = bpy.path.ensure_ext(self.action, ".ska")
-
-
-def available_actions(self, context):
-    actions = get_actions()  # Your function that returns a list of action names
-
-    # If no actions are available, provide a default fallback
-    if not actions:
-        return [("None", "No actions available", "")]
-
-    # Otherwise, dynamically construct the EnumProperty items
-    return [(act, act, "") for act in actions]
 
 
 class ExportSKAFile(bpy.types.Operator, ExportHelper):

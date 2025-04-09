@@ -51,7 +51,7 @@ LocatorClass = {
 
 # Also Node Order
 InformationIndices = {
-    "AnimatedUnit": {
+    "AnimatedUnit": {  # AnimatedInteractableObjectNoCollisionWithEffects
         "CGeoMesh": 1,
         "CGeoOBBTree": 8,
         "CDspJointMap": 7,
@@ -79,6 +79,30 @@ InformationIndices = {
         "CDspJointMap": 3,
         "CDspMeshFile": 2,
         "DrwResourceMeta": 5,
+    },
+    "AnimatedObjectNoCollision": {
+        "CGeoMesh": 1,
+        "CGeoOBBTree": 6,
+        "CDspJointMap": 5,
+        "CSkSkinInfo": 7,
+        "CSkSkeleton": 2,
+        "CDspMeshFile": 3,
+        "DrwResourceMeta": 9,
+        "AnimationSet": 8,
+        "AnimationTimings": 4,
+    },
+    "AnimatedObjectCollision": {
+        "CGeoMesh": 1,
+        "CGeoOBBTree": 7,
+        "CDspJointMap": 6,
+        "CSkSkinInfo": 8,
+        "CSkSkeleton": 3,
+        "CDspMeshFile": 4,
+        "DrwResourceMeta": 10,
+        "AnimationSet": 9,
+        "AnimationTimings": 5,
+        "CGeoPrimitiveContainer": 2,
+        "collisionShape": 11,
     },
 }
 
@@ -111,6 +135,30 @@ WriteOrder = {
         "DrwResourceMeta",
         "CGeoOBBTree",
         "CGeoMesh",
+    ],
+    "AnimatedObjectNoCollision": [
+        "CDspJointMap",
+        "CSkSkinInfo",
+        "CSkSkeleton",
+        "CDspMeshFile",
+        "DrwResourceMeta",
+        "CGeoOBBTree",
+        "CGeoMesh",
+        "AnimationSet",
+        "AnimationTimings",
+    ],
+    "AnimatedObjectCollision": [
+        "CDspJointMap",
+        "CSkSkinInfo",
+        "CSkSkeleton",
+        "CDspMeshFile",
+        "DrwResourceMeta",
+        "CGeoPrimitiveContainer",
+        "CGeoOBBTree",
+        "CGeoMesh",
+        "AnimationSet",
+        "AnimationTimings",
+        "collisionShape",
     ],
 }
 
@@ -371,6 +419,9 @@ class Vector3:
     z: float = 0.0
     xyz: Vector = field(default_factory=lambda: Vector((0, 0, 0)))
 
+    def __post_init__(self):
+        self.xyz = Vector((self.x, self.y, self.z))
+
     def read(self, file: BinaryIO) -> "Vector3":
         self.x, self.y, self.z = unpack("3f", file.read(calcsize("3f")))
         self.xyz = Vector((self.x, self.y, self.z))
@@ -392,7 +443,9 @@ class Matrix4x4:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("16f", *self.matrix))
+        # We have 4 Tuples of 4 floats
+        for i in range(4):
+            file.write(pack("4f", *self.matrix[i]))
 
     def size(self) -> int:
         return calcsize("16f")
@@ -448,12 +501,20 @@ class CGeoMesh:
     faces: List[Face] = field(default_factory=list)
     vertex_count: int = 0
     vertices: List[Vector4] = field(default_factory=list)
+    hash_map: dict = field(default_factory=dict)
 
     def read(self, file: BinaryIO) -> "CGeoMesh":
         self.magic, self.index_count = unpack("ii", file.read(calcsize("ii")))
         self.faces = [Face().read(file) for _ in range(self.index_count // 3)]
         self.vertex_count = unpack("i", file.read(calcsize("i")))[0]
-        self.vertices = [Vector4().read(file) for _ in range(self.vertex_count)]
+        for _ in range(self.vertex_count):
+            x, y, z, w = unpack("4f", file.read(calcsize("4f")))
+            key = tuple(round(coord, 6) for coord in (x, y, z))
+            if key not in self.hash_map:
+                self.hash_map[key] = _
+            else:
+                raise ValueError(f"Duplicate vertex found: {key}")
+            self.vertices.append(Vector4(x, y, z, w))
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -517,7 +578,7 @@ class MeshData:
 
 @dataclass(eq=False, repr=False)
 class Bone:
-    version: int = 0
+    version: int = 0  # uint
     identifier: int = 0
     name_length: int = field(default=0, init=False)
     name: str = ""
@@ -528,9 +589,9 @@ class Bone:
         self.name_length = len(self.name)
 
     def read(self, file: BinaryIO) -> "Bone":
-        self.version, self.identifier, self.name_length = unpack(
-            "iii", file.read(calcsize("iii"))
-        )
+        self.version = unpack("I", file.read(calcsize("I")))[0]
+        self.identifier = unpack("i", file.read(calcsize("i")))[0]
+        self.name_length = unpack("i", file.read(calcsize("i")))[0]
         self.name = (
             unpack(f"{self.name_length}s", file.read(calcsize(f"{self.name_length}s")))[
                 0
@@ -551,7 +612,9 @@ class Bone:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("iii", self.version, self.identifier, self.name_length))
+        file.write(pack("I", self.version))
+        file.write(pack("i", self.identifier))
+        file.write(pack("i", self.name_length))
         file.write(pack(f"{self.name_length}s", self.name.encode("utf-8")))
         file.write(pack("i", self.child_count))
         file.write(pack(f"{self.child_count}i", *self.children))
@@ -629,7 +692,7 @@ class CSkSkeleton:
     bone_count: int = 0
     bones: List[Bone] = field(default_factory=list)
     super_parent: "Matrix4x4" = field(
-        default_factory=lambda: Matrix(
+        default_factory=lambda: Matrix4x4(
             ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))
         )
     )
@@ -1663,7 +1726,7 @@ class AnimationSetVariant:
     start: float = 0.0
     end: float = 1.0
     allows_ik: int = 1
-    unknown2: int = 0
+    forceNoBlend: int = 0
 
     def read(self, file: BinaryIO) -> "AnimationSetVariant":
         """Reads the AnimationSetVariant from the buffer"""
@@ -1682,7 +1745,7 @@ class AnimationSetVariant:
         if self.version >= 5:
             self.allows_ik = unpack("B", file.read(calcsize("B")))[0]
         if self.version >= 7:
-            self.unknown2 = unpack("B", file.read(calcsize("B")))[0]
+            self.forceNoBlend = unpack("B", file.read(calcsize("B")))[0]
 
         return self
 
@@ -1697,7 +1760,7 @@ class AnimationSetVariant:
         if self.version >= 5:
             file.write(pack("B", self.allows_ik))
         if self.version >= 7:
-            file.write(pack("B", self.unknown2))
+            file.write(pack("B", self.forceNoBlend))
         return self
 
     def size(self) -> int:
@@ -1743,7 +1806,8 @@ class ModeAnimationKey:
         if self.type == 1:
             self.unknown2 = list(unpack("24B", file.read(calcsize("24B"))))
         elif self.type <= 5:
-            self.unknown2 = list(unpack("6B", file.read(calcsize("6B"))))
+            self.unknown2 = unpack("i", file.read(calcsize("i")))[0]
+            self.unknown4 = unpack("h", file.read(calcsize("h")))[0]
         elif self.type == 6:
             self.unknown2 = unpack("i", file.read(calcsize("i")))[0]
             self.vis_job = unpack("h", file.read(calcsize("h")))[0]
@@ -1764,7 +1828,8 @@ class ModeAnimationKey:
         if self.type == 1:
             file.write(pack("24B", *self.unknown2))
         elif self.type <= 5:
-            file.write(pack("6B", *self.unknown2))
+            file.write(pack("i", self.unknown2))
+            file.write(pack("h", self.unknown4))
         elif self.type == 6:
             file.write(pack("i", self.unknown2))
             file.write(pack("h", self.vis_job))
@@ -1942,9 +2007,8 @@ class AnimationSet:
     version: int = 6
     default_run_speed: float = 4.8  # TODO: Add a way to show/edit this value in Blender
     # TODO: Add a way to show/edit this value in Blender
-    default_walk_speed: float = 2.4
-    revision: int = 6  # TODO: Is it all the time?
-    mode_animation_key_count: int = 1  # How many different animations are there?
+    default_walk_speed: float = 2.3
+    revision: int = 0  # 0 For Animated Objects
     # TODO find out how often these values are used and for which object/unit/building types
     mode_change_type: int = 0
     hovering_ground: int = 0
@@ -1952,24 +2016,19 @@ class AnimationSet:
     fly_accel_scale: float = 0  # Changes for flying units
     fly_hit_scale: float = 1  # Changes for flying units
     allign_to_terrain: int = 0
+    mode_animation_key_count: int = 0  # How many different animations are there?
     mode_animation_keys: List[ModeAnimationKey] = field(default_factory=list)
     has_atlas: int = 1  # 1 or 2
     atlas_count: int = 0  # Animated Objects: 0
     ik_atlases: List[IKAtlas] = field(default_factory=list)
-    uk_len: int = 0  # TODO: Always 0?
+    uk_len: int = 0
     uk_ints: List[int] = field(default_factory=list)
-    subversion: int = 2  # TODO: Always 2?
+    subversion: int = 2
     animation_marker_count: int = 0  # Animated Objects: 0
     animation_marker_sets: List[AnimationMarkerSet] = field(default_factory=list)
     unknown: int = 0  # Not needed
     unknown_structs: List[UnknownStruct] = field(default_factory=list)  # Not needed
     data_object: str = None  # Placeholder for the animation name
-
-    # def __post_init__(self):
-    # 	if not self.data_object.endswith(".ska"):
-    # 		self.data_object += ".ska"
-    # 		for _ in range(self.mode_animation_key_count):
-    # 			self.mode_animation_keys.append(ModeAnimationKey(self.data_object))
 
     def read(self, file: BinaryIO) -> "AnimationSet":
         """Reads the AnimationSet from the buffer"""
@@ -2280,7 +2339,7 @@ class StructV3:
 @dataclass(eq=False, repr=False)
 class AnimationTimings:
     magic: int = 1650881127  # int
-    version: int = 4  # Short. 3 or 4
+    version: int = 3  # Short. 3 or 4
     # Short. Only used if there are multiple Animations.
     animation_timing_count: int = 0
     animation_timings: List[AnimationTiming] = field(default_factory=list)
