@@ -112,9 +112,7 @@ def get_user_preferences(context=None):
     if not context:
         context = bpy.context
     prefs = None
-    if hasattr(context, "user_preferences"):
-        prefs = context.user_preferences.addons.get(__package__, None)
-    elif hasattr(context, "preferences"):
+    if hasattr(context, "preferences"):
         prefs = context.preferences.addons.get(__package__, None)
     if prefs:
         return prefs.preferences
