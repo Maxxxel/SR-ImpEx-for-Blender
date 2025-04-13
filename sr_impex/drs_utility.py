@@ -66,6 +66,7 @@ from .drs_definitions import (
     AnimationTimings,
     VertexData,
     AnimationSetVariant,
+    CGeoSphere,
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -1180,6 +1181,58 @@ def import_collision_shapes(
         cylinder_collection.objects.link(cylinder_object)
 
 
+def import_animation_ik_atlas(
+    armature_object: bpy.types.Object,
+    animation_set: AnimationSet,
+    bone_list: list[DRSBone],
+) -> None:
+    for atlas in animation_set.ik_atlases:
+        # Get Bone with same Identifier
+        bone = next((b for b in bone_list if b.identifier == atlas.identifier), None)
+        if bone is None:
+            logger.log(
+                f"Bone with identifier {atlas.identifier} not found in bone list.",
+                "Warning",
+                "WARNING",
+            )
+            continue
+        # Get the Pose Bone
+        pose_bone = armature_object.pose.bones.get(bone.name)
+        if pose_bone is None:
+            logger.log(
+                f"Pose bone {bone.name} not found in armature.",
+                "Warning",
+                "WARNING",
+            )
+            continue
+        # Mark the Bone as Active
+        armature_object.data.bones.active = armature_object.data.bones[bone.name]
+        # Remove a previously added constraint with the same name if exists
+        constraint_name = "IK_Atlas_LimitRotation"
+        for con in list(pose_bone.constraints):
+            if con.name == constraint_name:
+                pose_bone.constraints.remove(con)
+        # Create a new Limit Rotation constraint
+        limit_rot = pose_bone.constraints.new(type="LIMIT_ROTATION")
+        limit_rot.name = constraint_name
+        # I want to loop the constraints (0, 1, 2) but get the according value as str (x, y, z)
+        for i in range(3):
+            constaint = atlas.constraints[i]
+            if i == 0:
+                limit_rot.use_limit_x = True
+                limit_rot.min_x = constaint.left_angle
+                limit_rot.max_x = constaint.right_angle
+            elif i == 1:
+                limit_rot.use_limit_y = True
+                limit_rot.min_y = constaint.left_angle
+                limit_rot.max_y = constaint.right_angle
+            elif i == 2:
+                limit_rot.use_limit_z = True
+                limit_rot.min_z = constaint.left_angle
+                limit_rot.max_z = constaint.right_angle
+        limit_rot.owner_space = "LOCAL"
+
+
 def import_state_based_mesh_set(
     state_based_mesh_set: StateBasedMeshSet,
     source_collection: bpy.types.Collection,
@@ -1346,6 +1399,7 @@ def load_drs(
     import_animation_type="FRAMES",
     import_animation_fps=30,
     animation_smoothing=True,
+    import_ik_atlas=False,
     import_debris=False,
     import_modules=True,
 ) -> None:
@@ -1408,6 +1462,15 @@ def load_drs(
                         import_animation_fps,
                         animation_smoothing,
                     )
+
+    if (
+        import_ik_atlas
+        and drs_file.csk_skeleton is not None
+        and armature_object is not None
+        and drs_file.animation_set is not None
+        and bone_list is not None
+    ):
+        import_animation_ik_atlas(armature_object, drs_file.animation_set, bone_list)
 
     if import_modules and drs_file.cdrw_locator_list is not None:
         for slocator in drs_file.cdrw_locator_list.slocators:
@@ -2451,8 +2514,57 @@ def create_box_shape(box: bpy.types.Object) -> BoxShape:
     return _box_shape
 
 
-def create_sphere_shape(_: bpy.types.Object) -> SphereShape:
-    pass
+def create_sphere_shape(sphere: bpy.types.Object) -> SphereShape:
+    """
+    Exports a Blender sphere object to a foreign SphereShape.
+    """
+    # Initialize our export structure
+    _sphere_shape = SphereShape()
+    _sphere_shape.coord_system = CMatCoordinateSystem()
+    _sphere_shape.geo_sphere = CGeoSphere()
+
+    # Ensure the mesh data is up to date.
+    mesh = sphere.data
+    mesh.calc_loop_triangles()
+
+    # Compute world-space coordinates for each vertex.
+    vertices_world = [sphere.matrix_world @ v.co for v in mesh.vertices]
+    if not vertices_world:
+        raise ValueError(
+            "The sphere object has no vertices to compute a bounding sphere from."
+        )
+
+    # Compute the center as the centroid of the vertices.
+    # (This works well if the object is a well-formed sphere.)
+    center = sum(vertices_world, Vector((0, 0, 0))) / len(vertices_world)
+
+    # Compute the radius as the maximum distance from the center to any vertex.
+    radius = max((v - center).length for v in vertices_world)
+
+    # Assign the computed center to the exported coordinate system.
+    _sphere_shape.coord_system.position = Vector3(center.x, center.y, center.z)
+
+    # Extract a pure rotation without scaling by converting to and from a quaternion.
+    # This is important if the object has non-uniform scaling.
+    pure_rotation = sphere.matrix_world.to_quaternion().to_matrix()
+    # Flatten the 3x3 rotation matrix in row-major order.
+    _sphere_shape.coord_system.matrix.matrix = [
+        pure_rotation[0][0],
+        pure_rotation[0][1],
+        pure_rotation[0][2],
+        pure_rotation[1][0],
+        pure_rotation[1][1],
+        pure_rotation[1][2],
+        pure_rotation[2][0],
+        pure_rotation[2][1],
+        pure_rotation[2][2],
+    ]
+
+    # Fill in the geometric sphere information.
+    _sphere_shape.geo_sphere.radius = radius
+    _sphere_shape.geo_sphere.center = Vector3(0, 0, 0)
+
+    return _sphere_shape
 
 
 def create_cylinder_shape(cylinder: bpy.types.Object) -> CylinderShape:
@@ -3003,9 +3115,10 @@ def save_drs(
             )
             new_drs_file.push_node_infos("CDspJointMap", new_drs_file.cdsp_joint_map)
             # Update CDspMeshFile with the RootReference in subMeshes
-            cdsp_mesh_file = update_mesh_file_root_reference(
-                cdsp_mesh_file, mesh_bone_data
-            )
+            if add_skin_mesh:
+                cdsp_mesh_file = update_mesh_file_root_reference(
+                    cdsp_mesh_file, mesh_bone_data
+                )
         elif node == "CDspMeshFile":
             new_drs_file.cdsp_mesh_file = cdsp_mesh_file
             new_drs_file.push_node_infos("CDspMeshFile", new_drs_file.cdsp_mesh_file)

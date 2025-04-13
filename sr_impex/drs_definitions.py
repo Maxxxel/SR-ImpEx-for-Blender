@@ -1625,14 +1625,19 @@ class CGeoPrimitiveContainer:
 
 @dataclass(eq=False, repr=False)
 class Constraint:
-    """Constraint"""
+    """Constraint
+    Default: <Constraint index="0" RightAngle="360.00000000" RightDampStart="360.00000000" LeftAngle="-360.00000000" LeftDampStart="-360.00000000" DampRatio="0.00000000" />
+    Custom:  <Constraint index="1" RightAngle="35.00000000" RightDampStart="35.00000000" LeftAngle="-35.00000000" LeftDampStart="-35.00000000" DampRatio="0.00000000" />
+    Default: <Constraint index="2" RightAngle="360.00000000" RightDampStart="360.00000000" LeftAngle="-360.00000000" LeftDampStart="-360.00000000" DampRatio="0.00000000" />
+    """
 
-    revision: int = 0
-    left_angle: float = 0.0
-    right_angle: float = 0.0
-    left_damp_start: float = 0.0
-    right_damp_start: float = 0.0
-    damp_ratio: float = 0.0
+    # Values are saved in RAD but are DEG
+    revision: int = 1  # verified
+    left_angle: float = -6.283185
+    right_angle: float = 6.283185
+    left_damp_start: float = -6.283185
+    right_damp_start: float = 6.283185
+    damp_ratio: float = 0.0  # 0 mostly, ranges from 0 to 1
 
     def read(self, file: BinaryIO) -> "Constraint":
         """Reads the Constraint from the buffer"""
@@ -1675,12 +1680,12 @@ class Constraint:
 class IKAtlas:
     """IKAtlas"""
 
-    identifier: int = 0
-    version: int = 0
-    axis: int = 0
-    chain_order: int = 0
-    constraints: List[Constraint] = field(default_factory=list)
-    purpose_flags: int = 0
+    identifier: int = 0  # BoneID
+    version: int = 2
+    axis: int = 2  # Always 2
+    chain_order: int = 0  # Order of Execution in the Bone Chain
+    constraints: List[Constraint] = field(default_factory=list)  # Always 3!
+    purpose_flags: int = 0  # 1, 2, 3, 6, 7: mostly 3, but what is it used for?
 
     def read(self, file: BinaryIO) -> "IKAtlas":
         """Reads the IKAtlas from the buffer"""
