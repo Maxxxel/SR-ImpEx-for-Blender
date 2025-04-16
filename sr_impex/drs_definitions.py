@@ -513,7 +513,7 @@ class CGeoMesh:
             if key not in self.hash_map:
                 self.hash_map[key] = _
             else:
-                raise ValueError(f"Duplicate vertex found: {key}")
+                print(f"Duplicate vertex found: {key} at index {_}")
             self.vertices.append(Vector4(x, y, z, w))
         return self
 
@@ -739,6 +739,7 @@ class Texture:
 
     def read(self, file: BinaryIO) -> "Texture":
         self.identifier, self.length = unpack("ii", file.read(calcsize("ii")))
+        print(f"Texture Identifier: {self.identifier}, Length: {self.length}")
         self.name = file.read(self.length).decode("utf-8").strip("\x00")
         self.spacer = unpack("i", file.read(calcsize("i")))[0]
         return self
@@ -856,6 +857,8 @@ class Material:
             self.depth_write_threshold = unpack("f", file.read(calcsize("f")))[0]
         elif self.identifier == 1668510785:
             self.saturation = unpack("f", file.read(calcsize("f")))[0]
+        elif self.identifier == 1936745324:
+            _unknown = unpack("f", file.read(calcsize("f")))[0]
         else:
             self.unknown = unpack("f", file.read(calcsize("f")))[0]
             raise TypeError(f"Unknown Material {self.unknown}")
@@ -1093,6 +1096,21 @@ class BattleforgeMesh:
             self.materials.read(file)
             self.level_of_detail.read(file)
             self.empty_string.read(file)
+        elif self.material_parameters == -86061052:
+            self.material_stuff, self.bool_parameter = unpack(
+                "ii", file.read(calcsize("ii"))
+            )
+            self.textures.read(file)
+            self.refraction.read(file)
+            self.materials.read(file)
+            self.level_of_detail.read(file)
+            self.empty_string.read(file)
+        elif self.material_parameters == -86061054:
+            self.bool_parameter = unpack("i", file.read(calcsize("i")))[0]
+            self.textures.read(file)
+            self.refraction.read(file)
+            self.materials.read(file)
+            self.empty_string.read(file)
         elif self.material_parameters == -86061055:
             self.bool_parameter = unpack("i", file.read(calcsize("i")))[0]
             self.textures.read(file)
@@ -1197,6 +1215,11 @@ class CDspMeshFile:
             self.bounding_box_upper_right_corner = Vector3().read(file)
             self.meshes = [BattleforgeMesh().read(file) for _ in range(self.mesh_count)]
             self.some_points = [Vector4().read(file) for _ in range(3)]
+        elif self.magic < 100:  # we assume its the mesh Count
+            self.bounding_box_lower_left_corner = Vector3().read(file)
+            self.bounding_box_upper_right_corner = Vector3().read(file)
+            self.mesh_count = self.magic
+            self.meshes = [BattleforgeMesh().read(file) for _ in range(self.magic)]
         else:
             raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
         return self
@@ -1281,6 +1304,9 @@ class CGeoOBBTree:
         self.magic, self.version, self.matrix_count = unpack(
             "iii", file.read(calcsize("iii"))
         )
+        if self.magic != 1845540702:
+            print(f"Magic Value: {self.magic} is not correct, skipping")
+            return
         self.obb_nodes = [OBBNode().read(file) for _ in range(self.matrix_count)]
         self.triangle_count = unpack("i", file.read(calcsize("i")))[0]
         self.faces = [Face().read(file) for _ in range(self.triangle_count)]

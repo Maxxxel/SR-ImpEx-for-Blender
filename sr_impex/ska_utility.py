@@ -185,7 +185,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     # Create Header, Time and Keyframes
     headers = []
     times = []
-    keyframes = []
+    keyframes: List[SKAKeyframe] = []
 
     last_tick = 0
     for bone_name, data in bone_lib.items():
@@ -260,7 +260,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                 rot_keyframe.tan_z = 0.0
                 rot_keyframe.tan_w = 0.0
             else:
-                pass  # TODO: implement smoothing
+                pass
 
     # Create a new SKA file and write the action data to it
     ska_file = SKA()

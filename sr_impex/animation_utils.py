@@ -5,7 +5,7 @@ import bpy
 from mathutils import Quaternion, Vector
 
 from .ska_definitions import SKAKeyframe, SKA
-from .drs_definitions import DRSBone
+from .drs_definitions import DRSBone, Keyframe
 
 
 def quat_log(q: Quaternion) -> Quaternion:
