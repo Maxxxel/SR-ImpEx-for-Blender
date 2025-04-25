@@ -67,6 +67,7 @@ from .drs_definitions import (
     VertexData,
     AnimationSetVariant,
     CGeoSphere,
+    AMS,
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -702,7 +703,6 @@ def create_bone_tree(
         parent_bone_name = bone_list[bone_data.parent].name
         edit_bone.parent = armature_data.edit_bones.get(parent_bone_name)
 
-    # Recursively create child bones
     for child_bone in [b for b in bone_list if b.parent == bone_data.identifier]:
         create_bone_tree(armature_data, bone_list, child_bone)
 
@@ -768,27 +768,14 @@ def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
         bone_list_item.identifier = bone_data.identifier
         bone_list_item.name = bone_data.name + (f"_{suffix}" if suffix else "")
         bone_list_item.bone_matrix = bone_matrix
+        bone_list_item.parent = bone_vertices[0].parent
 
-        # Set the Bone Children
-        bone_list_item.children = bone_data.children
-
-        # Set the Bones Children's Parent ID
-        for j in range(bone_data.child_count):
-            child_id = bone_data.children[j]
-            bone_list[child_id].parent = bone_data.identifier
+        # Print if parent = -1
+        if bone_list_item.parent == -1:
+            print(f"Bone {bone_list_item.name} has no parent.")
 
     # Order the Bones by Parent ID
     bone_list.sort(key=lambda x: x.identifier)
-
-    # Go through the Bone List find the bones without a parent
-    for bone in bone_list:
-        if bone.parent == -1 and bone.identifier != 0:
-            bone.parent = 0
-            logger.log(
-                "Bone {bone.name} has no parent, setting it to the root bone.",
-                "Info",
-                "INFO",
-            )
 
     # Return the BoneList
     return bone_list
@@ -808,7 +795,6 @@ def import_csk_skeleton(
     # Directly set armature data to edit mode
     bpy.context.view_layer.objects.active = armature_object
     with ensure_mode("EDIT"):
-        # Create the Bone Tree without using bpy.ops or context
         create_bone_tree(armature_data, bone_list, bone_list[0])
     record_bind_pose(bone_list, armature_data)
     return armature_object, bone_list
@@ -906,7 +892,8 @@ def create_mesh_object(
     bone_weights: List[VertexData] = None,
     armature_object=None,
     transform_matrix=None,
-    cgeo_mesh_data=None,
+    cgeo_mesh: CGeoMesh = None,
+    offset: int = None,
 ):
     # Create the mesh data using your existing helper.
     mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
@@ -920,7 +907,7 @@ def create_mesh_object(
             mesh_object,
             bone_list,
             bone_weights,
-            cgeo_mesh_data,
+            cgeo_mesh,
             drs_file.cdsp_mesh_file.meshes[mesh_index],
         )
 
@@ -1426,6 +1413,7 @@ def load_drs(
     if drs_file.csk_skin_info is not None:
         skin_vertex_data = drs_file.csk_skin_info.vertex_data
 
+    offset = 0
     for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
         mesh_object, _ = create_mesh_object(
             drs_file,
@@ -1437,7 +1425,9 @@ def load_drs(
             armature_object,
             None,
             drs_file.cgeo_mesh,
+            offset,
         )
+        offset += drs_file.cdsp_mesh_file.meshes[mesh_index].vertex_count
         mesh_collection.objects.link(mesh_object)
 
     if drs_file.collision_shape is not None and import_collision_shape:
@@ -1462,6 +1452,29 @@ def load_drs(
                         import_animation_fps,
                         animation_smoothing,
                     )
+    else:
+        # Check if an model_name.ams file is in the folder
+        if os.path.exists(os.path.join(dir_name, base_name + ".ams")):
+            # Load the Animation Set from the AMS file
+            ams_file: AMS = AMS().read(os.path.join(dir_name, base_name + ".ams"))
+
+            if ams_file:
+                with ensure_mode("POSE"):
+                    for animation_key in ams_file.animation_set.animations:
+                        for variant in animation_key.variants:
+                            ska_file: SKA = SKA().read(
+                                os.path.join(dir_name, variant.file_name)
+                            )
+                            # Create the Animation
+                            create_animation(
+                                ska_file,
+                                armature_object,
+                                bone_list,
+                                variant.file_name,
+                                import_animation_type,
+                                import_animation_fps,
+                                animation_smoothing,
+                            )
 
     if (
         import_ik_atlas

@@ -100,9 +100,8 @@ class SKA:
             # pylint: disable=unused-variable
             unused1 = unpack("i", reader.read(calcsize("i")))[0]
         elif self.type == 3:
-            unused1 = unpack("i", reader.read(calcsize("i")))[0]
-            # pylint: disable=unused-variable
-            unused2 = unpack("i", reader.read(calcsize("i")))[0]
+            duration = unpack("i", reader.read(calcsize("i")))[0]
+            repeat = unpack("i", reader.read(calcsize("i")))[0]
         elif self.type == 4:
             unused1 = unpack("i", reader.read(calcsize("i")))[0]
             unused2 = unpack("i", reader.read(calcsize("i")))[0]

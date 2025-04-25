@@ -1,3 +1,5 @@
+import xml.etree.ElementTree as ET
+import re
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
 from typing import List, Union, BinaryIO, Optional
@@ -300,15 +302,21 @@ class Vertex:
     bone_indices: Optional[List[int]] = field(default_factory=list)
 
     def read(self, file: BinaryIO, revision: int) -> "Vertex":
-        if revision == 133121:
+        if revision == 133121 or revision == 134365185 or revision == 536905729:
             data = unpack_data(file, "fff", "fff", "ff")
             self.position, self.normal, self.texture = data[0], data[1], data[2]
-        elif revision == 12288:
+        elif revision == 12288 or revision == 2049:
             data = unpack_data(file, "fff", "fff")
             self.tangent, self.bitangent = data[0], data[1]
         elif revision == 12:
             data = unpack_data(file, "4B", "4B")
             self.raw_weights, self.bone_indices = data[0], data[1]
+        elif revision == 163841:
+            data = unpack_data(file, "fff", "ff", "4B")
+            self.position, self.texture, _ = data[0], data[1], data[2]
+            self.normal = [0.0, 0.0, 0.0]
+        else:
+            raise ValueError(f"Unknown revision: {revision}")
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -513,7 +521,7 @@ class CGeoMesh:
             if key not in self.hash_map:
                 self.hash_map[key] = _
             else:
-                print(f"Duplicate vertex found: {key} at index {_}")
+                print(f"Duplicate vertex found: {key}")
             self.vertices.append(Vector4(x, y, z, w))
         return self
 
@@ -697,7 +705,7 @@ class CSkSkeleton:
         )
     )
 
-    def read(self, file: BinaryIO) -> "CSkSkeleton":
+    def read(self, file: BinaryIO, srrd: bool = False) -> "CSkSkeleton":
         self.magic, self.version, self.bone_matrix_count = unpack(
             "iii", file.read(calcsize("iii"))
         )
@@ -706,7 +714,8 @@ class CSkSkeleton:
         ]
         self.bone_count = unpack("i", file.read(calcsize("i")))[0]
         self.bones = [Bone().read(file) for _ in range(self.bone_count)]
-        self.super_parent = Matrix4x4().read(file)
+        if not srrd:
+            self.super_parent = Matrix4x4().read(file)
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -739,7 +748,6 @@ class Texture:
 
     def read(self, file: BinaryIO) -> "Texture":
         self.identifier, self.length = unpack("ii", file.read(calcsize("ii")))
-        print(f"Texture Identifier: {self.identifier}, Length: {self.length}")
         self.name = file.read(self.length).decode("utf-8").strip("\x00")
         self.spacer = unpack("i", file.read(calcsize("i")))[0]
         return self
@@ -859,6 +867,8 @@ class Material:
             self.saturation = unpack("f", file.read(calcsize("f")))[0]
         elif self.identifier == 1936745324:
             _unknown = unpack("f", file.read(calcsize("f")))[0]
+        elif self.identifier == 0:
+            _unknown = unpack("f", file.read(calcsize("f")))[0]
         else:
             self.unknown = unpack("f", file.read(calcsize("f")))[0]
             raise TypeError(f"Unknown Material {self.unknown}")
@@ -930,9 +940,15 @@ class Refraction:
 
     def read(self, file: BinaryIO) -> "Refraction":
         self.length = unpack("i", file.read(calcsize("i")))[0]
+
         if self.length == 1:
             self.identifier = unpack("i", file.read(calcsize("i")))[0]
             self.rgb = list(unpack("3f", file.read(calcsize("3f"))))
+        elif self.length > 1:
+            # TODO: Weird why it has more than 1? Maybe per Texture?
+            for _ in range(self.length):
+                self.identifier = unpack("i", file.read(calcsize("i")))[0]
+                self.rgb = list(unpack("3f", file.read(calcsize("3f"))))
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -955,8 +971,14 @@ class LevelOfDetail:
 
     def read(self, file: BinaryIO) -> "LevelOfDetail":
         self.length = unpack("i", file.read(calcsize("i")))[0]
+        if self.length == 0:
+            return self
+
         if self.length == 1:
             self.lod_level = unpack("i", file.read(calcsize("i")))[0]
+        else:
+            self.lod_level = unpack("ii", file.read(calcsize("ii")))[0]
+
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -1066,7 +1088,10 @@ class BattleforgeMesh:
 
     def read(self, file: BinaryIO) -> "BattleforgeMesh":
         self.vertex_count, self.face_count = unpack("ii", file.read(calcsize("ii")))
-        self.faces = [Face().read(file) for _ in range(self.face_count)]
+        print(f"VertexCount: {self.vertex_count}, FaceCount: {self.face_count}")
+        self.faces = []
+        for _ in range(self.face_count):
+            self.faces.append(Face().read(file))
         self.mesh_count = unpack("B", file.read(calcsize("B")))[0]
         self.mesh_data = [
             MeshData().read(file, self.vertex_count) for _ in range(self.mesh_count)
@@ -1117,7 +1142,9 @@ class BattleforgeMesh:
             self.refraction.read(file)
             self.materials.read(file)
         else:
-            raise TypeError(f"Unknown MaterialParameters {self.material_parameters}")
+            raise TypeError(
+                f"BattleforgeMesh: Unknown MaterialParameters {self.material_parameters}"
+            )
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -1207,14 +1234,18 @@ class CDspMeshFile:
         ]
     )
 
-    def read(self, file: BinaryIO) -> "CDspMeshFile":
+    def read(self, file: BinaryIO, srrd: bool = False) -> "CDspMeshFile":
         self.magic = unpack("i", file.read(calcsize("i")))[0]
-        if self.magic == 1314189598:
-            self.zero, self.mesh_count = unpack("ii", file.read(calcsize("ii")))
+        if self.magic == 1314189598 or srrd:
+            if srrd:
+                self.mesh_count = unpack("i", file.read(calcsize("i")))[0]
+            else:
+                self.zero, self.mesh_count = unpack("ii", file.read(calcsize("ii")))
             self.bounding_box_lower_left_corner = Vector3().read(file)
             self.bounding_box_upper_right_corner = Vector3().read(file)
             self.meshes = [BattleforgeMesh().read(file) for _ in range(self.mesh_count)]
-            self.some_points = [Vector4().read(file) for _ in range(3)]
+            if not srrd:
+                self.some_points = [Vector4().read(file) for _ in range(3)]
         elif self.magic < 100:  # we assume its the mesh Count
             self.bounding_box_lower_left_corner = Vector3().read(file)
             self.bounding_box_upper_right_corner = Vector3().read(file)
@@ -1305,7 +1336,7 @@ class CGeoOBBTree:
             "iii", file.read(calcsize("iii"))
         )
         if self.magic != 1845540702:
-            print(f"Magic Value: {self.magic} is not correct, skipping")
+            print(f"CGeoOBBTree: Magic Value: {self.magic} is not correct, skipping")
             return
         self.obb_nodes = [OBBNode().read(file) for _ in range(self.matrix_count)]
         self.triangle_count = unpack("i", file.read(calcsize("i")))[0]
@@ -2905,6 +2936,22 @@ class MeshSetGrid:
 
 
 @dataclass(eq=False, repr=False)
+class SRRDNode:
+    magic: str = ""  # 4 chars
+    size: int = 0  # Int
+
+    def read(self, file: BinaryIO) -> "SRRDNode":
+        """Reads the SRRDHeader from the buffer"""
+        self.magic = unpack("4s", file.read(4))[0].decode("utf-8")
+        if self.magic == ".FOE":
+            self.size = 0
+            return self
+
+        self.size = unpack("i", file.read(calcsize("i")))[0]
+        return self
+
+
+@dataclass(eq=False, repr=False)
 class DRS:
     operator: object = None
     context: object = None
@@ -2997,74 +3044,94 @@ class DRS:
         (
             self.magic,
             self.number_of_models,
-            self.node_information_offset,
-            self.node_hierarchy_offset,
-            self.node_count,
-        ) = unpack("iiiiI", reader.read(calcsize("iiiiI")))
+        ) = unpack("ii", reader.read(calcsize("ii")))
 
-        if self.magic != -981667554 or self.node_count < 1:
-            raise TypeError(
-                f"This is not a valid file. Magic: {self.magic}, NodeCount: {self.node_count}"
-            )
+        if self.magic == 1685222003:
+            # We read until the last 4 bytes (EOF)
+            while True:
+                node = SRRDNode().read(reader)
 
-        reader.seek(self.node_information_offset)
-        self.node_informations[0] = RootNodeInformation().read(reader)
+                if node.magic == "hsem":
+                    self.cdsp_mesh_file = CDspMeshFile().read(reader, srrd=True)
+                elif node.magic == "nioj":
+                    _unk = reader.read(4)
+                    self.cdsp_joint_map = CDspJointMap().read(reader)
+                elif node.magic == "moeg":
+                    _unk = reader.read(4)
+                    self.cgeo_mesh = CGeoMesh().read(reader)
+                elif node.magic == "niks":
+                    _unk = reader.read(4)
+                    self.csk_skin_info = CSkSkinInfo().read(reader)
+                elif node.magic == "leks":
+                    _unk = reader.read(4)
+                    self.csk_skeleton = CSkSkeleton().read(reader, srrd=True)
+                elif node.magic == ".FOE":
+                    break
+            return self
+        elif self.magic == -981667554:
+            (
+                self.node_information_offset,
+                self.node_hierarchy_offset,
+                self.node_count,
+            ) = unpack("iiI", reader.read(calcsize("iiI")))
+            reader.seek(self.node_information_offset)
+            self.node_informations[0] = RootNodeInformation().read(reader)
 
-        node_information_map = {
-            -475734043: "animation_set_node",
-            -1900395636: "cdsp_mesh_file_node",
-            100449016: "cgeo_mesh_node",
-            -761174227: "csk_skin_info_node",
-            -2110567991: "csk_skeleton_node",
-            -1403092629: "animation_timings_node",
-            -1340635850: "cdsp_joint_map_node",
-            -933519637: "cgeo_obb_tree_node",
-            -183033339: "drw_resource_meta_node",
-            1396683476: "cgeo_primitive_container_node",
-            268607026: "collision_shape_node",
-            688490554: "effect_set_node",
-            154295579: "mesh_set_grid_node",
-            735146985: "cdrw_locator_list_node",
-        }
+            node_information_map = {
+                -475734043: "animation_set_node",
+                -1900395636: "cdsp_mesh_file_node",
+                100449016: "cgeo_mesh_node",
+                -761174227: "csk_skin_info_node",
+                -2110567991: "csk_skeleton_node",
+                -1403092629: "animation_timings_node",
+                -1340635850: "cdsp_joint_map_node",
+                -933519637: "cgeo_obb_tree_node",
+                -183033339: "drw_resource_meta_node",
+                1396683476: "cgeo_primitive_container_node",
+                268607026: "collision_shape_node",
+                688490554: "effect_set_node",
+                154295579: "mesh_set_grid_node",
+                735146985: "cdrw_locator_list_node",
+            }
 
-        for _ in range(self.node_count - 1):
-            node_info = NodeInformation().read(reader)
-            setattr(self, node_information_map.get(node_info.magic, ""), node_info)
+            for _ in range(self.node_count - 1):
+                node_info = NodeInformation().read(reader)
+                setattr(self, node_information_map.get(node_info.magic, ""), node_info)
 
-        reader.seek(self.node_hierarchy_offset)
-        self.nodes[0] = RootNode().read(reader)
+            reader.seek(self.node_hierarchy_offset)
+            self.nodes[0] = RootNode().read(reader)
 
-        node_map = {
-            "AnimationSet": "animation_set_node",
-            "CDspMeshFile": "cdsp_mesh_file_node",
-            "CGeoMesh": "cgeo_mesh_node",
-            "CSkSkinInfo": "csk_skin_info_node",
-            "CSkSkeleton": "csk_skeleton_node",
-            "AnimationTimings": "animation_timings_node",
-            "CDspJointMap": "cdsp_joint_map_node",
-            "CGeoOBBTree": "cgeo_obb_tree_node",
-            "DrwResourceMeta": "drw_resource_meta_node",
-            "CGeoPrimitiveContainer": "cgeo_primitive_container_node",
-            "CollisionShape": "collision_shape_node",
-            "EffectSet": "effect_set_node",
-            "MeshSetGrid": "mesh_set_grid_node",
-            "CDrwLocatorList": "cdrw_locator_list_node",
-        }
+            node_map = {
+                "AnimationSet": "animation_set_node",
+                "CDspMeshFile": "cdsp_mesh_file_node",
+                "CGeoMesh": "cgeo_mesh_node",
+                "CSkSkinInfo": "csk_skin_info_node",
+                "CSkSkeleton": "csk_skeleton_node",
+                "AnimationTimings": "animation_timings_node",
+                "CDspJointMap": "cdsp_joint_map_node",
+                "CGeoOBBTree": "cgeo_obb_tree_node",
+                "DrwResourceMeta": "drw_resource_meta_node",
+                "CGeoPrimitiveContainer": "cgeo_primitive_container_node",
+                "CollisionShape": "collision_shape_node",
+                "EffectSet": "effect_set_node",
+                "MeshSetGrid": "mesh_set_grid_node",
+                "CDrwLocatorList": "cdrw_locator_list_node",
+            }
 
-        for _ in range(self.node_count - 1):
-            node = Node().read(reader)
-            setattr(self, node_map.get(node.name, ""), node)
+            for _ in range(self.node_count - 1):
+                node = Node().read(reader)
+                setattr(self, node_map.get(node.name, ""), node)
 
-        for key, value in node_map.items():
-            # remove _node from the value
-            node_info: NodeInformation = getattr(self, value, None)
-            index = value.replace("_node", "")
-            if node_info is not None:
-                reader.seek(node_info.offset)
-                setattr(self, index, globals()[key]().read(reader))
+            for key, value in node_map.items():
+                # remove _node from the value
+                node_info: NodeInformation = getattr(self, value, None)
+                index = value.replace("_node", "")
+                if node_info is not None:
+                    reader.seek(node_info.offset)
+                    setattr(self, index, globals()[key]().read(reader))
 
-        reader.close()
-        return self
+            reader.close()
+            return self
 
     def save(self, file_name: str):
         writer = FileWriter(file_name)
@@ -3174,4 +3241,126 @@ class BMS:
                 setattr(self, index, globals()[key]().read(reader))
 
         reader.close()
+        return self
+
+
+@dataclass
+class SFVariant:
+    weight: Optional[int]
+    path: str
+    file_name: Optional[str] = None
+
+    def __post_init__(self):
+        self.file_name = self.path.split("/")[-1] if self.path else ""
+
+
+@dataclass
+class SFAnimation:
+    job: int
+    distance: Optional[float] = None
+    weapon: Optional[int] = None
+    attitude: Optional[int] = None
+    variants: List[SFVariant] = field(default_factory=list)
+
+
+@dataclass
+class SFLink:
+    xOffset: Optional[float] = None
+    yOffset: Optional[float] = None
+    zOffset: Optional[float] = None
+    bone: Optional[str] = None
+
+
+@dataclass
+class SFSlot:
+    name: str
+    link: SFLink
+
+
+@dataclass
+class SFAttachment:
+    slots: List[SFSlot] = field(default_factory=list)
+
+
+@dataclass
+class SFAnimationSet:
+    version: str
+    animations: List[SFAnimation] = field(default_factory=list)
+    attachment: Optional[SFAttachment] = None
+
+
+@dataclass(eq=False, repr=False)
+class AMS:
+    animation_set: SFAnimationSet = None
+
+    def read(self, file_name: str) -> "AMS":
+        """Reads the AMS file and parses the XML content"""
+        with open(file_name, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        def sanitize_emote(match):
+            attr_start = match.group(1)
+            attr_value = match.group(2)
+            attr_end = match.group(3)
+            # Replace unescaped < and > characters
+            safe_attr_value = attr_value.replace("<", "&lt;").replace(">", "&gt;")
+            return f"{attr_start}{safe_attr_value}{attr_end}"
+
+        content = re.sub(r'(<emote\s+name=")([^"]*?)(">)', sanitize_emote, content)
+
+        root = ET.fromstring(content)
+        version = root.attrib.get("version", "")
+        self.animation_set = SFAnimationSet(version=version)
+
+        # Parse each <animation> element
+        for anim_elem in root.findall("animation"):
+            job = int(anim_elem.attrib["job"])
+
+            # Optional attributes
+            distance = anim_elem.attrib.get("distance")
+            distance = float(distance) if distance else None
+
+            weapon = anim_elem.attrib.get("weapon")
+            weapon = int(weapon) if weapon else None
+
+            attitude = anim_elem.attrib.get("attitude")
+            attitude = int(attitude) if attitude else None
+
+            animation = SFAnimation(
+                job=job, distance=distance, weapon=weapon, attitude=attitude
+            )
+
+            # Parse all <variant> children for this animation
+            for variant_elem in anim_elem.findall("variant"):
+                weight = variant_elem.attrib.get("weight")
+                weight = int(weight) if weight else None
+                # Use .strip() to remove any leading/trailing whitespace from the text
+                path = variant_elem.text.strip() if variant_elem.text else ""
+                animation.variants.append(SFVariant(weight=weight, path=path))
+
+            self.animation_set.animations.append(animation)
+
+        # Parse the <attachment> element (if any)
+        attach_elem = root.find("attachment")
+        if attach_elem is not None:
+            attachment = SFAttachment()
+            for slot_elem in attach_elem.findall("slot"):
+                slot_name = slot_elem.attrib["name"]
+                link_elem = slot_elem.find("link")
+                if link_elem is not None:
+                    # Get optional offset attributes
+                    xOffset = link_elem.attrib.get("xOffset")
+                    yOffset = link_elem.attrib.get("yOffset")
+                    zOffset = link_elem.attrib.get("zOffset")
+                    xOffset = float(xOffset) if xOffset else None
+                    yOffset = float(yOffset) if yOffset else None
+                    zOffset = float(zOffset) if zOffset else None
+
+                    bone = link_elem.attrib.get("bone")
+                    link = SFLink(
+                        xOffset=xOffset, yOffset=yOffset, zOffset=zOffset, bone=bone
+                    )
+                    attachment.slots.append(SFSlot(name=slot_name, link=link))
+            self.animation_set.attachment = attachment
+
         return self
