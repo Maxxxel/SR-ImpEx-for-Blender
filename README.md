@@ -28,9 +28,51 @@ Follow these steps to install the add-on into Blender:
 
 ### Exporting Models
 
-TBA
+1. **Open Blender**  
+   Launch Blender as you normally would.
 
----
+2. **Import Battleforge Scene**  
+   - Go to File > Import > New Battleforge Scene (no file selection needed).
+
+3. **Choose Model Type & Collision**  
+   - In the import panel, select:
+     - **Model Type**: Static or Animated  
+     - **Collision**: Box, Sphere, or Cylinder if required
+
+4. **Create New Battleforge Scene**  
+   - Click the **New Battleforge Scene** button.  
+   - Blender generates a new Collection hierarchy.
+
+5. **Organize Collections**  
+   - (Optional) Delete the original `Collection` hierarchy.  
+   - Work within the Battleforge collections.
+
+6. **Rename Your Model Collection**  
+   - In the Outliner, rename `DRSModel_object_CHANGENAME` to your model name.
+
+7. **Add Meshes**  
+   - Create/import meshes and move them into `Meshes_Collection`.
+
+8. **Assign Materials**  
+   - Switch to the Shading workspace.  
+   - Open the Asset Browser and under Battleforge Asset Lib, drag-and-drop:
+     - **ColNorPar** for Color, Normal, Parameter maps  
+     - **ColNorParRef** to include Refraction map  
+   - Ensure all wanted texture nodes feed into the **DRS Material** node.
+
+9. **Generate Collision Shapes (optional)**  
+   - Add a primitive (Box/Sphere/Cylinder), scale/position around your mesh, and put it inside the right sub-collection.
+
+10. **Export to .drs**  
+    - Select your model collection.  
+    - Go to File > Export > Battleforge (.drs).  
+    - Verify File Name and options:
+      - Apply Transform (default)
+      - Split Mesh by UV Islands (default)
+      - Flip Normals (default): Sometimes your model appears to be inside-out, change this optio to fix it
+      - Keep Debug Collection
+      - Model Type: static/animated with/without collision
+    - Click **Export DRS**.
 
 ## 🎯 Supported Features
 

@@ -2123,8 +2123,7 @@ def set_metallic_roughness_emission_map(
             [
                 pixels_r[i] if pixels_r else 0,  # Red channel
                 pixels_g[i + 1] if pixels_g else 0,  # Green channel
-                # Blue channel (placeholder for Fluid Map)
-                0,
+                0,  # Blue channel (placeholder for Fluid Map)
                 pixels_a[i + 3] if pixels_a else 0,  # Alpha channel
             ]
         )
