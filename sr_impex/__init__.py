@@ -17,7 +17,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 8, 1),
+    "version": (2, 8, 2),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -227,6 +227,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             return {"FINISHED"}
         elif self.filepath.endswith(".bmg"):
             keywords.pop("import_modules", None)
+            keywords.pop("animation_smoothing", None)
             load_bmg(context, **keywords)
             return {"FINISHED"}
         else:
