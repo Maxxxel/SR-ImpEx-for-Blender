@@ -100,9 +100,6 @@ def insert_keyframes(
     animation_type: int,
     bind_rot: Quaternion,
     bind_loc: Vector,
-    animation_smoothing: bool,
-    tangent_store: dict[str, float] = None,
-    rot_tangent_store: dict[float, Quaternion] = None,
 ) -> None:
     """
     Insert keyframes into the provided F-Curves.
@@ -116,12 +113,8 @@ def insert_keyframes(
         keypoints: List[bpy.types.Keyframe] = []
         for axis, value in zip("xyz", translation):
             kp = fcurves[f"location_{axis}"].keyframe_points.insert(frame, value)
-            kp.interpolation = "BEZIER"
+            kp.interpolation = "LINEAR"
             keypoints.append(kp)
-            if animation_smoothing and tangent_store:
-                tangent_store[f"location_{axis}"][round(frame, 3)] = getattr(
-                    frame_data, f"tan_{axis}"
-                )
     elif animation_type == 1:
         # Compute rotation. Note the negative sign before frame_data.w may be required,
         # depending on the source file’s convention.
@@ -131,13 +124,8 @@ def insert_keyframes(
         keypoints: List[bpy.types.Keyframe] = []
         for axis, value in zip("wxyz", rotation_quat):
             kp = fcurves[f"rotation_{axis}"].keyframe_points.insert(frame, value)
-            kp.interpolation = "BEZIER"
+            kp.interpolation = "LINEAR"
             keypoints.append(kp)
-        if animation_smoothing and rot_tangent_store:
-            tquat = Quaternion(
-                (frame_data.tan_w, frame_data.tan_x, frame_data.tan_y, frame_data.tan_z)
-            )
-            rot_tangent_store[round(frame, 3)] = tquat
 
 
 def add_animation_to_nla_track(
@@ -269,7 +257,6 @@ def create_animation(
     animation_name: str,
     import_animation_type: str,
     fps: int,
-    animation_smoothing: bool,
 ) -> None:
     """
     High-level routine to create an animation on the armature from a SKA file.
@@ -321,8 +308,6 @@ def create_animation(
                     header.type,
                     bone.bind_rot,
                     bone.bind_loc,
-                    animation_smoothing,
-                    tangent_store=tangent_storage_all[bone.ska_identifier],
                 )
             else:
                 insert_keyframes(
@@ -332,21 +317,6 @@ def create_animation(
                     header.type,
                     bone.bind_rot,
                     bone.bind_loc,
-                    animation_smoothing,
-                    rot_tangent_store=rot_tangent_storage_all[bone.ska_identifier],
                 )
-
-    # Post-process: apply smoothing to translation F-Curves using stored tangent values.
-    if animation_smoothing:
-        for bone_id, fcurves in bone_fcurve_map.items():
-            tangents = tangent_storage_all.get(bone_id, {})
-            for axis in "xyz":
-                key = f"location_{axis}"
-                if key in fcurves:
-                    apply_translation_smoothing(fcurves[key], tangents[key], fps)
-        # For rotation, process the rotation channels.
-        for bone_id, fcurves in bone_fcurve_map.items():
-            rot_tans = rot_tangent_storage_all.get(bone_id, {})
-            apply_rotation_smoothing(fcurves, rot_tans, fps, num_samples=3)
 
     add_animation_to_nla_track(armature_object, action)

@@ -17,7 +17,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 8, 1),
+    "version": (2, 8, 2),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -141,11 +141,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         min=1,
         max=100,
     )
-    animation_smoothing: BoolProperty(
-        name="Animation Smoothing",
-        description="Use animation smoothing (WIP)",
-        default=False,
-    )  # type: ignore
     import_ik_atlas: BoolProperty(
         name="Import IK Atlas (Experimental)",
         description="Import IK Atlas",
@@ -177,7 +172,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         layout.prop(self, "import_animation")
         layout.prop(self, "import_animation_type")
         layout.prop(self, "import_animation_fps")
-        layout.prop(self, "animation_smoothing")
         layout.prop(self, "import_ik_atlas")
         # Add a separator
         layout.separator()
@@ -204,7 +198,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         keywords["import_animation"] = self.import_animation
         keywords["import_animation_type"] = self.import_animation_type
         keywords["import_animation_fps"] = self.import_animation_fps
-        keywords["animation_smoothing"] = self.animation_smoothing
         keywords["import_ik_atlas"] = self.import_ik_atlas
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction

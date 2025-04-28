@@ -23,6 +23,7 @@ import bmesh.types
 from .drs_definitions import (
     DRS,
     BMS,
+    BMG,
     BoneMatrix,
     CDspMeshFile,
     CylinderShape,
@@ -396,10 +397,15 @@ def process_module_import(
     slocator,
     source_collection,
     armature_object,
+    bone_list,
     dir_name,
     drs_file,
     import_animation,
+    import_animation_type,
+    fps,
     import_debris,
+    import_collision_shape,
+    import_ik_atlas,
 ):
     # Determine module type and choose the correct collection name.
     module_type = slocator.class_type  # e.g., "Module1" or "Module2"
@@ -421,10 +427,15 @@ def process_module_import(
         module.state_based_mesh_set,
         module_collection,
         armature_object,
+        bone_list,
         dir_name,
         drs_file,
         import_animation,
+        import_animation_type,
+        fps,
         import_debris,
+        import_collision_shape,
+        import_ik_atlas,
         module_name,
         slocator,
         prefix,
@@ -636,38 +647,39 @@ def clean_vector(vec, tol=1e-6):
 
 def add_skin_weights_to_mesh(
     mesh_object: bpy.types.Object,
-    bone_list: list[DRSBone],
-    bone_weights: list[VertexData],
-    cgeo_mesh_data: CGeoMesh,
     cdsp_mesh_file_data: BattleforgeMesh,
+    joint_group: JointGroup,
+    armature_object: bpy.types.Object,
 ) -> None:
-    vertex_to_cgeo_index = []
-    bones_names = [bone.name for bone in bone_list]
 
-    for v in cdsp_mesh_file_data.mesh_data[0].vertices:
-        key = tuple(round(coord, 6) for coord in v.position)
-        index = cgeo_mesh_data.hash_map.get(key)
-        if index is None:
-            logger.log(
-                f"Vertex {key} not found in CGeoMesh hash map. Skipping weight assignment.",
-                "Warning",
-                "WARNING",
-            )
-            continue
-        vertex_to_cgeo_index.append(index)
+    skined_vertices_data = next(
+        (
+            mesh.vertices
+            for mesh in cdsp_mesh_file_data.mesh_data
+            if mesh.revision == 12
+        ),
+    )
 
-    skin_data: list[VertexData] = [bone_weights[i] for i in vertex_to_cgeo_index]
+    if not skined_vertices_data:
+        logger.log(
+            f"Mesh {mesh_object.name} does not have skin weights.",
+            "Info",
+            "INFO",
+        )
+        return
 
-    for vertex_index, vertex_data in enumerate(skin_data):
-        for bone_index, weight in zip(vertex_data.bone_indices, vertex_data.weights):
-            if weight > 0:
-                bone_name = bones_names[bone_index]
+    for vertex_index, vertex in enumerate(skined_vertices_data):
+        for i in range(4):
+            if vertex.raw_weights[i] > 0:
+                joint_index = vertex.bone_indices[i]
+                bone_index = joint_group.joints[joint_index]
+                bone_name = armature_object.data.bones[bone_index].name
                 if bone_name not in mesh_object.vertex_groups:
                     vertex_group = mesh_object.vertex_groups.new(name=bone_name)
-                    vertex_group.add([vertex_index], weight, "ADD")
+                    vertex_group.add([vertex_index], vertex.raw_weights[i] / 255, "ADD")
                 else:
                     vertex_group = mesh_object.vertex_groups[bone_name]
-                    vertex_group.add([vertex_index], weight, "ADD")
+                    vertex_group.add([vertex_index], vertex.raw_weights[i] / 255, "ADD")
 
 
 def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> None:
@@ -899,14 +911,11 @@ def import_cdsp_mesh_file(
 
 def create_mesh_object(
     drs_file: DRS,
-    mesh_index,
+    mesh_index: int,
     dir_name,
     base_name,
-    bone_list=None,
-    bone_weights: List[VertexData] = None,
     armature_object=None,
     transform_matrix=None,
-    cgeo_mesh_data=None,
 ):
     # Create the mesh data using your existing helper.
     mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
@@ -914,14 +923,20 @@ def create_mesh_object(
     # Create the mesh object.
     mesh_object = bpy.data.objects.new(f"CDspMeshFile_{mesh_index}", mesh_data)
 
-    # Add skin weights if available.
-    if drs_file.csk_skin_info and bone_weights and bone_list:
+    # Add skin weights if available ==> any of drs_file.cdsp_mesh_file.meshes[mesh_index].mesh_data[n].revision == 12
+    if (
+        drs_file.csk_skin_info
+        and any(
+            mesh.revision == 12
+            for mesh in drs_file.cdsp_mesh_file.meshes[mesh_index].mesh_data
+        )
+        and armature_object
+    ):
         add_skin_weights_to_mesh(
             mesh_object,
-            bone_list,
-            bone_weights,
-            cgeo_mesh_data,
             drs_file.cdsp_mesh_file.meshes[mesh_index],
+            drs_file.cdsp_joint_map.joint_groups[mesh_index],
+            armature_object,
         )
 
     # Link armature if a skeleton exists.
@@ -1233,16 +1248,123 @@ def import_animation_ik_atlas(
         limit_rot.owner_space = "LOCAL"
 
 
+def load_drs(
+    context: bpy.types.Context,
+    filepath="",
+    apply_transform=True,
+    import_collision_shape=False,
+    import_animation=True,
+    import_animation_type="FRAMES",
+    import_animation_fps=30,
+    import_ik_atlas=False,
+    import_debris=False,
+    import_modules=True,
+) -> None:
+
+    start_time = time.time()
+    base_name = os.path.basename(filepath).split(".")[0]
+    dir_name = os.path.dirname(filepath)
+    drs_file: DRS = DRS().read(filepath)
+    bpy.context.scene.render.fps = import_animation_fps
+
+    source_collection: bpy.types.Collection = bpy.data.collections.new(
+        "DRSModel_" + base_name
+    )
+    context.scene.collection.children.link(source_collection)
+
+    armature_object, bone_list = setup_armature(source_collection, drs_file)
+
+    mesh_collection: bpy.types.Collection = bpy.data.collections.new(
+        "Meshes_Collection"
+    )
+    source_collection.children.link(mesh_collection)
+
+    for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
+        mesh_object, _ = create_mesh_object(
+            drs_file, mesh_index, dir_name, base_name, armature_object, None
+        )
+        mesh_collection.objects.link(mesh_object)
+
+    if drs_file.collision_shape is not None and import_collision_shape:
+        import_collision_shapes(source_collection, drs_file)
+
+    if (
+        drs_file.animation_set is not None
+        and armature_object is not None
+        and import_animation
+    ):
+        with ensure_mode("POSE"):
+            for animation_key in drs_file.animation_set.mode_animation_keys:
+                for variant in animation_key.animation_set_variants:
+                    ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
+                    # Create the Animation
+                    create_animation(
+                        ska_file,
+                        armature_object,
+                        bone_list,
+                        variant.file,
+                        import_animation_type,
+                        import_animation_fps,
+                    )
+
+    if (
+        import_ik_atlas
+        and drs_file.csk_skeleton is not None
+        and armature_object is not None
+        and drs_file.animation_set is not None
+        and bone_list is not None
+    ):
+        import_animation_ik_atlas(armature_object, drs_file.animation_set, bone_list)
+
+    if import_modules and drs_file.cdrw_locator_list is not None:
+        for slocator in drs_file.cdrw_locator_list.slocators:
+            if slocator.file_name_length > 0 and slocator.class_type in {
+                "Module1",
+                "Module2",
+            }:
+                process_module_import(
+                    slocator,
+                    source_collection,
+                    armature_object,
+                    bone_list,
+                    dir_name,
+                    drs_file,
+                    import_animation,
+                    import_animation_type,
+                    import_animation_fps,
+                    import_debris,
+                    import_collision_shape,
+                    import_ik_atlas,
+                )
+
+    # Apply the Transformations to the Source Collection
+    apply_transformation(
+        source_collection, armature_object, apply_transform, False, True, True
+    )
+
+    # Print the Time Measurement
+    logger.log(
+        f"Imported {base_name} in {time.time() - start_time:.2f} seconds.",
+        "Import Time",
+        "INFO",
+    )
+    logger.display()
+    return {"FINISHED"}
+
+
 def import_state_based_mesh_set(
     state_based_mesh_set: StateBasedMeshSet,
     source_collection: bpy.types.Collection,
     armature_object: bpy.types.Object,
+    bone_list: list[DRSBone],
     dir_name: str,
     bmg_file: DRS,
     import_animation: bool,
     animation_type: str,
+    fps: int,
     import_debris: bool,
     import_collision_shape: bool,
+    import_ik_atlas: bool,
     base_name: str,
     slocator: SLocator = None,
     prefix: str = "",
@@ -1263,59 +1385,20 @@ def import_state_based_mesh_set(
             # Load the DRS Files
             drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_set.drs_file))
 
-            if drs_file.csk_skeleton is not None and armature_object is None:
-                # Create the Armature Data
-                armature_data: bpy.types.Armature = bpy.data.armatures.new(
-                    "CSkSkeleton"
-                )
-                # Create the Armature Object and add the Armature Data to it
-                armature_object: bpy.types.Object = bpy.data.objects.new(
-                    "Armature", armature_data
-                )
-                # Link the Armature Object to the Source Collection
-                source_collection.objects.link(armature_object)
-                # Create the Skeleton
-                bone_list = init_bones(drs_file.csk_skeleton)
-                # Directly set armature data to edit mode
-                bpy.context.view_layer.objects.active = armature_object
-                with ensure_mode("EDIT"):
-                    # Create the Bone Tree without using bpy.ops or context
-                    create_bone_tree(armature_data, bone_list, bone_list[0])
-                record_bind_pose(bone_list, armature_data)
-                # Add the Animations to the Armature Object
-                if bmg_file.animation_set is not None:
-                    pass
-
-            if drs_file.csk_skin_info is not None:
-                # Create the Bone Weights
-                bone_weights = create_bone_weights(
-                    drs_file.cdsp_mesh_file, drs_file.csk_skin_info, drs_file.cgeo_mesh
-                )
+            if not armature_object:
+                armature_object, bone_list = setup_armature(source_collection, drs_file)
 
             if drs_file.collision_shape is not None and import_collision_shape:
                 import_collision_shapes(state_collection, drs_file)
 
             for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-                offset = (
-                    0
-                    if mesh_index == 0
-                    else drs_file.cdsp_mesh_file.meshes[mesh_index - 1].vertex_count
-                )
                 # Create the Mesh Data
                 mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
                 # Create the Mesh Object and add the Mesh Data to it
                 mesh_object: bpy.types.Object = bpy.data.objects.new(
                     f"CDspMeshFile_{mesh_index}", mesh_data
                 )
-                # Add the Bone Weights to the Mesh Object
-                if drs_file.csk_skin_info is not None:
-                    add_skin_weights_to_mesh(
-                        mesh_object,
-                        bone_list,
-                        bone_weights,
-                        offset,
-                        drs_file.cdsp_mesh_file.meshes[mesh_index],
-                    )
+
                 # Check if the Mesh has a Skeleton and modify the Mesh Object accordingly
                 if drs_file.csk_skeleton is not None:
                     # Set the Armature Object as the Parent of the Mesh Object
@@ -1374,8 +1457,19 @@ def import_state_based_mesh_set(
                                 bone_list,
                                 variant.file,
                                 animation_type,
-                                animation_smoothing,
+                                fps,
                             )
+
+            if (
+                import_ik_atlas
+                and armature_object is not None
+                and import_animation
+                and drs_file.animation_set is not None
+                and bone_list is not None
+            ):
+                import_animation_ik_atlas(
+                    armature_object, drs_file.animation_set, bone_list
+                )
 
     # Get individual desctruction States
     if import_debris:
@@ -1390,148 +1484,86 @@ def import_state_based_mesh_set(
     return armature_object
 
 
-def load_drs(
-    context: bpy.types.Context,
-    filepath="",
-    apply_transform=True,
-    import_collision_shape=False,
-    import_animation=True,
-    import_animation_type="FRAMES",
-    import_animation_fps=30,
-    animation_smoothing=True,
-    import_ik_atlas=False,
-    import_debris=False,
-    import_modules=True,
-) -> None:
-
-    start_time = time.time()
-    base_name = os.path.basename(filepath).split(".")[0]
-    dir_name = os.path.dirname(filepath)
-    drs_file: DRS = DRS().read(filepath)
-    bpy.context.scene.render.fps = import_animation_fps
-
-    source_collection: bpy.types.Collection = bpy.data.collections.new(
-        "DRSModel_" + base_name
-    )
-    context.scene.collection.children.link(source_collection)
-
-    armature_object, bone_list = setup_armature(source_collection, drs_file)
-
-    mesh_collection: bpy.types.Collection = bpy.data.collections.new(
-        "Meshes_Collection"
-    )
-    source_collection.children.link(mesh_collection)
-
-    skin_vertex_data = None
-    if drs_file.csk_skin_info is not None:
-        skin_vertex_data = drs_file.csk_skin_info.vertex_data
-
-    for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-        mesh_object, _ = create_mesh_object(
-            drs_file,
-            mesh_index,
-            dir_name,
-            base_name,
-            bone_list,
-            skin_vertex_data,
-            armature_object,
-            None,
-            drs_file.cgeo_mesh,
-        )
-        mesh_collection.objects.link(mesh_object)
-
-    if drs_file.collision_shape is not None and import_collision_shape:
-        import_collision_shapes(source_collection, drs_file)
-
-    if (
-        drs_file.animation_set is not None
-        and armature_object is not None
-        and import_animation
-    ):
-        with ensure_mode("POSE"):
-            for animation_key in drs_file.animation_set.mode_animation_keys:
-                for variant in animation_key.animation_set_variants:
-                    ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
-                    # Create the Animation
-                    create_animation(
-                        ska_file,
-                        armature_object,
-                        bone_list,
-                        variant.file,
-                        import_animation_type,
-                        import_animation_fps,
-                        animation_smoothing,
-                    )
-
-    if (
-        import_ik_atlas
-        and drs_file.csk_skeleton is not None
-        and armature_object is not None
-        and drs_file.animation_set is not None
-        and bone_list is not None
-    ):
-        import_animation_ik_atlas(armature_object, drs_file.animation_set, bone_list)
-
-    if import_modules and drs_file.cdrw_locator_list is not None:
-        for slocator in drs_file.cdrw_locator_list.slocators:
-            if slocator.file_name_length > 0 and slocator.class_type in {
-                "Module1",
-                "Module2",
-            }:
-                process_module_import(
-                    slocator,
-                    source_collection,
-                    armature_object,
-                    dir_name,
-                    drs_file,
-                    import_animation,
-                    import_debris,
-                )
-
-    # Apply the Transformations to the Source Collection
-    apply_transformation(
-        source_collection, armature_object, apply_transform, False, True, True
-    )
-
-    # Print the Time Measurement
-    logger.log(
-        f"Imported {base_name} in {time.time() - start_time:.2f} seconds.",
-        "Import Time",
-        "INFO",
-    )
-    logger.display()
-    return {"FINISHED"}
-
-
 def import_mesh_set_grid(
-    bmg_file: DRS,
+    bmg_file: BMG,
     source_collection: bpy.types.Collection,
     armature_object: bpy.types.Object,
     dir_name: str,
     base_name: str,
     import_animation: bool,
     animation_type: str,
+    fps: int,
     import_debris: bool,
     import_collision_shape: bool,
-) -> bpy.types.Object:
+    import_ik_atlas: bool,
+) -> Tuple[bpy.types.Object, list[DRSBone]]:
+    # Create StateBasedMeshSet Collection to store the Mesh Objects
+    state_based_mesh_set_collection: bpy.types.Collection = bpy.data.collections.new(
+        "StateBasedMeshSet_Collection"
+    )
+    source_collection.children.link(state_based_mesh_set_collection)
+
     for module in bmg_file.mesh_set_grid.mesh_modules:
         if module.has_mesh_set:
-            temp_armature_object = import_state_based_mesh_set(
-                module.state_based_mesh_set,
-                source_collection,
-                armature_object,
-                dir_name,
-                bmg_file,
-                import_animation,
-                animation_type,
-                import_debris,
-                import_collision_shape,
-                base_name,
-            )
-            if temp_armature_object is not None:
-                armature_object = temp_armature_object
+            for mesh_set in module.state_based_mesh_set.mesh_states:
+                if mesh_set.has_files:
+                    file_path = os.path.join(dir_name, mesh_set.drs_file)
+                    drs_file = DRS().read(file_path)
 
-    return armature_object
+                    if armature_object is None:
+                        armature_object, bone_list = setup_armature(
+                            source_collection, drs_file
+                        )
+
+                    state_collection_name = f"Mesh_State_{mesh_set.state_num}"
+                    state_collection = find_or_create_collection(
+                        state_based_mesh_set_collection, state_collection_name
+                    )
+
+                    state_meshes_collection: bpy.types.Collection = (
+                        bpy.data.collections.new("Meshes_Collection")
+                    )
+                    state_collection.children.link(state_meshes_collection)
+
+                    for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
+                        mesh_object, _ = create_mesh_object(
+                            drs_file,
+                            mesh_index,
+                            dir_name,
+                            base_name,
+                            armature_object,
+                            None,
+                        )
+                        state_meshes_collection.objects.link(mesh_object)
+
+                    if drs_file.collision_shape is not None and import_collision_shape:
+                        import_collision_shapes(state_collection, drs_file)
+
+                        if (
+                            import_ik_atlas
+                            and drs_file.csk_skeleton is not None
+                            and armature_object is not None
+                            and drs_file.animation_set is not None
+                            and bone_list is not None
+                        ):
+                            import_animation_ik_atlas(
+                                armature_object, drs_file.animation_set, bone_list
+                            )
+
+            # Get individual desctruction States
+            if import_debris:
+                destruction_collection: bpy.types.Collection = bpy.data.collections.new(
+                    "Destruction_State_Collection"
+                )
+                source_collection.children.link(destruction_collection)
+                process_debris_import(
+                    module.state_based_mesh_set,
+                    destruction_collection,
+                    dir_name,
+                    base_name,
+                )
+
+    return armature_object, bone_list
 
 
 def load_bmg(
@@ -1542,6 +1574,7 @@ def load_bmg(
     import_animation=True,
     import_animation_type="FRAMES",
     import_animation_fps=30,
+    import_ik_atlas=False,
     import_debris=True,
     import_construction=True,
 ) -> None:
@@ -1553,10 +1586,11 @@ def load_bmg(
         "DRSModel_" + base_name
     )
     context.collection.children.link(source_collection)
-    bmg_file: DRS = DRS().read(filepath)
+    bmg_file: BMG = BMG().read(filepath)
 
     # Models share the same Skeleton Files, so we only need to create one Armature and share it across all sub-modules!
     armature_object = None
+    bone_list = None
 
     # Ground Decal
     if bmg_file.mesh_set_grid.ground_decal is not None:
@@ -1637,7 +1671,7 @@ def load_bmg(
 
     # Import Mesh Set Grid
     if bmg_file.mesh_set_grid is not None:
-        armature_object = import_mesh_set_grid(
+        armature_object, bone_list = import_mesh_set_grid(
             bmg_file,
             source_collection,
             armature_object,
@@ -1645,8 +1679,10 @@ def load_bmg(
             base_name,
             import_animation,
             import_animation_type,
+            import_animation_fps,
             import_debris,
             import_collision_shape,
+            import_ik_atlas,
         )
 
     # Import Construction
@@ -1685,10 +1721,16 @@ def load_bmg(
                     import_state_based_mesh_set(
                         bms_file.state_based_mesh_set,
                         slocator_collection,
+                        armature_object,
+                        bone_list,
                         construction_dir,
                         bms_file,
                         import_animation,
+                        import_animation_type,
+                        import_animation_fps,
                         import_debris,
+                        import_collision_shape,
+                        import_ik_atlas,
                         module_name,
                         slocator,
                         "Construction_",
@@ -1731,6 +1773,27 @@ def load_bmg(
                     "Error",
                     "ERROR",
                 )
+
+    # Import Animation
+    if (
+        bmg_file.animation_set is not None
+        and armature_object is not None
+        and bones_list is not None
+        and import_animation
+    ):
+        with ensure_mode("POSE"):
+            for animation_key in bmg_file.animation_set.mode_animation_keys:
+                for variant in animation_key.animation_set_variants:
+                    ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
+                    # Create the Animation
+                    create_animation(
+                        ska_file,
+                        armature_object,
+                        bone_list,
+                        variant.file,
+                        import_animation_type,
+                        import_animation_fps,
+                    )
 
     # Apply the Transformations to the Source Collection
     apply_transformation(
