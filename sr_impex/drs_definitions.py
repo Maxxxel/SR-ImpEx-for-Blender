@@ -171,9 +171,7 @@ class RootNode:
     name: str = "root name"
 
     def read(self, file: BinaryIO) -> "RootNode":
-        self.identifier, self.unknown, self.length = unpack(
-            "iii", file.read(calcsize("iii"))
-        )
+        self.identifier, self.unknown, self.length = unpack("iii", file.read(12))
         self.name = file.read(self.length).decode("utf-8").strip("\x00")
         return self
 
@@ -203,9 +201,13 @@ class Node:
         self.length = len(self.name)
 
     def read(self, file: BinaryIO) -> "Node":
-        self.info_index, self.length = unpack("ii", file.read(calcsize("ii")))
-        self.name = unpack(f"{self.length}s", file.read(calcsize(f"{self.length}s")))
-        self.zero = unpack("i", file.read(calcsize("i")))[0]
+        self.info_index, self.length = unpack("ii", file.read(8))
+        self.name = (
+            unpack(f"{self.length}s", file.read(calcsize(f"{self.length}s")))[0]
+            .decode("utf-8")
+            .strip("\x00")
+        )
+        self.zero = unpack("i", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -215,7 +217,7 @@ class Node:
         file.write(pack("i", self.zero))
 
     def size(self) -> int:
-        return calcsize("ii") + calcsize(f"{self.length}s") + calcsize("i")
+        return 8 + calcsize(f"{self.length}s") + 4
 
 
 @dataclass(eq=False, repr=False)
@@ -230,9 +232,9 @@ class RootNodeInformation:
     node_name = ""
 
     def read(self, file: BinaryIO) -> "RootNodeInformation":
-        self.zeroes = unpack("16b", file.read(calcsize("16b")))
+        self.zeroes = unpack("16b", file.read(16))
         self.neg_one, self.one, self.node_information_count, self.zero = unpack(
-            "iiii", file.read(calcsize("iiii"))
+            "iiii", file.read(16)
         )
         return self
 
@@ -249,7 +251,7 @@ class RootNodeInformation:
         )
 
     def size(self) -> int:
-        return calcsize("16biiii")
+        return 32
 
     def update_offset(self, _: int) -> None:
         pass
@@ -271,9 +273,9 @@ class NodeInformation:
 
     def read(self, file: BinaryIO) -> "NodeInformation":
         self.magic, self.identifier, self.offset, self.node_size = unpack(
-            "iiii", file.read(calcsize("iiii"))
+            "iiii", file.read(16)
         )
-        self.spacer = unpack("16b", file.read(calcsize("16b")))
+        self.spacer = unpack("16b", file.read(16))
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -303,12 +305,16 @@ class Vertex:
         if revision == 133121:
             data = unpack_data(file, "fff", "fff", "ff")
             self.position, self.normal, self.texture = data[0], data[1], data[2]
-        elif revision == 12288:
+        elif revision == 12288 or revision == 2049:
             data = unpack_data(file, "fff", "fff")
             self.tangent, self.bitangent = data[0], data[1]
         elif revision == 12:
             data = unpack_data(file, "4B", "4B")
             self.raw_weights, self.bone_indices = data[0], data[1]
+        elif revision == 163841:
+            data = unpack_data(file, "fff", "ff", "4B")
+            self.position, self.texture = data[0], data[1]
+            self.normal = [0.0, 0.0, 0.0]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -344,19 +350,19 @@ class Vertex:
 
     def size(self) -> int:
         if self.position:
-            return calcsize("fff")
+            return 12
         if self.normal:
-            return calcsize("fff")
+            return 12
         if self.texture:
-            return calcsize("ff")
+            return 8
         if self.tangent:
-            return calcsize("fff")
+            return 12
         if self.bitangent:
-            return calcsize("fff")
+            return 12
         if self.raw_weights:
-            return calcsize("4B")
+            return 4
         if self.bone_indices:
-            return calcsize("4B")
+            return 4
         return 0
 
 
@@ -366,7 +372,7 @@ class VertexData:
     bone_indices: List[int] = field(default_factory=lambda: [0] * 4)
 
     def read(self, file: BinaryIO) -> "VertexData":
-        data = unpack("4f4i", file.read(calcsize("4f4i")))
+        data = unpack("4f4i", file.read(32))
         self.weights, self.bone_indices = list(data[:4]), list(data[4:])
         return self
 
@@ -374,7 +380,7 @@ class VertexData:
         file.write(pack("4f4i", *self.weights, *self.bone_indices))
 
     def size(self) -> int:
-        return calcsize("4f4i")
+        return 32
 
 
 @dataclass(eq=False, repr=False)
@@ -382,14 +388,14 @@ class Face:
     indices: List[int] = field(default_factory=lambda: [0] * 3)
 
     def read(self, file: BinaryIO) -> "Face":
-        self.indices = list(unpack("3H", file.read(calcsize("3H"))))
+        self.indices = list(unpack("3H", file.read(6)))
         return self
 
     def write(self, file: BinaryIO) -> None:
         file.write(pack("3H", *self.indices))
 
     def size(self) -> int:
-        return calcsize("3H")
+        return 6
 
 
 @dataclass(repr=False)
@@ -401,7 +407,7 @@ class Vector4:
     xyz: Vector = field(default_factory=lambda: Vector((0, 0, 0)))
 
     def read(self, file: BinaryIO) -> "Vector4":
-        self.x, self.y, self.z, self.w = unpack("4f", file.read(calcsize("4f")))
+        self.x, self.y, self.z, self.w = unpack("4f", file.read(16))
         self.xyz = Vector((self.x, self.y, self.z))
         return self
 
@@ -409,7 +415,7 @@ class Vector4:
         file.write(pack("4f", self.x, self.y, self.z, self.w))
 
     def size(self) -> int:
-        return calcsize("4f")
+        return 16
 
 
 @dataclass(repr=False)
@@ -423,7 +429,7 @@ class Vector3:
         self.xyz = Vector((self.x, self.y, self.z))
 
     def read(self, file: BinaryIO) -> "Vector3":
-        self.x, self.y, self.z = unpack("3f", file.read(calcsize("3f")))
+        self.x, self.y, self.z = unpack("3f", file.read(12))
         self.xyz = Vector((self.x, self.y, self.z))
         return self
 
@@ -431,7 +437,7 @@ class Vector3:
         file.write(pack("3f", self.x, self.y, self.z))
 
     def size(self) -> int:
-        return calcsize("3f")
+        return 12
 
 
 @dataclass(eq=True, repr=False)
@@ -439,7 +445,7 @@ class Matrix4x4:
     matrix: tuple = ((0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0))
 
     def read(self, file: BinaryIO) -> "Matrix4x4":
-        self.matrix = unpack("16f", file.read(calcsize("16f")))
+        self.matrix = unpack("16f", file.read(64))
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -448,7 +454,7 @@ class Matrix4x4:
             file.write(pack("4f", *self.matrix[i]))
 
     def size(self) -> int:
-        return calcsize("16f")
+        return 64
 
 
 @dataclass(eq=True, repr=False)
@@ -459,7 +465,7 @@ class Matrix3x3:
     )
 
     def read(self, file: BinaryIO) -> "Matrix3x3":
-        self.matrix = unpack("9f", file.read(calcsize("9f")))
+        self.matrix = unpack("9f", file.read(36))
         self.math_matrix = Matrix(
             (
                 (self.matrix[0], self.matrix[1], self.matrix[2]),
@@ -473,7 +479,7 @@ class Matrix3x3:
         file.write(pack("9f", *self.matrix))
 
     def size(self) -> int:
-        return calcsize("9f")
+        return 36
 
 
 @dataclass(eq=True, repr=False)
@@ -501,19 +507,13 @@ class CGeoMesh:
     faces: List[Face] = field(default_factory=list)
     vertex_count: int = 0
     vertices: List[Vector4] = field(default_factory=list)
-    hash_map: dict = field(default_factory=dict)
 
     def read(self, file: BinaryIO) -> "CGeoMesh":
-        self.magic, self.index_count = unpack("ii", file.read(calcsize("ii")))
+        self.magic, self.index_count = unpack("ii", file.read(8))
         self.faces = [Face().read(file) for _ in range(self.index_count // 3)]
-        self.vertex_count = unpack("i", file.read(calcsize("i")))[0]
+        self.vertex_count = unpack("i", file.read(4))[0]
         for _ in range(self.vertex_count):
-            x, y, z, w = unpack("4f", file.read(calcsize("4f")))
-            key = tuple(round(coord, 6) for coord in (x, y, z))
-            if key not in self.hash_map:
-                self.hash_map[key] = _
-            else:
-                raise ValueError(f"Duplicate vertex found: {key}")
+            x, y, z, w = unpack("4f", file.read(16))
             self.vertices.append(Vector4(x, y, z, w))
         return self
 
@@ -526,11 +526,7 @@ class CGeoMesh:
             vertex.write(file)
 
     def size(self) -> int:
-        return (
-            calcsize("iii")
-            + calcsize("3H") * len(self.faces)
-            + calcsize("4f") * len(self.vertices)
-        )
+        return 12 + 6 * len(self.faces) + 16 * len(self.vertices)
 
 
 @dataclass(eq=False, repr=False)
@@ -540,7 +536,7 @@ class CSkSkinInfo:
     vertex_data: List[VertexData] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CSkSkinInfo":
-        self.version, self.vertex_count = unpack("ii", file.read(calcsize("ii")))
+        self.version, self.vertex_count = unpack("ii", file.read(8))
         self.vertex_data = [VertexData().read(file) for _ in range(self.vertex_count)]
         return self
 
@@ -550,7 +546,7 @@ class CSkSkinInfo:
             vertex.write(file)
 
     def size(self) -> int:
-        return calcsize("ii") + sum(vd.size() for vd in self.vertex_data)
+        return 8 + sum(vd.size() for vd in self.vertex_data)
 
 
 @dataclass(eq=False, repr=False)
@@ -560,7 +556,7 @@ class MeshData:
     vertices: List[Vertex] = field(default_factory=list)
 
     def read(self, file: BinaryIO, vertex_count: int) -> "MeshData":
-        self.revision, self.vertex_size = unpack("ii", file.read(calcsize("ii")))
+        self.revision, self.vertex_size = unpack("ii", file.read(8))
         self.vertices = [
             Vertex().read(file, self.revision) for _ in range(vertex_count)
         ]
@@ -572,7 +568,7 @@ class MeshData:
             vertex.write(file)
 
     def size(self) -> int:
-        s = calcsize("ii") + self.vertex_size * len(self.vertices)
+        s = 8 + self.vertex_size * len(self.vertices)
         return s
 
 
@@ -589,9 +585,9 @@ class Bone:
         self.name_length = len(self.name)
 
     def read(self, file: BinaryIO) -> "Bone":
-        self.version = unpack("I", file.read(calcsize("I")))[0]
-        self.identifier = unpack("i", file.read(calcsize("i")))[0]
-        self.name_length = unpack("i", file.read(calcsize("i")))[0]
+        self.version = unpack("I", file.read(4))[0]
+        self.identifier = unpack("i", file.read(4))[0]
+        self.name_length = unpack("i", file.read(4))[0]
         self.name = (
             unpack(f"{self.name_length}s", file.read(calcsize(f"{self.name_length}s")))[
                 0
@@ -605,7 +601,7 @@ class Bone:
         if len(self.name) > 63:
             self.name = str(hash(self.name))
             print(f"Hashed Bone Name: {self.name}")
-        self.child_count = unpack("i", file.read(calcsize("i")))[0]
+        self.child_count = unpack("i", file.read(4))[0]
         self.children = list(
             unpack(f"{self.child_count}i", file.read(calcsize(f"{self.child_count}i")))
         )
@@ -620,12 +616,7 @@ class Bone:
         file.write(pack(f"{self.child_count}i", *self.children))
 
     def size(self) -> int:
-        return (
-            calcsize("iii")
-            + self.name_length
-            + calcsize("i")
-            + calcsize(f"{self.child_count}i")
-        )
+        return 12 + self.name_length + 4 + calcsize(f"{self.child_count}i")
 
 
 @dataclass(eq=False, repr=False)
@@ -652,7 +643,7 @@ class BoneVertex:
 
     def read(self, file: BinaryIO) -> "BoneVertex":
         self.position = Vector3().read(file)
-        self.parent = unpack("i", file.read(calcsize("i")))[0]
+        self.parent = unpack("i", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -660,7 +651,7 @@ class BoneVertex:
         file.write(pack("i", self.parent))
 
     def size(self) -> int:
-        return self.position.size() + calcsize("i")
+        return self.position.size() + 4
 
 
 class DRSBone:
@@ -698,13 +689,11 @@ class CSkSkeleton:
     )
 
     def read(self, file: BinaryIO) -> "CSkSkeleton":
-        self.magic, self.version, self.bone_matrix_count = unpack(
-            "iii", file.read(calcsize("iii"))
-        )
+        self.magic, self.version, self.bone_matrix_count = unpack("iii", file.read(12))
         self.bone_matrices = [
             BoneMatrix().read(file) for _ in range(self.bone_matrix_count)
         ]
-        self.bone_count = unpack("i", file.read(calcsize("i")))[0]
+        self.bone_count = unpack("i", file.read(4))[0]
         self.bones = [Bone().read(file) for _ in range(self.bone_count)]
         self.super_parent = Matrix4x4().read(file)
         return self
@@ -720,7 +709,7 @@ class CSkSkeleton:
 
     def size(self) -> int:
         return (
-            calcsize("iiii")
+            16
             + sum(bone_matrix.size() for bone_matrix in self.bone_matrices)
             + sum(bone.size() for bone in self.bones)
             + self.super_parent.size()
@@ -738,9 +727,9 @@ class Texture:
         self.length = len(self.name)
 
     def read(self, file: BinaryIO) -> "Texture":
-        self.identifier, self.length = unpack("ii", file.read(calcsize("ii")))
+        self.identifier, self.length = unpack("ii", file.read(8))
         self.name = file.read(self.length).decode("utf-8").strip("\x00")
-        self.spacer = unpack("i", file.read(calcsize("i")))[0]
+        self.spacer = unpack("i", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -749,7 +738,7 @@ class Texture:
         file.write(pack("i", self.spacer))
 
     def size(self) -> int:
-        return calcsize("ii") + self.length + calcsize("i")
+        return 8 + self.length + 4
 
 
 @dataclass(eq=False, repr=False)
@@ -758,7 +747,7 @@ class Textures:
     textures: List["Texture"] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "Textures":
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.textures = [Texture().read(file) for _ in range(self.length)]
         return self
 
@@ -769,7 +758,7 @@ class Textures:
             texture.write(file)
 
     def size(self) -> int:
-        return calcsize("i") + sum(texture.size() for texture in self.textures)
+        return 4 + sum(texture.size() for texture in self.textures)
 
 
 @dataclass(eq=False, repr=False)
@@ -831,33 +820,33 @@ class Material:
 
     def read(self, file: BinaryIO) -> "Material":
         """Reads the Material from the buffer"""
-        self.identifier = unpack("i", file.read(calcsize("i")))[0]
+        self.identifier = unpack("i", file.read(4))[0]
         if self.identifier == 1668510769:
-            self.smoothness = unpack("f", file.read(calcsize("f")))[0]
+            self.smoothness = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510770:
-            self.metalness = unpack("f", file.read(calcsize("f")))[0]
+            self.metalness = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510771:
-            self.reflectivity = unpack("f", file.read(calcsize("f")))[0]
+            self.reflectivity = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510772:
-            self.emissivity = unpack("f", file.read(calcsize("f")))[0]
+            self.emissivity = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510773:
-            self.refraction_scale = unpack("f", file.read(calcsize("f")))[0]
+            self.refraction_scale = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510774:
-            self.distortion_mesh_scale = unpack("f", file.read(calcsize("f")))[0]
+            self.distortion_mesh_scale = unpack("f", file.read(4))[0]
         elif self.identifier == 1935897704:
-            self.scratch = unpack("f", file.read(calcsize("f")))[0]
+            self.scratch = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510775:
-            self.specular_scale = unpack("f", file.read(calcsize("f")))[0]
+            self.specular_scale = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510776:
-            self.wind_response = unpack("f", file.read(calcsize("f")))[0]
+            self.wind_response = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510777:
-            self.wind_height = unpack("f", file.read(calcsize("f")))[0]
+            self.wind_height = unpack("f", file.read(4))[0]
         elif self.identifier == 1935893623:
-            self.depth_write_threshold = unpack("f", file.read(calcsize("f")))[0]
+            self.depth_write_threshold = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510785:
-            self.saturation = unpack("f", file.read(calcsize("f")))[0]
+            self.saturation = unpack("f", file.read(4))[0]
         else:
-            self.unknown = unpack("f", file.read(calcsize("f")))[0]
+            self.unknown = unpack("f", file.read(4))[0]
             raise TypeError(f"Unknown Material {self.unknown}")
         return self
 
@@ -894,7 +883,7 @@ class Material:
         return self
 
     def size(self) -> int:
-        return calcsize("i") + calcsize("f")
+        return 4 + 4
 
 
 @dataclass(eq=False, repr=False)
@@ -905,7 +894,7 @@ class Materials:
     )
 
     def read(self, file: BinaryIO) -> "Materials":
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.materials = [Material().read(file) for _ in range(self.length)]
         return self
 
@@ -916,7 +905,7 @@ class Materials:
             material.write(file)
 
     def size(self) -> int:
-        return calcsize("i") + sum(material.size() for material in self.materials)
+        return 4 + sum(material.size() for material in self.materials)
 
 
 @dataclass(eq=False, repr=False)
@@ -926,10 +915,15 @@ class Refraction:
     rgb: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
 
     def read(self, file: BinaryIO) -> "Refraction":
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         if self.length == 1:
-            self.identifier = unpack("i", file.read(calcsize("i")))[0]
-            self.rgb = list(unpack("3f", file.read(calcsize("3f"))))
+            self.identifier = unpack("i", file.read(4))[0]
+            self.rgb = list(unpack("3f", file.read(12)))
+        elif self.length > 1:
+            for _ in range(self.length):
+                self.identifier = unpack("i", file.read(4))[0]
+                self.rgb = list(unpack("3f", file.read(12)))
+            print(f"Found {self.length} refraction values!!!")
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -939,9 +933,9 @@ class Refraction:
             file.write(pack("3f", *self.rgb))
 
     def size(self) -> int:
-        size = calcsize("i")
+        size = 4
         if self.length == 1:
-            size += calcsize("i") + calcsize("3f")
+            size += 4 + 12
         return size
 
 
@@ -951,9 +945,9 @@ class LevelOfDetail:
     lod_level: int = 2
 
     def read(self, file: BinaryIO) -> "LevelOfDetail":
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         if self.length == 1:
-            self.lod_level = unpack("i", file.read(calcsize("i")))[0]
+            self.lod_level = unpack("i", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -962,9 +956,9 @@ class LevelOfDetail:
             file.write(pack("i", self.lod_level))
 
     def size(self) -> int:
-        size = calcsize("i")
+        size = 4
         if self.length == 1:
-            size += calcsize("i")
+            size += 4
         return size
 
 
@@ -974,7 +968,7 @@ class EmptyString:
     unknown_string: str = ""
 
     def read(self, file: BinaryIO) -> "EmptyString":
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.unknown_string = unpack(
             f"{self.length * 2}s", file.read(calcsize(f"{self.length * 2}s"))
         )[0].decode("utf-8")
@@ -1004,15 +998,15 @@ class Flow:
     flow_scale: Vector4 = field(default_factory=Vector4)
 
     def read(self, file: BinaryIO) -> "Flow":
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         if self.length == 4:
-            self.max_flow_speed_identifier = unpack("i", file.read(calcsize("i")))[0]
+            self.max_flow_speed_identifier = unpack("i", file.read(4))[0]
             self.max_flow_speed = Vector4().read(file)
-            self.min_flow_speed_identifier = unpack("i", file.read(calcsize("i")))[0]
+            self.min_flow_speed_identifier = unpack("i", file.read(4))[0]
             self.min_flow_speed = Vector4().read(file)
-            self.flow_speed_change_identifier = unpack("i", file.read(calcsize("i")))[0]
+            self.flow_speed_change_identifier = unpack("i", file.read(4))[0]
             self.flow_speed_change = Vector4().read(file)
-            self.flow_scale_identifier = unpack("i", file.read(calcsize("i")))[0]
+            self.flow_scale_identifier = unpack("i", file.read(4))[0]
             self.flow_scale = Vector4().read(file)
         return self
 
@@ -1029,10 +1023,10 @@ class Flow:
             self.flow_scale.write(file)
 
     def size(self) -> int:
-        size = calcsize("i")
+        size = 4
         if self.length == 4:
             size += (
-                calcsize("iiii")
+                16
                 + self.max_flow_speed.size()
                 + self.min_flow_speed.size()
                 + self.flow_speed_change.size()
@@ -1062,39 +1056,49 @@ class BattleforgeMesh:
     flow: Flow = field(default_factory=Flow)
 
     def read(self, file: BinaryIO) -> "BattleforgeMesh":
-        self.vertex_count, self.face_count = unpack("ii", file.read(calcsize("ii")))
+        self.vertex_count, self.face_count = unpack("ii", file.read(8))
         self.faces = [Face().read(file) for _ in range(self.face_count)]
-        self.mesh_count = unpack("B", file.read(calcsize("B")))[0]
+        self.mesh_count = unpack("B", file.read(1))[0]
         self.mesh_data = [
             MeshData().read(file, self.vertex_count) for _ in range(self.mesh_count)
         ]
         self.bounding_box_lower_left_corner = Vector3().read(file)
         self.bounding_box_upper_right_corner = Vector3().read(file)
-        self.material_id, self.material_parameters = unpack(
-            "=hi", file.read(calcsize("=hi"))
-        )
+        self.material_id, self.material_parameters = unpack("=hi", file.read(6))
 
         if self.material_parameters == -86061050:
-            self.material_stuff, self.bool_parameter = unpack(
-                "ii", file.read(calcsize("ii"))
-            )
+            self.material_stuff, self.bool_parameter = unpack("ii", file.read(8))
             self.textures.read(file)
             self.refraction.read(file)
             self.materials.read(file)
             self.level_of_detail.read(file)
             self.empty_string.read(file)
             self.flow.read(file)
-        elif self.material_parameters == -86061051:
-            self.material_stuff, self.bool_parameter = unpack(
-                "ii", file.read(calcsize("ii"))
-            )
+        elif (
+            self.material_parameters == -86061051
+            or self.material_parameters == -86061052
+        ):
+            self.material_stuff, self.bool_parameter = unpack("ii", file.read(8))
             self.textures.read(file)
             self.refraction.read(file)
             self.materials.read(file)
             self.level_of_detail.read(file)
             self.empty_string.read(file)
+        elif self.material_parameters == -86061053:
+            self.bool_parameter = unpack("i", file.read(4))[0]
+            self.textures.read(file)
+            self.refraction.read(file)
+            self.materials.read(file)
+            self.level_of_detail.read(file)
+            self.empty_string.read(file)
+        elif self.material_parameters == -86061054:
+            self.bool_parameter = unpack("i", file.read(4))[0]
+            self.textures.read(file)
+            self.refraction.read(file)
+            self.materials.read(file)
+            self.level_of_detail.read(file)
         elif self.material_parameters == -86061055:
-            self.bool_parameter = unpack("i", file.read(calcsize("i")))[0]
+            self.bool_parameter = unpack("i", file.read(4))[0]
             self.textures.read(file)
             self.refraction.read(file)
             self.materials.read(file)
@@ -1137,16 +1141,16 @@ class BattleforgeMesh:
             raise TypeError(f"Unknown MaterialParameters {self.material_parameters}")
 
     def size(self) -> int:
-        size = calcsize("ii")  # VertexCount + FaceCount
-        size += calcsize("B")  # MeshCount
+        size = 8  # VertexCount + FaceCount
+        size += 1  # MeshCount
         size += 24  # BoundingBox1 + BoundingBox2
-        size += calcsize("=h")  # MaterialID
-        size += calcsize("i")  # MaterialParameters
+        size += 2  # MaterialID
+        size += 4  # MaterialParameters
         size += sum(face.size() for face in self.faces)
         size += sum(mesh_data.size() for mesh_data in self.mesh_data)
 
         if self.material_parameters == -86061050:
-            size += calcsize("ii")  # MaterialStuff + BoolParameter
+            size += 8  # MaterialStuff + BoolParameter
             size += self.textures.size()
             size += self.refraction.size()
             size += self.materials.size()
@@ -1154,14 +1158,14 @@ class BattleforgeMesh:
             size += self.empty_string.size()
             size += self.flow.size()
         elif self.material_parameters == -86061051:
-            size += calcsize("ii")  # MaterialStuff + BoolParameter
+            size += 8  # MaterialStuff + BoolParameter
             size += self.textures.size()
             size += self.refraction.size()
             size += self.materials.size()
             size += self.level_of_detail.size()
             size += self.empty_string.size()
         elif self.material_parameters == -86061055:
-            size += calcsize("i")  # BoolParameter
+            size += 4  # BoolParameter
             size += self.textures.size()
             size += self.refraction.size()
             size += self.materials.size()
@@ -1190,9 +1194,9 @@ class CDspMeshFile:
     )
 
     def read(self, file: BinaryIO) -> "CDspMeshFile":
-        self.magic = unpack("i", file.read(calcsize("i")))[0]
+        self.magic = unpack("i", file.read(4))[0]
         if self.magic == 1314189598:
-            self.zero, self.mesh_count = unpack("ii", file.read(calcsize("ii")))
+            self.zero, self.mesh_count = unpack("ii", file.read(8))
             self.bounding_box_lower_left_corner = Vector3().read(file)
             self.bounding_box_upper_right_corner = Vector3().read(file)
             self.meshes = [BattleforgeMesh().read(file) for _ in range(self.mesh_count)]
@@ -1247,7 +1251,7 @@ class OBBNode:
             self.node_depth,
             self.triangle_offset,
             self.total_triangles,
-        ) = unpack("4H2I", file.read(calcsize("4H2I")))
+        ) = unpack("4H2I", file.read(16))
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -1265,7 +1269,7 @@ class OBBNode:
         )
 
     def size(self) -> int:
-        return self.oriented_bounding_box.size() + calcsize("4H2I")
+        return self.oriented_bounding_box.size() + 16
 
 
 @dataclass(eq=False, repr=False)
@@ -1278,11 +1282,9 @@ class CGeoOBBTree:
     faces: List[Face] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CGeoOBBTree":
-        self.magic, self.version, self.matrix_count = unpack(
-            "iii", file.read(calcsize("iii"))
-        )
+        self.magic, self.version, self.matrix_count = unpack("iii", file.read(12))
         self.obb_nodes = [OBBNode().read(file) for _ in range(self.matrix_count)]
-        self.triangle_count = unpack("i", file.read(calcsize("i")))[0]
+        self.triangle_count = unpack("i", file.read(4))[0]
         self.faces = [Face().read(file) for _ in range(self.triangle_count)]
         return self
 
@@ -1296,7 +1298,7 @@ class CGeoOBBTree:
 
     def size(self) -> int:
         return (
-            calcsize("iiii")
+            16
             + sum(obb_node.size() for obb_node in self.obb_nodes)
             + sum(face.size() for face in self.faces)
         )
@@ -1308,9 +1310,9 @@ class JointGroup:
     joints: List[int] = field(default_factory=list)  # short
 
     def read(self, file: BinaryIO) -> "JointGroup":
-        self.joint_count = unpack("i", file.read(calcsize("i")))[0]
+        self.joint_count = unpack("i", file.read(4))[0]
         for _ in range(self.joint_count):
-            self.joints.append(unpack("h", file.read(calcsize("h")))[0])
+            self.joints.append(unpack("h", file.read(2))[0])
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -1319,7 +1321,7 @@ class JointGroup:
             file.write(pack("h", joint))
 
     def size(self) -> int:
-        return calcsize("i") + calcsize("h") * len(self.joints)
+        return 4 + 2 * len(self.joints)
 
 
 @dataclass(eq=False, repr=False)
@@ -1329,8 +1331,8 @@ class CDspJointMap:
     joint_groups: List[JointGroup] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CDspJointMap":
-        self.version = unpack("i", file.read(calcsize("i")))[0]
-        self.joint_group_count = unpack("i", file.read(calcsize("i")))[0]
+        self.version = unpack("i", file.read(4))[0]
+        self.joint_group_count = unpack("i", file.read(4))[0]
         self.joint_groups = [
             JointGroup().read(file) for _ in range(self.joint_group_count)
         ]
@@ -1342,9 +1344,7 @@ class CDspJointMap:
             joint_group.write(file)
 
     def size(self) -> int:
-        return calcsize("ii") + sum(
-            joint_group.size() for joint_group in self.joint_groups
-        )
+        return 8 + sum(joint_group.size() for joint_group in self.joint_groups)
 
 
 @dataclass(eq=False, repr=False)
@@ -1361,9 +1361,7 @@ class SLocator:
 
     def read(self, file: BinaryIO, version: int) -> "SLocator":
         self.cmat_coordinate_system = CMatCoordinateSystem().read(file)
-        self.class_id, self.sub_id, self.file_name_length = unpack(
-            "iii", file.read(calcsize("iii"))
-        )
+        self.class_id, self.sub_id, self.file_name_length = unpack("iii", file.read(12))
         self.file_name = (
             unpack(
                 f"{self.file_name_length}s",
@@ -1375,7 +1373,7 @@ class SLocator:
         # Get LocatorClass from ClassID
         self.class_type = LocatorClass.get(self.class_id, "Unknown")
         if version == 5:
-            self.uk_int = unpack("i", file.read(calcsize("i")))[0]
+            self.uk_int = unpack("i", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -1397,7 +1395,7 @@ class SLocator:
             f"iii{self.file_name_length}s"
         )
         if hasattr(self, "uk_int"):
-            size += calcsize("i")
+            size += 4
         return size
 
 
@@ -1409,9 +1407,7 @@ class CDrwLocatorList:
     slocators: List[SLocator] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CDrwLocatorList":
-        self.magic, self.version, self.length = unpack(
-            "iii", file.read(calcsize("iii"))
-        )
+        self.magic, self.version, self.length = unpack("iii", file.read(12))
         self.slocators = [
             SLocator().read(file, self.version) for _ in range(self.length)
         ]
@@ -1423,7 +1419,7 @@ class CDrwLocatorList:
             locator.write(file)
 
     def size(self) -> int:
-        return calcsize("iii") + sum(locator.size() for locator in self.slocators)
+        return 12 + sum(locator.size() for locator in self.slocators)
 
 
 @dataclass(eq=False, repr=False)
@@ -1470,7 +1466,7 @@ class CGeoCylinder:
 
     def read(self, file: BinaryIO) -> "CGeoCylinder":
         self.center = Vector3().read(file)
-        self.height, self.radius = unpack("ff", file.read(calcsize("ff")))
+        self.height, self.radius = unpack("ff", file.read(8))
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -1478,7 +1474,7 @@ class CGeoCylinder:
         file.write(pack("ff", self.height, self.radius))
 
     def size(self) -> int:
-        return self.center.size() + calcsize("ff")
+        return self.center.size() + 8
 
 
 @dataclass(eq=True, repr=False)
@@ -1505,7 +1501,7 @@ class CGeoSphere:
     center: Vector3 = field(default_factory=Vector3)
 
     def read(self, file: BinaryIO) -> "CGeoSphere":
-        self.radius = unpack("f", file.read(calcsize("f")))[0]
+        self.radius = unpack("f", file.read(4))[0]
         self.center = Vector3().read(file)
         return self
 
@@ -1514,7 +1510,7 @@ class CGeoSphere:
         self.center.write(file)
 
     def size(self) -> int:
-        return calcsize("f") + self.center.size()
+        return 4 + self.center.size()
 
 
 @dataclass(eq=True, repr=False)
@@ -1546,12 +1542,12 @@ class CollisionShape:
     cylinders: List[CylinderShape] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CollisionShape":
-        self.version = unpack("B", file.read(calcsize("B")))
-        self.box_count = unpack("I", file.read(calcsize("I")))[0]
+        self.version = unpack("B", file.read(1))
+        self.box_count = unpack("I", file.read(4))[0]
         self.boxes = [BoxShape().read(file) for _ in range(self.box_count)]
-        self.sphere_count = unpack("I", file.read(calcsize("I")))[0]
+        self.sphere_count = unpack("I", file.read(4))[0]
         self.spheres = [SphereShape().read(file) for _ in range(self.sphere_count)]
-        self.cylinder_count = unpack("I", file.read(calcsize("I")))[0]
+        self.cylinder_count = unpack("I", file.read(4))[0]
         self.cylinders = [
             CylinderShape().read(file) for _ in range(self.cylinder_count)
         ]
@@ -1573,8 +1569,8 @@ class CollisionShape:
 
     def size(self) -> int:
         return (
-            calcsize("B")
-            + calcsize("III")
+            1
+            + 12
             + sum(box.size() for box in self.boxes)
             + sum(sphere.size() for sphere in self.spheres)
             + sum(cylinder.size() for cylinder in self.cylinders)
@@ -1589,8 +1585,8 @@ class DrwResourceMeta:
 
     def read(self, file: BinaryIO) -> "DrwResourceMeta":
         """Reads the DrwResourceMeta from the buffer"""
-        self.unknown = list(unpack("2i", file.read(calcsize("2i"))))
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.unknown = list(unpack("2i", file.read(8)))
+        self.length = unpack("i", file.read(4))[0]
         self.hash = file.read(self.length).decode("utf-8").strip("\x00")
         return self
 
@@ -1641,7 +1637,7 @@ class Constraint:
 
     def read(self, file: BinaryIO) -> "Constraint":
         """Reads the Constraint from the buffer"""
-        self.revision = unpack("h", file.read(calcsize("h")))[0]
+        self.revision = unpack("h", file.read(2))[0]
         if self.revision == 1:
             (
                 self.left_angle,
@@ -1649,7 +1645,7 @@ class Constraint:
                 self.left_damp_start,
                 self.right_damp_start,
                 self.damp_ratio,
-            ) = unpack("5f", file.read(calcsize("5f")))
+            ) = unpack("5f", file.read(20))
         return self
 
     def write(self, file: BinaryIO) -> "Constraint":
@@ -1670,9 +1666,9 @@ class Constraint:
 
     def size(self) -> int:
         """Returns the size of the Constraint"""
-        base = calcsize("h")
+        base = 2
         if self.revision == 1:
-            base += calcsize("5f")
+            base += 20
         return base
 
 
@@ -1689,13 +1685,13 @@ class IKAtlas:
 
     def read(self, file: BinaryIO) -> "IKAtlas":
         """Reads the IKAtlas from the buffer"""
-        self.identifier = unpack("i", file.read(calcsize("i")))[0]
-        self.version = unpack("h", file.read(calcsize("h")))[0]
+        self.identifier = unpack("i", file.read(4))[0]
+        self.version = unpack("h", file.read(2))[0]
         if self.version >= 1:
-            self.axis, self.chain_order = unpack("ii", file.read(calcsize("ii")))
+            self.axis, self.chain_order = unpack("ii", file.read(8))
             self.constraints = [Constraint().read(file) for _ in range(3)]
             if self.version >= 2:
-                self.purpose_flags = unpack("h", file.read(calcsize("h")))[0]
+                self.purpose_flags = unpack("h", file.read(2))[0]
         return self
 
     def write(self, file: BinaryIO) -> "IKAtlas":
@@ -1712,13 +1708,11 @@ class IKAtlas:
 
     def size(self) -> int:
         """Returns the size of the IKAtlas"""
-        base = calcsize("ih")
+        base = 6
         if self.version >= 1:
-            base += calcsize("ii") + sum(
-                constraint.size() for constraint in self.constraints
-            )
+            base += 8 + sum(constraint.size() for constraint in self.constraints)
             if self.version >= 2:
-                base += calcsize("h")
+                base += 2
         return base
 
 
@@ -1735,9 +1729,9 @@ class AnimationSetVariant:
 
     def read(self, file: BinaryIO) -> "AnimationSetVariant":
         """Reads the AnimationSetVariant from the buffer"""
-        self.version = unpack("i", file.read(calcsize("i")))[0]
-        self.weight = unpack("i", file.read(calcsize("i")))[0]
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.version = unpack("i", file.read(4))[0]
+        self.weight = unpack("i", file.read(4))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.file = (
             unpack(f"{self.length}s", file.read(calcsize(f"{self.length}s")))[0]
             .decode("utf-8")
@@ -1745,12 +1739,12 @@ class AnimationSetVariant:
         )
 
         if self.version >= 4:
-            self.start = unpack("f", file.read(calcsize("f")))[0]
-            self.end = unpack("f", file.read(calcsize("f")))[0]
+            self.start = unpack("f", file.read(4))[0]
+            self.end = unpack("f", file.read(4))[0]
         if self.version >= 5:
-            self.allows_ik = unpack("B", file.read(calcsize("B")))[0]
+            self.allows_ik = unpack("B", file.read(1))[0]
         if self.version >= 7:
-            self.forceNoBlend = unpack("B", file.read(calcsize("B")))[0]
+            self.forceNoBlend = unpack("B", file.read(1))[0]
 
         return self
 
@@ -1770,13 +1764,13 @@ class AnimationSetVariant:
 
     def size(self) -> int:
         """Returns the size of the AnimationSetVariant"""
-        base = calcsize("iii") + self.length
+        base = 12 + self.length
         if self.version >= 4:
-            base += calcsize("ff")
+            base += 8
         if self.version >= 5:
-            base += calcsize("B")
+            base += 1
         if self.version >= 7:
-            base += calcsize("B")
+            base += 1
         return base
 
 
@@ -1798,27 +1792,27 @@ class ModeAnimationKey:
     def read(self, file: BinaryIO, uk: int) -> "ModeAnimationKey":
         """Reads the ModeAnimationKey from the buffer"""
         if uk != 2:
-            self.type = unpack("i", file.read(calcsize("i")))[0]
+            self.type = unpack("i", file.read(4))[0]
         else:
             self.type = 2
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.file = (
             unpack(f"{self.length}s", file.read(calcsize(f"{self.length}s")))[0]
             .decode("utf-8")
             .strip("\x00")
         )
-        self.unknown = unpack("i", file.read(calcsize("i")))[0]
+        self.unknown = unpack("i", file.read(4))[0]
         if self.type == 1:
-            self.unknown2 = list(unpack("24B", file.read(calcsize("24B"))))
+            self.unknown2 = list(unpack("24B", file.read(24)))
         elif self.type <= 5:
-            self.unknown2 = unpack("i", file.read(calcsize("i")))[0]
-            self.unknown4 = unpack("h", file.read(calcsize("h")))[0]
+            self.unknown2 = unpack("i", file.read(4))[0]
+            self.unknown4 = unpack("h", file.read(2))[0]
         elif self.type == 6:
-            self.unknown2 = unpack("i", file.read(calcsize("i")))[0]
-            self.vis_job = unpack("h", file.read(calcsize("h")))[0]
-            self.unknown3 = unpack("i", file.read(calcsize("i")))[0]
-            self.unknown4 = unpack("h", file.read(calcsize("h")))[0]
-        self.variant_count = unpack("i", file.read(calcsize("i")))[0]
+            self.unknown2 = unpack("i", file.read(4))[0]
+            self.vis_job = unpack("h", file.read(2))[0]
+            self.unknown3 = unpack("i", file.read(4))[0]
+            self.unknown4 = unpack("h", file.read(2))[0]
+        self.variant_count = unpack("i", file.read(4))[0]
         self.animation_set_variants = [
             AnimationSetVariant().read(file) for _ in range(self.variant_count)
         ]
@@ -1871,8 +1865,8 @@ class AnimationMarker:
 
     def read(self, file: BinaryIO) -> "AnimationMarker":
         """Reads the AnimationMarker from the buffer"""
-        self.some_class = unpack("i", file.read(calcsize("i")))[0]  # 4 bytes
-        self.time = unpack("f", file.read(calcsize("f")))[0]  # 4 bytes
+        self.some_class = unpack("i", file.read(4))[0]  # 4 bytes
+        self.time = unpack("f", file.read(4))[0]  # 4 bytes
         self.direction = Vector3().read(file)  # 12 bytes
         self.position = Vector3().read(file)  # 12 bytes
         return self
@@ -1902,15 +1896,15 @@ class AnimationMarkerSet:
 
     def read(self, file: BinaryIO) -> "AnimationMarkerSet":
         """Reads the AnimationMarkerSet from the buffer"""
-        self.anim_id = unpack("i", file.read(calcsize("i")))[0]
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.anim_id = unpack("i", file.read(4))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.name = (
             unpack(f"{self.length}s", file.read(calcsize(f"{self.length}s")))[0]
             .decode("utf-8")
             .strip("\x00")
         )
-        self.animation_marker_id = unpack("i", file.read(calcsize("i")))[0]
-        self.marker_count = unpack("i", file.read(calcsize("i")))[0]
+        self.animation_marker_id = unpack("i", file.read(4))[0]
+        self.marker_count = unpack("i", file.read(4))[0]
         self.animation_markers = [
             AnimationMarker().read(file) for _ in range(self.marker_count)
         ]
@@ -1944,7 +1938,7 @@ class UnknownStruct2:
 
     def read(self, file: BinaryIO) -> "UnknownStruct2":
         """Reads the UnknownStruct2 from the buffer"""
-        self.unknown_ints = [unpack("i", file.read(calcsize("i")))[0] for _ in range(5)]
+        self.unknown_ints = [unpack("i", file.read(4))[0] for _ in range(5)]
         return self
 
     def write(self, file: BinaryIO) -> "UnknownStruct2":
@@ -1971,15 +1965,15 @@ class UnknownStruct:
 
     def read(self, file: BinaryIO) -> "UnknownStruct":
         """Reads the UnknownStruct from the buffer"""
-        self.unknown = unpack("i", file.read(calcsize("i")))[0]
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.unknown = unpack("i", file.read(4))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.name = (
             unpack(f"{self.length}s", file.read(calcsize(f"{self.length}s")))[0]
             .decode("utf-8")
             .strip("\x00")
         )
-        self.unknown2 = unpack("i", file.read(calcsize("i")))[0]
-        self.unknown3 = unpack("i", file.read(calcsize("i")))[0]
+        self.unknown2 = unpack("i", file.read(4))[0]
+        self.unknown3 = unpack("i", file.read(4))[0]
         self.unknown_structs = [
             UnknownStruct2().read(file) for _ in range(self.unknown3)
         ]
@@ -2037,38 +2031,38 @@ class AnimationSet:
 
     def read(self, file: BinaryIO) -> "AnimationSet":
         """Reads the AnimationSet from the buffer"""
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.magic = (
             unpack("11s", file.read(calcsize("11s")))[0].decode("utf-8").strip("\x00")
         )
-        self.version = unpack("i", file.read(calcsize("i")))[0]
-        self.default_run_speed = unpack("f", file.read(calcsize("f")))[0]
-        self.default_walk_speed = unpack("f", file.read(calcsize("f")))[0]
+        self.version = unpack("i", file.read(4))[0]
+        self.default_run_speed = unpack("f", file.read(4))[0]
+        self.default_walk_speed = unpack("f", file.read(4))[0]
 
         if self.version == 2:
-            self.mode_animation_key_count = unpack("i", file.read(calcsize("i")))[0]
+            self.mode_animation_key_count = unpack("i", file.read(4))[0]
         else:
-            self.revision = unpack("i", file.read(calcsize("i")))[0]
+            self.revision = unpack("i", file.read(4))[0]
 
         if self.version >= 6:
             if self.revision >= 2:
-                self.mode_change_type = unpack("B", file.read(calcsize("B")))[0]
-                self.hovering_ground = unpack("B", file.read(calcsize("B")))[0]
+                self.mode_change_type = unpack("B", file.read(1))[0]
+                self.hovering_ground = unpack("B", file.read(1))[0]
 
             if self.revision >= 5:
-                self.fly_bank_scale = unpack("f", file.read(calcsize("f")))[0]
-                self.fly_accel_scale = unpack("f", file.read(calcsize("f")))[0]
-                self.fly_hit_scale = unpack("f", file.read(calcsize("f")))[0]
+                self.fly_bank_scale = unpack("f", file.read(4))[0]
+                self.fly_accel_scale = unpack("f", file.read(4))[0]
+                self.fly_hit_scale = unpack("f", file.read(4))[0]
 
             if self.revision >= 6:
-                self.allign_to_terrain = unpack("B", file.read(calcsize("B")))[0]
+                self.allign_to_terrain = unpack("B", file.read(1))[0]
 
         uk: int = 0
 
         if self.version == 2:
-            uk = unpack("i", file.read(calcsize("i")))[0]
+            uk = unpack("i", file.read(4))[0]
         else:
-            self.mode_animation_key_count = unpack("i", file.read(calcsize("i")))[0]
+            self.mode_animation_key_count = unpack("i", file.read(4))[0]
 
         self.mode_animation_keys = [
             ModeAnimationKey().read(file, uk)
@@ -2076,31 +2070,31 @@ class AnimationSet:
         ]
 
         if self.version >= 3:
-            self.has_atlas = unpack("h", file.read(calcsize("h")))[0]
+            self.has_atlas = unpack("h", file.read(2))[0]
 
             if self.has_atlas >= 1:
-                self.atlas_count = unpack("i", file.read(calcsize("i")))[0]
+                self.atlas_count = unpack("i", file.read(4))[0]
                 self.ik_atlases = [
                     IKAtlas().read(file) for _ in range(self.atlas_count)
                 ]
 
             if self.has_atlas >= 2:
-                self.uk_len = unpack("i", file.read(calcsize("i")))[0]
+                self.uk_len = unpack("i", file.read(4))[0]
                 self.uk_ints = list(
                     unpack(f"{self.uk_len}i", file.read(calcsize(f"{self.uk_len}i")))
                 )
 
         if self.version >= 4:
-            self.subversion = unpack("h", file.read(calcsize("h")))[0]
+            self.subversion = unpack("h", file.read(2))[0]
 
             if self.subversion == 2:
-                self.animation_marker_count = unpack("i", file.read(calcsize("i")))[0]
+                self.animation_marker_count = unpack("i", file.read(4))[0]
                 self.animation_marker_sets = [
                     AnimationMarkerSet().read(file)
                     for _ in range(self.animation_marker_count)
                 ]
             elif self.subversion == 1:
-                self.unknown = unpack("i", file.read(calcsize("i")))[0]
+                self.unknown = unpack("i", file.read(4))[0]
                 self.unknown_structs = [
                     UnknownStruct().read(file) for _ in range(self.unknown)
                 ]
@@ -2217,12 +2211,12 @@ class Timing:
 
     def read(self, file: BinaryIO) -> "Timing":
         """Reads the Timing from the buffer"""
-        self.cast_ms = unpack("i", file.read(calcsize("i")))[0]
-        self.resolve_ms = unpack("i", file.read(calcsize("i")))[0]
-        self.uk_1 = unpack("f", file.read(calcsize("f")))[0]
-        self.uk_2 = unpack("f", file.read(calcsize("f")))[0]
-        self.uk_3 = unpack("f", file.read(calcsize("f")))[0]
-        self.animation_marker_id = unpack("i", file.read(calcsize("i")))[0]
+        self.cast_ms = unpack("i", file.read(4))[0]
+        self.resolve_ms = unpack("i", file.read(4))[0]
+        self.uk_1 = unpack("f", file.read(4))[0]
+        self.uk_2 = unpack("f", file.read(4))[0]
+        self.uk_3 = unpack("f", file.read(4))[0]
+        self.animation_marker_id = unpack("i", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> "Timing":
@@ -2251,10 +2245,10 @@ class TimingVariant:
 
     def read(self, file: BinaryIO, animation_timing_version: int) -> "TimingVariant":
         """Reads the TimingVariant from the buffer"""
-        self.weight = unpack("B", file.read(calcsize("B")))[0]
+        self.weight = unpack("B", file.read(1))[0]
         if animation_timing_version == 4:
-            self.variant_index = unpack("B", file.read(calcsize("B")))[0]
-        self.timing_count = unpack("H", file.read(calcsize("H")))[0]
+            self.variant_index = unpack("B", file.read(1))[0]
+        self.timing_count = unpack("H", file.read(2))[0]
         self.timings = [Timing().read(file) for _ in range(self.timing_count)]
         return self
 
@@ -2286,11 +2280,11 @@ class AnimationTiming:
 
     def read(self, file: BinaryIO, animation_timing_version: int) -> "AnimationTiming":
         """Reads the AnimationTiming from the buffer"""
-        self.animation_type = unpack("i", file.read(calcsize("i")))[0]
+        self.animation_type = unpack("i", file.read(4))[0]
         if animation_timing_version in [2, 3, 4]:
-            self.animation_tag_id = unpack("i", file.read(calcsize("i")))[0]
-            self.is_enter_mode_animation = unpack("h", file.read(calcsize("h")))[0]
-        self.variant_count = unpack("H", file.read(calcsize("H")))[0]
+            self.animation_tag_id = unpack("i", file.read(4))[0]
+            self.is_enter_mode_animation = unpack("h", file.read(2))[0]
+        self.variant_count = unpack("H", file.read(2))[0]
         self.timing_variants = [
             TimingVariant().read(file, animation_timing_version)
             for _ in range(self.variant_count)
@@ -2327,8 +2321,8 @@ class StructV3:
 
     def read(self, file: BinaryIO) -> "StructV3":
         """Reads the StructV3 from the buffer"""
-        self.length = unpack("i", file.read(calcsize("i")))[0]
-        self.unknown = [unpack("i", file.read(calcsize("i")))[0] for _ in range(2)]
+        self.length = unpack("i", file.read(4))[0]
+        self.unknown = [unpack("i", file.read(4))[0] for _ in range(2)]
         return self
 
     def write(self, file: BinaryIO) -> "StructV3":
@@ -2351,9 +2345,9 @@ class AnimationTimings:
     struct_v3: StructV3 = StructV3()
 
     def read(self, file: BinaryIO) -> "AnimationTimings":
-        self.magic = unpack("i", file.read(calcsize("i")))[0]
-        self.version = unpack("h", file.read(calcsize("h")))[0]
-        self.animation_timing_count = unpack("h", file.read(calcsize("h")))[0]
+        self.magic = unpack("i", file.read(4))[0]
+        self.version = unpack("h", file.read(2))[0]
+        self.animation_timing_count = unpack("h", file.read(2))[0]
         self.animation_timings = [
             AnimationTiming().read(file, self.version)
             for _ in range(self.animation_timing_count)
@@ -2391,7 +2385,7 @@ class Variant:
 
     def read(self, file: BinaryIO) -> "Variant":
         self.weight = unpack("B", file.read(1))[0]
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.name = file.read(self.length).decode("utf-8").strip("\x00")
         return self
 
@@ -2428,14 +2422,14 @@ class Keyframe:
             self.volume,
             self.pitch_shift_min,
             self.pitch_shift_max,
-        ) = unpack("fifffff", file.read(calcsize("fifffff")))
-        self.offset = list(unpack("3f", file.read(calcsize("3f"))))
+        ) = unpack("fifffff", file.read(28))
+        self.offset = list(unpack("3f", file.read(12)))
         self.interruptable = unpack("B", file.read(1))[0]
 
         if _type not in [10, 11]:
             self.uk = unpack("B", file.read(1))[0]
 
-        self.variant_count = unpack("i", file.read(calcsize("i")))[0]
+        self.variant_count = unpack("i", file.read(4))[0]
         self.variants = [Variant().read(file) for _ in range(self.variant_count)]
         return self
 
@@ -2463,10 +2457,10 @@ class Keyframe:
             variant.write(file)
 
     def size(self) -> int:
-        size = calcsize("fifffff") + calcsize("3f") + calcsize("B")
+        size = 28 + 12 + 1
         if self.uk is not None:
-            size += calcsize("B")
-        size += calcsize("i")
+            size += 1
+        size += 4
         for variant in self.variants:
             size += variant.size()
         return size
@@ -2480,9 +2474,9 @@ class SkelEff:
     keyframes: List[Keyframe] = field(default_factory=list)
 
     def read(self, file: BinaryIO, _type: int) -> "SkelEff":
-        self.length = unpack("i", file.read(calcsize("i")))[0]
+        self.length = unpack("i", file.read(4))[0]
         self.name = file.read(self.length).decode("utf-8").strip("\x00")
-        self.keyframe_count = unpack("i", file.read(calcsize("i")))[0]
+        self.keyframe_count = unpack("i", file.read(4))[0]
         self.keyframes = [
             Keyframe().read(file, _type) for _ in range(self.keyframe_count)
         ]
@@ -2496,7 +2490,7 @@ class SkelEff:
             keyframe.write(file)
 
     def size(self) -> int:
-        base = calcsize("ii") + self.length
+        base = 8 + self.length
         for keyframe in self.keyframes:
             base += keyframe.size()
         return base
@@ -2514,9 +2508,9 @@ class SthSound:
 
     def read(self, file: BinaryIO) -> "SthSound":
         self.sth_sound_file = unpack("B", file.read(1))[0]
-        self.unknown = unpack("h", file.read(calcsize("h")))[0]
-        self.unknown_list = list(unpack("5i", file.read(calcsize("5i"))))
-        self.lenght = unpack("i", file.read(calcsize("i")))[0]
+        self.unknown = unpack("h", file.read(2))[0]
+        self.unknown_list = list(unpack("5i", file.read(20)))
+        self.lenght = unpack("i", file.read(4))[0]
         self.file_name = file.read(self.lenght).decode("utf-8").strip("\x00")
         return self
 
@@ -2542,10 +2536,10 @@ class UKS2:
     sth_sound: List[SthSound] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "UKS2":
-        self.unknown = unpack("h", file.read(calcsize("h")))[0]
-        self.unknown_list = list(unpack("5i", file.read(calcsize("5i"))))
-        self.unknown_2 = unpack("h", file.read(calcsize("h")))[0]
-        self.lenght = unpack("h", file.read(calcsize("h")))[0]
+        self.unknown = unpack("h", file.read(2))[0]
+        self.unknown_list = list(unpack("5i", file.read(20)))
+        self.unknown_2 = unpack("h", file.read(2))[0]
+        self.lenght = unpack("h", file.read(2))[0]
         self.sth_sound = [SthSound().read(file) for _ in range(self.lenght)]
         return self
 
@@ -2572,10 +2566,10 @@ class UKS1:
     unknown_structs: List[UKS2] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "UKS1":
-        self.unknown = unpack("h", file.read(calcsize("h")))[0]
-        self.unknown_list = list(unpack("5i", file.read(calcsize("5i"))))
-        self.unknown_2 = unpack("h", file.read(calcsize("h")))[0]
-        self.length = unpack("h", file.read(calcsize("h")))[0]
+        self.unknown = unpack("h", file.read(2))[0]
+        self.unknown_list = list(unpack("5i", file.read(20)))
+        self.unknown_2 = unpack("h", file.read(2))[0]
+        self.length = unpack("h", file.read(2))[0]
         self.unknown_structs = [UKS2().read(file) for _ in range(self.length)]
         return self
 
@@ -2604,10 +2598,10 @@ class UKS3:
     sth_sound: List[SthSound] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "UKS3":
-        self.unknown = unpack("h", file.read(calcsize("h")))[0]
-        self.unknown_list = list(unpack("5i", file.read(calcsize("5i"))))
-        self.unknown_2 = unpack("h", file.read(calcsize("h")))[0]
-        self.lenght = unpack("h", file.read(calcsize("h")))[0]
+        self.unknown = unpack("h", file.read(2))[0]
+        self.unknown_list = list(unpack("5i", file.read(20)))
+        self.unknown_2 = unpack("h", file.read(2))[0]
+        self.lenght = unpack("h", file.read(2))[0]
         self.sth_sound = [SthSound().read(file) for _ in range(self.lenght)]
         return self
 
@@ -2639,21 +2633,21 @@ class EffectSet:
     unknown3: List[UKS1] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "EffectSet":
-        self.type = unpack("h", file.read(calcsize("h")))[0]
-        self.checksum_length = unpack("i", file.read(calcsize("i")))[0]
+        self.type = unpack("h", file.read(2))[0]
+        self.checksum_length = unpack("i", file.read(4))[0]
         self.checksum = file.read(self.checksum_length).decode("utf-8").strip("\x00")
 
         if self.type in [10, 11, 12]:
             if self.type == 10:
-                self.unknown = list(unpack("5f", file.read(calcsize("5f"))))
+                self.unknown = list(unpack("5f", file.read(20)))
 
-            self.length = unpack("i", file.read(calcsize("i")))[0]
+            self.length = unpack("i", file.read(4))[0]
             self.skel_effekts = [
                 SkelEff().read(file, self.type) for _ in range(self.length)
             ]
-            self.length4 = unpack("h", file.read(calcsize("h")))[0]
+            self.length4 = unpack("h", file.read(2))[0]
             self.unknown4 = [UKS3().read(file) for _ in range(self.length4)]
-            self.lenght3 = unpack("h", file.read(calcsize("h")))[0]
+            self.lenght3 = unpack("h", file.read(2))[0]
             self.unknown3 = [UKS1().read(file) for _ in range(self.lenght3)]
         return self
 
@@ -2678,14 +2672,14 @@ class EffectSet:
         base = 6 + self.checksum_length
         if self.type in [10, 11, 12]:
             if self.type == 10:
-                base += calcsize("5f")
-            base += calcsize("i")
+                base += 20
+            base += 4
             for skel_eff in self.skel_effekts:
                 base += skel_eff.size()
-            base += calcsize("h")
+            base += 2
             for unknown in self.unknown4:
                 base += unknown.size()
-            base += calcsize("h")
+            base += 2
             for unknown in self.unknown3:
                 base += unknown.size()
         return base
@@ -2702,10 +2696,10 @@ class SMeshState:
 
     def read(self, file: BinaryIO) -> "SMeshState":
         """Reads the SMeshState from the buffer"""
-        self.state_num = unpack("i", file.read(calcsize("i")))[0]
-        self.has_files = unpack("h", file.read(calcsize("h")))[0]
+        self.state_num = unpack("i", file.read(4))[0]
+        self.has_files = unpack("h", file.read(2))[0]
         if self.has_files:
-            self.uk_file_length = unpack("i", file.read(calcsize("i")))[0]
+            self.uk_file_length = unpack("i", file.read(4))[0]
             self.uk_file = (
                 unpack(
                     f"{self.uk_file_length}s",
@@ -2714,7 +2708,7 @@ class SMeshState:
                 .decode("utf-8")
                 .strip("\x00")
             )
-            self.drs_file_length = unpack("i", file.read(calcsize("i")))[0]
+            self.drs_file_length = unpack("i", file.read(4))[0]
             self.drs_file = (
                 unpack(
                     f"{self.drs_file_length}s",
@@ -2737,8 +2731,8 @@ class DestructionState:
 
     def read(self, file: BinaryIO) -> "DestructionState":
         """Reads the DestructionState from the buffer"""
-        self.state_num = unpack("i", file.read(calcsize("i")))[0]
-        self.file_name_length = unpack("i", file.read(calcsize("i")))[0]
+        self.state_num = unpack("i", file.read(4))[0]
+        self.file_name_length = unpack("i", file.read(4))[0]
         self.file_name = (
             unpack(
                 f"{self.file_name_length}s",
@@ -2761,13 +2755,13 @@ class StateBasedMeshSet:
 
     def read(self, file: BinaryIO) -> "StateBasedMeshSet":
         """Reads the StateBasedMeshSet from the buffer"""
-        self.uk = unpack("h", file.read(calcsize("h")))[0]
-        self.uk2 = unpack("i", file.read(calcsize("i")))[0]
-        self.num_mesh_states = unpack("i", file.read(calcsize("i")))[0]
+        self.uk = unpack("h", file.read(2))[0]
+        self.uk2 = unpack("i", file.read(4))[0]
+        self.num_mesh_states = unpack("i", file.read(4))[0]
         self.mesh_states = [
             SMeshState().read(file) for _ in range(self.num_mesh_states)
         ]
-        self.num_destruction_states = unpack("i", file.read(calcsize("i")))[0]
+        self.num_destruction_states = unpack("i", file.read(4))[0]
         self.destruction_states = [
             DestructionState().read(file) for _ in range(self.num_destruction_states)
         ]
@@ -2785,8 +2779,8 @@ class MeshGridModule:
 
     def read(self, file: BinaryIO) -> "MeshGridModule":
         """Reads the MeshGridModule from the buffer"""
-        self.uk = unpack("h", file.read(calcsize("h")))[0]
-        self.has_mesh_set = unpack("B", file.read(calcsize("B")))[0]
+        self.uk = unpack("h", file.read(2))[0]
+        self.has_mesh_set = unpack("B", file.read(1))[0]
         if self.has_mesh_set:
             self.state_based_mesh_set = StateBasedMeshSet().read(file)
         return self
@@ -2818,10 +2812,10 @@ class MeshSetGrid:
 
     def read(self, file: BinaryIO) -> "MeshSetGrid":
         """Reads the MeshSetGrid from the buffer"""
-        self.revision = unpack("h", file.read(calcsize("h")))[0]
-        self.grid_width = unpack("B", file.read(calcsize("B")))[0]
-        self.grid_height = unpack("B", file.read(calcsize("B")))[0]
-        self.name_length = unpack("i", file.read(calcsize("i")))[0]
+        self.revision = unpack("h", file.read(2))[0]
+        self.grid_width = unpack("B", file.read(1))[0]
+        self.grid_height = unpack("B", file.read(1))[0]
+        self.name_length = unpack("i", file.read(4))[0]
         self.name = (
             unpack(f"{self.name_length}s", file.read(calcsize(f"{self.name_length}s")))[
                 0
@@ -2829,7 +2823,7 @@ class MeshSetGrid:
             .decode("utf-8")
             .strip("\x00")
         )
-        self.uuid_length = unpack("i", file.read(calcsize("i")))[0]
+        self.uuid_length = unpack("i", file.read(4))[0]
         self.uuid = (
             unpack(f"{self.uuid_length}s", file.read(calcsize(f"{self.uuid_length}s")))[
                 0
@@ -2837,8 +2831,8 @@ class MeshSetGrid:
             .decode("utf-8")
             .strip("\x00")
         )
-        self.grid_rotation = unpack("h", file.read(calcsize("h")))[0]
-        self.ground_decal_length = unpack("i", file.read(calcsize("i")))[0]
+        self.grid_rotation = unpack("h", file.read(2))[0]
+        self.ground_decal_length = unpack("i", file.read(4))[0]
         self.ground_decal = (
             unpack(
                 f"{self.ground_decal_length}s",
@@ -2847,7 +2841,7 @@ class MeshSetGrid:
             .decode("utf-8")
             .strip("\x00")
         )
-        self.uk_string0_length = unpack("i", file.read(calcsize("i")))[0]
+        self.uk_string0_length = unpack("i", file.read(4))[0]
         self.uk_string0 = (
             unpack(
                 f"{self.uk_string0_length}s",
@@ -2856,7 +2850,7 @@ class MeshSetGrid:
             .decode("utf-8")
             .strip("\x00")
         )
-        self.uk_string1_length = unpack("i", file.read(calcsize("i")))[0]
+        self.uk_string1_length = unpack("i", file.read(4))[0]
         self.uk_string1 = (
             unpack(
                 f"{self.uk_string1_length}s",
@@ -2865,8 +2859,8 @@ class MeshSetGrid:
             .decode("utf-8")
             .strip("\x00")
         )
-        self.module_distance = unpack("f", file.read(calcsize("f")))[0]
-        self.is_center_pivoted = unpack("B", file.read(calcsize("B")))[0]
+        self.module_distance = unpack("f", file.read(4))[0]
+        self.is_center_pivoted = unpack("B", file.read(1))[0]
         self.mesh_modules = [
             MeshGridModule().read(file)
             for _ in range((self.grid_width * 2 + 1) * (self.grid_height * 2 + 1))
@@ -2905,7 +2899,6 @@ class DRS:
     cgeo_primitive_container_node: Node = None
     collision_shape_node: Node = None
     effect_set_node: Node = None
-    mesh_set_grid_node: Node = None
     cdrw_locator_list_node: Node = None
     animation_set: AnimationSet = None
     cdsp_mesh_file: CDspMeshFile = None
@@ -2917,7 +2910,6 @@ class DRS:
     drw_resource_meta: DrwResourceMeta = None
     cgeo_primitive_container: CGeoPrimitiveContainer = None
     collision_shape: CollisionShape = None
-    mesh_set_grid: MeshSetGrid = None
     cdrw_locator_list: CDrwLocatorList = None
     effect_set: EffectSet = None
     animation_timings: AnimationTimings = None
@@ -2974,13 +2966,14 @@ class DRS:
             self.node_information_offset,
             self.node_hierarchy_offset,
             self.node_count,
-        ) = unpack("iiiiI", reader.read(calcsize("iiiiI")))
+        ) = unpack("iiiiI", reader.read(20))
 
         if self.magic != -981667554 or self.node_count < 1:
             raise TypeError(
                 f"This is not a valid file. Magic: {self.magic}, NodeCount: {self.node_count}"
             )
 
+        # Read Node Informations
         reader.seek(self.node_information_offset)
         self.node_informations[0] = RootNodeInformation().read(reader)
 
@@ -2997,14 +2990,21 @@ class DRS:
             1396683476: "cgeo_primitive_container_node",
             268607026: "collision_shape_node",
             688490554: "effect_set_node",
-            154295579: "mesh_set_grid_node",
             735146985: "cdrw_locator_list_node",
+            -196433635: "gd_locator_list_node",  # Not yet implemented
+            -1424862619: "fx_master_node",  # Not yet implemented
         }
 
         for _ in range(self.node_count - 1):
             node_info = NodeInformation().read(reader)
-            setattr(self, node_information_map.get(node_info.magic, ""), node_info)
+            # Check if the node_info is in the node_information_map
+            if node_info.magic in node_information_map:
+                setattr(self, node_information_map[node_info.magic], node_info)
+                self.node_informations.append(node_info)
+            else:
+                raise TypeError(f"Unknown Node: {node_info.magic}")
 
+        # Read Node Hierarchy
         reader.seek(self.node_hierarchy_offset)
         self.nodes[0] = RootNode().read(reader)
 
@@ -3019,23 +3019,45 @@ class DRS:
             "CGeoOBBTree": "cgeo_obb_tree_node",
             "DrwResourceMeta": "drw_resource_meta_node",
             "CGeoPrimitiveContainer": "cgeo_primitive_container_node",
-            "CollisionShape": "collision_shape_node",
+            "collisionShape": "collision_shape_node",
             "EffectSet": "effect_set_node",
-            "MeshSetGrid": "mesh_set_grid_node",
             "CDrwLocatorList": "cdrw_locator_list_node",
+            "CGdLocatorList": "gd_locator_list_node",  # Not yet implemented
+            "FxMaster": "fx_master_node",  # Not yet implemented
         }
 
         for _ in range(self.node_count - 1):
             node = Node().read(reader)
-            setattr(self, node_map.get(node.name, ""), node)
+            # Check if the node is in the node_map
+            if node.name in node_map:
+                # collisionShape is a special case, as its first letter is lowercase
+                val = node_map[node.name]
+                if val == "collisionShape":
+                    val = "CollisionShape"
+                setattr(self, val, node)
+                self.nodes.append(node)
+            else:
+                raise TypeError(f"Unknown Node: {node.name}")
 
-        for key, value in node_map.items():
-            # remove _node from the value
-            node_info: NodeInformation = getattr(self, value, None)
-            index = value.replace("_node", "")
-            if node_info is not None:
-                reader.seek(node_info.offset)
-                setattr(self, index, globals()[key]().read(reader))
+        for node in self.nodes:
+            if not hasattr(node, "info_index"):
+                # Root Node has no info_index
+                continue
+
+            node_info = self.node_informations[node.info_index]
+            if node_info is None:
+                raise TypeError(f"Node {node.name} not found")
+
+            reader.seek(node_info.offset)
+            node_name = node_map.get(node.name, None).replace("_node", "")
+            if node_map is None:
+                raise TypeError(f"Node {node.name} not found in node_map")
+            # CollisionShape is a special case, as its first letter is lowercase
+            val = node.name
+            if val == "collisionShape":
+                val = "CollisionShape"
+
+            setattr(self, node_name, globals()[val]().read(reader))
 
         reader.close()
         return self
@@ -3109,7 +3131,7 @@ class BMS:
             self.node_information_offset,
             self.node_hierarchy_offset,
             self.node_count,
-        ) = unpack("iiiii", reader.read(calcsize("iiiii")))
+        ) = unpack("iiiii", reader.read(20))
 
         if self.magic != -981667554 or self.node_count < 1:
             raise TypeError(
@@ -3146,6 +3168,122 @@ class BMS:
             if node_info is not None:
                 reader.seek(node_info.offset)
                 setattr(self, index, globals()[key]().read(reader))
+
+        reader.close()
+        return self
+
+
+@dataclass(eq=False, repr=False)
+class BMG:
+    operator: object = None
+    context: object = None
+    keywords: object = None
+    magic: int = -981667554
+    number_of_models: int = 1
+    node_information_offset: int = 20
+    node_hierarchy_offset: int = 20
+    data_offset: int = 20  # 20 = Default Data Offset
+    node_count: int = 1
+    nodes: List[Node] = field(default_factory=lambda: [RootNode()])
+    node_informations: List[Union[NodeInformation, RootNodeInformation]] = field(
+        default_factory=lambda: [RootNodeInformation()]
+    )
+    animation_set_node: Node = None
+    animation_timings_node: Node = None
+    cgeo_primitive_container_node: Node = None
+    collision_shape_node: Node = None
+    effect_set_node: Node = None
+    animation_set: AnimationSet = None
+    mesh_set_grid_node: Node = None
+    cgeo_primitive_container: CGeoPrimitiveContainer = None
+    collision_shape: CollisionShape = None
+    effect_set: EffectSet = None
+    animation_timings: AnimationTimings = None
+    mesh_set_grid: MeshSetGrid = None
+    model_type: str = None
+
+    def read(self, file_name: str) -> "BMG":
+        reader = FileReader(file_name)
+        (
+            self.magic,
+            self.number_of_models,
+            self.node_information_offset,
+            self.node_hierarchy_offset,
+            self.node_count,
+        ) = unpack("iiiiI", reader.read(20))
+
+        if self.magic != -981667554 or self.node_count < 1:
+            raise TypeError(
+                f"This is not a valid file. Magic: {self.magic}, NodeCount: {self.node_count}"
+            )
+
+        # Read Node Informations
+        reader.seek(self.node_information_offset)
+        self.node_informations[0] = RootNodeInformation().read(reader)
+
+        node_information_map = {
+            154295579: "mesh_set_grid_node",
+            -475734043: "animation_set_node",
+            -1403092629: "animation_timings_node",
+            1396683476: "cgeo_primitive_container_node",
+            268607026: "collision_shape_node",
+            688490554: "effect_set_node",
+        }
+
+        for _ in range(self.node_count - 1):
+            node_info = NodeInformation().read(reader)
+            # Check if the node_info is in the node_information_map
+            if node_info.magic in node_information_map:
+                setattr(self, node_information_map[node_info.magic], node_info)
+                self.node_informations.append(node_info)
+            else:
+                raise TypeError(f"Unknown Node: {node_info.magic}")
+
+        # Read Node Hierarchy
+        reader.seek(self.node_hierarchy_offset)
+        self.nodes[0] = RootNode().read(reader)
+
+        node_map = {
+            "AnimationSet": "animation_set_node",
+            "AnimationTimings": "animation_timings_node",
+            "CGeoPrimitiveContainer": "cgeo_primitive_container_node",
+            "collisionShape": "collision_shape_node",
+            "EffectSet": "effect_set_node",
+            "MeshSetGrid": "mesh_set_grid_node",
+        }
+
+        for _ in range(self.node_count - 1):
+            node = Node().read(reader)
+            # Check if the node is in the node_map
+            if node.name in node_map:
+                # collisionShape is a special case, as its first letter is lowercase
+                val = node_map[node.name]
+                if val == "collisionShape":
+                    val = "CollisionShape"
+                setattr(self, val, node)
+                self.nodes.append(node)
+            else:
+                raise TypeError(f"Unknown Node: {node.name}")
+
+        for node in self.nodes:
+            if not hasattr(node, "info_index"):
+                # Root Node has no info_index
+                continue
+
+            node_info = self.node_informations[node.info_index]
+            if node_info is None:
+                raise TypeError(f"Node {node.name} not found")
+
+            reader.seek(node_info.offset)
+            node_name = node_map.get(node.name, None).replace("_node", "")
+            if node_map is None:
+                raise TypeError(f"Node {node.name} not found in node_map")
+            # CollisionShape is a special case, as its first letter is lowercase
+            val = node.name
+            if val == "collisionShape":
+                val = "CollisionShape"
+
+            setattr(self, node_name, globals()[val]().read(reader))
 
         reader.close()
         return self

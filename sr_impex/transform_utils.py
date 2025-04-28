@@ -108,6 +108,10 @@ def apply_transformation(
 
     transform = get_conversion_matrix(invert)
     meshes_collection = get_collection(source_collection, "Meshes_Collection")
+    if meshes_collection is None:  # For Buildings
+        meshes_collection = get_collection(
+            source_collection, "StateBasedMeshSet_Collection"
+        )
     previous_active_object = bpy.context.view_layer.objects.active
 
     if armature_object is not None:
@@ -157,6 +161,24 @@ def apply_transformation(
                             apply_transformation_to_objects(
                                 grandchild.objects, transform, operator_on_collision
                             )
+                if child.name.startswith("Mesh_State_"):
+                    # get the MeshesCollection from the child
+                    meshes_collection = get_collection(child, "Meshes_Collection")
+                    if meshes_collection:
+                        if (
+                            len(meshes_collection.objects) == 0
+                            and len(meshes_collection.children) > 0
+                        ):
+                            for grandchild in meshes_collection.children:
+                                apply_transformation_to_objects(
+                                    grandchild.objects, transform, operator_on_meshes
+                                )
+                        else:
+                            apply_transformation_to_objects(
+                                meshes_collection.objects, transform, operator_on_meshes
+                            )
+        else:
+            print("Meshes_Collection not found.")
 
     collision_collection = get_collection(
         source_collection, "CollisionShapes_Collection"
