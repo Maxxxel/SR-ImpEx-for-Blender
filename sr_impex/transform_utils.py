@@ -77,6 +77,7 @@ def apply_transformation_to_objects(
         obj.select_set(True)
         if apply_operator:
             bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+        obj.select_set(False)
 
 
 def get_collection(
@@ -112,12 +113,17 @@ def apply_transformation(
         meshes_collection = get_collection(
             source_collection, "StateBasedMeshSet_Collection"
         )
+    if meshes_collection is None:  # For Vehicles
+        raise ValueError("No Meshes_Collection found.")
+
     previous_active_object = bpy.context.view_layer.objects.active
 
     if armature_object is not None:
-        armature_object.matrix_world = transform @ armature_object.matrix_world
-        bpy.context.view_layer.objects.active = armature_object
         armature_object.select_set(True)
+        bpy.context.view_layer.objects.active = armature_object
+        armature_object.matrix_world = transform @ armature_object.matrix_world
+        armature_object.select_set(False)
+        bpy.context.view_layer.objects.active = previous_active_object
         # Loop the child collections
         for child in meshes_collection.children:
             # Check if there is a CollsionShapes_Collection inside the child
@@ -131,7 +137,6 @@ def apply_transformation(
                         apply_transformation_to_objects(
                             grandchild.objects, transform, operator_on_collision
                         )
-        bpy.context.view_layer.objects.active = previous_active_object
     else:
         if meshes_collection:
             if (
