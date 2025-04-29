@@ -5,7 +5,6 @@ from . import addon_updater_ops
 import os
 from os.path import dirname, realpath
 import importlib  # pylint: disable=unused-import
-import fnmatch
 import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
@@ -17,7 +16,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 8, 4),
+    "version": (2, 9, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
