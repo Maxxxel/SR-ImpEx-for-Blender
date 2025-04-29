@@ -141,6 +141,11 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         min=1,
         max=100,
     )
+    smooth_animation: BoolProperty(
+        name="Import Animation Smoothing",
+        description="Import animation smoothing",
+        default=True,
+    )  # type: ignore
     import_ik_atlas: BoolProperty(
         name="Import IK Atlas (Experimental)",
         description="Import IK Atlas",
@@ -172,6 +177,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         layout.prop(self, "import_animation")
         layout.prop(self, "import_animation_type")
         layout.prop(self, "import_animation_fps")
+        layout.prop(self, "smooth_animation")
         layout.prop(self, "import_ik_atlas")
         # Add a separator
         layout.separator()
@@ -198,6 +204,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         keywords["import_animation"] = self.import_animation
         keywords["import_animation_type"] = self.import_animation_type
         keywords["import_animation_fps"] = self.import_animation_fps
+        keywords["smooth_animation"] = self.smooth_animation
         keywords["import_ik_atlas"] = self.import_ik_atlas
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction
