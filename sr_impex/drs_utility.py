@@ -78,7 +78,7 @@ from .transform_utils import (
     get_collection,
 )
 from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
-from .animation_utils import create_animation
+from .animation_utils import import_ska_animation
 from .message_logger import MessageLogger
 
 logger = MessageLogger()
@@ -637,38 +637,39 @@ def clean_vector(vec, tol=1e-6):
 
 def add_skin_weights_to_mesh(
     mesh_object: bpy.types.Object,
-    bone_list: list[DRSBone],
-    bone_weights: list[VertexData],
-    cgeo_mesh_data: CGeoMesh,
     cdsp_mesh_file_data: BattleforgeMesh,
+    joint_group: JointGroup,
+    armature_object: bpy.types.Object,
 ) -> None:
-    vertex_to_cgeo_index = []
-    bones_names = [bone.name for bone in bone_list]
 
-    for v in cdsp_mesh_file_data.mesh_data[0].vertices:
-        key = tuple(round(coord, 6) for coord in v.position)
-        index = cgeo_mesh_data.hash_map.get(key)
-        if index is None:
-            logger.log(
-                f"Vertex {key} not found in CGeoMesh hash map. Skipping weight assignment.",
-                "Warning",
-                "WARNING",
-            )
-            continue
-        vertex_to_cgeo_index.append(index)
+    skined_vertices_data = next(
+        (
+            mesh.vertices
+            for mesh in cdsp_mesh_file_data.mesh_data
+            if mesh.revision == 12
+        ),
+    )
 
-    skin_data: list[VertexData] = [bone_weights[i] for i in vertex_to_cgeo_index]
+    if not skined_vertices_data:
+        logger.log(
+            f"Mesh {mesh_object.name} does not have skin weights.",
+            "Info",
+            "INFO",
+        )
+        return
 
-    for vertex_index, vertex_data in enumerate(skin_data):
-        for bone_index, weight in zip(vertex_data.bone_indices, vertex_data.weights):
-            if weight > 0:
-                bone_name = bones_names[bone_index]
+    for vertex_index, vertex in enumerate(skined_vertices_data):
+        for i in range(4):
+            if vertex.raw_weights[i] > 0:
+                joint_index = vertex.bone_indices[i]
+                bone_index = joint_group.joints[joint_index]
+                bone_name = armature_object.data.bones[bone_index].name
                 if bone_name not in mesh_object.vertex_groups:
                     vertex_group = mesh_object.vertex_groups.new(name=bone_name)
-                    vertex_group.add([vertex_index], weight, "ADD")
+                    vertex_group.add([vertex_index], vertex.raw_weights[i] / 255, "ADD")
                 else:
                     vertex_group = mesh_object.vertex_groups[bone_name]
-                    vertex_group.add([vertex_index], weight, "ADD")
+                    vertex_group.add([vertex_index], vertex.raw_weights[i] / 255, "ADD")
 
 
 def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> None:
@@ -905,10 +906,9 @@ def create_mesh_object(
     if drs_file.csk_skin_info and bone_weights and bone_list:
         add_skin_weights_to_mesh(
             mesh_object,
-            bone_list,
-            bone_weights,
-            cgeo_mesh,
             drs_file.cdsp_mesh_file.meshes[mesh_index],
+            drs_file.cdsp_joint_map.joint_groups[mesh_index],
+            armature_object,
         )
 
     # Link armature if a skeleton exists.
@@ -1443,14 +1443,14 @@ def load_drs(
                 for variant in animation_key.animation_set_variants:
                     ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
                     # Create the Animation
-                    create_animation(
+                    import_ska_animation(
                         ska_file,
                         armature_object,
                         bone_list,
                         variant.file,
-                        import_animation_type,
                         import_animation_fps,
                         animation_smoothing,
+                        import_animation_type,
                     )
     else:
         # Check if an model_name.ams file is in the folder
@@ -1466,15 +1466,31 @@ def load_drs(
                                 os.path.join(dir_name, variant.file_name)
                             )
                             # Create the Animation
-                            create_animation(
+                            import_ska_animation(
                                 ska_file,
                                 armature_object,
                                 bone_list,
                                 variant.file_name,
-                                import_animation_type,
                                 import_animation_fps,
                                 animation_smoothing,
+                                import_animation_type,
                             )
+        # Check if an model_name.ska file is in the folder
+        elif os.path.exists(os.path.join(dir_name, base_name + ".ska")):
+            # Load the Animation Set from the SKA file
+            ska_file: SKA = SKA().read(os.path.join(dir_name, base_name + ".ska"))
+
+            if ska_file:
+                with ensure_mode("POSE"):
+                    import_ska_animation(
+                        ska_file,
+                        armature_object,
+                        bone_list,
+                        base_name + ".ska",
+                        import_animation_fps,
+                        animation_smoothing,
+                        import_animation_type,
+                    )
 
     if (
         import_ik_atlas

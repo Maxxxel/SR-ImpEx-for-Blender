@@ -30,6 +30,13 @@ MagicValues = {
     "EffectSet": 688490554,
 }
 
+MagicClassValues = {
+    1558308612: "CSkSkeleton",
+    1314189598: "CDspMeshFile",
+    1845540702: "CGeoOBBTree",
+    1650881127: "AnimationTimings",
+}
+
 AnimationType = {
     "CastResolve": 0,
     "Spawn": 1,
@@ -302,7 +309,12 @@ class Vertex:
     bone_indices: Optional[List[int]] = field(default_factory=list)
 
     def read(self, file: BinaryIO, revision: int) -> "Vertex":
-        if revision == 133121 or revision == 134365185 or revision == 536905729:
+        if (
+            revision == 133121
+            or revision == 134365185
+            or revision == 536905729
+            or revision == 134381569
+        ):
             data = unpack_data(file, "fff", "fff", "ff")
             self.position, self.normal, self.texture = data[0], data[1], data[2]
         elif revision == 12288 or revision == 2049:
@@ -509,7 +521,6 @@ class CGeoMesh:
     faces: List[Face] = field(default_factory=list)
     vertex_count: int = 0
     vertices: List[Vector4] = field(default_factory=list)
-    hash_map: dict = field(default_factory=dict)
 
     def read(self, file: BinaryIO) -> "CGeoMesh":
         self.magic, self.index_count = unpack("ii", file.read(calcsize("ii")))
@@ -518,10 +529,6 @@ class CGeoMesh:
         for _ in range(self.vertex_count):
             x, y, z, w = unpack("4f", file.read(calcsize("4f")))
             key = tuple(round(coord, 6) for coord in (x, y, z))
-            if key not in self.hash_map:
-                self.hash_map[key] = _
-            else:
-                print(f"Duplicate vertex found: {key}")
             self.vertices.append(Vector4(x, y, z, w))
         return self
 
@@ -1603,7 +1610,15 @@ class CollisionShape:
     cylinders: List[CylinderShape] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CollisionShape":
-        self.version = unpack("B", file.read(calcsize("B")))
+        # We can have either byte or int for version, depending on the file
+        current_position = file.tell()
+        temp_version_int = unpack("I", file.read(calcsize("I")))[0]
+        if temp_version_int == 1:
+            self.version = 1
+        else:
+            file.seek(current_position)  # Go back 4 bytes
+            self.version = unpack("B", file.read(calcsize("B")))[0]
+
         self.box_count = unpack("I", file.read(calcsize("I")))[0]
         self.boxes = [BoxShape().read(file) for _ in range(self.box_count)]
         self.sphere_count = unpack("I", file.read(calcsize("I")))[0]
@@ -3128,6 +3143,14 @@ class DRS:
                 index = value.replace("_node", "")
                 if node_info is not None:
                     reader.seek(node_info.offset)
+                    # Read Magic and Decide which class to use from MagicValues
+                    previous_position = reader.tell()
+                    magic = unpack("i", reader.read(4))[0]
+                    class_name = MagicClassValues.get(magic, None)
+                    if class_name is not None and class_name != key:
+                        key = class_name
+                        index = node_map.get(key, None).replace("_node", "")
+                    reader.seek(previous_position)
                     setattr(self, index, globals()[key]().read(reader))
 
             reader.close()
