@@ -78,7 +78,7 @@ from .transform_utils import (
     get_collection,
 )
 from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
-from .animation_utils import create_animation
+from .animation_utils import import_ska_animation
 from .message_logger import MessageLogger
 
 logger = MessageLogger()
@@ -1256,6 +1256,7 @@ def load_drs(
     import_animation=True,
     import_animation_type="FRAMES",
     import_animation_fps=30,
+    smooth_animation=True,
     import_ik_atlas=False,
     import_debris=False,
     import_modules=True,
@@ -1298,13 +1299,14 @@ def load_drs(
                 for variant in animation_key.animation_set_variants:
                     ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
                     # Create the Animation
-                    create_animation(
+                    import_ska_animation(
                         ska_file,
                         armature_object,
                         bone_list,
                         variant.file,
-                        import_animation_type,
                         import_animation_fps,
+                        smooth_animation,
+                        import_animation_type,
                     )
 
     if (
@@ -1361,6 +1363,7 @@ def import_state_based_mesh_set(
     bmg_file: DRS,
     import_animation: bool,
     animation_type: str,
+    smooth_animation,
     fps: int,
     import_debris: bool,
     import_collision_shape: bool,
@@ -1451,13 +1454,14 @@ def import_state_based_mesh_set(
                             ska_file: SKA = SKA().read(
                                 os.path.join(dir_name, variant.file)
                             )
-                            create_animation(
+                            import_ska_animation(
                                 ska_file,
                                 armature_object,
                                 bone_list,
                                 variant.file,
-                                animation_type,
                                 fps,
+                                smooth_animation,
+                                animation_type,
                             )
 
             if (
@@ -1574,6 +1578,7 @@ def load_bmg(
     import_animation=True,
     import_animation_type="FRAMES",
     import_animation_fps=30,
+    smooth_animation=True,
     import_ik_atlas=False,
     import_debris=True,
     import_construction=True,
@@ -1727,6 +1732,7 @@ def load_bmg(
                         bms_file,
                         import_animation,
                         import_animation_type,
+                        smooth_animation,
                         import_animation_fps,
                         import_debris,
                         import_collision_shape,
@@ -1786,13 +1792,14 @@ def load_bmg(
                 for variant in animation_key.animation_set_variants:
                     ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
                     # Create the Animation
-                    create_animation(
+                    import_ska_animation(
                         ska_file,
                         armature_object,
                         bone_list,
                         variant.file,
-                        import_animation_type,
                         import_animation_fps,
+                        smooth_animation,
+                        import_animation_type,
                     )
 
     # Apply the Transformations to the Source Collection
