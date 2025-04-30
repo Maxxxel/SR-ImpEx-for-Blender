@@ -16,7 +16,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 9, 0),
+    "version": (2, 9, 2),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -331,16 +331,24 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
             export_folder = os.path.dirname(self.filepath)
 
             # We only allow actions with the same name as the export animation name or _idle
-            for action_name in all_actions:
-                action_name_without_ska = action_name.replace(".ska", "")
-                if (
-                    action_name_without_ska == model_name
-                    or action_name_without_ska.find("_idle") != -1
-                ):
+            nbr_actions = len(all_actions)
+            if nbr_actions == 1:
+                export_ska(
+                    context, os.path.join(export_folder, all_actions[0]), all_actions[0]
+                )
+            else:
+                for action_name in all_actions:
+                    action_name_without_ska = action_name.replace(".ska", "")
+                    if (
+                        action_name_without_ska == model_name
+                        or action_name_without_ska.find("_idle") != -1
+                    ):
 
-                    export_ska(
-                        context, os.path.join(export_folder, action_name), action_name
-                    )
+                        export_ska(
+                            context,
+                            os.path.join(export_folder, action_name),
+                            action_name,
+                        )
         return {"FINISHED"}
 
 
@@ -367,14 +375,33 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
     )
 
     def invoke(self, context, event):
-        actions = get_actions()
-        if actions:
-            self.action = actions[0]
-            self.filepath = bpy.path.ensure_ext(self.action, ".ska")
-        else:
-            self.filepath = "untitled.ska"
+        # Retrieve the active collection from the active layer collection
+        active_coll = context.view_layer.active_layer_collection.collection
+        coll_name = active_coll.name
 
-        context.window_manager.fileselect_add(self)
+        if not coll_name.startswith("DRSModel_"):
+            model_name = "you havent selected a DRS model collection"
+        else:
+            # Check if the Collection has an armature
+            armature = None
+            for obj in active_coll.objects:
+                if obj.type == "ARMATURE":
+                    armature = obj
+                    break
+            if armature is None:
+                self.report({"ERROR"}, "No armature found in the selected collection")
+                return {"CANCELLED"}
+            # Switch to Object mode to get the actions
+            bpy.ops.object.mode_set(mode="OBJECT")
+            actions = get_actions()
+            if actions:
+                self.action = actions[0]
+                self.filepath = bpy.path.ensure_ext(self.action, ".ska")
+            else:
+                self.report({"ERROR"}, "No actions found in the selected armature")
+                return {"CANCELLED"}
+
+            context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
     def execute(self, context):

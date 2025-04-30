@@ -5,8 +5,6 @@ from mathutils import Quaternion, Vector
 from .ska_definitions import SKA, SKAKeyframe
 from .drs_definitions import DRSBone
 
-# — Core Blender Utilities —
-
 
 def create_action(
     arm_obj: bpy.types.Object, name: str, cyclic: bool = False
@@ -37,9 +35,6 @@ def get_bone_fcurves(
             path + "rotation_quaternion", index=idx
         )
     return fcurves
-
-
-# — Hermite → Bézier Curve Inserter —
 
 
 def insert_hermite_bezier_curve(
@@ -76,9 +71,6 @@ def insert_hermite_bezier_curve(
         kp0.handle_right.y = P0 + off_v0
         kp1.handle_left.x = f1 - off_f
         kp1.handle_left.y = P1 - off_v1
-
-
-# — Main Import Function —
 
 
 def import_ska_animation(

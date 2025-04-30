@@ -64,6 +64,14 @@ def get_actions() -> List[str]:
     return sorted(relevant_actions)
 
 
+def generate_bone_id(bone_name: str) -> int:
+    """Generate a unique bone ID based on the bone name."""
+    # Generate a unique ID for the bone based on its name
+    # This is a simple hash function, you can replace it with a more complex one if needed
+    bone_id = sum(ord(char) for char in bone_name) % (2**32 - 1)
+    return bone_id
+
+
 def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> None:
     """Export the current scene to a .ska file."""
     # Find the Animation Data by the given action name in the current context
@@ -89,7 +97,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
         elif fcurve.data_path.endswith("rotation_quaternion"):
             rotation_fcurves[fcurve.data_path].append(fcurve)
         else:
-            logger.log(f"Skipping fcurve {fcurve.data_path}")
+            logger.log(f"Skipping fcurve {fcurve.data_path}", "info", "INFO")
 
     # Assure we have the same sizes
     assert len(location_fcurves) == len(
@@ -188,11 +196,19 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     keyframes = []
 
     last_tick = 0
+    interrupted = False
     for bone_name, data in bone_lib.items():
         bone_id = bones_list.get(bone_name)
         if bone_id is None:
-            logger.log(f"Bone {bone_name} not found in the bone_versions.json")
-            return
+            # We need to generate a new unique bone id (uint) for this bone based on the name
+            bone_id = generate_bone_id(bone_name)
+            # Check if the bone_id is already in use
+            if bone_id in bones_list.values():
+                logger.log(
+                    f"Bone ID {bone_id} already exists for {bone_name}. Tell Maxxxel to change the hash Algorithm."
+                )
+                interrupted = True
+                break
 
         # Retrieve the bone from the armature's rest data
         armature_bone = armature.data.bones[bone_name]
@@ -262,6 +278,11 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
             else:
                 pass  # TODO: implement smoothing
 
+    if interrupted:
+        logger.log("Export interrupted.")
+        logger.display()
+        return
+
     # Create a new SKA file and write the action data to it
     ska_file = SKA()
     # We will sue type 6 for now
@@ -276,6 +297,9 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     ska_file.times = times
     ska_file.keyframes = keyframes
     # Write the SKA file to disk
+    # Assure filepath has the .ska extension
+    if not filepath.endswith(".ska"):
+        filepath += ".ska"
     ska_file.write(filepath)
 
     logger.display()

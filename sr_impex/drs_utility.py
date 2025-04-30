@@ -393,6 +393,14 @@ def get_base_transform(coord_system) -> Matrix:
     return transform
 
 
+def generate_bone_id(bone_name: str) -> int:
+    """Generate a unique bone ID based on the bone name."""
+    # Generate a unique ID for the bone based on its name
+    # This is a simple hash function, you can replace it with a more complex one if needed
+    bone_id = sum(ord(char) for char in bone_name) % (2**32 - 1)
+    return bone_id
+
+
 def process_module_import(
     slocator,
     source_collection,
@@ -2335,6 +2343,9 @@ def create_mesh(
                 weights = []
                 bone_indices = []
                 for group in vertex2.groups:
+                    # only if weight > 0.0
+                    if group.weight <= 0.0:
+                        continue
                     # Weight is between 0.0 and 1.0, we need to convert it to 0-255
                     weight = int(group.weight * 255)
                     bone_name = mesh.vertex_groups[group.group].name
@@ -2348,6 +2359,19 @@ def create_mesh(
                 while len(weights) < 4:
                     weights.append(0)
                     bone_indices.append(-1)  # Root Reference, we update that later.
+
+                # Check if we have more than 4 weights, if so, we need to clip them
+                if len(weights) > 4:
+                    logger.log(
+                        f"More than 4 weights found for vertex {vertex.vertex_index}. Clipping to 4.",
+                        "Warning",
+                        "WARNING",
+                    )
+                    # We remove the lowest weights until we have 4 left
+                    while len(weights) > 4:
+                        min_weight_index = weights.index(min(weights))
+                        weights.pop(min_weight_index)
+                        bone_indices.pop(min_weight_index)
 
                 _mesh_2_data.vertices[vertex.vertex_index] = Vertex(
                     raw_weights=weights, bone_indices=bone_indices
@@ -2829,12 +2853,8 @@ def create_skeleton(
         # Get the Version from the version List
         version = bones_list.get(bone.name, -1)
         if version == -1:
-            logger.log(
-                f"Bone {bone.name} not found in bones list. Skipping it.",
-                "Error",
-                "ERROR",
-            )
-            continue
+            # Create a new version number for the bone
+            version = generate_bone_id(bone.name)
         # Insert the bone into the list, sorted by version number
         unordered_bones.append((bone.name, version))
     # Sort the bones by version number
@@ -2957,14 +2977,18 @@ def create_animation_set(model_name: str) -> AnimationSet:
     all_actions = get_actions()
     available_action = []
 
-    # We only allow actions with the same name as the export animation name or _idle
-    for action_name in all_actions:
-        action_name_without_ska = action_name.replace(".ska", "")
-        if (
-            action_name_without_ska == model_name
-            or action_name_without_ska.find("_idle") != -1
-        ):
-            available_action.append(action_name)
+    # We only allow actions with the same name as the export animation name or _idle or if its the only action
+    nbr_actions = len(all_actions)
+    if nbr_actions == 1:
+        available_action.append(all_actions[0])
+    elif nbr_actions > 1:
+        for action_name in all_actions:
+            action_name_without_ska = action_name.replace(".ska", "")
+            if (
+                action_name_without_ska == model_name
+                or action_name_without_ska.find("_idle") != -1
+            ):
+                available_action.append(action_name)
 
     if len(available_action) == 0:
         logger.log(
@@ -2988,6 +3012,9 @@ def create_animation_set(model_name: str) -> AnimationSet:
     animation_key.variant_count = 0
 
     for action_name in available_action:
+        # Assure we have .ska at the end of the name
+        if not action_name.endswith(".ska"):
+            action_name += ".ska"
         animation_key.variant_count += 1
         variant = AnimationSetVariant()
         variant.version = 4
@@ -3126,6 +3153,8 @@ def save_drs(
             if obj.type == "ARMATURE":
                 armature_object = obj
                 add_skin_mesh = True
+                # Limit the Weights to max. 4 bones per vertex
+                bpy.ops.object.vertex_group_limit_total(limit=4)
                 # Create a bone map from the armature
                 bone_map = create_bone_map(armature_object)
                 break
