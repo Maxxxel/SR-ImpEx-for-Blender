@@ -16,7 +16,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 9, 0),
+    "version": (2, 9, 1),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -367,14 +367,33 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
     )
 
     def invoke(self, context, event):
-        actions = get_actions()
-        if actions:
-            self.action = actions[0]
-            self.filepath = bpy.path.ensure_ext(self.action, ".ska")
-        else:
-            self.filepath = "untitled.ska"
+        # Retrieve the active collection from the active layer collection
+        active_coll = context.view_layer.active_layer_collection.collection
+        coll_name = active_coll.name
 
-        context.window_manager.fileselect_add(self)
+        if not coll_name.startswith("DRSModel_"):
+            model_name = "you havent selected a DRS model collection"
+        else:
+            # Check if the Collection has an armature
+            armature = None
+            for obj in active_coll.objects:
+                if obj.type == "ARMATURE":
+                    armature = obj
+                    break
+            if armature is None:
+                self.report({"ERROR"}, "No armature found in the selected collection")
+                return {"CANCELLED"}
+            # Switch to Object mode to get the actions
+            bpy.ops.object.mode_set(mode="OBJECT")
+            actions = get_actions()
+            if actions:
+                self.action = actions[0]
+                self.filepath = bpy.path.ensure_ext(self.action, ".ska")
+            else:
+                self.report({"ERROR"}, "No actions found in the selected armature")
+                return {"CANCELLED"}
+
+            context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
