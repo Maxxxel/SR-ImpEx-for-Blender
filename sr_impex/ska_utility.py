@@ -297,6 +297,9 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     ska_file.times = times
     ska_file.keyframes = keyframes
     # Write the SKA file to disk
+    # Assure filepath has the .ska extension
+    if not filepath.endswith(".ska"):
+        filepath += ".ska"
     ska_file.write(filepath)
 
     logger.display()

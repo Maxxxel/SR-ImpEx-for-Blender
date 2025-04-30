@@ -16,7 +16,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 9, 1),
+    "version": (2, 9, 2),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -331,16 +331,24 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
             export_folder = os.path.dirname(self.filepath)
 
             # We only allow actions with the same name as the export animation name or _idle
-            for action_name in all_actions:
-                action_name_without_ska = action_name.replace(".ska", "")
-                if (
-                    action_name_without_ska == model_name
-                    or action_name_without_ska.find("_idle") != -1
-                ):
+            nbr_actions = len(all_actions)
+            if nbr_actions == 1:
+                export_ska(
+                    context, os.path.join(export_folder, all_actions[0]), all_actions[0]
+                )
+            else:
+                for action_name in all_actions:
+                    action_name_without_ska = action_name.replace(".ska", "")
+                    if (
+                        action_name_without_ska == model_name
+                        or action_name_without_ska.find("_idle") != -1
+                    ):
 
-                    export_ska(
-                        context, os.path.join(export_folder, action_name), action_name
-                    )
+                        export_ska(
+                            context,
+                            os.path.join(export_folder, action_name),
+                            action_name,
+                        )
         return {"FINISHED"}
 
 
