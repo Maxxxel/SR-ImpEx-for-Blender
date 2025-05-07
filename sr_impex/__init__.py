@@ -16,7 +16,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 9, 2),
+    "version": (2, 9, 3),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -349,6 +349,10 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
                             os.path.join(export_folder, action_name),
                             action_name,
                         )
+
+        # Purge unused data blocks
+        bpy.ops.outliner.orphans_purge(do_recursive=True)
+
         return {"FINISHED"}
 
 
