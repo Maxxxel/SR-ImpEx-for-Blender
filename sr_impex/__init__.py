@@ -349,6 +349,10 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
                             os.path.join(export_folder, action_name),
                             action_name,
                         )
+
+        # Purge unused data blocks
+        bpy.ops.outliner.orphans_purge(do_recursive=True)
+
         return {"FINISHED"}
 
 

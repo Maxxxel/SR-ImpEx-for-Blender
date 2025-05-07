@@ -74,8 +74,8 @@ from .ska_definitions import SKA
 from .ska_utility import get_actions
 from .transform_utils import (
     ensure_mode,
-    apply_transformation,
-    get_collection,
+    parent_under_game_axes,
+    create_empty,
 )
 from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
 from .animation_utils import import_ska_animation
@@ -103,6 +103,16 @@ def find_or_create_collection(
         source_collection.children.link(collection)
 
     return collection
+
+
+def get_collection(
+    source_collection: bpy.types.Collection, name: str
+) -> bpy.types.Collection:
+    """Return the sub-collection whose name matches the provided name."""
+    for collection in source_collection.children:
+        if collection.name.startswith(name):
+            return collection
+    return None
 
 
 def abort(
@@ -303,16 +313,6 @@ def get_image_and_pixels(map_node, map_name):
 
 
 def create_new_bf_scene(scene_type: str, collision_support: bool):
-    """
-    Create the new Battleforge scene structure with the following hierarchy:
-      - DRSModel_<scene_type>
-             ├── Meshes_Collection
-             └── CollisionShapes_Collection (if collision_support is True)
-                      ├── Boxes_Collection
-                      ├── Spheres_Collection
-                      └── Cylinders_Collection
-    """
-
     # Create the main collection with a name based on the scene type.
     main_collection_name = f"DRSModel_{scene_type}_CHANGENAME"
     main_collection = bpy.data.collections.new(main_collection_name)
@@ -335,6 +335,9 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
 
         cylinders_collection = bpy.data.collections.new("Cylinders_Collection")
         collision_collection.children.link(cylinders_collection)
+
+    # Add the empty object to the main collection.
+    create_empty(main_collection)
 
     list_paths = [
         ("Battleforge Assets", resource_dir + "/assets"),
@@ -923,7 +926,6 @@ def create_mesh_object(
     dir_name,
     base_name,
     armature_object=None,
-    transform_matrix=None,
 ):
     # Create the mesh data using your existing helper.
     mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
@@ -949,13 +951,8 @@ def create_mesh_object(
 
     # Link armature if a skeleton exists.
     if drs_file.csk_skeleton and armature_object:
-        mesh_object.parent = armature_object
         modifier = mesh_object.modifiers.new(type="ARMATURE", name="Armature")
         modifier.object = armature_object
-
-    # Apply transformation if provided.
-    if transform_matrix is not None:
-        mesh_object.matrix_world = transform_matrix
 
     # Create and assign material.
     material = create_material(
@@ -1290,7 +1287,7 @@ def load_drs(
 
     for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
         mesh_object, _ = create_mesh_object(
-            drs_file, mesh_index, dir_name, base_name, armature_object, None
+            drs_file, mesh_index, dir_name, base_name, armature_object
         )
         mesh_collection.objects.link(mesh_object)
 
@@ -1348,9 +1345,8 @@ def load_drs(
                 )
 
     # Apply the Transformations to the Source Collection
-    apply_transformation(
-        source_collection, armature_object, apply_transform, False, True, True
-    )
+    if apply_transform:
+        parent_under_game_axes(source_collection)
 
     # Print the Time Measurement
     logger.log(
@@ -1434,11 +1430,6 @@ def import_state_based_mesh_set(
                     local_matrix = (
                         Matrix.Translation(location) @ transposed_rotation.to_4x4()
                     )
-                    # Apply the Local Matrix to the Mesh Object
-                    # if apply_transform:
-                    #     mesh_object.matrix_world = global_matrix @ local_matrix
-                    #     mirror_object_by_vector(mesh_object, Vector((0, 0, 1)))
-                    # else:
                     mesh_object.matrix_world = local_matrix
                 # Create the Material Data
                 material_data = create_material(
@@ -1544,7 +1535,6 @@ def import_mesh_set_grid(
                             dir_name,
                             base_name,
                             armature_object,
-                            None,
                         )
                         state_meshes_collection.objects.link(mesh_object)
 
@@ -1811,16 +1801,8 @@ def load_bmg(
                     )
 
     # Apply the Transformations to the Source Collection
-    apply_transformation(
-        source_collection,
-        armature_object,
-        apply_transform,
-        False,
-        True,
-        True,
-        True,
-        True,
-    )
+    if apply_transform:
+        parent_under_game_axes(source_collection)
 
     # Print the Time Measurement
     logger.log(
@@ -1950,6 +1932,7 @@ def verify_collections(
 
 def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Mesh:
     """Create a unified Mesh from a Collection of Meshes."""
+
     with new_bmesh() as bm:
         for mesh in meshes_collection.objects:
             if mesh.type == "MESH":
@@ -2271,7 +2254,7 @@ def set_refraction_color_and_map(
 
 
 def create_mesh(
-    mesh: bpy.types.Mesh,
+    mesh: bpy.types.Object,
     mesh_index: int,
     model_name: str,
     folder_path: str,
@@ -2286,8 +2269,6 @@ def create_mesh(
             bpy.ops.mesh.select_all(action="DESELECT")
 
     mesh.data.calc_tangents()
-    # [bone_name] = local_index
-    # ["root_ref"] = root_ref
     per_mesh_bone_data: Dict[str, int] = {}
     per_mesh_bone_data["root_ref"] = -1
 
@@ -3172,10 +3153,17 @@ def save_drs(
         logger.log(f"Error setting origin for meshes: {e}", "Origin Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
 
-    # === APPLY TRANSFORMATIONS =================================================
-    apply_transformation(
-        source_collection_copy, armature_object, use_apply_transform, True, True, True
+    # === APPLY TRANSFORMATIONS ================================================
+    is_imported = any(
+        obj.type == "EMPTY" and obj.name.startswith("GameOrientation")
+        for obj in source_collection_copy.objects
     )
+
+    if is_imported:
+        # We dont need to apply any transformations, the model is already in the right position, thanks to the GameOrientation Empty, which tracks the model's transform
+        pass
+    else:
+        pass
 
     # === CREATE DRS STRUCTURE =================================================
     folder_path = os.path.dirname(filepath)
@@ -3279,12 +3267,12 @@ def save_drs(
     new_drs_file.update_offsets()
 
     # === SAVE THE DRS FILE ====================================================
-    # try:
-    #     new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
-    # except Exception as e:  # pylint: disable=broad-except
-    #     logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
-    #     return abort(keep_debug_collections, source_collection_copy)
-    new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    try:
+        new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    except Exception as e:  # pylint: disable=broad-except
+        logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
+    # new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:
