@@ -1,13 +1,12 @@
 # ----------------------------------------------------
 # Auto-Update Integration: Import updater ops
 # ----------------------------------------------------
-from . import addon_updater_ops
 import os
 from os.path import dirname, realpath
-import importlib  # pylint: disable=unused-import
 import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
+from . import addon_updater_ops
 from .drs_utility import load_drs, save_drs, load_bmg, create_new_bf_scene
 from .ska_utility import export_ska, get_actions
 
@@ -36,7 +35,7 @@ def update_filename(self, context):
                 params.filename = bpy.path.ensure_ext(self.action, ".ska")
 
 
-def available_actions(self, context):
+def available_actions(_self, _context):
     actions = get_actions()  # Your function that returns a list of action names
 
     # If no actions are available, provide a default fallback
@@ -57,33 +56,33 @@ class MyAddonPreferences(bpy.types.AddonPreferences):
         name="Auto-check for Update",
         description="If enabled, auto-check for updates using an interval",
         default=False,
-    )
+    )  # type: ignore
     updater_interval_months: IntProperty(
         name="Months",
         description="Number of months between checking for updates",
         default=0,
         min=0,
-    )
+    )  # type: ignore
     updater_interval_days: IntProperty(
         name="Days",
         description="Number of days between checking for updates",
         default=7,
         min=0,
-    )
+    )  # type: ignore
     updater_interval_hours: IntProperty(
         name="Hours",
         description="Number of hours between checking for updates",
         default=0,
         min=0,
         max=23,
-    )
+    )  # type: ignore
     updater_interval_minutes: IntProperty(
         name="Minutes",
         description="Number of minutes between checking for updates",
         default=0,
         min=0,
         max=59,
-    )
+    )  # type: ignore
 
     def draw(self, context):
         layout = self.layout
@@ -99,6 +98,13 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
     bl_idname = "import_scene.drs"
     bl_label = "Import DRS/BMG"
     filename_ext = ".drs;.bmg"
+    # this one needs to be named exactly 'filepath' for ExportHelper
+    filepath: StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the SKA",
+        maxlen=1024,
+        subtype="FILE_PATH",
+    )  # type: ignore
     filter_glob: StringProperty(
         default="*.drs;*.bmg", options={"HIDDEN"}, maxlen=255
     )  # type: ignore
@@ -120,11 +126,10 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         description="Import collision shapes",
         default=True,
     )  # type: ignore
-    # use_animation_smoothing: BoolProperty(name="Use Animation Smoothing", description="Use animation smoothing", default=True) # type: ignore
     import_animation: BoolProperty(
         name="Import Animation", description="Import animation", default=True
     )  # type: ignore
-    import_animation_type: EnumProperty(  # type: ignore
+    import_animation_type: EnumProperty(
         name="Type",
         description="Select the animation type to import",
         items=[
@@ -132,14 +137,14 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             ("SECONDS", "Seconds", "Import animation in seconds"),
         ],
         default="SECONDS",
-    )
-    import_animation_fps: IntProperty(  # type: ignore
+    )  # type: ignore
+    import_animation_fps: IntProperty(
         name="Animation FPS",
         description="FPS for the imported animation",
         default=30,
         min=1,
         max=100,
-    )
+    )  # type: ignore
     smooth_animation: BoolProperty(
         name="Import Animation Smoothing",
         description="Import animation smoothing",
@@ -187,7 +192,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         layout.prop(self, "import_construction")
         layout.prop(self, "import_debris")
         # layout.prop(self, "create_size_reference")
-        if addon_updater_ops.updater.update_ready == True:
+        if addon_updater_ops.updater.update_ready is True:
             layout.label(
                 text="Update available! Please check the preferences.",
                 icon="INFO",
@@ -236,21 +241,22 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 class ExportBFModel(bpy.types.Operator, ExportHelper):
     """Export a Battleforge drs/bmg file"""
 
-    bl_idname = "export_scene.drs"
-    bl_label = "Export DRS"
-    filename_ext = ".drs"
+    bl_idname: str = "export_scene.drs"
+    bl_label: str = "Export DRS"
+    filename_ext: str = ".drs"
 
+    # this one needs to be named exactly 'filepath' for ExportHelper
+    filepath: StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the SKA",
+        maxlen=1024,
+        subtype="FILE_PATH",
+    )  # type: ignore
     filter_glob: StringProperty(
         # type: ignore # ignore
         default="*.drs;*.bmg",
         options={"HIDDEN"},
         maxlen=255,
-    )
-    use_apply_transform: BoolProperty(
-        # type: ignore # ignore
-        name="Apply Transform",
-        description="Workaround for object transformations importing incorrectly",
-        default=True,
     )
     split_mesh_by_uv_islands: BoolProperty(
         # type: ignore # ignore
@@ -280,12 +286,11 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
             ("AnimatedObjectCollision", "Animated Object (with collision)", ""),
         ],
         default="StaticObjectNoCollision",
-    )
+    )  # type: ignore
 
     def draw(self, context):
         layout = self.layout
         layout.label(text="Export Settings", icon="EXPORT")
-        layout.prop(self, "use_apply_transform")
         layout.prop(self, "split_mesh_by_uv_islands")
         layout.prop(self, "flip_normals")
         layout.prop(self, "keep_debug_collections")
@@ -309,7 +314,6 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
         keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
-        keywords["use_apply_transform"] = self.use_apply_transform
         keywords["split_mesh_by_uv_islands"] = self.split_mesh_by_uv_islands
         keywords["flip_normals"] = self.flip_normals
         keywords["keep_debug_collections"] = self.keep_debug_collections
@@ -359,9 +363,10 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 class ExportSKAFile(bpy.types.Operator, ExportHelper):
     """Export a Battleforge ska animation file"""
 
-    bl_idname = "export_animation.ska"
-    bl_label = "Export SKA"
-    filename_ext = ".ska"
+    bl_idname: str = "export_animation.ska"
+    bl_label: str = "Export SKA"
+    bl_options = {"REGISTER"}
+    filename_ext: str = ".ska"
 
     filter_glob: StringProperty(
         # type: ignore # ignore
@@ -370,47 +375,58 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
         maxlen=255,
     )
 
+    # this one needs to be named exactly 'filepath' for ExportHelper
+    filepath: StringProperty(
+        name="File Path",
+        description="Filepath used for exporting the SKA",
+        maxlen=1024,
+        subtype="FILE_PATH",
+    )  # type: ignore
+
     # Create an enum with all the actions for the selected object
     action: EnumProperty(
         name="Action",
         description="Select the action to export",
         items=available_actions,  # Note: Pass the function, not the call result!
         update=update_filename,
-    )
+    )  # type: ignore
 
     def invoke(self, context, event):
         # Retrieve the active collection from the active layer collection
         active_coll = context.view_layer.active_layer_collection.collection
-        coll_name = active_coll.name
+        if not active_coll.name.startswith("DRSModel_"):
+            self.report({"ERROR"}, "You haven't selected a DRS model collection")
+            return {"CANCELLED"}
 
-        if not coll_name.startswith("DRSModel_"):
-            model_name = "you havent selected a DRS model collection"
-        else:
-            # Check if the Collection has an armature
-            armature = None
-            for obj in active_coll.objects:
-                if obj.type == "ARMATURE":
-                    armature = obj
-                    break
-            if armature is None:
-                self.report({"ERROR"}, "No armature found in the selected collection")
-                return {"CANCELLED"}
-            # Switch to Object mode to get the actions
-            bpy.ops.object.mode_set(mode="OBJECT")
-            actions = get_actions()
-            if actions:
-                self.action = actions[0]
-                self.filepath = bpy.path.ensure_ext(self.action, ".ska")
-            else:
-                self.report({"ERROR"}, "No actions found in the selected armature")
-                return {"CANCELLED"}
+        armature = next((o for o in active_coll.objects if o.type == "ARMATURE"), None)
+        if armature is None:
+            self.report({"ERROR"}, "No armature found in the selected collection")
+            return {"CANCELLED"}
 
-            context.window_manager.fileselect_add(self)
+        for obj in context.view_layer.objects:
+            obj.select_set(False)
+        armature.select_set(True)
+        context.view_layer.objects.active = armature
+
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        actions = get_actions()
+        if not actions:
+            self.report({"ERROR"}, "No actions found in the selected armature")
+            return {"CANCELLED"}
+
+        self.action = actions[0]
+        self.filepath = bpy.path.ensure_ext(self.action, ".ska")
+
+        context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
-    def execute(self, context):
-        keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Export Settings", icon="EXPORT")
+        layout.prop(self, "action", text="Action")
 
+    def execute(self, context):
         export_ska(context, self.filepath, self.action)
         return {"FINISHED"}
 

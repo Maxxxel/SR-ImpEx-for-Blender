@@ -104,13 +104,11 @@ def import_ska_animation(
     def extract_rot(b: DRSBone, kf: SKAKeyframe) -> Tuple[float, float, float, float]:
         q = Quaternion((-kf.w, kf.x, kf.y, kf.z))
         r = b.bind_rot.conjugated() @ q
-        # r.normalize()
         return (r.w, r.x, r.y, r.z)
 
     def tangent_rot(b: DRSBone, kf: SKAKeyframe) -> Tuple[float, float, float, float]:
         tq = Quaternion((-kf.tan_w, kf.tan_x, kf.tan_y, kf.tan_z))
         tr = b.bind_rot.conjugated() @ tq
-        # tr.normalize()
         return (tr.w, tr.x, tr.y, tr.z)
 
     # Process each channel header

@@ -18,7 +18,6 @@ from bmesh.ops import (
     create_uvsphere,
     create_cone,
 )
-import bmesh.types
 
 from .drs_definitions import (
     DRS,
@@ -34,7 +33,6 @@ from .drs_definitions import (
     Bone,
     BoneVertex,
     BoxShape,
-    Matrix3x3,
     ModeAnimationKey,
     SLocator,
     SphereShape,
@@ -571,13 +569,13 @@ def compute_texture_key(image):
         # Copy the pixel data safely
         pixels = image.pixels[:]
     except Exception as e:
-        raise RuntimeError(f"Failed to access image pixels: {e}")
+        raise RuntimeError(f"Failed to access image pixels: {e}") from e
 
     # Pack the floats into bytes safely
     try:
         pixel_bytes = pack(f"{len(pixels)}f", *pixels)
     except Exception as e:
-        raise RuntimeError(f"Failed to pack pixel data: {e}")
+        raise RuntimeError(f"Failed to pack pixel data: {e}") from e
 
     image_hash = hashlib.md5(pixel_bytes).hexdigest()
     return f"{image_hash}"
@@ -717,8 +715,8 @@ def create_bone_tree(
     armature_data.display_type = "STICK"
     edit_bone.head = bone_data.bone_matrix @ Vector((0, 0, 0))
     edit_bone.tail = bone_data.bone_matrix @ Vector((0, 1, 0))
-    edit_bone.length = 0.1
     edit_bone.align_roll(bone_data.bone_matrix.to_3x3() @ Vector((0, 0, 1)))
+    edit_bone.length = 0.1
 
     # Set the parent bone
     if bone_data.parent != -1:
@@ -1493,9 +1491,6 @@ def import_mesh_set_grid(
     armature_object: bpy.types.Object,
     dir_name: str,
     base_name: str,
-    import_animation: bool,
-    animation_type: str,
-    fps: int,
     import_debris: bool,
     import_collision_shape: bool,
     import_ik_atlas: bool,
@@ -1505,6 +1500,7 @@ def import_mesh_set_grid(
         "StateBasedMeshSet_Collection"
     )
     source_collection.children.link(state_based_mesh_set_collection)
+    bone_list = None
 
     for module in bmg_file.mesh_set_grid.mesh_modules:
         if module.has_mesh_set:
@@ -1680,9 +1676,6 @@ def load_bmg(
             armature_object,
             dir_name,
             base_name,
-            import_animation,
-            import_animation_type,
-            import_animation_fps,
             import_debris,
             import_collision_shape,
             import_ik_atlas,
@@ -2871,10 +2864,10 @@ def create_skeleton(
         rest_mat = armature_bone.matrix_local.copy()
         rot = rest_mat.to_3x3()
         loc = rest_mat.to_translation()
-        vec_3 = clean_vector(-(rot.inverted() @ loc))
-        vec_0 = clean_vector(rot[0].copy())
-        vec_1 = clean_vector(rot[1].copy())
-        vec_2 = clean_vector(rot[2].copy())
+        vec_3 = -(rot.inverted() @ loc)
+        vec_0 = rot[0].copy()
+        vec_1 = rot[1].copy()
+        vec_2 = rot[2].copy()
 
         bone_vertex_0 = BoneVertex()
         bone_vertex_0.position = Vector3(vec_0.x, vec_0.y, vec_0.z)
@@ -3057,27 +3050,20 @@ def update_mesh_file_root_reference(
             continue
         # Get the SkinningMeshData
         skinning_mesh_data = mesh.mesh_data[2]
-        for j in range(len(skinning_mesh_data.vertices)):
+        for vertex in skinning_mesh_data.vertices:
             # Check the 2nd, 3rd and 4th bone index for -1
-            if skinning_mesh_data.vertices[j].bone_indices[1] == -1:
-                skinning_mesh_data.vertices[j].bone_indices[1] = per_mesh_bone_data[
-                    "root_ref"
-                ]
-            if skinning_mesh_data.vertices[j].bone_indices[2] == -1:
-                skinning_mesh_data.vertices[j].bone_indices[2] = per_mesh_bone_data[
-                    "root_ref"
-                ]
-            if skinning_mesh_data.vertices[j].bone_indices[3] == -1:
-                skinning_mesh_data.vertices[j].bone_indices[3] = per_mesh_bone_data[
-                    "root_ref"
-                ]
+            if vertex.bone_indices[1] == -1:
+                vertex.bone_indices[1] = per_mesh_bone_data["root_ref"]
+            if vertex.bone_indices[2] == -1:
+                vertex.bone_indices[2] = per_mesh_bone_data["root_ref"]
+            if vertex.bone_indices[3] == -1:
+                vertex.bone_indices[3] = per_mesh_bone_data["root_ref"]
     return cdsp_mesh_file
 
 
 def save_drs(
     context: bpy.types.Context,
     filepath: str,
-    use_apply_transform: bool,
     split_mesh_by_uv_islands: bool,
     flip_normals: bool,
     keep_debug_collections: bool,
@@ -3085,7 +3071,7 @@ def save_drs(
     model_name: str,
 ) -> dict:
     """Save the DRS file."""
-    global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref
+    global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref  # pylint: disable=global-statement
     # === PRE-VALIDITY CHECKS =================================================
     # Ensure active collection is valid
     source_collection = bpy.context.view_layer.active_layer_collection.collection
@@ -3152,18 +3138,6 @@ def save_drs(
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Error setting origin for meshes: {e}", "Origin Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
-
-    # === APPLY TRANSFORMATIONS ================================================
-    is_imported = any(
-        obj.type == "EMPTY" and obj.name.startswith("GameOrientation")
-        for obj in source_collection_copy.objects
-    )
-
-    if is_imported:
-        # We dont need to apply any transformations, the model is already in the right position, thanks to the GameOrientation Empty, which tracks the model's transform
-        pass
-    else:
-        pass
 
     # === CREATE DRS STRUCTURE =================================================
     folder_path = os.path.dirname(filepath)
