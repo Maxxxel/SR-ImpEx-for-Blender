@@ -317,36 +317,21 @@ class Vertex:
             self.normal = [0.0, 0.0, 0.0]
         return self
 
-    def write(self, file: BinaryIO) -> None:
-        if self.position:
-            file.write(pack("f", self.position[0]))
-            file.write(pack("f", self.position[1]))
-            file.write(pack("f", self.position[2]))
-        if self.normal:
-            file.write(pack("f", self.normal[0]))
-            file.write(pack("f", self.normal[1]))
-            file.write(pack("f", self.normal[2]))
-        if self.texture:
-            file.write(pack("f", self.texture[0]))
-            file.write(pack("f", self.texture[1]))
-        if self.tangent:
-            file.write(pack("f", self.tangent[0]))
-            file.write(pack("f", self.tangent[1]))
-            file.write(pack("f", self.tangent[2]))
-        if self.bitangent:
-            file.write(pack("f", self.bitangent[0]))
-            file.write(pack("f", self.bitangent[1]))
-            file.write(pack("f", self.bitangent[2]))
-        if self.raw_weights:
-            file.write(pack("B", self.raw_weights[0]))
-            file.write(pack("B", self.raw_weights[1]))
-            file.write(pack("B", self.raw_weights[2]))
-            file.write(pack("B", self.raw_weights[3]))
-        if self.bone_indices:
-            file.write(pack("B", self.bone_indices[0]))
-            file.write(pack("B", self.bone_indices[1]))
-            file.write(pack("B", self.bone_indices[2]))
-            file.write(pack("B", self.bone_indices[3]))
+    def write(self, file: BinaryIO, revision: int) -> None:
+        if revision == 133121:
+            file.write(pack("fff", *self.position))
+            file.write(pack("fff", *self.normal))
+            file.write(pack("ff", *self.texture))
+        elif revision == 12288 or revision == 2049:
+            file.write(pack("fff", *self.tangent))
+            file.write(pack("fff", *self.bitangent))
+        elif revision == 12:
+            file.write(pack("4B", *self.raw_weights))
+            file.write(pack("4B", *self.bone_indices))
+        elif revision == 163841:
+            file.write(pack("fff", *self.position))
+            file.write(pack("ff", *self.texture))
+            # Normal is zeroed out
 
     def size(self) -> int:
         if self.position:
@@ -364,6 +349,14 @@ class Vertex:
         if self.bone_indices:
             return 4
         return 0
+
+    def __repr__(self) -> str:
+        return (
+            f"Vertex(position={self.position}, normal={self.normal}, "
+            f"texture={self.texture}, tangent={self.tangent}, "
+            f"bitangent={self.bitangent}, raw_weights={self.raw_weights}, "
+            f"bone_indices={self.bone_indices})"
+        )
 
 
 @dataclass(eq=False, repr=False)
@@ -564,8 +557,8 @@ class MeshData:
 
     def write(self, file: BinaryIO) -> None:
         file.write(pack("ii", self.revision, self.vertex_size))
-        for vertex in self.vertices:
-            vertex.write(file)
+        for i, vertex in enumerate(self.vertices):
+            vertex.write(file, self.revision)
 
     def size(self) -> int:
         s = 8 + self.vertex_size * len(self.vertices)

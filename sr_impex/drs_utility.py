@@ -2292,7 +2292,6 @@ def create_mesh(
     for _face in mesh.data.polygons:
         new_face = Face()
         new_face.indices = []
-
         for index in _face.loop_indices:
             vertex: bpy.types.MeshLoop = mesh.data.loops[index]
             vertex2: bpy.types.MeshVertex = mesh.data.vertices[vertex.vertex_index]
@@ -3241,12 +3240,12 @@ def save_drs(
     new_drs_file.update_offsets()
 
     # === SAVE THE DRS FILE ====================================================
-    try:
-        new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
-    except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
-        return abort(keep_debug_collections, source_collection_copy)
-    # new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    # try:
+    #     new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    # except Exception as e:  # pylint: disable=broad-except
+    #     logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
+    #     return abort(keep_debug_collections, source_collection_copy)
+    new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:
