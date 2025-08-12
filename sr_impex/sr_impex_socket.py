@@ -236,11 +236,3 @@ class DRS_PT_SocketPanel(bpy.types.Panel):
 
         # --- NEW SECTION FOR DEBUGGING ---
         layout.separator()
-
-        box = layout.box()
-        row = box.row()
-        row.label(text="Debugging Tools", icon="TOOL_SETTINGS")
-
-        row = box.row()
-        # This is the new button
-        row.operator("drs.debug_obb_tree", text="Generate OBBTree")

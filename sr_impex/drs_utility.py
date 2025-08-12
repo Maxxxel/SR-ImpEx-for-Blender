@@ -20,6 +20,7 @@ from bmesh.ops import (
 )
 import bmesh
 import numpy as np
+import uuid
 
 from .drs_definitions import (
     DRS,
@@ -81,6 +82,7 @@ from .transform_utils import (
 from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
 from .animation_utils import import_ska_animation
 from .message_logger import MessageLogger
+from .locator_editor import BLOB_KEY, UID_KEY
 
 logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -93,6 +95,62 @@ with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
 
 # region General Helper Functions
+BLOB_KEY = "CDrwLocatorListJSON"
+
+
+def persist_locator_blob_on_collection(
+    source_collection: bpy.types.Collection, drs_file: "DRS"
+) -> dict | None:
+    """Create and store the CDrwLocatorList blob (with stable UIDs) on the model collection."""
+    if not hasattr(drs_file, "cdrw_locator_list") or drs_file.cdrw_locator_list is None:
+        return None
+    blob = _cdrw_to_blob(drs_file.cdrw_locator_list)
+    source_collection[BLOB_KEY] = json.dumps(
+        blob, separators=(",", ":"), ensure_ascii=False
+    )
+    return blob
+
+
+def _cdrw_to_blob(cdrw_list: "CDrwLocatorList") -> dict:
+    """Serialize CDrwLocatorList into the editor's JSON blob format."""
+
+    def _stable_uid(
+        class_id: int,
+        bone_id: int,
+        file_name: str,
+        rot9: list[float],
+        pos3: list[float],
+    ) -> str:
+        # stable (session-independent) hex UID derived from content at import-time
+        key = f"{class_id}|{bone_id}|{file_name}|{','.join(f'{x:.6f}' for x in rot9)}|{','.join(f'{x:.6f}' for x in pos3)}"
+        return hashlib.sha1(key.encode("utf-8")).hexdigest()
+
+    locs = []
+    for loc in cdrw_list.slocators or []:
+        rot9 = list(loc.cmat_coordinate_system.matrix.matrix)  # 9 floats
+        pos3 = [
+            loc.cmat_coordinate_system.position.x,
+            loc.cmat_coordinate_system.position.y,
+            loc.cmat_coordinate_system.position.z,
+        ]
+        entry = {
+            "uid": _stable_uid(
+                int(loc.class_id), int(loc.bone_id), loc.file_name or "", rot9, pos3
+            ),
+            "class_id": int(loc.class_id),
+            "file": loc.file_name or "",
+            "bone_id": int(loc.bone_id),
+            "uk_int": (
+                int(loc.uk_int)
+                if hasattr(loc, "uk_int") and loc.uk_int is not None
+                else -1
+            ),
+            "rot3x3": rot9,
+            "pos": pos3,
+        }
+        locs.append(entry)
+
+    return {"version": int(cdrw_list.version), "locators": locs}
 
 
 def find_or_create_collection(
@@ -565,6 +623,13 @@ def process_slocator_import(
 ):
     locator_object = None
 
+    # Build stable UID EXACTLY like _cdrw_to_blob
+    rot9 = list(slocator.cmat_coordinate_system.matrix.matrix)
+    pos3 = list(slocator.cmat_coordinate_system.position.xyz)
+
+    key = f"{int(slocator.class_id)}|{int(slocator.bone_id)}|{slocator.file_name or ''}|{','.join(f'{x:.6f}' for x in rot9)}|{','.join(f'{x:.6f}' for x in pos3)}"
+    stable_uid = hashlib.sha1(key.encode("utf-8")).hexdigest()
+
     # Convert locator local transform
     local_offset = Vector(slocator.cmat_coordinate_system.position.xyz)
     local_rot = Matrix(slocator.cmat_coordinate_system.matrix.math_matrix)
@@ -612,6 +677,9 @@ def process_slocator_import(
         )
         return
 
+    # Assign stable UID so GUI can match object <-> blob directly
+    locator_object[UID_KEY] = stable_uid
+
     if slocator.bone_id >= 0:
         bone = next((b for b in bone_list if b.identifier == slocator.bone_id), None)
         if bone:
@@ -627,6 +695,10 @@ def process_slocator_import(
             print(
                 f"Warning [process_slocator_import]: Locator bone_id {slocator.bone_id} not found."
             )
+            locator_object.parent = None
+            locator_object.location = world_loc
+            locator_object.rotation_mode = "QUATERNION"
+            locator_object.rotation_quaternion = world_rot.to_quaternion()
     else:
         # Apply transform to sphere
         locator_object.location = world_loc
@@ -1722,6 +1794,8 @@ def load_drs(
         "DRSModel_" + base_name
     )
     context.scene.collection.children.link(source_collection)
+
+    persist_locator_blob_on_collection(source_collection, drs_file)
 
     armature_object, bone_list = setup_armature(source_collection, drs_file)
 

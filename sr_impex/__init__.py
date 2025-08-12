@@ -17,10 +17,11 @@ from .drs_utility import (
     save_drs,
     load_bmg,
     create_new_bf_scene,
-    DRS_OT_debug_obb_tree,
+    # DRS_OT_debug_obb_tree,
 )
 from .ska_utility import export_ska, get_actions
 from . import addon_updater_ops
+from . import locator_editor
 
 bl_info = {
     "name": "SR-ImpEx",
@@ -598,7 +599,8 @@ def register():
     bpy.utils.register_class(DRS_PT_SocketPanel)
     bpy.utils.register_class(StartSocketSyncOperator)
     bpy.utils.register_class(StopSocketSyncOperator)
-    bpy.utils.register_class(DRS_OT_debug_obb_tree)
+    # bpy.utils.register_class(DRS_OT_debug_obb_tree)
+    locator_editor.register()
 
 
 def unregister():
@@ -614,4 +616,5 @@ def unregister():
     bpy.utils.unregister_class(DRS_PT_SocketPanel)
     bpy.utils.unregister_class(StartSocketSyncOperator)
     bpy.utils.unregister_class(StopSocketSyncOperator)
-    bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
+    # bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
+    locator_editor.unregister()

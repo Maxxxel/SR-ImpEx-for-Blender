@@ -41,12 +41,12 @@ LocatorClass = {
     0: "HealthBar",  # Health Bar placement offset
     1: "DestructiblePart",  # Static module for parts/destructibles
     2: "Construction",  # aka. PivotOffset internally; Construction pieces
-    3: "Turret",  # Animated attached unit that will play its attack animations
+    3: "Turret",  # Animated attached unit that will play its attack animations -> SKA
     4: "FxbIdle",  # aka. WormDecal internally, effects for when not moving, only worm uses this originally
     5: "Wheel",  # Animated attached unit that will play its idle and walk/run animations
     6: "StaticPerm",  # aka. FXNode internally; Building/Object permanent effects
     7: "Unknown7",  #
-    8: "DynamicPerm",  # Unit permanent effects
+    8: "DynamicPerm",  # Unit permanent effects -> FXB
     9: "DamageFlameSmall",  # Building fire location from damage, plays effect_building_flame_small.fxb
     10: "DamageFlameSmallSmoke",  # Building fire location from damage, plays effect_building_flame_small_smoke.fxb
     11: "DamageFlameLarge",  # Building fire location from damage, plays effect_building_flame_large.fxb
@@ -55,7 +55,7 @@ LocatorClass = {
     14: "SpellCast",  # seemingly not used anymore
     15: "SpellHitAll",  # as above
     16: "Hit",  # Point of being hit by attacks/spells
-    29: "Projectile_Spawn",  # Point to use attacks/spells from
+    29: "Projectile_Spawn",  # Point to use attacks/spells from -> sometimes FXB
 }
 
 # Also Node Order
