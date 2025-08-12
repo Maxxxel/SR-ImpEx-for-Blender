@@ -38,15 +38,24 @@ AnimationType = {
 }
 
 LocatorClass = {
-    0: "Unknown0",
-    1: "Module1",
-    2: "Construction",
-    3: "SKA",
-    4: "FxbIdle",
-    5: "Module2",
-    8: "FxbPermOvt",
-    16: "Unknown16",
-    29: "FxbAtt",
+    0: "HealthBar",  # Health Bar placement offset
+    1: "DestructiblePart",  # Static module for parts/destructibles
+    2: "Construction",  # aka. PivotOffset internally; Construction pieces
+    3: "Turret",  # Animated attached unit that will play its attack animations
+    4: "FxbIdle",  # aka. WormDecal internally, effects for when not moving, only worm uses this originally
+    5: "Wheel",  # Animated attached unit that will play its idle and walk/run animations
+    6: "StaticPerm",  # aka. FXNode internally; Building/Object permanent effects
+    7: "Unknown7",  #
+    8: "DynamicPerm",  # Unit permanent effects
+    9: "DamageFlameSmall",  # Building fire location from damage, plays effect_building_flame_small.fxb
+    10: "DamageFlameSmallSmoke",  # Building fire location from damage, plays effect_building_flame_small_smoke.fxb
+    11: "DamageFlameLarge",  # Building fire location from damage, plays effect_building_flame_large.fxb
+    12: "DamageSmokeOnly",  # Building smoke location from damage, plays effect_building_flame_smoke.fxb
+    13: "DamageFlameHuge",  # Building fire location from damage, plays effect_building_flame_huge.fxb
+    14: "SpellCast",  # seemingly not used anymore
+    15: "SpellHitAll",  # as above
+    16: "Hit",  # Point of being hit by attacks/spells
+    29: "Projectile_Spawn",  # Point to use attacks/spells from
 }
 
 # Also Node Order
@@ -1346,15 +1355,17 @@ class SLocator:
         default_factory=CMatCoordinateSystem
     )
     class_id: int = 0
-    sub_id: int = 0
+    bone_id: int = 0
     file_name_length: int = 0
     file_name: str = ""
-    uk_int: int = 0
+    uk_int: int = -1
     class_type: str = ""
 
     def read(self, file: BinaryIO, version: int) -> "SLocator":
         self.cmat_coordinate_system = CMatCoordinateSystem().read(file)
-        self.class_id, self.sub_id, self.file_name_length = unpack("iii", file.read(12))
+        self.class_id, self.bone_id, self.file_name_length = unpack(
+            "iii", file.read(12)
+        )
         self.file_name = (
             unpack(
                 f"{self.file_name_length}s",
@@ -1375,7 +1386,7 @@ class SLocator:
             pack(
                 f"iii{self.file_name_length}s",
                 self.class_id,
-                self.sub_id,
+                self.bone_id,
                 self.file_name_length,
                 self.file_name.encode("utf-8"),
             )
@@ -1851,14 +1862,14 @@ class ModeAnimationKey:
 class AnimationMarker:
     """AnimationMarker"""
 
-    some_class: int = 0
+    is_spawn_animation: int = 0
     time: float = 0.0
     direction: Vector3 = field(default_factory=lambda: Vector3(0, 0, 0))
     position: Vector3 = field(default_factory=lambda: Vector3(0, 0, 0))
 
     def read(self, file: BinaryIO) -> "AnimationMarker":
         """Reads the AnimationMarker from the buffer"""
-        self.some_class = unpack("i", file.read(4))[0]  # 4 bytes
+        self.is_spawn_animation = unpack("i", file.read(4))[0]  # 4 bytes
         self.time = unpack("f", file.read(4))[0]  # 4 bytes
         self.direction = Vector3().read(file)  # 12 bytes
         self.position = Vector3().read(file)  # 12 bytes
@@ -1866,7 +1877,7 @@ class AnimationMarker:
 
     def write(self, file: BinaryIO) -> "AnimationMarker":
         """Writes the AnimationMarker to the buffer"""
-        file.write(pack("if", self.some_class, self.time))
+        file.write(pack("if", self.is_spawn_animation, self.time))
         self.direction.write(file)
         self.position.write(file)
         return self
@@ -1883,8 +1894,8 @@ class AnimationMarkerSet:
     anim_id: int = 0
     length: int = 0
     name: str = ""
-    animation_marker_id: int = 0
-    marker_count: int = 0
+    animation_marker_id: int = 0  # uint
+    marker_count: int = 1  # Always 1
     animation_markers: List[AnimationMarker] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "AnimationMarkerSet":
@@ -1896,7 +1907,7 @@ class AnimationMarkerSet:
             .decode("utf-8")
             .strip("\x00")
         )
-        self.animation_marker_id = unpack("i", file.read(4))[0]
+        self.animation_marker_id = unpack("I", file.read(4))[0]
         self.marker_count = unpack("i", file.read(4))[0]
         self.animation_markers = [
             AnimationMarker().read(file) for _ in range(self.marker_count)
@@ -1907,7 +1918,7 @@ class AnimationMarkerSet:
         """Writes the AnimationMarkerSet to the buffer"""
         file.write(pack("ii", self.anim_id, self.length))
         file.write(pack(f"{self.length}s", self.name.encode("utf-8")))
-        file.write(pack("ii", self.animation_marker_id, self.marker_count))
+        file.write(pack("Ii", self.animation_marker_id, self.marker_count))
         for animation_marker in self.animation_markers:
             animation_marker.write(file)
         return self
@@ -2331,7 +2342,7 @@ class StructV3:
 @dataclass(eq=False, repr=False)
 class AnimationTimings:
     magic: int = 1650881127  # int
-    version: int = 3  # Short. 3 or 4
+    version: int = 4  # Short. 3 or 4
     # Short. Only used if there are multiple Animations.
     animation_timing_count: int = 0
     animation_timings: List[AnimationTiming] = field(default_factory=list)
@@ -2612,7 +2623,7 @@ class UKS3:
 
 @dataclass(eq=False, repr=False)
 class EffectSet:
-    type: int = 0  # Short
+    type: int = 12  # Short
     checksum_length: int = 0  # Int
     checksum: str = ""  # CString split into length and name
     length: int = 0
@@ -2680,10 +2691,10 @@ class EffectSet:
 
 @dataclass(eq=False, repr=False)
 class SMeshState:
-    state_num: int = 0  # Int
-    has_files: int = 0  # Short
-    uk_file_length: int = 0  # Int
-    uk_file: str = ""  # String
+    state_num: int = 0  # Int Always 0
+    has_files: int = 0  # Short Always 1
+    uk_file_length: int = 0  # Int Always 0
+    uk_file: str = ""  # String Always ""
     drs_file_length: int = 0  # Int
     drs_file: str = ""  # String
 
@@ -2739,11 +2750,11 @@ class DestructionState:
 
 @dataclass(eq=False, repr=False)
 class StateBasedMeshSet:
-    uk: int = 1  # Short
-    uk2: int = 10  # Int
-    num_mesh_states: int = 0  # Int
+    uk: int = 1  # Short # Depends on the Type i guess
+    uk2: int = 11  # Int # Depends on the type i guess
+    num_mesh_states: int = 1  # Int Always needs one
     mesh_states: List[SMeshState] = field(default_factory=list)
-    num_destruction_states: int = 0  # Int
+    num_destruction_states: int = 1  # Int
     destruction_states: List[DestructionState] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "StateBasedMeshSet":

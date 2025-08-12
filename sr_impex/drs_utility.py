@@ -18,6 +18,8 @@ from bmesh.ops import (
     create_uvsphere,
     create_cone,
 )
+import bmesh
+import numpy as np
 
 from .drs_definitions import (
     DRS,
@@ -66,6 +68,7 @@ from .drs_definitions import (
     VertexData,
     AnimationSetVariant,
     CGeoSphere,
+    Matrix3x3,
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -394,6 +397,28 @@ def get_base_transform(coord_system) -> Matrix:
     return transform
 
 
+def get_base_transform_transposed(coord_system) -> Matrix:
+    rotation_flat = coord_system.matrix.matrix
+    position = coord_system.position
+
+    rot_mat = Matrix(
+        (
+            (rotation_flat[0], rotation_flat[1], rotation_flat[2]),
+            (rotation_flat[3], rotation_flat[4], rotation_flat[5]),
+            (rotation_flat[6], rotation_flat[7], rotation_flat[8]),
+        )
+    )
+
+    # This swaps the rows and columns to correct the orientation
+    rot_mat.transpose()
+
+    # Now, build the full 4x4 matrix
+    transform = rot_mat.to_4x4()
+    transform.translation = Vector((position.x, position.y, position.z))
+
+    return transform
+
+
 def generate_bone_id(bone_name: str) -> int:
     """Generate a unique bone ID based on the bone name."""
     # Generate a unique ID for the bone based on its name
@@ -402,53 +427,211 @@ def generate_bone_id(bone_name: str) -> int:
     return bone_id
 
 
-def process_module_import(
-    slocator,
-    source_collection,
-    armature_object,
-    bone_list,
-    dir_name,
-    drs_file,
-    import_animation,
-    import_animation_type,
-    fps,
-    import_debris,
-    import_collision_shape,
-    import_ik_atlas,
+def load_static_bms_module(
+    file_name: str, dir_name: str, parent_collection: bpy.types.Collection
 ):
-    # Determine module type and choose the correct collection name.
-    module_type = slocator.class_type  # e.g., "Module1" or "Module2"
-    module_collection_name = "Modules1" if module_type == "Module1" else "Modules2"
-    module_collection = find_or_create_collection(
-        source_collection, module_collection_name
+    # if filename has .module extension replace it with bms
+    if file_name.endswith(".module"):
+        file_name = file_name.replace(".module", ".bms")
+    bms_file: BMS = BMS().read(os.path.join(dir_name, file_name))
+
+    if bms_file.state_based_mesh_set is None:
+        logger.log(
+            f"Warning [load_static_bms_module]: State-based mesh set not found in {file_name}.",
+            "Warning",
+            "WARNING",
+        )
+        return None
+
+    # StateBasedMeshSet has MeshStates and DestructionStates
+    mesh_state_collection = find_or_create_collection(
+        parent_collection, "Destructible_Meshes"
     )
 
-    # Replace the module extension with .bms and read the module file.
-    module_file_name = slocator.file_name.replace(".module", ".bms")
-    module = BMS().read(os.path.join(dir_name, module_file_name))
+    # We shall have only one State Mesh
+    if bms_file.state_based_mesh_set.num_mesh_states > 1:
+        logger.log(
+            f"Warning [load_static_bms_module]: Multiple state meshes found in {file_name}. Only the first one will be used.",
+            "Warning",
+            "WARNING",
+        )
 
-    # Build a module-specific name and prefix.
-    module_name = f"{module_type}_{slocator.sub_id}"
-    prefix = "Module_1_" if module_type == "Module1" else "Module_2_"
+    for mesh_state in bms_file.state_based_mesh_set.mesh_states:
+        drs_file = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
+        mesh_object, _ = create_mesh_object(
+            drs_file, 0, dir_name, f"State_{mesh_state.state_num}", None
+        )
+        mesh_state_collection.objects.link(mesh_object)
+        return mesh_object
 
-    # Call the existing state-based mesh importer with the proper parameters.
-    import_state_based_mesh_set(
-        module.state_based_mesh_set,
-        module_collection,
+
+def load_animated_bms_module(
+    file_name: str,
+    dir_name: str,
+    parent_collection: bpy.types.Collection,
+    import_animation_fps,
+    smooth_animation,
+    import_animation_type,
+):
+    # if filename has .module extension replace it with bms
+    if file_name.endswith(".module"):
+        file_name = file_name.replace(".module", ".bms")
+    bms_file: BMS = BMS().read(os.path.join(dir_name, file_name))
+
+    if bms_file.state_based_mesh_set is None:
+        logger.log(
+            f"Warning [load_animated_bms_module]: State-based mesh set not found in {file_name}.",
+            "Warning",
+            "WARNING",
+        )
+        return None
+
+    # StateBasedMeshSet has MeshStates and DestructionStates
+    mesh_state_collection = find_or_create_collection(parent_collection, "State_Meshes")
+
+    # We shall have only one State Mesh
+    if bms_file.state_based_mesh_set.num_mesh_states > 1:
+        logger.log(
+            f"Warning [load_animated_bms_module]: Multiple state meshes found in {file_name}. Only the first one will be used.",
+            "Warning",
+            "WARNING",
+        )
+
+    for mesh_state in bms_file.state_based_mesh_set.mesh_states:
+        drs_file = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
+        armature_object, bone_list = setup_armature(
+            mesh_state_collection, drs_file, "Locator_Wheel_"
+        )
+        mesh_object, _ = create_mesh_object(
+            drs_file, 0, dir_name, f"State_{mesh_state.state_num}", armature_object
+        )
+        mesh_state_collection.objects.link(mesh_object)
+
+        # We need to parent the Mesh_object under the ArmatureObject
+        if armature_object is not None:
+            mesh_object.parent = armature_object
+            mesh_object.matrix_parent_inverse.identity()
+
+        if drs_file.animation_set is not None and armature_object is not None:
+            with ensure_mode("POSE"):
+                for animation_key in drs_file.animation_set.mode_animation_keys:
+                    for variant in animation_key.animation_set_variants:
+                        ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
+                        # Create the Animation
+                        import_ska_animation(
+                            ska_file,
+                            armature_object,
+                            bone_list,
+                            variant.file,
+                            import_animation_fps,
+                            smooth_animation,
+                            import_animation_type,
+                        )
+
+        return armature_object
+
+
+def load_turret_animation(
+    file_name: str,
+    dir_name: str,
+    armature_object: bpy.types.Object,
+    bone_list: List[DRSBone],
+    import_animation_fps,
+    smooth_animation,
+    import_animation_type,
+):
+    ska_file: SKA = SKA().read(os.path.join(dir_name, file_name))
+    # Create the Animation
+    import_ska_animation(
+        ska_file,
         armature_object,
         bone_list,
-        dir_name,
-        drs_file,
-        import_animation,
+        file_name,
+        import_animation_fps,
+        smooth_animation,
         import_animation_type,
-        fps,
-        import_debris,
-        import_collision_shape,
-        import_ik_atlas,
-        module_name,
-        slocator,
-        prefix,
     )
+
+
+def process_slocator_import(
+    slocator: SLocator,
+    source_collection: bpy.types.Collection,
+    bone_list: List[DRSBone],
+    armature_object: bpy.types.Object,
+    dir_name: str,
+    import_animation_fps,
+    smooth_animation,
+    import_animation_type,
+):
+    locator_object = None
+
+    # Convert locator local transform
+    local_offset = Vector(slocator.cmat_coordinate_system.position.xyz)
+    local_rot = Matrix(slocator.cmat_coordinate_system.matrix.math_matrix)
+
+    # Default world transform (used if no bone is attached)
+    world_loc = local_offset.copy()
+    world_rot = local_rot.copy()
+
+    # Depending on the Type we create a Marker or load a drs-file or ska-file
+    if slocator.class_type == "DestructiblePart":
+        locator_object = load_static_bms_module(
+            slocator.file_name, dir_name, source_collection
+        )
+    elif slocator.class_type == "Wheel":
+        locator_object = load_animated_bms_module(
+            slocator.file_name,
+            dir_name,
+            source_collection,
+            import_animation_fps,
+            smooth_animation,
+            import_animation_type,
+        )
+    elif slocator.class_type == "Turret" and slocator.file_name_length > 0:
+        load_turret_animation(
+            slocator.file_name,
+            dir_name,
+            armature_object,
+            bone_list,
+            import_animation_fps,
+            smooth_animation,
+            import_animation_type,
+        )
+    else:
+        # We sometimes have .fxb files -> Effects, we ignore them for now
+        # Create visual sphere for locator
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=0.1, location=(0, 0, 0))
+        locator_object = bpy.context.object
+        locator_object.name = f"Locator_{slocator.class_type}"
+        source_collection.objects.link(locator_object)
+        bpy.context.collection.objects.unlink(locator_object)
+
+    if not locator_object and slocator.class_type != "Turret":
+        logger.log(
+            f"Warning [process_slocator_import]: Locator object for {slocator.class_type} not found, file: {slocator.file_name}."
+        )
+        return
+
+    if slocator.bone_id >= 0:
+        bone = next((b for b in bone_list if b.identifier == slocator.bone_id), None)
+        if bone:
+            bone_name = bone.name
+            locator_object.parent = armature_object
+            locator_object.parent_type = "BONE"
+            locator_object.parent_bone = bone_name
+            locator_object.matrix_parent_inverse.identity()
+            locator_object.location = local_offset
+            locator_object.rotation_mode = "QUATERNION"
+            locator_object.rotation_quaternion = local_rot.to_quaternion()
+        else:
+            print(
+                f"Warning [process_slocator_import]: Locator bone_id {slocator.bone_id} not found."
+            )
+    else:
+        # Apply transform to sphere
+        locator_object.location = world_loc
+        locator_object.rotation_mode = "QUATERNION"
+        locator_object.rotation_quaternion = world_rot.to_quaternion()
 
 
 def process_debris_import(state_based_mesh_set, source_collection, dir_name, base_name):
@@ -649,6 +832,74 @@ def clean_vector(vec, tol=1e-6):
     return Vector([0.0 if abs(c) < tol else c for c in vec])
 
 
+class DRS_OT_debug_obb_tree(bpy.types.Operator):
+    """Calculates and visualizes an OBBTree for the selected collection's meshes."""
+
+    bl_idname = "drs.debug_obb_tree"
+    bl_label = "Debug OBBTree"
+    bl_description = "Calculates a new OBBTree from the meshes in the active collection and visualizes it"
+
+    def execute(self, context):
+        start_time = time.time()
+        # 1. Check if a valid collection is selected
+        active_layer_coll = context.view_layer.active_layer_collection
+        if active_layer_coll is None or active_layer_coll == context.scene.collection:
+            logger.log(
+                "Please select a specific model collection in the Outliner.",
+                "Error",
+                "ERROR",
+            )
+            logger.display()
+            return {"CANCELLED"}
+
+        source_collection = active_layer_coll.collection
+
+        # 2. Verify collection name and find the Meshes_Collection
+        if not source_collection.name.startswith("DRSModel_"):
+            logger.log(
+                f"Selected collection '{source_collection.name}' is not a valid DRSModel collection.",
+                "Error",
+                "ERROR",
+            )
+            logger.display()
+            return {"CANCELLED"}
+
+        meshes_collection = get_collection(source_collection, "Meshes_Collection")
+        if not meshes_collection:
+            logger.log(
+                f"Could not find a 'Meshes_Collection' within '{source_collection.name}'.",
+                "Error",
+                "ERROR",
+            )
+            logger.display()
+            return {"CANCELLED"}
+
+        # 3. Gather mesh objects ONLY from that specific collection
+        mesh_objects = [obj for obj in meshes_collection.objects if obj.type == "MESH"]
+        if not mesh_objects:
+            logger.log(
+                "No mesh objects found in 'Meshes_Collection'.", "Error", "ERROR"
+            )
+            logger.display()
+            return {"CANCELLED"}
+
+        # Create the unified Mesh
+        unified_mesh = create_unified_mesh(meshes_collection)
+
+        cgeo_obb_tree = create_cgeo_obb_tree(unified_mesh)
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        logger.log(
+            f"OBBTree calculation and visualization completed in {elapsed_time:.2f} seconds.",
+            "Info",
+            "INFO",
+        )
+        logger.display()
+
+        return {"FINISHED"}
+
+
 # endregion
 
 # region Import DRS Model to Blender
@@ -816,18 +1067,25 @@ def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
 
 
 def import_csk_skeleton(
-    source_collection: bpy.types.Collection, drs_file: DRS
+    source_collection: bpy.types.Collection, drs_file: DRS, locator_prefix: str = ""
 ) -> Tuple[bpy.types.Object, list[DRSBone]]:
     # Create the Armature Data
-    armature_data: bpy.types.Armature = bpy.data.armatures.new("CSkSkeleton")
+    armature_data: bpy.types.Armature = bpy.data.armatures.new(
+        f"{locator_prefix}CSkSkeleton"
+    )
     # Create the Armature Object and add the Armature Data to it
-    armature_object: bpy.types.Object = bpy.data.objects.new("Armature", armature_data)
-    # Link the Armature Object to the Source Collection
+    armature_object: bpy.types.Object = bpy.data.objects.new(
+        f"{locator_prefix}Armature", armature_data
+    )
+    # Link the Armature Object to the Scene Collection to ensure it's in the view layer
+    bpy.context.scene.collection.objects.link(armature_object)
+    # Now link it to the intended destination collection
     source_collection.objects.link(armature_object)
     # Create the Skeleton
     bone_list = init_bones(drs_file.csk_skeleton)
     # Directly set armature data to edit mode
     bpy.context.view_layer.objects.active = armature_object
+    # bpy.context.view_layer.objects.active = armature_object
     with ensure_mode("EDIT"):
         # Create the Bone Tree without using bpy.ops or context
         create_bone_tree(armature_data, bone_list, bone_list[0])
@@ -962,28 +1220,15 @@ def create_mesh_object(
 
 
 def setup_armature(
-    source_collection, drs_file: DRS
+    source_collection, drs_file: DRS, locator_prefix: str = ""
 ) -> Tuple[bpy.types.Object, list[DRSBone]]:
     armature_object, bone_list = None, None
     if drs_file.csk_skeleton is not None:
-        armature_object, bone_list = import_csk_skeleton(source_collection, drs_file)
+        armature_object, bone_list = import_csk_skeleton(
+            source_collection, drs_file, locator_prefix
+        )
         # Optionally: add any shared animation setup here.
     return armature_object, bone_list
-
-
-def apply_slocator_transform(mesh_object, slocator):
-    location = (
-        slocator.cmat_coordinate_system.position.x,
-        slocator.cmat_coordinate_system.position.y,
-        slocator.cmat_coordinate_system.position.z,
-    )
-    # Convert the flat rotation list into a 3x3 Matrix.
-    rotation_vals = slocator.cmat_coordinate_system.matrix.matrix
-    rotation_matrix = Matrix(
-        [list(rotation_vals[i : i + 3]) for i in range(0, len(rotation_vals), 3)]
-    ).transposed()
-    local_matrix = Matrix.Translation(location) @ rotation_matrix.to_4x4()
-    mesh_object.matrix_world = local_matrix
 
 
 def create_material(
@@ -1251,6 +1496,204 @@ def import_animation_ik_atlas(
         limit_rot.owner_space = "LOCAL"
 
 
+def import_cgeo_mesh(cgeo_mesh: CGeoMesh, collection: bpy.types.Collection) -> None:
+    start_time = time.time()
+    cgeo_mesh_mesh = bpy.data.meshes.new("CGeoMesh")
+    vertices = list()
+    faces = list()
+
+    for face in cgeo_mesh.faces:
+        faces.append([face.indices[0], face.indices[1], face.indices[2]])
+
+    for vertex in cgeo_mesh.vertices:
+        vertices.append([vertex.x, vertex.y, vertex.z])
+
+    cgeo_mesh_mesh.from_pydata(vertices, [], faces)
+    cgeo_mesh_mesh.polygons.foreach_set(
+        "use_smooth", [True] * len(cgeo_mesh_mesh.polygons)
+    )
+    if bpy.app.version[:2] in [
+        (3, 3),
+        (3, 4),
+        (3, 5),
+        (3, 6),
+        (4, 0),
+    ]:  # pylint: disable=unsubscriptable-object
+        cgeo_mesh_mesh.use_auto_smooth = True
+
+    cgeo_mesh_object = bpy.data.objects.new("CGeoMesh", cgeo_mesh_mesh)
+    cgeo_mesh_object.display_type = "WIRE"
+    collection.objects.link(cgeo_mesh_object)
+    end_time = time.time()
+    logger.log(f"Imported CGeoMesh in {end_time - start_time:.2f} seconds.")
+
+
+def import_obb_tree(
+    obb_tree: CGeoOBBTree, collection: bpy.types.Collection, limit_depth: int
+) -> None:
+    """
+    Creates a true hierarchical representation of the OBB tree in Blender
+    using nested collections and efficient object creation.
+    """
+    if not obb_tree.obb_nodes:
+        print("OBBTree has no nodes to import.")
+        return
+
+    start_time = time.time()
+
+    # --- Create a single, reusable cube mesh ---
+    # This avoids using the slow bpy.ops operator in a loop.
+    template_mesh = bpy.data.meshes.new("OBB_Cube_Mesh")
+    template_mesh.from_pydata(
+        [
+            (-1, -1, -1),
+            (1, -1, -1),
+            (1, 1, -1),
+            (-1, 1, -1),
+            (-1, -1, 1),
+            (1, -1, 1),
+            (1, 1, 1),
+            (-1, 1, 1),
+        ],
+        [],
+        [
+            (0, 1, 2, 3),
+            (4, 5, 6, 7),
+            (0, 1, 5, 4),
+            (1, 2, 6, 5),
+            (2, 3, 7, 6),
+            (3, 0, 4, 7),
+        ],
+    )
+    template_mesh.update()
+
+    blender_collections = [None] * len(obb_tree.obb_nodes)
+
+    # --- Create a cache for materials to avoid creating duplicate ones ---
+    material_cache = {}
+
+    def create_node_hierarchy(node_index, parent_collection):
+        if blender_collections[node_index] is not None:
+            return blender_collections[node_index]
+
+        node_data = obb_tree.obb_nodes[node_index]
+
+        if node_data.node_depth > limit_depth:
+            return None
+
+        # --- Create a new collection for this node ---
+        node_collection = bpy.data.collections.new(
+            f"OBB_Node_{node_index}_Depth_{node_data.node_depth}"
+        )
+        parent_collection.children.link(node_collection)
+        blender_collections[node_index] = node_collection
+
+        # --- Create the Visual Object using the template mesh (very fast) ---
+        cube_obj = bpy.data.objects.new(f"OBB_Node_{node_index}", template_mesh)
+        node_collection.objects.link(cube_obj)
+
+        # Set the transformation from the OBB data
+        transform_matrix = get_base_transform_transposed(
+            node_data.oriented_bounding_box
+        )
+        cube_obj.matrix_world = transform_matrix
+
+        # --- Use a cached material for visualization ---
+        mat = material_cache.get(node_data.node_depth)
+        if not mat:
+            mat = bpy.data.materials.new(name=f"OBB_Depth_{node_data.node_depth}_Mat")
+            mat.use_nodes = True
+            bsdf = mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf:
+                gradient = (
+                    1.0 - node_data.node_depth / 11.0
+                )  # Normalized over an assumed max depth
+                bsdf.inputs["Base Color"].default_value = (
+                    gradient,
+                    gradient,
+                    gradient,
+                    1,
+                )
+                mat.blend_method = "BLEND"
+                bsdf.inputs["Alpha"].default_value = 0.25
+            material_cache[node_data.node_depth] = mat
+
+        cube_obj.data.materials.append(mat)
+
+        # --- Recursive Creation for Children ---
+        if node_data.first_child_index > 0:
+            create_node_hierarchy(node_data.first_child_index, node_collection)
+
+        if node_data.second_child_index > 0:
+            create_node_hierarchy(node_data.second_child_index, node_collection)
+
+        return node_collection
+
+    # Create a root collection for the entire OBB Tree
+    obb_tree_root_collection = bpy.data.collections.new("OBBTree_Hierarchy")
+    collection.children.link(obb_tree_root_collection)
+
+    # Start the recursive creation from the root node (index 0)
+    create_node_hierarchy(0, obb_tree_root_collection)
+
+    end_time = time.time()
+    logger.log(f"OBB Tree creation took {end_time - start_time:.2f} seconds.")
+
+
+def import_bounding_box(
+    cdsp_mesh_file: CDspMeshFile, collection: bpy.types.Collection
+) -> None:
+    """
+    Creates a wireframe cube in Blender that represents the Axis-Aligned Bounding Box (AABB)
+    defined by the lower-left and upper-right corners.
+
+    Args:
+        cdsp_mesh_file (CDspMeshFile): The data object containing the bounding box corners.
+        collection (bpy.types.Collection): The collection to link the new object to.
+    """
+    start_time = time.time()
+    # Extract the corner vectors from the input data
+    llc_data = cdsp_mesh_file.bounding_box_lower_left_corner
+    urc_data = cdsp_mesh_file.bounding_box_upper_right_corner
+
+    # Convert to Blender's Vector type for easier math
+    llc = Vector((llc_data.x, llc_data.y, llc_data.z))
+    urc = Vector((urc_data.x, urc_data.y, urc_data.z))
+
+    # 1. Calculate the dimensions (size) of the bounding box
+    dimensions = urc - llc
+
+    # 2. Calculate the center of the bounding box
+    # This will be the location of the cube's origin in Blender
+    center = llc + (dimensions / 2.0)
+
+    # 3. Create the cube primitive at the calculated center
+    bpy.ops.mesh.primitive_cube_add(
+        size=1, enter_editmode=False, align="WORLD", location=center
+    )
+    bbox_obj = bpy.context.object
+    bbox_obj.name = "AABB_BoundingBox"
+
+    # 4. Set the final dimensions of the cube
+    bbox_obj.dimensions = dimensions
+
+    # 5. Link the new object to your target collection and unlink from the scene's default
+    # This prevents the object from appearing in the wrong place in the outliner
+    scene_collection = bpy.context.scene.collection
+    if scene_collection.name in [c.name for c in bbox_obj.users_collection]:
+        scene_collection.objects.unlink(bbox_obj)
+
+    if collection.name not in [c.name for c in bbox_obj.users_collection]:
+        collection.objects.link(bbox_obj)
+
+    # 6. Set display properties for better visualization
+    bbox_obj.display_type = "WIRE"  # Show as a wireframe
+    bbox_obj.show_in_front = True  # Make the wireframe visible through other objects
+
+    end_time = time.time()
+    logger.log(f"AABB Bounding Box creation took {end_time - start_time:.2f} seconds.")
+
+
 def load_drs(
     context: bpy.types.Context,
     filepath="",
@@ -1263,6 +1706,10 @@ def load_drs(
     import_ik_atlas=False,
     import_debris=False,
     import_modules=True,
+    import_geomesh=False,
+    import_obbtree=False,
+    limit_obb_depth=5,
+    import_bb=False,
 ) -> None:
 
     start_time = time.time()
@@ -1322,25 +1769,37 @@ def load_drs(
         import_animation_ik_atlas(armature_object, drs_file.animation_set, bone_list)
 
     if import_modules and drs_file.cdrw_locator_list is not None:
+        slocator_collection = bpy.data.collections.new("SLocators_Collection")
         for slocator in drs_file.cdrw_locator_list.slocators:
-            if slocator.file_name_length > 0 and slocator.class_type in {
-                "Module1",
-                "Module2",
-            }:
-                process_module_import(
-                    slocator,
-                    source_collection,
-                    armature_object,
-                    bone_list,
-                    dir_name,
-                    drs_file,
-                    import_animation,
-                    import_animation_type,
-                    import_animation_fps,
-                    import_debris,
-                    import_collision_shape,
-                    import_ik_atlas,
-                )
+            process_slocator_import(
+                slocator,
+                slocator_collection,
+                bone_list,
+                armature_object,
+                dir_name,
+                import_animation_fps,
+                smooth_animation,
+                import_animation_type,
+            )
+        source_collection.children.link(slocator_collection)
+
+    if import_obbtree and drs_file.cgeo_obb_tree is not None:
+        debug_collection = find_or_create_collection(
+            source_collection, "Debug_Collection"
+        )
+        import_obb_tree(drs_file.cgeo_obb_tree, debug_collection, limit_obb_depth)
+
+    if import_geomesh and drs_file.cgeo_mesh is not None:
+        debug_collection = find_or_create_collection(
+            source_collection, "Debug_Collection"
+        )
+        import_cgeo_mesh(drs_file.cgeo_mesh, debug_collection)
+
+    if import_bb and drs_file.cdsp_mesh_file is not None:
+        debug_collection = find_or_create_collection(
+            source_collection, "Debug_Collection"
+        )
+        import_bounding_box(drs_file.cdsp_mesh_file, debug_collection)
 
     # Apply the Transformations to the Source Collection
     if apply_transform:
@@ -1445,6 +1904,9 @@ def import_state_based_mesh_set(
                 and armature_object is not None
                 and import_animation
             ):
+                # POSE MODE is only for Armature Objects, so we need to ensure we're in the right context
+                if armature_object:
+                    bpy.context.view_layer.objects.active = armature_object
                 with ensure_mode("POSE"):
                     for animation_key in bmg_file.animation_set.mode_animation_keys:
                         for variant in animation_key.animation_set_variants:
@@ -1713,7 +2175,7 @@ def load_bmg(
                     bms_file: BMS = BMS().read(
                         os.path.join(construction_dir, slocator.file_name)
                     )
-                    module_name = slocator.class_type + "_" + str(slocator.sub_id)
+                    module_name = slocator.class_type + "_" + str(slocator.bone_id)
                     import_state_based_mesh_set(
                         bms_file.state_based_mesh_set,
                         slocator_collection,
@@ -1926,34 +2388,34 @@ def verify_collections(
 def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Mesh:
     """Create a unified Mesh from a Collection of Meshes."""
 
-    with new_bmesh() as bm:
-        for mesh in meshes_collection.objects:
-            if mesh.type == "MESH":
-                bm.from_mesh(mesh.data)
+    with new_bmesh() as bm_out:
+        for obj in meshes_collection.objects:
+            if obj.type != "MESH":
+                continue
 
-        # Count Faces and Vertices before removing doubles
-        face_count = len(bm.faces)
-        vertex_count = len(bm.verts)
+            # Build a temporary BMesh from the object's RAW mesh (rest pose)
+            bm_tmp = bmesh.new()
+            bm_tmp.from_mesh(obj.data)
+            # Apply object->world transform (includes parents like GameOrientation)
+            bm_tmp.transform(obj.matrix_world)
 
-        # Remove Duplicates by lowest possible float
-        remove_doubles(bm, verts=bm.verts, dist=0.00001)
+            # Pipe into the output BMesh
+            tmp_me = bpy.data.meshes.new(name="__tmp__")
+            bm_tmp.to_mesh(tmp_me)
+            bm_tmp.free()
 
-        # Create the new Mesh
-        unified_mesh = bpy.data.meshes.new("unified_mesh")
-        bm.to_mesh(unified_mesh)
+            bm_out.from_mesh(tmp_me)
+            bpy.data.meshes.remove(tmp_me)
 
-    # Count Faces and Vertices after removing doubles
-    face_count_after = len(unified_mesh.polygons)
-    vertex_count_after = len(unified_mesh.vertices)
+        # Weld tiny duplicates after the transform
+        bm_out.verts.ensure_lookup_table()
+        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-5)
 
-    # Show the Message Box
-    logger.log(
-        f"Unified Mesh has {face_count_after} Faces and {vertex_count_after} Vertices after removing duplicates. The original Mesh had {face_count} Faces and {vertex_count} Vertices.",
-        "Unified Mesh",
-        "INFO",
-    )
+        # Bake to a new Mesh
+        unified = bpy.data.meshes.new("unified_mesh")
+        bm_out.to_mesh(unified)
 
-    return unified_mesh
+    return unified
 
 
 def create_cgeo_mesh(unique_mesh: bpy.types.Mesh) -> CGeoMesh:
@@ -1977,42 +2439,238 @@ def create_cgeo_mesh(unique_mesh: bpy.types.Mesh) -> CGeoMesh:
     return _cgeo_mesh
 
 
-def create_obb_node(unique_mesh: bpy.types.Mesh) -> OBBNode:
-    """Create an OBB Node for the OBB Tree."""
-    obb_node = OBBNode()
-    obb_node.node_depth = 0
-    obb_node.current_triangle_count = 0
-    obb_node.minimum_triangles_found = len(unique_mesh.polygons)
-    obb_node.unknown1 = 0
-    obb_node.unknown2 = 0
-    obb_node.unknown3 = 0
-    obb_node.oriented_bounding_box = CMatCoordinateSystem()
-    # TODO: We need to update this later as we need to calculate the center of the mesh
-    obb_node.oriented_bounding_box.position = Vector((0, 0, 0))
-    # TODO: We need to update this later as we need to calculate the rotation of the mesh
-    obb_node.oriented_bounding_box.matrix = Matrix.Identity(3)
+def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
+    unified_mesh.calc_loop_triangles()
+    vcount = len(unified_mesh.vertices)
+    verts = np.empty(vcount * 3, dtype=np.float64)
+    unified_mesh.vertices.foreach_get("co", verts)
+    verts = verts.reshape(vcount, 3)
+    tris = np.array(
+        [lt.vertices[:] for lt in unified_mesh.loop_triangles], dtype=np.int32
+    )
+    tri_count = len(tris)
+    if tri_count == 0:
+        tree = CGeoOBBTree()
+        tree.matrix_count = 0
+        tree.obb_nodes = []
+        tree.triangle_count = 0
+        tree.faces = []
+        return tree
 
-    return obb_node
+    tri_centroids = verts[tris].mean(axis=1)
 
+    def volume_from_axes(points: np.ndarray, A: np.ndarray):
+        P = points @ A
+        mn = P.min(axis=0)
+        mx = P.max(axis=0)
+        e = 0.5 * (mx - mn)
+        return float(8.0 * e[0] * e[1] * e[2])
 
-def create_cgeo_obb_tree(unique_mesh: bpy.types.Mesh) -> CGeoOBBTree:
-    """Create a CGeoOBBTree from a Blender Mesh Object."""
-    _cgeo_obb_tree = CGeoOBBTree()
-    _cgeo_obb_tree.triangle_count = len(unique_mesh.polygons)
-    _cgeo_obb_tree.faces = []
+    def pca_axes(points: np.ndarray):
+        c = points.mean(axis=0)
+        X = points - c
+        U, S, Vt = np.linalg.svd(X, full_matrices=False)
+        A = Vt.T
+        if np.linalg.det(A) < 0:
+            A[:, 2] *= -1.0
+        return A
 
-    for _face in unique_mesh.polygons:
-        new_face = Face()
-        new_face.indices = [_face.vertices[0], _face.vertices[1], _face.vertices[2]]
-        _cgeo_obb_tree.faces.append(new_face)
+    def rodrigues(w):
+        t = np.linalg.norm(w)
+        if t < 1e-12:
+            return np.eye(3)
+        k = w / t
+        K = np.array(
+            [[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]], dtype=np.float64
+        )
+        return np.eye(3) + np.sin(t) * K + (1 - np.cos(t)) * (K @ K)
 
-    _cgeo_obb_tree.matrix_count = 0
-    _cgeo_obb_tree.obb_nodes = []
+    def nm_simplex(f, x0, step, iters):
+        x = np.array(
+            [
+                x0,
+                x0 + np.array([step, 0, 0]),
+                x0 + np.array([0, step, 0]),
+                x0 + np.array([0, 0, step]),
+            ],
+            dtype=np.float64,
+        )
+        fx = np.array([f(xi) for xi in x], dtype=np.float64)
+        for _ in range(iters):
+            order = np.argsort(fx)
+            x = x[order]
+            fx = fx[order]
+            c = x[:3].mean(axis=0)
+            xr = c + (c - x[3])
+            fr = f(xr)
+            if fr < fx[0]:
+                xe = c + 2 * (xr - c)
+                fe = f(xe)
+                x[3], fx[3] = (xe, fe) if fe < fr else (xr, fr)
+            elif fr < fx[2]:
+                x[3], fx[3] = xr, fr
+            else:
+                xc = c + 0.5 * (x[3] - c)
+                fc = f(xc)
+                if fc < fx[3]:
+                    x[3], fx[3] = xc, fc
+                else:
+                    x[1:] = x[0] + 0.5 * (x[1:] - x[0])
+                    fx[1:] = np.array([f(xi) for xi in x[1:]])
+        order = np.argsort(fx)
+        return x[order][0], fx[order][0]
 
-    for _ in range(_cgeo_obb_tree.matrix_count):
-        _cgeo_obb_tree.obb_nodes.append(create_obb_node(unique_mesh))
+    def hybbrid_orientation(points: np.ndarray):
+        # Seeds: PCA, identity, plus up to two hull feature frames.
+        bm = bmesh.new()
+        for p in points:
+            bm.verts.new((float(p[0]), float(p[1]), float(p[2])))
+        bm.verts.ensure_lookup_table()
+        bmesh.ops.convex_hull(bm, input=bm.verts[:])
+        bm.verts.ensure_lookup_table()
+        bm.edges.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+        H = np.array([v.co[:] for v in bm.verts], dtype=np.float64)
+        normals = [
+            np.array(f.normal[:], dtype=np.float64)
+            for f in bm.faces
+            if f.normal.length > 1e-12
+        ]
+        edges = []
+        for e in bm.edges:
+            d = H[e.verts[1].index] - H[e.verts[0].index]
+            n = np.linalg.norm(d)
+            if n > 1e-9:
+                edges.append(d / n)
+        bm.free()
 
-    return _cgeo_obb_tree
+        seeds = [pca_axes(points), np.eye(3)]
+        if normals:
+            z = normals[0] / (np.linalg.norm(normals[0]) + 1e-30)
+            if edges:
+                t = edges[0]
+                u = t - z * (t @ z)
+                if np.linalg.norm(u) > 1e-9:
+                    u /= np.linalg.norm(u)
+                    v = np.cross(z, u)
+                    seeds.append(np.column_stack([u, v, z]))
+        if len(normals) > 1:
+            z = normals[-1] / (np.linalg.norm(normals[-1]) + 1e-30)
+            if edges:
+                t = edges[-1]
+                u = t - z * (t @ z)
+                if np.linalg.norm(u) > 1e-9:
+                    u /= np.linalg.norm(u)
+                    v = np.cross(z, u)
+                    seeds.append(np.column_stack([u, v, z]))
+
+        best_A = seeds[0]
+        best_V = volume_from_axes(points, best_A)
+        step = 0.15  # ~8.6°
+        iters = 10
+
+        for A0 in seeds:
+
+            def f(w):
+                R = rodrigues(w)
+                A = A0 @ R
+                if np.linalg.det(A) < 0:
+                    A[:, 2] = np.cross(A[:, 0], A[:, 1])
+                return volume_from_axes(points, A)
+
+            w_best, v_best = nm_simplex(f, np.zeros(3), step, iters)
+            if v_best < best_V:
+                R = rodrigues(w_best)
+                best_A = A0 @ R
+                if np.linalg.det(best_A) < 0:
+                    best_A[:, 2] = np.cross(best_A[:, 0], best_A[:, 1])
+                best_V = v_best
+
+        P = points @ best_A
+        mn = P.min(axis=0)
+        mx = P.max(axis=0)
+        e = 0.5 * (mx - mn)
+        mid = 0.5 * (mx + mn)
+        c = mid @ best_A.T
+        return c, best_A, np.maximum(e + 1e-6, 1e-9)
+
+    def build(face_idx: np.ndarray, depth: int, nodes: list) -> int:
+        uniq = np.unique(tris[face_idx].reshape(-1))
+        pts = verts[uniq]
+        c, A, E = hybbrid_orientation(pts)
+
+        cs = CMatCoordinateSystem()
+        cs.position = Vector3(x=float(c[0]), y=float(c[1]), z=float(c[2]))
+        scaled = A * E[None, :]
+        M_store = scaled.T  # store rows; importer does one transpose
+        cs.matrix = Matrix3x3(
+            matrix=[
+                float(M_store[0, 0]),
+                float(M_store[0, 1]),
+                float(M_store[0, 2]),
+                float(M_store[1, 0]),
+                float(M_store[1, 1]),
+                float(M_store[1, 2]),
+                float(M_store[2, 0]),
+                float(M_store[2, 1]),
+                float(M_store[2, 2]),
+            ]
+        )
+
+        node = OBBNode()
+        node.oriented_bounding_box = cs
+        node.first_child_index = 0
+        node.second_child_index = 0
+        node.skip_pointer = 0
+        node.node_depth = depth
+        node.triangle_offset = 0
+        node.total_triangles = int(len(face_idx))
+
+        my = len(nodes)
+        nodes.append(node)
+
+        MIN_TRIS = 12
+        MAX_DEPTH = 32
+        if len(face_idx) <= MIN_TRIS or depth >= MAX_DEPTH:
+            return my
+
+        axis_id = int(np.argmax(E))
+        dir_world = A[:, axis_id] / (np.linalg.norm(A[:, axis_id]) + 1e-30)
+        vals = (tri_centroids[face_idx] - c) @ dir_world
+        med = np.median(vals)
+        left_mask = vals <= med
+        right_mask = ~left_mask
+        left_idx = face_idx[left_mask]
+        right_idx = face_idx[right_mask]
+        if len(left_idx) == 0 or len(right_idx) == 0:
+            order = np.argsort(vals)
+            half = len(order) // 2
+            if half == 0:
+                return my
+            left_idx = face_idx[order[:half]]
+            right_idx = face_idx[order[half:]]
+
+        li = build(left_idx, depth + 1, nodes)
+        ri = build(right_idx, depth + 1, nodes)
+        nodes[my].first_child_index = li if li > 0 else 0
+        nodes[my].second_child_index = ri if ri > 0 else 0
+        return my
+
+    nodes: list[OBBNode] = []
+    all_faces = np.arange(tri_count, dtype=np.int32)
+    build(all_faces, 0, nodes)
+
+    tree = CGeoOBBTree()
+    tree.matrix_count = len(nodes)
+    tree.obb_nodes = nodes
+    tree.triangle_count = tri_count
+    out_faces = []
+    for a, b, c in tris:
+        f = Face()
+        f.indices = [int(a), int(b), int(c)]
+        out_faces.append(f)
+    tree.faces = out_faces
+    return tree
 
 
 def create_cdsp_joint_map(

@@ -6,16 +6,28 @@ from os.path import dirname, realpath
 import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
-from . import addon_updater_ops
-from .drs_utility import load_drs, save_drs, load_bmg, create_new_bf_scene
+from .sr_impex_socket import (
+    DRS_PT_SocketPanel,
+    StartSocketSyncOperator,
+    StopSocketSyncOperator,
+    send_path_to_gui,
+)
+from .drs_utility import (
+    load_drs,
+    save_drs,
+    load_bmg,
+    create_new_bf_scene,
+    DRS_OT_debug_obb_tree,
+)
 from .ska_utility import export_ska, get_actions
+from . import addon_updater_ops
 
 bl_info = {
     "name": "SR-ImpEx",
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 3, 0),
-    "version": (2, 10, 0),
+    "version": (3, 0, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -159,12 +171,36 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         name="Import Debris", description="Import debris for bmg files", default=True
     )  # type: ignore
     import_modules: BoolProperty(
-        name="Import Modules", description="Import modules for drs files", default=True
+        name="Import Modules/Locators",
+        description="Import modules and locators for drs files",
+        default=True,
     )  # type: ignore
     import_construction: BoolProperty(
         name="Import Construction",
         description="Import construction for bmg files",
         default=True,
+    )  # type: ignore
+    import_geomesh: BoolProperty(
+        name="[DEBUG] Import CGeoMesh",
+        description="Import additional geometry mesh data.",
+        default=False,
+    )  # type: ignore
+    import_obbtree: BoolProperty(
+        name="[DEBUG] Import CGeoOBBTree",
+        description="Import additional OBB tree data.",
+        default=False,
+    )  # type: ignore
+    limit_obb_depth: IntProperty(
+        name="[DEBUG] Limit OBB Depth",
+        description="Limit the depth of the OBB tree.",
+        default=5,
+        min=1,
+        max=1000,
+    )  # type: ignore
+    import_bb: BoolProperty(
+        name="[DEBUG] Import MeshBoundingBox",
+        description="Import additional axis-aligned bounding box data.",
+        default=False,
     )  # type: ignore
 
     def draw(self, context):
@@ -191,6 +227,14 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         layout.prop(self, "import_modules")
         layout.prop(self, "import_construction")
         layout.prop(self, "import_debris")
+        # Add a separator
+        layout.separator()
+        # Debug Section
+        layout.label(text="Debug Settings", icon="CONSOLE")
+        layout.prop(self, "import_geomesh")
+        layout.prop(self, "import_obbtree")
+        layout.prop(self, "limit_obb_depth")
+        layout.prop(self, "import_bb")
         # layout.prop(self, "create_size_reference")
         if addon_updater_ops.updater.update_ready is True:
             layout.label(
@@ -228,10 +272,12 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             keywords.pop("import_debris", None)
             keywords.pop("import_construction", None)
             load_drs(context, **keywords)
+            send_path_to_gui(self.filepath)
             return {"FINISHED"}
         elif self.filepath.endswith(".bmg"):
             keywords.pop("import_modules", None)
             load_bmg(context, **keywords)
+            send_path_to_gui(self.filepath)
             return {"FINISHED"}
         else:
             self.report({"ERROR"}, "Unsupported file type")
@@ -549,6 +595,10 @@ def register():
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
     bpy.utils.register_class(MyAddonPreferences)
+    bpy.utils.register_class(DRS_PT_SocketPanel)
+    bpy.utils.register_class(StartSocketSyncOperator)
+    bpy.utils.register_class(StopSocketSyncOperator)
+    bpy.utils.register_class(DRS_OT_debug_obb_tree)
 
 
 def unregister():
@@ -561,3 +611,7 @@ def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     bpy.utils.unregister_class(MyAddonPreferences)
+    bpy.utils.unregister_class(DRS_PT_SocketPanel)
+    bpy.utils.unregister_class(StartSocketSyncOperator)
+    bpy.utils.unregister_class(StopSocketSyncOperator)
+    bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
