@@ -38,16 +38,255 @@ AnimationType = {
 }
 
 LocatorClass = {
-    0: "Unknown0",
-    1: "Module1",
-    2: "Construction",
-    3: "SKA",
-    4: "FxbIdle",
-    5: "Module2",
-    8: "FxbPermOvt",
-    16: "Unknown16",
-    29: "FxbAtt",
+    0: "HealthBar",  # Health Bar placement offset
+    1: "DestructiblePart",  # Static module for parts/destructibles
+    2: "Construction",  # aka. PivotOffset internally; Construction pieces
+    3: "Turret",  # Animated attached unit that will play its attack animations -> SKA
+    4: "FxbIdle",  # aka. WormDecal internally, effects for when not moving, only worm uses this originally
+    5: "Wheel",  # Animated attached unit that will play its idle and walk/run animations
+    6: "StaticPerm",  # aka. FXNode internally; Building/Object permanent effects
+    7: "Unknown7",  #
+    8: "DynamicPerm",  # Unit permanent effects -> FXB
+    9: "DamageFlameSmall",  # Building fire location from damage, plays effect_building_flame_small.fxb
+    10: "DamageFlameSmallSmoke",  # Building fire location from damage, plays effect_building_flame_small_smoke.fxb
+    11: "DamageFlameLarge",  # Building fire location from damage, plays effect_building_flame_large.fxb
+    12: "DamageSmokeOnly",  # Building smoke location from damage, plays effect_building_flame_smoke.fxb
+    13: "DamageFlameHuge",  # Building fire location from damage, plays effect_building_flame_huge.fxb
+    14: "SpellCast",  # seemingly not used anymore
+    15: "SpellHitAll",  # as above
+    16: "Hit",  # Point of being hit by attacks/spells
+    29: "Projectile_Spawn",  # Point to use attacks/spells from -> sometimes FXB
 }
+
+VIS_JOB_MAP = {
+    0: "Idle",
+    1: "Walk",
+    2: "Run",
+    3: "Spawn",
+    4: "HitFromBack",
+    5: "Cheer / Emote",
+    6: "SpellTargetShotSequenceAreaShotDelay / SpellTargetShotSequenceAreaIdle",
+    7: "UnDeploy",
+    8: "Attack",
+    9: "Deploy / Charge Attack Run",
+    10: "WormMovement Start",
+    11: "HitFromFront",
+    12: "Die",
+    13: "CorpseRot",
+    14: "SpellTargetShotSequenceAreaRecoil / HitFromLeft",
+    15: "Special Melee Attack (AnimTagID 114)",
+    16: "Special Melee Attack (AnimTagID 115)",
+    17: "WormMovement Loop",
+    18: "Cast",
+    19: "CastResolve",
+    21: "CastResolveAir",
+    22: "CastAir",
+    23: "HitFromRight",
+    24: "Talk",
+    27: "Impactful Movement / Trample",
+    28: "WormMovement End",
+    29: "PushBackStandUp Start",
+    30: "PushBackStandUp Loop",
+    31: "PushBackStandUp End",
+    35: "Immobilized / Trapped",
+    99: "Trailer",
+    128: "StampedeStart",
+    129: "StampedeRun",
+    130: "StampedeStop",
+    131: "EraseOverTimeInit / EraseOverTimeStart",
+    132: "EraseOverTimeWork / EraseOverTimeLoop",
+    133: "EraseOverTimeShutDown / EraseOverTimeEnd",
+    134: "GroundPounder (Tremor) Cast",
+    135: "GroundPounder (Tremor) Resolve",
+    136: "Firelance (Emberstrike) Cast",
+    137: "Firelance (Emberstrike) Resolve",
+    138: "Paralyze Cast",
+    139: "Paralyze Resolve",
+    140: "ThrowFlames Init",
+    141: "ThrowFlames Work",
+    142: "ThrowFlames ShutDown",
+    143: "ThrowShadowFlames Init",
+    144: "ThrowShadowFlames Work",
+    145: "ThrowShadowFlames ShutDown",
+    146: "Conflagration Init",
+    147: "Conflagration Work",
+    148: "Conflagration ShutDown",
+    149: "Exhaust Cast",
+    150: "Exhaust Resolve",
+    151: "UnholyArmor Cast",
+    152: "UnholyArmor Resolve",
+    153: "Frenzy Cast",
+    154: "Frenzy Resolve",
+    155: "SummonSkeletons Cast",
+    156: "SummonSkeletons Resolve",
+    157: "Deathwish Cast",
+    158: "Deathwish Resolve",
+    159: "SacrificeSquad Cast",
+    160: "SacrificeSquad Resolve",
+    161: "SuicidalBomb Cast",
+    162: "SuicidalBomb Resolve",
+    163: "CrushWalls Cast",
+    164: "CrushWalls Resolve",
+    165: "Rage (AnimTagID 31)",
+    166: "Rage (AnimTagID 32)",
+    167: "DisableTower Cast",
+    168: "DisableTower Resolve",
+    169: "PowerSteal Cast",
+    170: "PowerSteal Resolve",
+    173: "Heal Cast",
+    174: "Heal Resolve",
+    175: "ThunderousRoar Cast",
+    176: "ThunderousRoar Resolve",
+    177: "Heal Channel Start",
+    178: "Heal Channel Loop",
+    179: "Heal Channel End",
+    180: "Paralyze Channel Start",
+    181: "Paralyze Channel Loop",
+    182: "Paralyze Channel End",
+    183: "DisableTower CastAir",
+    184: "DisableTower ResolveAir",
+    185: "PreparedSalvo Cast",
+    186: "PreparedSalvo Resolve",
+    187: "PreparedSalvo CastAir",
+    188: "PreparedSalvo ResolveAir",
+    189: "Special Burrow Cast",
+    190: "Special Burrow Resolve",
+    191: "Turret Fire To Front Cast",
+    192: "Turret Fire To Front Resolve",
+    193: "Turret Fire To Left Cast",
+    194: "Turret Fire To Left Resolve",
+    195: "Turret Fire To Back Cast",
+    196: "Turret Fire To Back Resolve",
+    197: "Turret Fire To Right Cast",
+    198: "Turret Fire To Right Resolve",
+    199: "Charge Attack",
+    200: "SummonDemon Cast",
+    201: "SummonDemon Resolve",
+    202: "AreaFreeze Cast",
+    203: "AreaFreeze Resolve",
+    204: "HealingRay Cast",
+    205: "HealingRay Resolve",
+    206: "IceShield Channel Start (Previously Winter Witch aura)",
+    207: "IceShield Channel Loop",
+    208: "IceShield Channel End",
+    209: "FrostBeam Start",
+    210: "FrostBeam Loop",
+    211: "FrostBeam End",
+    212: "AntimagicField Start",
+    213: "AntimagicField Loop",
+    214: "AntimagicField End",
+    215: "FireStream Start",
+    216: "FireStream Loop",
+    217: "FireStream End",
+    218: "StasisField Cast",
+    219: "StasisField Resolve",
+    220: "BurningLiquid Cast",
+    221: "BurningLiquid Resolve",
+    222: "MindControl Cast",
+    223: "MindControl Resolve",
+    224: "IceShield Target Cast",
+    225: "IceShield Target Resolve",
+    226: "SonicScream Cast",
+    227: "SonicScream Resolve",
+    228: "TeleportSelf Cast",
+    229: "TeleportSelf Resolve",
+    230: "Repair Channel Start (AnimTagID 110)",
+    231: "Repair Channel Loop (AnimTagID 110)",
+    232: "Repair Channel End (AnimTagID 110)",
+    233: "Strike Cast",
+    234: "Strike Resolve",
+    235: "CriticalMass Cast",
+    236: "CriticalMass Resolve",
+    237: "SiegeTrumpet Cast",
+    238: "SiegeTrumpet Resolve",
+    239: "Bracing Zone Cast",
+    240: "Bracing Zone Resolve",
+    241: "Fireball Cast",
+    242: "Fireball Resolve",
+    243: "MassSleep Cast",
+    244: "MassSleep Resolve",
+    245: "ChainInsectRay Cast",
+    246: "ChainInsectRay Resolve",
+    247: "Repair Channel Start (AnimTagID 121)",
+    248: "Repair Channel Loop (AnimTagID 121)",
+    249: "Repair Channel End (AnimTagID 121)",
+    250: "BombRaid Cast",
+    251: "BombRaid Resolve",
+    252: "LifeLink Start",
+    253: "LifeLink Loop",
+    254: "LifeLink End",
+    255: "WormMovement_Hack Cast",
+    256: "WormMovement_Hack Resolve",
+    257: "skel_giant_hammer_attack_pve1 Cast",
+    258: "skel_giant_hammer_attack_pve1 Resolve",
+    259: "IceBombardment Near Start",
+    260: "IceBombardment Near Loop",
+    261: "IceBombardment Near End",
+    262: "IceBombardment Far Start",
+    263: "IceBombardment Far Loop",
+    264: "IceBombardment Far End",
+    265: "ParalyzingRoar Cast",
+    266: "ParalyzingRoar Resolve",
+    267: "SacrificeKill Cast",
+    268: "SacrificeKill Resolve",
+    269: "LifeTransfer Cast",
+    270: "LifeTransfer Resolve",
+    271: "Earthquake Start",
+    272: "Earthquake Loop",
+    273: "Earthquake End",
+    274: "PVEChannel Start",
+    275: "PVEChannel Loop",
+    276: "PVEChannel End",
+    277: "PVECastResolve Cast",
+    278: "PVECastResolve Resolve",
+    279: "PVEMelee Attack",
+    280: "AttachToBuilding Start",
+    281: "AttachToBuilding Loop",
+    282: "AttachToBuilding End",
+    283: "RepairCast Cast",
+    284: "RepairCast Resolve",
+    285: "RageCastStage1 Cast",
+    286: "RageCastStage1 Resolve",
+    287: "RageCastStage1 CastAir",
+    288: "RageCastStage1 ResolveAir",
+    289: "RageCastStage2 Cast",
+    290: "RageCastStage2 Resolve",
+    291: "RageCastStage2 CastAir",
+    292: "RageCastStage2 ResolveAir",
+    293: "SuicideAttack Cast",
+    294: "SuicideAttack Resolve",
+    295: "RelocateBuilding Cast",
+    296: "RelocateBuilding Resolve",
+    297: "DeathCounter Cast",
+    298: "DeathCounter Resolve",
+    299: "TombOfDeath Start",
+    300: "TombOfDeath Loop",
+    301: "TombOfDeath End",
+    302: "VersatileAirSpecial Cast",
+    303: "VersatileAirSpecial Resolve",
+    304: "PVECastResolve2 Cast",
+    305: "PVECastResolve2 Resolve",
+    306: "Taunt Cast",
+    307: "Taunt Resolve",
+    308: "Swap Cast",
+    309: "Swap Resolve",
+    310: "Disenchant Cast",
+    311: "Disenchant Resolve",
+    312: "GravitySurge Cast",
+    313: "GravitySurge Resolve",
+    314: "Enrage Cast",
+    315: "Enrage Resolve",
+    316: "SpecialRangedAir Cast",
+    317: "SpecialRangedAir Resolve",
+    318: "GlobalBuffChannel Start",
+    319: "GlobalBuffChannel Loop",
+    320: "GlobalBuffChannel End",
+    321: "Harpoon Cast",
+    322: "Harpoon Resolve",
+    323: "ThrowMines Cast",
+    324: "ThrowMines Resolve",
+}
+
 
 # Also Node Order
 InformationIndices = {
@@ -317,36 +556,21 @@ class Vertex:
             self.normal = [0.0, 0.0, 0.0]
         return self
 
-    def write(self, file: BinaryIO) -> None:
-        if self.position:
-            file.write(pack("f", self.position[0]))
-            file.write(pack("f", self.position[1]))
-            file.write(pack("f", self.position[2]))
-        if self.normal:
-            file.write(pack("f", self.normal[0]))
-            file.write(pack("f", self.normal[1]))
-            file.write(pack("f", self.normal[2]))
-        if self.texture:
-            file.write(pack("f", self.texture[0]))
-            file.write(pack("f", self.texture[1]))
-        if self.tangent:
-            file.write(pack("f", self.tangent[0]))
-            file.write(pack("f", self.tangent[1]))
-            file.write(pack("f", self.tangent[2]))
-        if self.bitangent:
-            file.write(pack("f", self.bitangent[0]))
-            file.write(pack("f", self.bitangent[1]))
-            file.write(pack("f", self.bitangent[2]))
-        if self.raw_weights:
-            file.write(pack("B", self.raw_weights[0]))
-            file.write(pack("B", self.raw_weights[1]))
-            file.write(pack("B", self.raw_weights[2]))
-            file.write(pack("B", self.raw_weights[3]))
-        if self.bone_indices:
-            file.write(pack("B", self.bone_indices[0]))
-            file.write(pack("B", self.bone_indices[1]))
-            file.write(pack("B", self.bone_indices[2]))
-            file.write(pack("B", self.bone_indices[3]))
+    def write(self, file: BinaryIO, revision: int) -> None:
+        if revision == 133121:
+            file.write(pack("fff", *self.position))
+            file.write(pack("fff", *self.normal))
+            file.write(pack("ff", *self.texture))
+        elif revision == 12288 or revision == 2049:
+            file.write(pack("fff", *self.tangent))
+            file.write(pack("fff", *self.bitangent))
+        elif revision == 12:
+            file.write(pack("4B", *self.raw_weights))
+            file.write(pack("4B", *self.bone_indices))
+        elif revision == 163841:
+            file.write(pack("fff", *self.position))
+            file.write(pack("ff", *self.texture))
+            # Normal is zeroed out
 
     def size(self) -> int:
         if self.position:
@@ -364,6 +588,14 @@ class Vertex:
         if self.bone_indices:
             return 4
         return 0
+
+    def __repr__(self) -> str:
+        return (
+            f"Vertex(position={self.position}, normal={self.normal}, "
+            f"texture={self.texture}, tangent={self.tangent}, "
+            f"bitangent={self.bitangent}, raw_weights={self.raw_weights}, "
+            f"bone_indices={self.bone_indices})"
+        )
 
 
 @dataclass(eq=False, repr=False)
@@ -564,8 +796,8 @@ class MeshData:
 
     def write(self, file: BinaryIO) -> None:
         file.write(pack("ii", self.revision, self.vertex_size))
-        for vertex in self.vertices:
-            vertex.write(file)
+        for i, vertex in enumerate(self.vertices):
+            vertex.write(file, self.revision)
 
     def size(self) -> int:
         s = 8 + self.vertex_size * len(self.vertices)
@@ -1353,15 +1585,17 @@ class SLocator:
         default_factory=CMatCoordinateSystem
     )
     class_id: int = 0
-    sub_id: int = 0
+    bone_id: int = 0
     file_name_length: int = 0
     file_name: str = ""
-    uk_int: int = 0
+    uk_int: int = -1
     class_type: str = ""
 
     def read(self, file: BinaryIO, version: int) -> "SLocator":
         self.cmat_coordinate_system = CMatCoordinateSystem().read(file)
-        self.class_id, self.sub_id, self.file_name_length = unpack("iii", file.read(12))
+        self.class_id, self.bone_id, self.file_name_length = unpack(
+            "iii", file.read(12)
+        )
         self.file_name = (
             unpack(
                 f"{self.file_name_length}s",
@@ -1382,7 +1616,7 @@ class SLocator:
             pack(
                 f"iii{self.file_name_length}s",
                 self.class_id,
-                self.sub_id,
+                self.bone_id,
                 self.file_name_length,
                 self.file_name.encode("utf-8"),
             )
@@ -1858,14 +2092,14 @@ class ModeAnimationKey:
 class AnimationMarker:
     """AnimationMarker"""
 
-    some_class: int = 0
+    is_spawn_animation: int = 0
     time: float = 0.0
     direction: Vector3 = field(default_factory=lambda: Vector3(0, 0, 0))
     position: Vector3 = field(default_factory=lambda: Vector3(0, 0, 0))
 
     def read(self, file: BinaryIO) -> "AnimationMarker":
         """Reads the AnimationMarker from the buffer"""
-        self.some_class = unpack("i", file.read(4))[0]  # 4 bytes
+        self.is_spawn_animation = unpack("i", file.read(4))[0]  # 4 bytes
         self.time = unpack("f", file.read(4))[0]  # 4 bytes
         self.direction = Vector3().read(file)  # 12 bytes
         self.position = Vector3().read(file)  # 12 bytes
@@ -1873,7 +2107,7 @@ class AnimationMarker:
 
     def write(self, file: BinaryIO) -> "AnimationMarker":
         """Writes the AnimationMarker to the buffer"""
-        file.write(pack("if", self.some_class, self.time))
+        file.write(pack("if", self.is_spawn_animation, self.time))
         self.direction.write(file)
         self.position.write(file)
         return self
@@ -1890,8 +2124,8 @@ class AnimationMarkerSet:
     anim_id: int = 0
     length: int = 0
     name: str = ""
-    animation_marker_id: int = 0
-    marker_count: int = 0
+    animation_marker_id: int = 0  # uint
+    marker_count: int = 1  # Always 1
     animation_markers: List[AnimationMarker] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "AnimationMarkerSet":
@@ -1903,7 +2137,7 @@ class AnimationMarkerSet:
             .decode("utf-8")
             .strip("\x00")
         )
-        self.animation_marker_id = unpack("i", file.read(4))[0]
+        self.animation_marker_id = unpack("I", file.read(4))[0]
         self.marker_count = unpack("i", file.read(4))[0]
         self.animation_markers = [
             AnimationMarker().read(file) for _ in range(self.marker_count)
@@ -1914,7 +2148,7 @@ class AnimationMarkerSet:
         """Writes the AnimationMarkerSet to the buffer"""
         file.write(pack("ii", self.anim_id, self.length))
         file.write(pack(f"{self.length}s", self.name.encode("utf-8")))
-        file.write(pack("ii", self.animation_marker_id, self.marker_count))
+        file.write(pack("Ii", self.animation_marker_id, self.marker_count))
         for animation_marker in self.animation_markers:
             animation_marker.write(file)
         return self
@@ -2338,7 +2572,7 @@ class StructV3:
 @dataclass(eq=False, repr=False)
 class AnimationTimings:
     magic: int = 1650881127  # int
-    version: int = 3  # Short. 3 or 4
+    version: int = 4  # Short. 3 or 4
     # Short. Only used if there are multiple Animations.
     animation_timing_count: int = 0
     animation_timings: List[AnimationTiming] = field(default_factory=list)
@@ -2619,7 +2853,7 @@ class UKS3:
 
 @dataclass(eq=False, repr=False)
 class EffectSet:
-    type: int = 0  # Short
+    type: int = 12  # Short
     checksum_length: int = 0  # Int
     checksum: str = ""  # CString split into length and name
     length: int = 0
@@ -2687,10 +2921,10 @@ class EffectSet:
 
 @dataclass(eq=False, repr=False)
 class SMeshState:
-    state_num: int = 0  # Int
-    has_files: int = 0  # Short
-    uk_file_length: int = 0  # Int
-    uk_file: str = ""  # String
+    state_num: int = 0  # Int Always 0
+    has_files: int = 0  # Short Always 1
+    uk_file_length: int = 0  # Int Always 0
+    uk_file: str = ""  # String Always ""
     drs_file_length: int = 0  # Int
     drs_file: str = ""  # String
 
@@ -2746,11 +2980,11 @@ class DestructionState:
 
 @dataclass(eq=False, repr=False)
 class StateBasedMeshSet:
-    uk: int = 1  # Short
-    uk2: int = 10  # Int
-    num_mesh_states: int = 0  # Int
+    uk: int = 1  # Short # Depends on the Type i guess
+    uk2: int = 11  # Int # Depends on the type i guess
+    num_mesh_states: int = 1  # Int Always needs one
     mesh_states: List[SMeshState] = field(default_factory=list)
-    num_destruction_states: int = 0  # Int
+    num_destruction_states: int = 1  # Int
     destruction_states: List[DestructionState] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "StateBasedMeshSet":

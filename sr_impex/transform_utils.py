@@ -50,5 +50,9 @@ def parent_under_game_axes(source_collection: bpy.types.Collection):
 
     for obj in source_collection.all_objects:
         if obj.type in {"MESH", "ARMATURE"}:
+            if obj.parent is not None:
+                # DEBUG PRINT
+                print(f"Object {obj.name} has a parent {obj.parent.name}, skipping.")
+                continue  # Skip objects that already have a parent
             obj.matrix_parent_inverse = empty.matrix_world.inverted()
             obj.parent = empty
