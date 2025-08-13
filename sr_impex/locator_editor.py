@@ -693,31 +693,56 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
 # ---- Simple launcher panel in N-panel ---------------------------------------
 
 
-class DRS_PT_LocatorEditorLauncher(bpy.types.Panel):
+# class DRS_PT_LocatorEditorLauncher(bpy.types.Panel):
+#     bl_label = "CDrwLocatorList"
+#     bl_idname = "DRS_PT_LocatorEditorLauncher"
+#     bl_space_type = "VIEW_3D"
+#     bl_region_type = "UI"
+#     bl_category = "DRS"
+
+#     def draw(self, _context):
+#         col = self.layout.column()
+
+#         model = _active_model_collection()
+#         if not model:
+#             col.label(
+#                 text="Select a DRSModel_* collection in the Outliner.", icon="INFO"
+#             )
+#             return
+
+#         # Store the active model on our state and (cheaply) refresh UI data from blob
+#         st = _state()
+#         if st.model != model:
+#             st.model = model
+#             _refresh_state_from_blob(model)
+
+#         # Draw the full editor (list + details + buttons) inside the panel
+#         _draw_editor_body(col)
+
+
+class DRS_PT_LocatorEditorProps(bpy.types.Panel):
     bl_label = "CDrwLocatorList"
-    bl_idname = "DRS_PT_LocatorEditorLauncher"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "DRS"
+    bl_idname = "DRS_PT_LocatorEditorProps"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "collection"  # Collection properties tab
 
-    def draw(self, _context):
-        col = self.layout.column()
+    @classmethod
+    def poll(cls, context):
+        col = getattr(context, "collection", None)
+        return bool(
+            col
+            and isinstance(col, bpy.types.Collection)
+            and col.name.startswith("DRSModel_")
+        )
 
-        model = _active_model_collection()
-        if not model:
-            col.label(
-                text="Select a DRSModel_* collection in the Outliner.", icon="INFO"
-            )
-            return
-
-        # Store the active model on our state and (cheaply) refresh UI data from blob
+    def draw(self, context):
         st = _state()
+        model = context.collection  # currently selected collection in Properties
         if st.model != model:
             st.model = model
             _refresh_state_from_blob(model)
-
-        # Draw the full editor (list + details + buttons) inside the panel
-        _draw_editor_body(col)
+        _draw_editor_body(self.layout)  # uses your existing drawer
 
 
 # ---- Registration ------------------------------------------------------------
@@ -731,7 +756,8 @@ _classes = (
     DRS_OT_LocatorRemove,
     DRS_OT_LocatorSync,
     DRS_OT_LocatorSaveItem,
-    DRS_PT_LocatorEditorLauncher,
+    # DRS_PT_LocatorEditorLauncher,
+    DRS_PT_LocatorEditorProps,
 )
 
 
