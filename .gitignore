@@ -9,3 +9,4 @@
 *.code-workspace
 *.pyc
 create_release_package.py
+pyrightconfig.json

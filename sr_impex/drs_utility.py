@@ -3,11 +3,12 @@ import json
 from os.path import dirname, realpath
 from math import radians
 import time
+import uuid
 import hashlib
 import subprocess
 from struct import pack
 from collections import defaultdict
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Dict, Optional, Union
 import xml.etree.ElementTree as ET
 from mathutils import Matrix, Vector
 import bpy
@@ -19,8 +20,9 @@ from bmesh.ops import (
     create_cone,
 )
 import bmesh
+
+# pylint: disable=import-error
 import numpy as np
-import uuid
 
 from .drs_definitions import (
     DRS,
@@ -70,6 +72,7 @@ from .drs_definitions import (
     AnimationSetVariant,
     CGeoSphere,
     Matrix3x3,
+    CDrwLocatorList,
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -96,6 +99,7 @@ with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
 
 # region General Helper Functions
 BLOB_KEY = "CDrwLocatorListJSON"
+ANIM_BLOB_KEY = "AnimationSetJSON"
 
 
 def persist_locator_blob_on_collection(
@@ -153,6 +157,107 @@ def _cdrw_to_blob(cdrw_list: "CDrwLocatorList") -> dict:
     return {"version": int(cdrw_list.version), "locators": locs}
 
 
+def _v3_to_list(v) -> list[float]:
+    try:
+        return [float(v.x), float(v.y), float(v.z)]
+    except Exception:
+        return [0.0, 0.0, 0.0]
+
+
+def animset_to_blob(anim: "AnimationSet") -> dict:
+    """Serialize drs_definitions.AnimationSet into the editor JSON schema."""
+    # Top-level scalars (see AnimationSet fields in drs_definitions)
+    blob = {
+        "default_run_speed": float(getattr(anim, "default_run_speed", 5.0) or 5.0),
+        "default_walk_speed": float(getattr(anim, "default_walk_speed", 2.0) or 2.0),
+        "mode_change_type": int(getattr(anim, "mode_change_type", 0) or 0),
+        "hovering_ground": int(getattr(anim, "hovering_ground", 0) or 0),
+        "fly_bank_scale": float(getattr(anim, "fly_bank_scale", 0.0) or 0.0),
+        "fly_accel_scale": float(getattr(anim, "fly_accel_scale", 0.0) or 0.0),
+        "fly_hit_scale": float(getattr(anim, "fly_hit_scale", 0.0) or 0.0),
+        # Mind the spelling in defs: allign_to_terrain
+        "align_to_terrain": int(getattr(anim, "allign_to_terrain", 0) or 0),
+        "mode_keys": [],
+        "marker_sets": [],
+    }
+
+    # ModeAnimationKeys -> Mode Keys (UI)
+    for k in getattr(anim, "mode_animation_keys", []) or []:
+        variants = []
+        for var in getattr(k, "animation_set_variants", []) or []:
+            variants.append(
+                {
+                    "weight": int(getattr(var, "weight", 100) or 0),
+                    "start": float(getattr(var, "start", 0.0) or 0.0),
+                    "end": float(getattr(var, "end", 1.0) or 1.0),
+                    "allows_ik": int(getattr(var, "allows_ik", 0) or 0),
+                    "file": (getattr(var, "file", "") or ""),
+                }
+            )
+
+        blob["mode_keys"].append(
+            {
+                "vis_job": int(getattr(k, "vis_job", 0) or 0),
+                "variants": variants,
+            }
+        )
+
+    # AnimationMarkerSets -> Marker Sets (UI). Always 1 marker per set.
+    for ms in getattr(anim, "animation_marker_sets", []) or []:
+        am_id = getattr(ms, "animation_marker_id", 0)
+        try:
+            am_id_str = str(int(am_id))
+        except Exception:
+            am_id_str = str(am_id) if am_id else str(uuid.uuid4())
+
+        if getattr(ms, "animation_markers", None):
+            m = ms.animation_markers[0]
+            marker = {
+                "is_spawn_animation": int(getattr(m, "is_spawn_animation", 0) or 0),
+                "time": float(getattr(m, "time", 0.0) or 0.0),
+                "direction": _v3_to_list(getattr(m, "direction", None)),
+                "position": _v3_to_list(getattr(m, "position", None)),
+            }
+        else:
+            marker = {
+                "is_spawn_animation": 0,
+                "time": 0.0,
+                "direction": [0.0, 0.0, 0.0],
+                "position": [0.0, 0.0, 0.0],
+            }
+
+        blob["marker_sets"].append(
+            {
+                "anim_id": int(getattr(ms, "anim_id", 0) or 0),
+                # In the file this is 'name' (string) — UI uses 'file' for the action name.
+                "file": (getattr(ms, "name", "") or ""),
+                "animation_marker_id": am_id_str,
+                "markers": [marker],
+            }
+        )
+
+    return blob
+
+
+def persist_animset_blob_on_collection(
+    source_collection: bpy.types.Collection, drs_file: "DRS"
+) -> dict | None:
+    """
+    Create and store the AnimationSet blob on the model collection.
+
+    Usage right after you've loaded the DRS:
+        persist_animset_blob_on_collection(model_collection, drs_file)
+    """
+    anim = getattr(drs_file, "animation_set", None)
+    if anim is None:
+        return None
+    blob = animset_to_blob(anim)
+    source_collection[ANIM_BLOB_KEY] = json.dumps(
+        blob, separators=(",", ":"), ensure_ascii=False
+    )
+    return blob
+
+
 def find_or_create_collection(
     source_collection: bpy.types.Collection, collection_name: str
 ) -> bpy.types.Collection:
@@ -166,7 +271,7 @@ def find_or_create_collection(
 
 def get_collection(
     source_collection: bpy.types.Collection, name: str
-) -> bpy.types.Collection:
+) -> Union[bpy.types.Collection, None]:
     """Return the sub-collection whose name matches the provided name."""
     for collection in source_collection.children:
         if collection.name.startswith(name):
@@ -174,9 +279,7 @@ def get_collection(
     return None
 
 
-def abort(
-    keep_debug_collections: bool, source_collection_copy: bpy.types.Collection
-) -> dict:
+def abort(keep_debug_collections: bool, source_collection_copy: bpy.types.Collection):
     if not keep_debug_collections and source_collection_copy is not None:
         bpy.data.collections.remove(source_collection_copy)
 
@@ -621,7 +724,7 @@ def process_slocator_import(
     smooth_animation,
     import_animation_type,
 ):
-    locator_object = None
+    locator_object: Union[bpy.types.Object, None] = None
 
     # Build stable UID EXACTLY like _cdrw_to_blob
     rot9 = list(slocator.cmat_coordinate_system.matrix.matrix)
@@ -904,72 +1007,72 @@ def clean_vector(vec, tol=1e-6):
     return Vector([0.0 if abs(c) < tol else c for c in vec])
 
 
-class DRS_OT_debug_obb_tree(bpy.types.Operator):
-    """Calculates and visualizes an OBBTree for the selected collection's meshes."""
+# class DRS_OT_debug_obb_tree(bpy.types.Operator):
+#     """Calculates and visualizes an OBBTree for the selected collection's meshes."""
 
-    bl_idname = "drs.debug_obb_tree"
-    bl_label = "Debug OBBTree"
-    bl_description = "Calculates a new OBBTree from the meshes in the active collection and visualizes it"
+#     bl_idname = "drs.debug_obb_tree"
+#     bl_label = "Debug OBBTree"
+#     bl_description = "Calculates a new OBBTree from the meshes in the active collection and visualizes it"
 
-    def execute(self, context):
-        start_time = time.time()
-        # 1. Check if a valid collection is selected
-        active_layer_coll = context.view_layer.active_layer_collection
-        if active_layer_coll is None or active_layer_coll == context.scene.collection:
-            logger.log(
-                "Please select a specific model collection in the Outliner.",
-                "Error",
-                "ERROR",
-            )
-            logger.display()
-            return {"CANCELLED"}
+#     def execute(self, context):
+#         start_time = time.time()
+#         # 1. Check if a valid collection is selected
+#         active_layer_coll = context.view_layer.active_layer_collection
+#         if active_layer_coll is None or active_layer_coll == context.scene.collection:
+#             logger.log(
+#                 "Please select a specific model collection in the Outliner.",
+#                 "Error",
+#                 "ERROR",
+#             )
+#             logger.display()
+#             return {"CANCELLED"}
 
-        source_collection = active_layer_coll.collection
+#         source_collection = active_layer_coll.collection
 
-        # 2. Verify collection name and find the Meshes_Collection
-        if not source_collection.name.startswith("DRSModel_"):
-            logger.log(
-                f"Selected collection '{source_collection.name}' is not a valid DRSModel collection.",
-                "Error",
-                "ERROR",
-            )
-            logger.display()
-            return {"CANCELLED"}
+#         # 2. Verify collection name and find the Meshes_Collection
+#         if not source_collection.name.startswith("DRSModel_"):
+#             logger.log(
+#                 f"Selected collection '{source_collection.name}' is not a valid DRSModel collection.",
+#                 "Error",
+#                 "ERROR",
+#             )
+#             logger.display()
+#             return {"CANCELLED"}
 
-        meshes_collection = get_collection(source_collection, "Meshes_Collection")
-        if not meshes_collection:
-            logger.log(
-                f"Could not find a 'Meshes_Collection' within '{source_collection.name}'.",
-                "Error",
-                "ERROR",
-            )
-            logger.display()
-            return {"CANCELLED"}
+#         meshes_collection = get_collection(source_collection, "Meshes_Collection")
+#         if not meshes_collection:
+#             logger.log(
+#                 f"Could not find a 'Meshes_Collection' within '{source_collection.name}'.",
+#                 "Error",
+#                 "ERROR",
+#             )
+#             logger.display()
+#             return {"CANCELLED"}
 
-        # 3. Gather mesh objects ONLY from that specific collection
-        mesh_objects = [obj for obj in meshes_collection.objects if obj.type == "MESH"]
-        if not mesh_objects:
-            logger.log(
-                "No mesh objects found in 'Meshes_Collection'.", "Error", "ERROR"
-            )
-            logger.display()
-            return {"CANCELLED"}
+#         # 3. Gather mesh objects ONLY from that specific collection
+#         mesh_objects = [obj for obj in meshes_collection.objects if obj.type == "MESH"]
+#         if not mesh_objects:
+#             logger.log(
+#                 "No mesh objects found in 'Meshes_Collection'.", "Error", "ERROR"
+#             )
+#             logger.display()
+#             return {"CANCELLED"}
 
-        # Create the unified Mesh
-        unified_mesh = create_unified_mesh(meshes_collection)
+#         # Create the unified Mesh
+#         unified_mesh = create_unified_mesh(meshes_collection)
 
-        cgeo_obb_tree = create_cgeo_obb_tree(unified_mesh)
+#         cgeo_obb_tree = create_cgeo_obb_tree(unified_mesh)
 
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        logger.log(
-            f"OBBTree calculation and visualization completed in {elapsed_time:.2f} seconds.",
-            "Info",
-            "INFO",
-        )
-        logger.display()
+#         end_time = time.time()
+#         elapsed_time = end_time - start_time
+#         logger.log(
+#             f"OBBTree calculation and visualization completed in {elapsed_time:.2f} seconds.",
+#             "Info",
+#             "INFO",
+#         )
+#         logger.display()
 
-        return {"FINISHED"}
+#         return {"FINISHED"}
 
 
 # endregion
@@ -1199,7 +1302,7 @@ def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Me
     uv_list = list()
 
     for _ in range(battleforge_mesh_data.face_count):
-        face: Face = battleforge_mesh_data.faces[_].indices
+        face = battleforge_mesh_data.faces[_].indices
         faces.append([face[0], face[1], face[2]])
 
     for _ in range(battleforge_mesh_data.vertex_count):
@@ -1291,9 +1394,7 @@ def create_mesh_object(
     return mesh_object, mesh_data
 
 
-def setup_armature(
-    source_collection, drs_file: DRS, locator_prefix: str = ""
-) -> Tuple[bpy.types.Object, list[DRSBone]]:
+def setup_armature(source_collection, drs_file: DRS, locator_prefix: str = ""):
     armature_object, bone_list = None, None
     if drs_file.csk_skeleton is not None:
         armature_object, bone_list = import_csk_skeleton(
@@ -1776,13 +1877,12 @@ def load_drs(
     import_animation_fps=30,
     smooth_animation=True,
     import_ik_atlas=False,
-    import_debris=False,
     import_modules=True,
     import_geomesh=False,
     import_obbtree=False,
     limit_obb_depth=5,
     import_bb=False,
-) -> None:
+):
 
     start_time = time.time()
     base_name = os.path.basename(filepath).split(".")[0]
@@ -1796,6 +1896,7 @@ def load_drs(
     context.scene.collection.children.link(source_collection)
 
     persist_locator_blob_on_collection(source_collection, drs_file)
+    persist_animset_blob_on_collection(source_collection, drs_file)
 
     armature_object, bone_list = setup_armature(source_collection, drs_file)
 
@@ -2030,7 +2131,7 @@ def import_mesh_set_grid(
     import_debris: bool,
     import_collision_shape: bool,
     import_ik_atlas: bool,
-) -> Tuple[bpy.types.Object, list[DRSBone]]:
+):
     # Create StateBasedMeshSet Collection to store the Mesh Objects
     state_based_mesh_set_collection: bpy.types.Collection = bpy.data.collections.new(
         "StateBasedMeshSet_Collection"
@@ -2112,7 +2213,7 @@ def load_bmg(
     import_ik_atlas=False,
     import_debris=True,
     import_construction=True,
-) -> None:
+):
     start_time = time.time()
     dir_name = os.path.dirname(filepath)
     base_name = os.path.basename(filepath).split(".")[0]
@@ -2543,7 +2644,7 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
     def pca_axes(points: np.ndarray):
         c = points.mean(axis=0)
         X = points - c
-        U, S, Vt = np.linalg.svd(X, full_matrices=False)
+        _U, _S, Vt = np.linalg.svd(X, full_matrices=False)
         A = Vt.T
         if np.linalg.det(A) < 0:
             A[:, 2] *= -1.0
@@ -2559,7 +2660,7 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
         )
         return np.eye(3) + np.sin(t) * K + (1 - np.cos(t)) * (K @ K)
 
-    def nm_simplex(f, x0, step, iters):
+    def nm_simplex(func, x0, step, iters):
         x = np.array(
             [
                 x0,
@@ -2569,28 +2670,28 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
             ],
             dtype=np.float64,
         )
-        fx = np.array([f(xi) for xi in x], dtype=np.float64)
+        fx = np.array([func(xi) for xi in x], dtype=np.float64)
         for _ in range(iters):
             order = np.argsort(fx)
             x = x[order]
             fx = fx[order]
             c = x[:3].mean(axis=0)
             xr = c + (c - x[3])
-            fr = f(xr)
+            fr = func(xr)
             if fr < fx[0]:
                 xe = c + 2 * (xr - c)
-                fe = f(xe)
+                fe = func(xe)
                 x[3], fx[3] = (xe, fe) if fe < fr else (xr, fr)
             elif fr < fx[2]:
                 x[3], fx[3] = xr, fr
             else:
                 xc = c + 0.5 * (x[3] - c)
-                fc = f(xc)
+                fc = func(xc)
                 if fc < fx[3]:
                     x[3], fx[3] = xc, fc
                 else:
                     x[1:] = x[0] + 0.5 * (x[1:] - x[0])
-                    fx[1:] = np.array([f(xi) for xi in x[1:]])
+                    fx[1:] = np.array([func(xi) for xi in x[1:]])
         order = np.argsort(fx)
         return x[order][0], fx[order][0]
 
@@ -2645,14 +2746,14 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
 
         for A0 in seeds:
 
-            def f(w):
+            def func(w):
                 R = rodrigues(w)
                 A = A0 @ R
                 if np.linalg.det(A) < 0:
                     A[:, 2] = np.cross(A[:, 0], A[:, 1])
                 return volume_from_axes(points, A)
 
-            w_best, v_best = nm_simplex(f, np.zeros(3), step, iters)
+            w_best, v_best = nm_simplex(func, np.zeros(3), step, iters)
             if v_best < best_V:
                 R = rodrigues(w_best)
                 best_A = A0 @ R
@@ -2740,9 +2841,9 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
     tree.triangle_count = tri_count
     out_faces = []
     for a, b, c in tris:
-        f = Face()
-        f.indices = [int(a), int(b), int(c)]
-        out_faces.append(f)
+        _face = Face()
+        _face.indices = [int(a), int(b), int(c)]
+        out_faces.append(_face)
     tree.faces = out_faces
     return tree
 
@@ -2877,7 +2978,7 @@ def set_metallic_roughness_emission_map(
         map_node and map_node.is_linked
         for map_node in [metallic_map_node, roughness_map_node, emission_map_node]
     ):
-        return
+        return -1
 
     # Retrieve images and pixels
     img_r, pixels_r = get_image_and_pixels(metallic_map_node, "metallic_map")
@@ -2895,7 +2996,7 @@ def set_metallic_roughness_emission_map(
             "Info",
             "INFO",
         )
-        return
+        return -1
 
     # Combine the images into a new image
     new_img = bpy.data.images.new(
@@ -2985,7 +3086,7 @@ def create_mesh(
     folder_path: str,
     flip_normals: bool,
     add_skin_mesh: bool = False,
-) -> Tuple[BattleforgeMesh, Dict[str, int]]:
+) -> Tuple[Union[BattleforgeMesh, None], Dict[str, int]]:
     """Create a Battleforge Mesh from a Blender Mesh Object."""
     if flip_normals:
         with ensure_mode("EDIT"):
@@ -3098,8 +3199,8 @@ def create_mesh(
     ) = get_bb(mesh)
     new_mesh.material_id = 25702
     # Node Group for Access the Data
-    mesh_material: bpy.types.Material = mesh.material_slots[0].material
-    material_nodes: List[bpy.types.Node] = mesh_material.node_tree.nodes
+    mesh_material = mesh.material_slots[0].material
+    material_nodes = mesh_material.node_tree.nodes
     # Find the DRS Node
     color_map = None
     # alpha_map = None # Needed?
@@ -3155,7 +3256,7 @@ def create_mesh(
 
     # Check if the Color Map is set
     if not set_color_map(color_map, new_mesh, mesh_index, model_name, folder_path):
-        return None
+        return None, per_mesh_bone_data
 
     # Check if the Normal Map is set
     if not skip_normal_map:
@@ -3180,6 +3281,8 @@ def create_mesh(
             folder_path,
             bool_param_bit_flag,
         )
+        if bool_param_bit_flag == -1:
+            return None, per_mesh_bone_data
 
     # Set the Bool Parameter by a bin -> dec conversion
     new_mesh.bool_parameter = int(str(bool_param_bit_flag), 2)
@@ -3205,7 +3308,7 @@ def create_cdsp_mesh_file(
     filepath: str,
     flip_normals: bool,
     add_skin_mesh: bool = False,
-) -> Tuple[CDspMeshFile, List[Dict[str, int]]]:
+):
     """Create a CDspMeshFile from a Collection of Meshes."""
     _cdsp_meshfile = CDspMeshFile()
     _cdsp_meshfile.mesh_count = 0
@@ -3783,6 +3886,8 @@ def update_mesh_file_root_reference(
         skinning_mesh_data = mesh.mesh_data[2]
         for vertex in skinning_mesh_data.vertices:
             # Check the 2nd, 3rd and 4th bone index for -1
+            if not vertex.bone_indices:
+                continue
             if vertex.bone_indices[1] == -1:
                 vertex.bone_indices[1] = per_mesh_bone_data["root_ref"]
             if vertex.bone_indices[2] == -1:
@@ -3800,7 +3905,7 @@ def save_drs(
     keep_debug_collections: bool,
     model_type: str,
     model_name: str,
-) -> dict:
+):
     """Save the DRS file."""
     global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref  # pylint: disable=global-statement
     # === PRE-VALIDITY CHECKS =================================================

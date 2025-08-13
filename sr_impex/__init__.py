@@ -22,6 +22,7 @@ from .drs_utility import (
 from .ska_utility import export_ska, get_actions
 from . import addon_updater_ops
 from . import locator_editor
+from . import animation_set_editor
 
 bl_info = {
     "name": "SR-ImpEx",
@@ -57,6 +58,41 @@ def available_actions(_self, _context):
 
     # Otherwise, dynamically construct the EnumProperty items
     return [(act, act, "") for act in actions]
+
+
+_menus_attached = False
+
+
+def _attach_menus_idempotent():
+    global _menus_attached
+    if _menus_attached:
+        return
+    # Remove old callbacks if they exist (safe if they don't)
+    try:
+        bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+    except Exception:
+        pass
+    try:
+        bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    except Exception:
+        pass
+    # Append once
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
+    _menus_attached = True
+
+
+def _detach_menus_safely():
+    global _menus_attached
+    try:
+        bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+    except Exception:
+        pass
+    try:
+        bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    except Exception:
+        pass
+    _menus_attached = False
 
 
 # ----------------------------------------------------
@@ -270,13 +306,13 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 
         # Check if the file is a DRS or a BMG file
         if self.filepath.endswith(".drs"):
-            keywords.pop("import_debris", None)
-            keywords.pop("import_construction", None)
+            keywords.pop("import_debris")
+            keywords.pop("import_construction")
             load_drs(context, **keywords)
             send_path_to_gui(self.filepath)
             return {"FINISHED"}
         elif self.filepath.endswith(".bmg"):
-            keywords.pop("import_modules", None)
+            keywords.pop("import_modules")
             load_bmg(context, **keywords)
             send_path_to_gui(self.filepath)
             return {"FINISHED"}
@@ -593,14 +629,14 @@ def register():
     bpy.utils.register_class(ExportSKAFile)
     bpy.utils.register_class(NewBFScene)
     bpy.utils.register_class(ShowMessagesOperator)
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
+    _attach_menus_idempotent()
     bpy.utils.register_class(MyAddonPreferences)
     bpy.utils.register_class(DRS_PT_SocketPanel)
     bpy.utils.register_class(StartSocketSyncOperator)
     bpy.utils.register_class(StopSocketSyncOperator)
     # bpy.utils.register_class(DRS_OT_debug_obb_tree)
     locator_editor.register()
+    animation_set_editor.register()
 
 
 def unregister():
@@ -610,11 +646,11 @@ def unregister():
     bpy.utils.unregister_class(ExportSKAFile)
     bpy.utils.unregister_class(NewBFScene)
     bpy.utils.unregister_class(ShowMessagesOperator)
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    _detach_menus_safely()
     bpy.utils.unregister_class(MyAddonPreferences)
     bpy.utils.unregister_class(DRS_PT_SocketPanel)
     bpy.utils.unregister_class(StartSocketSyncOperator)
     bpy.utils.unregister_class(StopSocketSyncOperator)
     # bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
     locator_editor.unregister()
+    animation_set_editor.unregister()
