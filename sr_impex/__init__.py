@@ -28,8 +28,8 @@ bl_info = {
     "name": "SR-ImpEx",
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
-    "blender": (4, 3, 0),
-    "version": (3, 0, 0),
+    "blender": (4, 4, 0),
+    "version": (3, 0, 1),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -74,6 +74,7 @@ def _attach_menus_idempotent():
         pass
     try:
         bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    # pylint: disable=broad-exception-caught
     except Exception:
         pass
     # Append once
@@ -90,6 +91,7 @@ def _detach_menus_safely():
         pass
     try:
         bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    # pylint: disable=broad-exception-caught
     except Exception:
         pass
     _menus_attached = False

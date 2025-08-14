@@ -160,6 +160,7 @@ def _cdrw_to_blob(cdrw_list: "CDrwLocatorList") -> dict:
 def _v3_to_list(v) -> list[float]:
     try:
         return [float(v.x), float(v.y), float(v.z)]
+    # pylint: disable=broad-exception-caught
     except Exception:
         return [0.0, 0.0, 0.0]
 
@@ -207,6 +208,7 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
         am_id = getattr(ms, "animation_marker_id", 0)
         try:
             am_id_str = str(int(am_id))
+        # pylint: disable=broad-exception-caught
         except Exception:
             am_id_str = str(am_id) if am_id else str(uuid.uuid4())
 

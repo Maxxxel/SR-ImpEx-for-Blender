@@ -5,36 +5,117 @@ from mathutils import Quaternion, Vector
 from .ska_definitions import SKA, SKAKeyframe
 from .drs_definitions import DRSBone
 
+IS_44_PLUS = bpy.app.version >= (4, 4, 0)
+
+
+def assign_action_compat(arm_obj: bpy.types.Object, action: bpy.types.Action) -> None:
+    """
+    Assign an Action to the armature for playback/authoring.
+    On 4.4+ selects an action slot if available; on older versions it's a no-op.
+    """
+    if arm_obj.animation_data is None:
+        arm_obj.animation_data_create()
+
+    anim = arm_obj.animation_data
+    anim.action = action
+
+    # Blender 4.4 adds 'slotted' actions; try to pick a suitable slot when available.
+    if IS_44_PLUS and hasattr(anim, "action_slot"):
+        # Prefer AnimData's suggestion if present
+        slots = getattr(anim, "action_suitable_slots", None)
+        if slots and len(slots):
+            anim.action_slot = slots[0]
+        else:
+            # Or pick the first slot on the action, if any
+            act_slots = getattr(action, "slots", None)
+            if act_slots and len(act_slots):
+                anim.action_slot = act_slots[0]
+
+
+def ensure_fcurve_compat(
+    action: bpy.types.Action,
+    arm_obj: bpy.types.Object,
+    data_path: str,
+    index: int = 0,
+) -> bpy.types.FCurve:
+    """
+    Create/ensure an FCurve routed correctly.
+    - Blender 4.4+: action.fcurve_ensure_for_datablock(...)
+    - Older versions: action.fcurves.find/new(...)
+    """
+    if IS_44_PLUS and hasattr(action, "fcurve_ensure_for_datablock"):
+        return action.fcurve_ensure_for_datablock(
+            arm_obj, data_path=data_path, index=index
+        )
+
+    # Legacy path (<= 4.3)
+    fc = action.fcurves.find(data_path=data_path, index=index)
+    if fc is None:
+        fc = action.fcurves.new(data_path=data_path, index=index)
+    return fc
+
 
 def create_action(
     arm_obj: bpy.types.Object, name: str, cyclic: bool = False
 ) -> bpy.types.Action:
-    """
-    Create and assign a new Action to the armature.
-    """
-    if arm_obj.animation_data is None:
-        arm_obj.animation_data_create()
+    """Create a new Action, assign it to the armature, and select a slot on 4.4+."""
     action = bpy.data.actions.new(name=name)
-    action.use_cyclic = cyclic
-    arm_obj.animation_data.action = action
+    # keep existing flag if you use it
+    if hasattr(action, "use_cyclic"):
+        action.use_cyclic = cyclic
+    assign_action_compat(arm_obj, action)
     return action
 
 
 def get_bone_fcurves(
-    action: bpy.types.Action, bone_name: str
-) -> Dict[str, bpy.types.FCurve]:
-    """
-    Create FCurves for location (x,y,z) and rotation_quaternion (w,x,y,z).
-    """
-    fcurves: Dict[str, bpy.types.FCurve] = {}
-    path = f'pose.bones["{bone_name}"].'
-    for idx, ax in enumerate(("x", "y", "z")):
-        fcurves[f"location_{ax}"] = action.fcurves.new(path + "location", index=idx)
-    for idx, ax in enumerate(("w", "x", "y", "z")):
-        fcurves[f"rotation_{ax}"] = action.fcurves.new(
-            path + "rotation_quaternion", index=idx
+    action: bpy.types.Action, arm_obj: bpy.types.Object, bone_name: str
+) -> dict[str, bpy.types.FCurve]:
+    fcurves = {}
+    base = f'pose.bones["{bone_name}"].'
+
+    for i, ax in enumerate(("x", "y", "z")):
+        fcurves[f"location_{ax}"] = ensure_fcurve_compat(
+            action, arm_obj, base + "location", i
         )
+
+    for i, ax in enumerate(("w", "x", "y", "z")):
+        fcurves[f"rotation_{ax}"] = ensure_fcurve_compat(
+            action, arm_obj, base + "rotation_quaternion", i
+        )
+
     return fcurves
+
+
+def _kf_at_frame(fcurve: bpy.types.FCurve, frame: float, eps: float = 1e-6):
+    for k in fcurve.keyframe_points:
+        if abs(k.co.x - frame) <= eps:
+            return k
+    return None
+
+
+def insert_or_replace_key(
+    fcurve: bpy.types.FCurve,
+    frame: float,
+    value: float,
+    interpolation: str = "BEZIER",
+    handle_type: str = "FREE",
+) -> bpy.types.Keyframe:
+    k = _kf_at_frame(fcurve, frame)
+    if k is None:
+        # insert without REPLACE (avoids the proxy return)
+        k = fcurve.keyframe_points.insert(frame, value)
+    else:
+        k.co.y = value  # replace value in-place
+
+    # now it's the *stored* keyframe; safe to edit
+    k.interpolation = interpolation
+    k.handle_left_type = handle_type
+    k.handle_right_type = handle_type
+
+    # finalize
+    fcurve.keyframe_points.update()
+    fcurve.update()
+    return k
 
 
 def insert_hermite_bezier_curve(
@@ -53,9 +134,7 @@ def insert_hermite_bezier_curve(
         return
     # Insert keyframes
     for f, v in zip(frames, values):
-        kp = fcurve.keyframe_points.insert(f, v, options={"REPLACE"})
-        kp.interpolation = "BEZIER"
-        kp.handle_left_type = kp.handle_right_type = "FREE"
+        insert_or_replace_key(fcurve, f, v, interpolation="BEZIER", handle_type="FREE")
     # Compute and set handles
     for i in range(n - 1):
         f0, f1 = frames[i], frames[i + 1]
@@ -91,7 +170,7 @@ def import_ska_animation(
     bone_map = {b.ska_identifier: b for b in bone_list}
     curves_map: Dict[int, Dict[str, bpy.types.FCurve]] = {}
     for b in bone_list:
-        curves_map[b.ska_identifier] = get_bone_fcurves(action, b.name)
+        curves_map[b.ska_identifier] = get_bone_fcurves(action, arm_obj, b.name)
         arm_obj.pose.bones[b.name].rotation_mode = "QUATERNION"
 
     # Helper functions for extraction and tangents
@@ -156,8 +235,7 @@ def import_ska_animation(
                 insert_hermite_bezier_curve(fcurve, frames, vals, tans, duration, fps)
             else:
                 for fr, v in zip(frames, vals):
-                    kp = fcurve.keyframe_points.insert(fr, v, options={"REPLACE"})
-                    kp.interpolation = "LINEAR"
+                    insert_or_replace_key(fcurve, fr, v, interpolation="LINEAR")
     # Add NLA track strip
     track = arm_obj.animation_data.nla_tracks.new()
     strip = track.strips.new(action.name, 0, action)

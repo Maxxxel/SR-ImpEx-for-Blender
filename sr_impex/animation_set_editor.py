@@ -5,9 +5,9 @@
 from __future__ import annotations
 import json
 import uuid
-from typing import Dict, List, Optional
-
+from typing import Dict, Optional
 import bpy
+
 from bpy.props import (
     StringProperty,
     IntProperty,
@@ -23,6 +23,7 @@ from bpy.props import (
 # Import definitions: VIS_JOB_MAP comes from your drs_definitions.py
 # ---------------------------------------------------------------------------
 
+from .animation_utils import assign_action_compat
 from .drs_definitions import VIS_JOB_MAP
 
 # Build a static enum list at import time (identifier is the numeric id as string)
@@ -101,6 +102,7 @@ def _stop_preview_playback():
     if _playback_state.get("handler"):
         try:
             bpy.app.handlers.frame_change_post.remove(_playback_state["handler"])
+        # pylint: disable=broad-exception-caught
         except Exception:
             pass
         _playback_state["handler"] = None
@@ -109,6 +111,7 @@ def _stop_preview_playback():
     try:
         if bpy.context.screen and bpy.context.screen.is_animation_playing:
             bpy.ops.screen.animation_play()
+    # pylint: disable=broad-exception-caught
     except Exception:
         pass
 
@@ -150,6 +153,7 @@ def _read_anim_blob(col: bpy.types.Collection) -> Dict:
         b.setdefault("mode_keys", [])
         b.setdefault("marker_sets", [])
         return b
+    # pylint: disable=broad-exception-caught
     except Exception:
         return _empty_blob()
 
@@ -197,6 +201,7 @@ class ModeKeyPG(bpy.types.PropertyGroup):
     def to_dict(self) -> Dict:
         try:
             vj = int(self.vis_job)
+        # pylint: disable=broad-exception-caught
         except Exception:
             vj = 0
         return {"vis_job": vj, "variants": [v.to_dict() for v in self.variants]}
@@ -233,10 +238,10 @@ class MarkerPG(bpy.types.PropertyGroup):
 class MarkerSetPG(bpy.types.PropertyGroup):
     anim_id: EnumProperty(
         name="VisJob", items=VIS_JOB_ENUM, default=VIS_JOB_DEFAULT
-    )  # keep as-is
-    file: EnumProperty(name="Action", items=_actions_enum)  # <-- replace this line
-    animation_marker_id: StringProperty(name="Marker ID", default="")  # keep
-    markers: CollectionProperty(type=MarkerPG)  # keep
+    )  # type: ignore
+    file: EnumProperty(name="Action", items=_actions_enum)  # type: ignore
+    animation_marker_id: StringProperty(name="Marker ID", default="")  # type: ignore
+    markers: CollectionProperty(type=MarkerPG)  # type: ignore
 
     def ensure_id(self):
         if not self.animation_marker_id:
@@ -250,6 +255,7 @@ class MarkerSetPG(bpy.types.PropertyGroup):
         m0 = self.markers[0]
         try:
             anim_id_int = int(self.anim_id)
+        # pylint: disable=broad-exception-caught
         except Exception:
             anim_id_int = 0
         return {
@@ -348,6 +354,7 @@ class DRS_UL_ModeKeys(bpy.types.UIList):
     def draw_item(self, _ctx, layout, _data, item: ModeKeyPG, _icon, _active, _flt):
         try:
             key = int(item.vis_job)
+        # pylint: disable=broad-exception-caught
         except Exception:
             key = 0
         layout.label(text=f"{VIS_JOB_MAP.get(key, 'Unknown')} ({key})")
@@ -367,6 +374,7 @@ class DRS_UL_MarkerSets(bpy.types.UIList):
     def draw_item(self, _ctx, layout, _data, item: MarkerSetPG, _icon, _active, _flt):
         try:
             key = int(item.anim_id)
+        # pylint: disable=broad-exception-caught
         except Exception:
             key = 0
         lab = "(no action)" if item.file == "NONE" else item.file
@@ -562,8 +570,7 @@ class DRS_OT_AnimSet_PlayVariant(bpy.types.Operator):
         end_f = max(start_f + 1, end_f)
 
         # Assign action to armature (active action path, keep it simple)
-        arm.animation_data_create()
-        arm.animation_data.action = act
+        assign_action_compat(arm, act)
 
         # Restart playback cleanly
         _stop_preview_playback()
@@ -579,6 +586,7 @@ class DRS_OT_AnimSet_PlayVariant(bpy.types.Operator):
         # Start playing
         try:
             bpy.ops.screen.animation_play()
+        # pylint: disable=broad-exception-caught
         except Exception:
             # Fallback: even if play couldn't start (rare), keep frame set
             pass
