@@ -3600,70 +3600,99 @@ def create_skin_info(
     meshes_collection: bpy.types.Collection,
     bone_map: Dict[str, Dict[str, int]],
 ) -> CSkSkinInfo:
-    """Create a SkinInfo."""
+    """Create CSkSkinInfo by matching world-space vertices to the unified mesh."""
+    TOL_DIGITS = 5  # matches 1e-5 used in remove_doubles
     skin_info = CSkSkinInfo()
-    skin_info.vertex_data = []
-    skin_info.vertex_count += len(unified_mesh.vertices)
+    skin_info.vertex_count = len(unified_mesh.vertices)
 
-    unified_hashtable = {}
+    # Build hashtable: unified mesh is already in WORLD SPACE
+    unified_hashtable: dict[tuple[float, float, float], int] = {}
     for v in unified_mesh.vertices:
-        key = tuple(round(coord, 6) for coord in v.co)
-        if key not in unified_hashtable:
-            unified_hashtable[key] = v.index
-        else:
+        key = (
+            round(v.co.x, TOL_DIGITS),
+            round(v.co.y, TOL_DIGITS),
+            round(v.co.z, TOL_DIGITS),
+        )
+        if key in unified_hashtable:
             logger.log(
                 f"Duplicate vertex found in unified mesh: {v.co}", "Error", "ERROR"
             )
+            # early out with empty data but correct count
+            skin_info.vertex_data = [
+                VertexData(bone_indices=[0, 0, 0, 0], weights=[0.0, 0.0, 0.0, 0.0])
+            ] * skin_info.vertex_count
             return skin_info
+        unified_hashtable[key] = v.index
 
-    vertex_data: List[VertexData] = [None] * len(unified_mesh.vertices)
-    for mesh in meshes_collection.objects:
-        if mesh.type == "MESH":
-            # We need to map the mesh vertex to the unified index
-            for vertex in mesh.data.vertices:
-                key = tuple(round(coord, 6) for coord in vertex.co)
-                if key in unified_hashtable:
-                    index = unified_hashtable[key]
+    # Accumulate per-vertex weights in unified index space
+    vertex_data: list[VertexData | None] = [None] * skin_info.vertex_count
 
-                    if vertex_data[index] is None:
-                        vertex_data[index] = VertexData(bone_indices=[], weights=[])
+    for obj in meshes_collection.objects:
+        if obj.type != "MESH":
+            continue
 
-                    # We need to get all vertex groups from the mesh and map them to the skeleton, we take the bone order from the armature
-                    for vertex_group in vertex.groups:
-                        # bone_index = vertex_group.group
-                        bone_group = vertex_group.group
-                        bone_name: str = mesh.vertex_groups[bone_group].name
-                        bone_data = bone_map.get(bone_name, -1)
-                        if bone_data == -1:
-                            logger.log(
-                                f"Bone {bone_name} not found in bone map for vertex {vertex.index}",
-                                "Error",
-                                "ERROR",
-                            )
-                            continue
-                        bone_index = bone_data["id"]
-                        bone_weight = vertex_group.weight
-                        if bone_index not in vertex_data[index].bone_indices:
-                            vertex_data[index].bone_indices.append(bone_index)
-                            vertex_data[index].weights.append(bone_weight)
-                else:
+        mw = obj.matrix_world.copy()
+        vgroups = obj.vertex_groups
+        for v in obj.data.vertices:
+            # Convert OBJECT -> WORLD to match unified mesh space
+            wco = mw @ v.co
+            key = (
+                round(wco.x, TOL_DIGITS),
+                round(wco.y, TOL_DIGITS),
+                round(wco.z, TOL_DIGITS),
+            )
+            idx = unified_hashtable.get(key)
+            if idx is None:
+                logger.log(
+                    f"Vertex {v.index} not found in unified mesh (ws: {wco})",
+                    "Error",
+                    "ERROR",
+                )
+                continue
+
+            if vertex_data[idx] is None:
+                vertex_data[idx] = VertexData(bone_indices=[], weights=[])
+
+            # Map Blender vertex groups -> bone ids from bone_map
+            for g in v.groups:
+                if g.weight <= 0.0:
+                    continue
+                bone_name = vgroups[g.group].name
+                bone_info = bone_map.get(bone_name, -1)
+                if bone_info == -1:
                     logger.log(
-                        f"Vertex {vertex.index} not found in unified mesh: {vertex.co}",
+                        f"Bone {bone_name} not in bone map for vertex {v.index}",
                         "Error",
                         "ERROR",
                     )
                     continue
+                bone_id = bone_info["id"]
+                if bone_id not in vertex_data[idx].bone_indices:
+                    vertex_data[idx].bone_indices.append(bone_id)
+                    vertex_data[idx].weights.append(g.weight)
 
-    # Fill the vertex data with zeros up to 4 bones
-    for vertex in vertex_data:
-        if vertex is None:
+    # Normalize to 4 influences per vertex (pad/truncate)
+    for i, vd in enumerate(vertex_data):
+        if vd is None:
+            # no data collected for this unified vertex; keep it as zeros
+            vertex_data[i] = VertexData(
+                bone_indices=[0, 0, 0, 0], weights=[0.0, 0.0, 0.0, 0.0]
+            )
             continue
-        while len(vertex.bone_indices) < 4:
-            vertex.bone_indices.append(0)
-            vertex.weights.append(0.0)
 
-    skin_info.vertex_data = vertex_data
+        # Optional: sort by weight desc before clamping to 4
+        if len(vd.weights) > 4:
+            order = sorted(
+                range(len(vd.weights)), key=lambda k: vd.weights[k], reverse=True
+            )[:4]
+            vd.bone_indices = [vd.bone_indices[k] for k in order]
+            vd.weights = [vd.weights[k] for k in order]
 
+        while len(vd.bone_indices) < 4:
+            vd.bone_indices.append(0)
+            vd.weights.append(0.0)
+
+    skin_info.vertex_data = vertex_data  # type: ignore[assignment]
     return skin_info
 
 
@@ -4099,12 +4128,12 @@ def save_drs(
     new_drs_file.update_offsets()
 
     # === SAVE THE DRS FILE ====================================================
-    # try:
-    #     new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
-    # except Exception as e:  # pylint: disable=broad-except
-    #     logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
-    #     return abort(keep_debug_collections, source_collection_copy)
-    new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    try:
+        new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    except Exception as e:  # pylint: disable=broad-except
+        logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
+    # new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:
