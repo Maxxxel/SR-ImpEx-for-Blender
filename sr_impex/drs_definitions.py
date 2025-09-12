@@ -1732,7 +1732,7 @@ class AnimationSetVariant:
     start: float = 0.0
     end: float = 1.0
     allows_ik: int = 1
-    forceNoBlend: int = 0
+    force_no_blend: int = 0
 
     def read(self, file: BinaryIO) -> "AnimationSetVariant":
         """Reads the AnimationSetVariant from the buffer"""
@@ -1751,7 +1751,7 @@ class AnimationSetVariant:
         if self.version >= 5:
             self.allows_ik = unpack("B", file.read(1))[0]
         if self.version >= 7:
-            self.forceNoBlend = unpack("B", file.read(1))[0]
+            self.force_no_blend = unpack("B", file.read(1))[0]
 
         return self
 
@@ -1766,7 +1766,7 @@ class AnimationSetVariant:
         if self.version >= 5:
             file.write(pack("B", self.allows_ik))
         if self.version >= 7:
-            file.write(pack("B", self.forceNoBlend))
+            file.write(pack("B", self.force_no_blend))
         return self
 
     def size(self) -> int:

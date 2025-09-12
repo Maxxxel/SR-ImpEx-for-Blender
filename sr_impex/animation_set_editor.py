@@ -693,6 +693,7 @@ class AnimVariantPG(bpy.types.PropertyGroup):
     start: FloatProperty(name="Start", default=0.0, min=0.0, max=1.0)  # type: ignore
     end: FloatProperty(name="End", default=1.0, min=0.0, max=1.0)  # type: ignore
     allows_ik: BoolProperty(name="Allows IK", default=True)  # type: ignore
+    force_no_blend: BoolProperty(name="Force No Blend", default=False)  # type: ignore
     file: EnumProperty(name="Action", items=_actions_enum)  # type: ignore
 
 
@@ -816,6 +817,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
             v.start = float(vd.get("start", 0.0))
             v.end = float(vd.get("end", 1.0))
             v.allows_ik = bool(int(vd.get("allows_ik", 1)))
+            v.force_no_blend = bool(int(vd.get("force_no_blend", 0)))
             f = (vd.get("file") or "").strip()
             v.file = _resolve_action_name(f)
             vlist.append(v)
@@ -910,6 +912,7 @@ def _write_state_to_blob(col: bpy.types.Collection):
                     "start": float(v.start),
                     "end": float(v.end),
                     "allows_ik": 1 if v.allows_ik else 0,
+                    "force_no_blend": 1 if v.force_no_blend else 0,
                     "file": "" if v.file == "NONE" else v.file,
                 }
             )
@@ -952,7 +955,7 @@ class DRS_OT_AnimSet_InitUnit(bpy.types.Operator):
                 mk.role = comp.get("role", "")
                 mk.special_mode = 0
                 v = mk.variants.add()
-                v.weight, v.start, v.end, v.allows_ik, v.file = (
+                v.weight, v.start, v.end, v.allows_ik, v.file, v.force_no_blend = (
                     100,
                     0.0,
                     1.0,
@@ -1027,7 +1030,14 @@ class DRS_OT_ModeKey_AddAbility(bpy.types.Operator):
             else:
                 mk.target_mode = -1
             v = mk.variants.add()
-            v.weight, v.start, v.end, v.allows_ik, v.file = 100, 0.0, 1.0, True, "NONE"
+            v.weight, v.start, v.end, v.allows_ik, v.file, v.force_no_blend = (
+                100,
+                0.0,
+                1.0,
+                True,
+                "NONE",
+                False,
+            )
             existing.add(key)
             added = True
 
@@ -1243,6 +1253,7 @@ def _draw_variant_editor(
         det.prop(v, "file", text="Action")
         det.prop(v, "weight")
         det.prop(v, "allows_ik")
+        det.prop(v, "force_no_blend")
         # det.prop(v, "start")
         if is_cast:
             # End belongs to slider; show locked (no explicit Resolve part UI)
@@ -1283,7 +1294,14 @@ class DRS_OT_VariantAdd(bpy.types.Operator):
             return {"CANCELLED"}
         mk = st.mode_keys[self.index]
         v = mk.variants.add()
-        v.weight, v.start, v.end, v.allows_ik, v.file = 100, 0.0, 1.0, True, "NONE"
+        v.weight, v.start, v.end, v.allows_ik, v.file, v.force_no_blend = (
+            100,
+            0.0,
+            1.0,
+            True,
+            "NONE",
+            False,
+        )
         mk.active_variant = len(mk.variants) - 1
         _redraw_ui()
         return {"FINISHED"}

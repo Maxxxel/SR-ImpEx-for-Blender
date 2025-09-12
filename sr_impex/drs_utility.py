@@ -3812,81 +3812,185 @@ def create_skeleton(
 
 
 def create_animation_set(model_name: str) -> AnimationSet:
-    """Create an AnimationSet."""
-    animation_set = AnimationSet()
-    animation_set.version = 6
-    animation_set.default_run_speed = 4.8
-    animation_set.default_walk_speed = 2.3
-    animation_set.revision = 6
-    animation_set.mode_change_type = 0
-    animation_set.hovering_ground = 0
-    animation_set.fly_bank_scale = 1.0
-    animation_set.fly_accel_scale = 0
-    animation_set.fly_hit_scale = 1.0
-    animation_set.allign_to_terrain = 0
-    animation_set.has_atlas = 1
-    animation_set.atlas_count = 0
-    animation_set.ik_atlases = []  # Not needed here
-    animation_set.subversion = 2
-    animation_set.animation_marker_count = 0  # Not needed here
-    animation_set.animation_marker_sets = []  # Not needed here
-    animation_set.mode_animation_keys = []
+    """
+    Build an AnimationSet for export from the AnimationSetJSON blob.
+    Anything not present in the blob falls back to defaults.
+    """
 
-    # Get all Action
-    all_actions = get_actions()
-    available_action = []
-
-    # We only allow actions with the same name as the export animation name or _idle or if its the only action
-    nbr_actions = len(all_actions)
-    if nbr_actions == 1:
-        available_action.append(all_actions[0])
-    elif nbr_actions > 1:
-        for action_name in all_actions:
-            action_name_without_ska = action_name.replace(".ska", "")
-            if (
-                action_name_without_ska == model_name
-                or action_name_without_ska.find("_idle") != -1
-            ):
-                available_action.append(action_name)
-
-    if len(available_action) == 0:
-        logger.log(
-            "No valid Action found. Please check the Action Names.",
-            "Error",
-            "ERROR",
+    # -- helper: get active top-level DRSModel_* collection (same idea as editor) ----
+    def _active_top_drsmodel() -> bpy.types.Collection | None:
+        alc = (
+            bpy.context.view_layer.active_layer_collection.collection
+            if bpy.context and bpy.context.view_layer
+            else None
         )
-        return animation_set
+        if not isinstance(alc, bpy.types.Collection):
+            return None
+        if not alc.name.startswith("DRSModel_"):
+            return None
+        for top in bpy.context.scene.collection.children:
+            if top == alc:
+                return alc
+        return None
 
-    animation_set.mode_animation_key_count = 1
-    animation_key = ModeAnimationKey()
-    animation_key.type = 6
-    animation_key.length = 11
-    animation_key.file = "Battleforge"
-    animation_key.unknown = 2
-    animation_key.unknown2 = 3
-    animation_key.vis_job = 0
-    animation_key.unknown3 = 3
-    animation_key.unknown4 = 0
-    animation_key.animation_set_variants = []
-    animation_key.variant_count = 0
+    def _read_blob(col: bpy.types.Collection) -> dict:
+        data = col.get(ANIM_BLOB_KEY)
+        if not data:
+            return {}
+        try:
+            b = json.loads(data)
+            if not isinstance(b, dict):
+                return {}
+            # ensure lists exist
+            b.setdefault("mode_keys", [])
+            b.setdefault("marker_sets", [])
+            return b
+        except Exception:  # noqa: BLE001
+            return {}
 
-    for action_name in available_action:
-        # Assure we have .ska at the end of the name
-        if not action_name.endswith(".ska"):
-            action_name += ".ska"
-        animation_key.variant_count += 1
-        variant = AnimationSetVariant()
-        variant.version = 4
-        variant.weight = 100 // len(available_action)
-        variant.start = 0
-        variant.end = 1
-        variant.length = len(action_name)
-        variant.file = action_name
-        animation_key.animation_set_variants.append(variant)
+    # -- defaults compatible with existing exporter ------------------------------------------------
+    anim = AnimationSet()
+    anim.version = 6
+    anim.revision = 6
+    anim.subversion = 2
+    anim.has_atlas = 1
+    anim.atlas_count = 0
+    anim.ik_atlases = []
+    anim.animation_marker_sets = []
+    anim.animation_marker_count = 0
+    anim.mode_animation_keys = []
+    anim.mode_animation_key_count = 0
 
-    animation_set.mode_animation_keys.append(animation_key)
+    # sensible defaults (these are the same values you previously emitted)
+    anim.default_run_speed = 4.8
+    anim.default_walk_speed = 2.3
+    anim.mode_change_type = 0
+    anim.hovering_ground = 0
+    anim.fly_bank_scale = 1.0
+    anim.fly_accel_scale = 0.0
+    anim.fly_hit_scale = 1.0
+    anim.allign_to_terrain = 0
 
-    return animation_set
+    # ---- try to read blob from the active model --------------------------------------------------
+    col = _active_top_drsmodel()
+    blob = _read_blob(col) if col else {}
+
+    # top-level scalars
+    def _bget(name, default):  # small helper with type coercion
+        val = blob.get(name, default)
+        return val if val is not None else default
+
+    anim.default_run_speed = float(_bget("default_run_speed", anim.default_run_speed))
+    anim.default_walk_speed = float(
+        _bget("default_walk_speed", anim.default_walk_speed)
+    )
+    anim.mode_change_type = int(_bget("mode_change_type", anim.mode_change_type))
+    anim.hovering_ground = int(_bget("hovering_ground", anim.hovering_ground))
+    anim.fly_bank_scale = float(_bget("fly_bank_scale", anim.fly_bank_scale))
+    anim.fly_accel_scale = float(_bget("fly_accel_scale", anim.fly_accel_scale))
+    anim.fly_hit_scale = float(_bget("fly_hit_scale", anim.fly_hit_scale))
+    anim.allign_to_terrain = int(_bget("align_to_terrain", anim.allign_to_terrain))
+
+    # ---- Mode Keys ------------------------------------------------------------------------------
+    mode_keys = blob.get("mode_keys", []) or []
+    for mkd in mode_keys:
+        try:
+            mk = ModeAnimationKey()
+            # keep legacy header values that the writer expects
+            mk.type = 6
+            mk.length = 11
+            mk.file = "Battleforge"
+            mk.unknown = 2
+            mk.unknown2 = 3
+            mk.unknown3 = 3
+
+            mk.vis_job = int(mkd.get("vis_job", 0) or 0)
+            mk.special_mode = int(mkd.get("special_mode", 0) or 0)
+
+            mk.animation_set_variants = []
+            mk.variant_count = 0
+
+            for vd in mkd.get("variants", []) or []:
+                # skip empty variants
+                f = (vd.get("file") or "").strip()
+                if not f or f == "NONE":
+                    continue
+                if not f.endswith(".ska"):
+                    f += ".ska"
+
+                var = AnimationSetVariant()
+                var.version = 7
+                var.weight = int(vd.get("weight", 100) or 0)
+                var.start = float(vd.get("start", 0.0) or 0.0)
+                var.end = float(vd.get("end", 1.0) or 1.0)
+                var.length = len(f)
+                var.allows_ik = int(vd.get("allows_ik", 1))
+                var.force_no_blend = bool(int(vd.get("force_no_blend", 0)))
+                var.file = f
+
+                mk.animation_set_variants.append(var)
+
+            mk.variant_count = len(mk.animation_set_variants)
+            # only append keys that have at least one valid variant
+            if mk.variant_count > 0:
+                anim.mode_animation_keys.append(mk)
+        except Exception:  # noqa: BLE001
+            # ignore individual bad keys; continue with the rest
+            continue
+
+    anim.mode_animation_key_count = len(anim.mode_animation_keys)
+
+    # ---- Marker sets (optional) -----------------------------------------------------------------
+    # The blob may include marker info; if present and the struct type fits your writer,
+    # you can map it here. For now we keep defaults unless you need them in the file.
+    # (anim.animation_marker_sets stays empty, which matches prior behavior.)
+
+    # ---- Fallback if no blob or no valid variants -----------------------------------------------
+    if anim.mode_animation_key_count == 0:
+        # previous behavior: pick actions by name and synthesize a single key
+        all_actions = get_actions()
+        available_action: list[str] = []
+        if len(all_actions) == 1:
+            available_action.append(all_actions[0])
+        elif len(all_actions) > 1:
+            for a in all_actions:
+                base = a.replace(".ska", "")
+                if base == model_name or "_idle" in base:
+                    available_action.append(a)
+
+        if available_action:
+            mk = ModeAnimationKey()
+            mk.type = 6
+            mk.length = 11
+            mk.file = "Battleforge"
+            mk.unknown = 2
+            mk.unknown2 = 3
+            mk.vis_job = 0
+            mk.unknown3 = 3
+            mk.unknown4 = 0
+            mk.animation_set_variants = []
+            for a in available_action:
+                f = a if a.endswith(".ska") else (a + ".ska")
+                var = AnimationSetVariant()
+                var.version = 4
+                var.weight = 100 // max(1, len(available_action))
+                var.start = 0.0
+                var.end = 1.0
+                var.length = len(f)
+                var.file = f
+                var.allows_ik = 1
+                mk.animation_set_variants.append(var)
+            mk.variant_count = len(mk.animation_set_variants)
+            anim.mode_animation_keys = [mk]
+            anim.mode_animation_key_count = 1
+        else:
+            logger.log(
+                "No AnimationSet blob found (or it had no valid variants), and no suitable Actions in the scene.",
+                "Error",
+                "ERROR",
+            )
+
+    return anim
 
 
 def create_bone_map(
