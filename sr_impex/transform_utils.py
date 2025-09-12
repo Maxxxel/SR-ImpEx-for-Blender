@@ -33,20 +33,27 @@ def get_conversion_matrix(invert: bool = False) -> Matrix:
     return transform.inverted() if invert else transform
 
 
-def create_empty(source_collection: bpy.types.Collection) -> bpy.types.Object:
+def create_empty(
+    source_collection: bpy.types.Collection, apply_transform: bool = True
+) -> bpy.types.Object:
     """
     Create an empty object in the scene with the specified name and location.
     Optionally set its rotation.
     """
-    M = get_conversion_matrix(invert=False)
     empty = bpy.data.objects.new("GameOrientation", None)
     source_collection.objects.link(empty)
+    if not apply_transform:
+        return empty
+
+    M = get_conversion_matrix(invert=False)
     empty.matrix_world = M
     return empty
 
 
-def parent_under_game_axes(source_collection: bpy.types.Collection):
-    empty = create_empty(source_collection)
+def parent_under_game_axes(
+    source_collection: bpy.types.Collection, apply_transform: bool = True
+):
+    empty = create_empty(source_collection, apply_transform)
 
     for obj in source_collection.all_objects:
         if obj.type in {"MESH", "ARMATURE"}:
@@ -54,5 +61,6 @@ def parent_under_game_axes(source_collection: bpy.types.Collection):
                 # DEBUG PRINT
                 print(f"Object {obj.name} has a parent {obj.parent.name}, skipping.")
                 continue  # Skip objects that already have a parent
-            obj.matrix_parent_inverse = empty.matrix_world.inverted()
+            if apply_transform:
+                obj.matrix_parent_inverse = empty.matrix_world.inverted()
             obj.parent = empty

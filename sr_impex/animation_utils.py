@@ -1,7 +1,10 @@
 # animation_utils.py
 from typing import List, Dict, Tuple
-import bpy
+import os
+import json
 from mathutils import Quaternion, Vector
+import bpy
+
 from .ska_definitions import SKA, SKAKeyframe
 from .drs_definitions import DRSBone
 
@@ -160,12 +163,60 @@ def import_ska_animation(
     fps: int,
     use_bezier: bool = True,
     import_type: str = "SECONDS",
+    unit_name: str = "Name",
+    map_collection: bpy.types.Collection | None = None,
 ) -> None:
     """
     Import SKA into Blender by inserting Hermite-interpolated Bézier keyframes.
     """
+    blob_key_original = (name or "").strip()
+    # 1. Remove .ska extension if present
+    if name.lower().endswith(".ska"):
+        name = name[:-4]
+    # 2. Remove parent folder if present. E.g. D:\Games\Skylords Reborn\Mods\Unpack\bf1\gfx\units\skel_giant_hammer\unit_dreadnought.drs -> skel_giant_hammer is what we want
+    parent_folder = os.path.basename(os.path.dirname(unit_name))
+    if name.startswith(parent_folder + "_"):
+        name = name[len(parent_folder) + 1 :]
+    # 3. Check if still too long
+    if len(name) > 63:
+        print(f"Warning: Action name '{name}' is too long, truncating to 63 chars.")
+        name = name[:63]
+
+    # Check if Action with this name already exists
+    existing_action = bpy.data.actions.get(name)
+    if existing_action is not None:
+        # Just assign it and return
+        assign_action_compat(arm_obj, existing_action)
+        print(f"Info: Action '{name}' already exists, assigned existing action.")
+        return
+
     action = create_action(arm_obj, name=name, cyclic=(ska_file.repeat > 1))
     duration = ska_file.duration
+
+    # ---- Mapping: blob filename -> actual Action name ----
+    # Store on the model collection as JSON (ID props are fine, but JSON keeps it simple)
+    if map_collection is not None:
+        try:
+            mapping_raw = map_collection.get("_drs_action_map", "{}")
+            mapping = json.loads(mapping_raw) if isinstance(mapping_raw, str) else {}
+        except Exception:
+            mapping = {}
+
+        # Use the basename of the blob file, AND the raw string, so both resolve.
+        base = os.path.basename(blob_key_original)
+        mapping[blob_key_original] = action.name
+        mapping[base] = action.name
+
+        # Also record no-.ska variant (common in old blobs)
+        if blob_key_original.lower().endswith(".ska"):
+            mapping[blob_key_original[:-4]] = action.name
+        if base.lower().endswith(".ska"):
+            mapping[base[:-4]] = action.name
+
+        map_collection["_drs_action_map"] = json.dumps(
+            mapping, separators=(",", ":"), ensure_ascii=False
+        )
+
     # Prepare bones and curves
     bone_map = {b.ska_identifier: b for b in bone_list}
     curves_map: Dict[int, Dict[str, bpy.types.FCurve]] = {}

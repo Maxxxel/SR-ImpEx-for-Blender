@@ -200,6 +200,7 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
             {
                 "vis_job": int(getattr(k, "vis_job", 0) or 0),
                 "variants": variants,
+                "special_mode": int(getattr(k, "special_mode", 0) or 0),
             }
         )
 
@@ -689,6 +690,8 @@ def load_animated_bms_module(
                             import_animation_fps,
                             smooth_animation,
                             import_animation_type,
+                            file_name,
+                            map_collection=parent_collection,
                         )
 
         return armature_object
@@ -713,6 +716,16 @@ def load_turret_animation(
         import_animation_fps,
         smooth_animation,
         import_animation_type,
+        file_name,
+        map_collection=(
+            None
+            if armature_object is None
+            else (
+                armature_object.users_collection[0]
+                if armature_object.users_collection
+                else None
+            )
+        ),
     )
 
 
@@ -767,6 +780,7 @@ def process_slocator_import(
             smooth_animation,
             import_animation_type,
         )
+        return
     else:
         # We sometimes have .fxb files -> Effects, we ignore them for now
         # Create visual sphere for locator
@@ -1934,6 +1948,8 @@ def load_drs(
                         import_animation_fps,
                         smooth_animation,
                         import_animation_type,
+                        filepath,
+                        map_collection=source_collection,
                     )
 
     if (
@@ -1979,8 +1995,7 @@ def load_drs(
         import_bounding_box(drs_file.cdsp_mesh_file, debug_collection)
 
     # Apply the Transformations to the Source Collection
-    if apply_transform:
-        parent_under_game_axes(source_collection)
+    parent_under_game_axes(source_collection, apply_transform)
 
     # Print the Time Measurement
     logger.log(
@@ -2098,6 +2113,8 @@ def import_state_based_mesh_set(
                                 fps,
                                 smooth_animation,
                                 animation_type,
+                                base_name,
+                                map_collection=source_collection,
                             )
 
             if (
@@ -2430,11 +2447,12 @@ def load_bmg(
                         import_animation_fps,
                         smooth_animation,
                         import_animation_type,
+                        filepath,
+                        map_collection=source_collection,
                     )
 
     # Apply the Transformations to the Source Collection
-    if apply_transform:
-        parent_under_game_axes(source_collection)
+    parent_under_game_axes(source_collection, apply_transform)
 
     # Print the Time Measurement
     logger.log(
@@ -3234,21 +3252,23 @@ def create_mesh(
                     refraction_map = node.inputs[7]
                 break
 
-    if flu_map is None or flu_map.is_linked is False:
-        # -86061055: no MaterialStuff, no Fluid, no String, no LOD
-        new_mesh.material_parameters = -86061055  # Hex: 0xFADED001
-    else:
-        # -86061050: All Materials
-        new_mesh.material_parameters = -86061050  # Hex: 0xFADED006
-        new_mesh.material_stuff = 0  # Added for Hex 0xFADED004+
-        # Level of Detail
-        new_mesh.level_of_detail = LevelOfDetail()  # Added for Hex 0xFADED002+
-        # Empty String
-        new_mesh.empty_string = EmptyString()  # Added for Hex 0xFADED003+
-        # Flow
-        new_mesh.flow = (
-            Flow()
-        )  # Maybe later we can add some flow data in blender. Added for Hex 0xFADED006
+    # if flu_map is None or flu_map.is_linked is False:
+    # new_mesh.material_parameters = -86061055
+    # -86061055: Bool, Textures, Refraction, Materials
+    # -86061054: Bool, Textures, Refraction, Materials, LOD
+    # -86061053: Bool, Textures, Refraction, Materials, LOD, Empty String
+    # -86061052: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff
+    # -86061051: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff
+    # else:
+    # -86061050: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff, Flow
+    new_mesh.material_parameters = -86061050  # Hex: 0xFADED006
+    new_mesh.material_stuff = 0  # Added for Hex 0xFADED004+
+    # Level of Detail
+    new_mesh.level_of_detail = LevelOfDetail()  # Added for Hex 0xFADED002+
+    # Empty String
+    new_mesh.empty_string = EmptyString()  # Added for Hex 0xFADED003+
+    # Flow
+    new_mesh.flow = Flow()
 
     # Individual Material Parameters depending on the MaterialID:
     new_mesh.bool_parameter = 0
