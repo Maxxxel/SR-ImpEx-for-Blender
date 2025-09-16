@@ -7,6 +7,7 @@ import hashlib
 import os
 from typing import Dict, Optional, Tuple
 
+import random
 import math
 from mathutils import Vector, Quaternion
 
@@ -33,6 +34,9 @@ from .abilities import (
     additional_abilities,
 )
 
+from .drs_definitions import AnimationType as DRS_ANIM_TYPE
+
+_ANIMTYPE_BY_ID = {v: k for k, v in DRS_ANIM_TYPE.items()}
 
 _ACTIONS_ENUM_CACHE = None
 _ACTIONS_ENUM_COUNT = -1
@@ -751,6 +755,47 @@ def _fill_picker_items(self_items, mode: int, query: str = ""):
         it.selected = False
 
 
+def _all_abilities_map():
+    d = {}
+    d.update(must_have_abilities)
+    d.update(situational_abilities)
+    d.update(additional_abilities)
+    return d
+
+
+def _normalize_role_match(role: str) -> str:
+    # "CastGround" / "CastAir" should match "Cast"
+    r = (role or "").strip()
+    if "Cast" in r:
+        return "Cast"
+    return r
+
+
+def _visjob_timing_spec(vis_job: int, role: str) -> dict | None:
+    ab_name = _infer_ability_for_visjob(int(vis_job))
+    ab = _all_abilities_map().get(ab_name) or {}
+    links = ab.get("timings", []) or []
+    r_norm = _normalize_role_match(role)
+    for t in links:
+        roles = [
+            (_normalize_role_match(x) or "") for x in (t.get("links_to_roles") or [])
+        ]
+        if r_norm and r_norm in roles:
+            return {
+                "animation_type": str(
+                    t.get("animation_type", "") or ""
+                ),  # string like "Melee"
+                "tag_id": int(t.get("tag_id", 0) or 0),
+                "is_enter_mode": int(t.get("is_enter_mode", 0) or 0),
+            }
+    return None
+
+
+def _new_uint10() -> int:
+    """Generate a positive uint (~10 digits)."""
+    return random.randint(1_000_000_000, 4_294_967_295)
+
+
 # ---------------------------------------------------------------------------
 # Blob I/O
 # ---------------------------------------------------------------------------
@@ -770,6 +815,7 @@ def _empty_blob() -> Dict:
         "align_to_terrain": False,
         "mode_keys": [],
         "marker_sets": [],
+        "timings": [],
     }
 
 
@@ -781,6 +827,7 @@ def _read_blob(col: bpy.types.Collection) -> Dict:
         b = json.loads(data)
         b.setdefault("mode_keys", [])
         b.setdefault("marker_sets", [])
+        b.setdefault("timings", [])
         return b
     except Exception:  # pylint: disable=broad-exception-caught
         return _empty_blob()
@@ -852,6 +899,16 @@ class AnimVariantPG(bpy.types.PropertyGroup):
     marker_time: FloatProperty(name="Time (0..1)", default=0.0, min=0.0, max=1.0, precision=3)  # type: ignore
     marker_pos: FloatVectorProperty(name="Position", size=3, default=(0.0, 0.0, 0.0), subtype="TRANSLATION")  # type: ignore
     marker_dir: FloatVectorProperty(name="Direction", size=3, default=(0.0, 0.0, 1.0), subtype="DIRECTION")  # type: ignore
+    # --- timing fields (attached per-variant) ---
+    timing_has: BoolProperty(name="Has Timing", default=False, options={"HIDDEN"})  # type: ignore
+    timing_type: StringProperty(name="Type", default="", options={"HIDDEN"})  # type: ignore  # CHANGED
+    timing_tag_id: IntProperty(name="Tag ID", default=0, options={"HIDDEN"})  # type: ignore
+    timing_is_enter: IntProperty(name="Is Enter Mode", default=0, options={"HIDDEN"})  # type: ignore
+    timing_variant_index: IntProperty(name="VariantIndex", default=0, options={"HIDDEN"})  # type: ignore
+    timing_cast_ms: IntProperty(name="Cast (ms)", default=0)  # type: ignore
+    timing_resolve_ms: IntProperty(name="Duration (ms)", default=0)  # type: ignore
+    timing_marker_id: StringProperty(name="MarkerID", default="")  # type: ignore  # CHANGED
+    timing_dir: FloatVectorProperty(name="Direction", size=3, default=(0.0, 0.0, 1.0), subtype="DIRECTION")  # type: ignore
 
 
 def _update_cast_to_resolve(self, _ctx):
@@ -983,7 +1040,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
         tmp.append((mk, vlist))
 
     # --- Map markers from blob to variants (by (anim_id=vis_job, file)) ---
-    marker_map = {}  # (vis_job:int, ska:str) -> marker dict
+    marker_map = {}  # (vis_job:int, ska:str) -> marker dict (includes marker id)
     for ms in b.get("marker_sets", []) or []:
         try:
             vj = int(ms.get("anim_id", 0) or 0)
@@ -998,25 +1055,76 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
             if dire is None:
                 dire = m.get("dir", [0.0, 0.0, 1.0])
 
+            # keep marker id as string in UI
+            am_id = ms.get("animation_marker_id", "")  # may be int in older blobs
+            am_id_str = str(am_id) if am_id is not None else ""
+
             marker_map[(vj, ska)] = {
                 "is_spawn_animation": int(m.get("is_spawn_animation", 0) or 0),
                 "time": float(m.get("time", 0.0) or 0.0),
                 "position": list(pos),
                 "direction": list(dire),
+                "animation_marker_id": am_id_str,
             }
         except Exception:
             continue
 
+    # --- Build timings pool (dedup) ---
+    # key: (animation_type:int, animation_tag_id:int, is_enter_mode:int)
+    # val: list of unique timing dicts (each can be consumed once)
+    def _animtype_to_int(name_or_num) -> int:
+        # supports both numeric and names from DRS_ANIM_TYPE
+        try:
+            from .drs_definitions import AnimationType as DRS_ANIM_TYPE
+        except Exception:
+            DRS_ANIM_TYPE = {}
+        s = f"{name_or_num}".strip()
+        if s in DRS_ANIM_TYPE:
+            return int(DRS_ANIM_TYPE[s])
+        try:
+            return int(s)
+        except Exception:
+            return 0
+
+    timings_pool: dict[tuple[int, int, int], list[dict]] = {}
+    seen_sigs: dict[tuple[int, int, int], set] = {}
+
+    for grp in b.get("timings", []) or []:
+        # accept name or int for animation_type; input blobs vary
+        atype_int = _animtype_to_int(grp.get("animation_type", 0))
+        tag = int(grp.get("animation_tag_id", grp.get("tag_id", 0)) or 0)
+        enter = int(
+            grp.get("is_enter_mode", grp.get("is_enter_mode_animation", 0)) or 0
+        )
+        key = (atype_int, tag, enter)
+        lst = timings_pool.setdefault(key, [])
+        ded = seen_sigs.setdefault(key, set())
+
+        for v in grp.get("variants", []) or []:
+            tv = {
+                "weight": int(v.get("weight", 100) or 100),
+                "cast_ms": int(v.get("cast_ms", 0) or 0),
+                "resolve_ms": int(
+                    v.get("resolve_ms", v.get("cast_resolve_ms", 0)) or 0
+                ),
+                "direction": list(v.get("direction") or [0.0, 0.0, 1.0]),
+                # keep marker id as string in UI
+                "animation_marker_id": str(v.get("animation_marker_id", 0) or "0"),
+            }
+            # signature for dedup (values only; ignore variant_index which caused the collision)
+            sig = (
+                tv["cast_ms"],
+                tv["resolve_ms"],
+                tuple(float(x) for x in tv["direction"]),
+                int(tv["animation_marker_id"] or "0"),
+            )
+            if sig in ded:
+                continue
+            ded.add(sig)
+            lst.append(tv)
+
     def _v_of(item):
         return item[0] if isinstance(item, tuple) else item
-
-    def _ska_of(item):
-        if isinstance(item, tuple):
-            return item[1]
-        v = item
-        return getattr(v, "raw_ska", "") or _norm_ska_name(
-            v.file if v.file and v.file != "NONE" else ""
-        )
 
     # attach markers to variants (use the raw SKA captured above!)
     for mk, vlist in tmp:
@@ -1024,7 +1132,14 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
         requires = _visjob_requires_marker(vj)
         for item in vlist:
             v = _v_of(item)
-            ska = _ska_of(item)
+            ska = (
+                item[1]
+                if isinstance(item, tuple)
+                else (
+                    getattr(v, "raw_ska", "")
+                    or _norm_ska_name(v.file if v.file and v.file != "NONE" else "")
+                )
+            )
             if not ska:
                 continue
             found = marker_map.get((vj, ska))
@@ -1034,6 +1149,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
                 v.marker_time = float(found.get("time", 0.0))
                 v.marker_pos = list(found.get("position", [0.0, 0.0, 0.0]))
                 v.marker_dir = list(found.get("direction", [0.0, 0.0, 1.0]))
+                v.timing_marker_id = str(found.get("animation_marker_id", "") or "")
             elif requires:
                 d = _marker_defaults_for_visjob(vj)
                 v.marker_has = True
@@ -1041,6 +1157,121 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
                 v.marker_time = float(d["time"])
                 v.marker_pos = list(d["position"])
                 v.marker_dir = list(d["direction"])
+                v.timing_marker_id = v.timing_marker_id or str(_new_uint10())
+
+    # helper to get action length in ms (rounded int)
+    def _act_ms(act_name: str) -> int:
+        if not act_name or act_name == "NONE":
+            return 0
+        act = bpy.data.actions.get(act_name)
+        if not act:
+            return 0
+        frames = _action_span_frames(act)
+        fps = bpy.context.scene.render.fps if bpy.context.scene else 30
+        return int(round((frames / fps) * 1000.0))
+
+    # consume candidates from the pool (so they aren't reused elsewhere)
+    def _pick_by_marker(cands: list[dict], marker_id_str: str) -> dict | None:
+        if not marker_id_str:
+            return None
+        for i, t in enumerate(cands):
+            if str(t.get("animation_marker_id", "") or "") == marker_id_str:
+                return cands.pop(i)
+        return None
+
+    def _pick_by_duration(cands: list[dict], target_ms: int) -> dict | None:
+        if not cands:
+            return None
+        best_i, best_d = -1, 1e18
+        for i, t in enumerate(cands):
+            d = abs(int(t.get("resolve_ms", 0) or 0) - int(target_ms))
+            if d < best_d:
+                best_d, best_i = d, i
+        # small safety: exact or very close match preferred
+        if best_i >= 0:
+            return cands.pop(best_i)
+        return None
+
+    # attach timings per ModeKey using marker id when needed, otherwise by duration
+    for mk, vlist in tmp:
+        # timing spec for this vis job + role
+        try:
+            vj = int(mk.vis_job)
+        except Exception:
+            vj = 0
+        spec = _visjob_timing_spec(vj, mk.role or "")
+        if not spec:
+            # No timing spec for this vis_job/role → skip attaching timings for this ModeKey
+            # (prevents AttributeError on reload)
+            continue
+
+        atype_int = _animtype_to_int(spec.get("animation_type", 0))
+        tag = int(spec.get("tag_id", spec.get("animation_tag_id", 0)) or 0)
+        enter = int(spec.get("is_enter_mode", 0) or 0)
+        key = (atype_int, tag, enter)
+
+        # nothing to attach
+        cands = timings_pool.get(key, [])
+        requires_marker = _visjob_requires_marker(vj)
+
+        for idx, v in enumerate(vlist):
+            # make sure the timing block exists on the variant
+            v.timing_has = True
+            # keep the spec readable in UI (string OK), we export ints later
+            try:
+                from .drs_definitions import AnimationType as DRS_ANIM_TYPE
+
+                inv = {v: k for k, v in DRS_ANIM_TYPE.items()}
+                v.timing_type = inv.get(atype_int, str(atype_int))
+            except Exception:
+                v.timing_type = str(atype_int)
+            v.timing_tag_id = tag
+            v.timing_is_enter = enter
+            v.timing_variant_index = idx
+
+            # try to pick a matching timing
+            picked = None
+            ska = getattr(v, "raw_ska", "") or _norm_ska_name(
+                v.file if v.file and v.file != "NONE" else ""
+            )
+            # 1) by marker id when required
+            if requires_marker:
+                mid = ""
+                mm = marker_map.get((vj, ska))
+                if mm:
+                    mid = str(mm.get("animation_marker_id", "") or "")
+                # if UI already has a marker id, prefer that
+                mid = str(getattr(v, "timing_marker_id", "") or mid)
+                picked = _pick_by_marker(cands, mid)
+
+            # 2) otherwise by duration (resolve part is the full action length here)
+            if picked is None:
+                total_ms = _act_ms(v.file)
+                picked = _pick_by_duration(cands, total_ms)
+
+            if picked is None:
+                # default (derive from the action + marker, nothing fancy)
+                total_ms = _act_ms(v.file)
+                v.timing_resolve_ms = int(total_ms)
+                v.timing_cast_ms = int(round(float(mk.cast_to_resolve) * total_ms))
+                v.timing_dir = list(getattr(v, "marker_dir", (0.0, 0.0, 1.0)))
+                if requires_marker:
+                    mm = marker_map.get((vj, ska))
+                    v.timing_marker_id = str(
+                        (mm.get("animation_marker_id") if mm else "")
+                        or getattr(v, "timing_marker_id", "")
+                        or str(_new_uint10())
+                    )
+                else:
+                    v.timing_marker_id = getattr(v, "timing_marker_id", "") or "0"
+            else:
+                v.timing_cast_ms = int(picked.get("cast_ms", 0) or 0)
+                v.timing_resolve_ms = int(picked.get("resolve_ms", 0) or 0)
+                v.timing_dir = list(picked.get("direction") or [0.0, 0.0, 1.0])
+                v.timing_marker_id = str(
+                    picked.get("animation_marker_id", "")
+                    or (getattr(v, "timing_marker_id", "") or "")
+                )
 
     # Second pass: derive sliders from actual variants (file truth)
     # - Cast: for EVERY cast-* ModeKey, set cast_to_resolve = its first variant's end
@@ -1111,9 +1342,13 @@ def _write_state_to_blob(col: bpy.types.Collection):
         "align_to_terrain": int(st.align_to_terrain),
         "mode_keys": [],
         "marker_sets": [],
+        "timings": [],
     }
     # collect for marker_sets while writing mode_keys
     emitted_ms = set()  # guard against duplicates
+    # --- Build timings groups in-memory first ---
+    groups: dict[tuple[int, int, int], dict[int, dict]] = {}
+
     for mk in st.mode_keys:
         try:
             vj = int(mk.vis_job)
@@ -1173,6 +1408,66 @@ def _write_state_to_blob(col: bpy.types.Collection):
                 )
 
         b["mode_keys"].append(md)
+
+    def _animtype_to_int(name_or_num: str) -> int:
+        s = (name_or_num or "").strip()
+        if s in DRS_ANIM_TYPE:
+            return int(DRS_ANIM_TYPE[s])
+        try:
+            return int(s)  # already numeric string
+        except Exception:
+            return 0
+
+    def _to_uint(s: str) -> int:
+        try:
+            return int(str(s).strip())
+        except Exception:
+            return 0
+
+    def _cast_ms_for_export(mk, v) -> int:
+        dur = int(getattr(v, "timing_resolve_ms", 0) or 0)
+        # prefer marker_time; fallback to mk.cast_to_resolve if marker absent
+        if getattr(v, "marker_has", False):
+            frac = 1.0 - float(getattr(v, "marker_time", 0.0) or 0.0)
+        else:
+            frac = 1.0 - float(getattr(mk, "cast_to_resolve", 0.0) or 0.0)
+        frac = max(0.0, min(1.0, frac))
+        return int(round(dur * frac))
+
+    for mk in st.mode_keys:
+        for idx, v in enumerate(mk.variants):
+            if getattr(v, "timing_has", False):
+                ty_int = _animtype_to_int(getattr(v, "timing_type", ""))
+                tag = int(getattr(v, "timing_tag_id", 0) or 0)
+                enter = int(getattr(v, "timing_is_enter", 0) or 0)
+                tkey = (ty_int, tag, enter)
+                if tkey not in groups:
+                    groups[tkey] = {}
+                if idx not in groups[tkey]:
+                    groups[tkey][idx] = {
+                        "variant_index": int(idx),
+                        "weight": int(v.weight),
+                        "cast_ms": _cast_ms_for_export(mk, v),
+                        "resolve_ms": int(v.timing_resolve_ms),
+                        "direction": [
+                            float(x) for x in (v.timing_dir or [0.0, 0.0, 1.0])
+                        ],
+                        "animation_marker_id": _to_uint(
+                            getattr(v, "timing_marker_id", "")
+                        ),  # back to uint
+                    }
+
+    # materialize into blob (overwrite any previous timings fully)
+    b["timings"] = []
+    for (ty_int, tag, enter), lut in groups.items():
+        b["timings"].append(
+            {
+                "animation_type": int(ty_int),  # numeric for DRS writer
+                "animation_tag_id": int(tag),
+                "is_enter_mode": int(enter),
+                "variants": [lut[k] for k in sorted(lut.keys())],
+            }
+        )
 
     _write_blob(col, b)
 
@@ -1391,6 +1686,11 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         if original_frame_length is None:
             # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
             original_frame_length = act.frame_range[1] - act.frame_range[0]
+
+        original_fps = act["ska_original_fps"]
+        if original_fps:
+            # Set the scene fps to the original fps of the animation
+            context.scene.render.fps = int(original_fps)
 
         # Reset any existing playback state
         _playback["end"] = None
@@ -1628,11 +1928,67 @@ def _draw_variant_editor(
             )
             op2.mode_key_index = mk_index
 
-        # ... existing cast handling and Play button ...
         if not is_sle and not is_cast:
             pr = det.row(align=True)
             op = pr.operator("drs.animset_play_range", text="Play", icon="PLAY")
             op.mode_key_index, op.start, op.end = mk_index, float(v.start), float(v.end)
+
+    spec = _visjob_timing_spec(vj, mk.role or "")
+    if spec and 0 <= mk.active_variant < len(mk.variants):
+        v = mk.variants[mk.active_variant]
+        tbox = box.box()
+        tbox.label(text="Timing")
+        tbox.use_property_split = True
+        tbox.use_property_decorate = False
+
+        # ensure timing exists if user switched action late
+        if not v.timing_has:
+            v.timing_has = True
+            v.timing_type = str(spec["animation_type"])
+            v.timing_tag_id = int(spec["tag_id"])
+            v.timing_is_enter = int(spec["is_enter_mode"])
+            v.timing_variant_index = mk.active_variant
+            fps = bpy.context.scene.render.fps if bpy.context.scene else 30
+            act_name = (v.file or "").strip()
+            frames_ms = (
+                int(
+                    round(
+                        (_action_span_frames(bpy.data.actions.get(act_name)) / fps)
+                        * 1000.0
+                    )
+                )
+                if act_name and act_name != "NONE"
+                else 0
+            )
+            v.timing_resolve_ms = frames_ms
+            v.timing_cast_ms = int(round(float(mk.cast_to_resolve) * frames_ms))
+            v.timing_dir = list(getattr(v, "marker_dir", (0.0, 0.0, 1.0)))
+            v.timing_marker_id = str(_new_uint10())  # string
+
+        # read-only fields
+        row = tbox.row()
+        row.enabled = False
+        row.prop(v, "timing_type", text="Type")
+        row = tbox.row()
+        row.enabled = False
+        row.prop(v, "timing_tag_id", text="Tag ID")
+        row = tbox.row()
+        row.enabled = False
+        row.prop(v, "timing_is_enter", text="Is Enter Mode")
+        row = tbox.row()
+        row.enabled = False
+        row.prop(v, "timing_variant_index", text="VariantIndex")
+        row = tbox.row()
+        row.enabled = False
+        row.prop(v, "timing_cast_ms", text="Cast (ms)")
+        row = tbox.row()
+        row.enabled = False
+        row.prop(v, "timing_resolve_ms", text="Duration (ms)")
+        row = tbox.row()
+        row.enabled = False
+        row.prop(v, "timing_marker_id", text="MarkerID")
+        # editable direction
+        tbox.prop(v, "timing_dir", text="Direction")
 
 
 class DRS_UL_Variants(bpy.types.UIList):

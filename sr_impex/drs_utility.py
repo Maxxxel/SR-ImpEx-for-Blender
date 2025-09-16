@@ -241,6 +241,149 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
     return blob
 
 
+# --- AnimationTimings <-> Blob ----------------------------------------------
+
+
+def _timing_direction_to_list(tdir) -> list[float]:
+    try:
+        return [float(tdir.x), float(tdir.y), float(tdir.z)]
+    except Exception:
+        return [0.0, 0.0, 0.0]
+
+
+def animtimings_to_blob(anim_timings) -> list[dict]:
+    """
+    Convert drs_definitions.AnimationTimings into a compact, deduped blob list.
+
+    Schema we emit:
+    [
+      {
+        "animation_type": int,
+        "animation_tag_id": int,
+        "is_enter_mode": int,
+        "variants": [
+           {
+             "variant_index": int,
+             "weight": int,
+             "cast_ms": int,
+             "resolve_ms": int,
+             "direction": [x,y,z],
+             "animation_marker_id": int
+           },
+           ...
+        ]
+      },
+      ...
+    ]
+    """
+    out = []
+    if not anim_timings:
+        return out
+
+    for at in getattr(anim_timings, "animation_timings", []) or []:
+        entry = {
+            "animation_type": int(getattr(at, "animation_type", 0) or 0),
+            "animation_tag_id": int(getattr(at, "animation_tag_id", 0) or 0),
+            "is_enter_mode": int(getattr(at, "is_enter_mode_animation", 0) or 0),
+            "variants": [],
+        }
+
+        for var in getattr(at, "timing_variants", []) or []:
+            v_idx = int(getattr(var, "variant_index", 0) or 0)
+            w = int(getattr(var, "weight", 100) or 100)
+
+            # Deduplicate timings inside the variant (files often repeat n×n)
+            seen = set()
+            picked = None
+            for t in getattr(var, "timings", []) or []:
+                sig = (
+                    int(getattr(t, "cast_ms", 0) or 0),
+                    int(getattr(t, "cast_resolve_ms", 0) or 0),
+                    int(getattr(t, "animation_marker_id", 0) or 0),
+                    tuple(_timing_direction_to_list(getattr(t, "direction", None))),
+                )
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                picked = t
+                break
+
+            if picked is None:
+                # No timing data; still emit a stub so the UI can create it later
+                entry["variants"].append(
+                    {
+                        "variant_index": v_idx,
+                        "weight": w,
+                        "cast_ms": 0,
+                        "resolve_ms": 0,
+                        "direction": [0.0, 0.0, 0.0],
+                        "animation_marker_id": 0,
+                    }
+                )
+            else:
+                entry["variants"].append(
+                    {
+                        "variant_index": v_idx,
+                        "weight": w,
+                        "cast_ms": int(getattr(picked, "cast_ms", 0) or 0),
+                        "resolve_ms": int(getattr(picked, "resolve_ms", 0) or 0),
+                        "direction": _timing_direction_to_list(
+                            getattr(picked, "direction", None)
+                        ),
+                        "animation_marker_id": int(
+                            getattr(picked, "animation_marker_id", 0) or 0
+                        ),
+                    }
+                )
+
+        out.append(entry)
+
+    return out
+
+
+def blob_to_animationtimings(blob) -> "AnimationTimings":
+    from .drs_definitions import (
+        AnimationTimings,
+        AnimationTiming,
+        TimingVariant,
+        Timing,
+    )  # reuse your defs
+
+    at_root = AnimationTimings()
+    at_root.version = 4
+    at_root.animation_timings = []
+    for group in blob.get("timings") or []:
+        at = AnimationTiming()
+        at.animation_type = int(group.get("animation_type", 0) or 0)
+        at.animation_tag_id = int(group.get("animation_tag_id", 0) or 0)
+        at.is_enter_mode_animation = int(group.get("is_enter_mode", 0) or 0)
+        at.timing_variants = []
+        for v in group.get("variants") or []:
+            tv = TimingVariant()
+            tv.weight = int(v.get("weight", 100) or 100)
+            tv.variant_index = int(v.get("variant_index", 0) or 0)
+            # single unique Timing
+            t = Timing()
+            t.cast_ms = int(v.get("cast_ms", 0) or 0)
+            t.cast_resolve_ms = int(v.get("resolve_ms", 0) or 0)
+            t.animation_marker_id = int(v.get("animation_marker_id", 0) or 0)
+            dx, dy, dz = v.get("direction") or [0.0, 0.0, 0.0]
+            t.direction.x, t.direction.y, t.direction.z = (
+                float(dx),
+                float(dy),
+                float(dz),
+            )
+            tv.timings = [t]
+            tv.timing_count = 1
+            at.timing_variants.append(tv)
+        at.variant_count = len(at.timing_variants)
+        at_root.animation_timings.append(at)
+
+    at_root.animation_timing_count = len(at_root.animation_timings)
+    # keep your StructV3 as-is; no change needed
+    return at_root
+
+
 def persist_animset_blob_on_collection(
     source_collection: bpy.types.Collection, drs_file: "DRS"
 ) -> dict | None:
@@ -254,6 +397,13 @@ def persist_animset_blob_on_collection(
     if anim is None:
         return None
     blob = animset_to_blob(anim)
+    try:
+        if hasattr(drs_file, "animation_timings") and drs_file.animation_timings:
+            blob["timings"] = animtimings_to_blob(drs_file.animation_timings)
+        else:
+            blob["timings"] = []
+    except Exception:
+        blob.setdefault("timings", [])
     source_collection[ANIM_BLOB_KEY] = json.dumps(
         blob, separators=(",", ":"), ensure_ascii=False
     )
@@ -3959,6 +4109,54 @@ def create_animation_set(model_name: str) -> AnimationSet:
     return anim
 
 
+def create_animation_timings() -> Optional[AnimationTimings]:
+    """
+    Build AnimationTimings for export from the AnimationSetJSON blob.
+    Returns None if no timings are present so the caller can skip writing.
+    """
+
+    # -- locate the active top-level DRSModel_* collection ------------
+    def _active_top_drsmodel() -> bpy.types.Collection | None:
+        alc = (
+            bpy.context.view_layer.active_layer_collection.collection
+            if bpy.context and bpy.context.view_layer
+            else None
+        )
+        if not isinstance(alc, bpy.types.Collection):
+            return None
+        if not alc.name.startswith("DRSModel_"):
+            return None
+        for top in bpy.context.scene.collection.children:
+            if top == alc:
+                return alc
+        return None
+
+    # -- read the JSON blob from the collection -----------------------
+    def _read_blob(col: bpy.types.Collection) -> dict:
+        data = col.get(ANIM_BLOB_KEY)
+        if not data:
+            return {}
+        try:
+            b = json.loads(data)
+            # timings lives alongside mode_keys/marker_sets in this blob
+            b.setdefault("timings", [])
+            return b
+        except Exception:
+            return {}
+
+    col = _active_top_drsmodel()
+    if not col:
+        return None
+
+    blob = _read_blob(col)
+    timings_list = blob.get("timings") or []
+    if not timings_list:
+        return None
+
+    # Use the existing helper to map blob -> AnimationTimings
+    return blob_to_animationtimings({"timings": timings_list})
+
+
 def create_bone_map(
     armature_object: bpy.types.Object,
 ) -> Dict[str, Dict[str, Optional[int]]]:
@@ -4174,7 +4372,7 @@ def save_drs(
             new_drs_file.push_node_infos("AnimationSet", new_drs_file.animation_set)
         elif node == "AnimationTimings":
             # Empty Set and use external EntityEditor
-            new_drs_file.animation_timings = AnimationTimings()
+            new_drs_file.animation_timings = create_animation_timings()
             if new_drs_file.animation_timings is None:
                 logger.log(
                     "Failed to create AnimationTimings.",

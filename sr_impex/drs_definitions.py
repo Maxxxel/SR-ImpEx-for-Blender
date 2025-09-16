@@ -178,7 +178,7 @@ class RootNode:
     identifier: int = 0
     unknown: int = 0
     length: int = field(default=9, init=False)
-    name: str = "root name"
+    name: str = "root node"
 
     def read(self, file: BinaryIO) -> "RootNode":
         self.identifier, self.unknown, self.length = unpack("iii", file.read(12))
@@ -2211,29 +2211,23 @@ class AnimationSet:
 class Timing:
     cast_ms: int = 0  # Int
     resolve_ms: int = 0  # Int
-    uk_1: float = 0  # Float
-    uk_2: float = 0  # Float
-    uk_3: float = 0  # Float
-    animation_marker_id: int = 0  # Int
+    direction: Vector = Vector((0.0, 0.0, 1.0))  # Vector
+    animation_marker_id: int = 0  # UInt
 
     def read(self, file: BinaryIO) -> "Timing":
         """Reads the Timing from the buffer"""
         self.cast_ms = unpack("i", file.read(4))[0]
         self.resolve_ms = unpack("i", file.read(4))[0]
-        self.uk_1 = unpack("f", file.read(4))[0]
-        self.uk_2 = unpack("f", file.read(4))[0]
-        self.uk_3 = unpack("f", file.read(4))[0]
-        self.animation_marker_id = unpack("i", file.read(4))[0]
+        self.direction = Vector(unpack("fff", file.read(12)))
+        self.animation_marker_id = unpack("I", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> "Timing":
         """Writes the Timing to the buffer"""
         file.write(pack("i", self.cast_ms))
         file.write(pack("i", self.resolve_ms))
-        file.write(pack("f", self.uk_1))
-        file.write(pack("f", self.uk_2))
-        file.write(pack("f", self.uk_3))
-        file.write(pack("i", self.animation_marker_id))
+        file.write(pack("fff", *self.direction))
+        file.write(pack("I", self.animation_marker_id))
         return self
 
     def size(self) -> int:

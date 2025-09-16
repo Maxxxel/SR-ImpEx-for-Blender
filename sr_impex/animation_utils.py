@@ -286,6 +286,7 @@ def import_ska_animation(
     track = arm_obj.animation_data.nla_tracks.new()
     strip = track.strips.new(action.name, 0, action)
     strip.repeat = ska_file.repeat
+
     track.name = action.name
     # Save Original Duration in the Action
     action["ska_original_duration"] = duration

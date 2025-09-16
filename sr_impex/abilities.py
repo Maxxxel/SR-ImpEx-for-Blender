@@ -102,7 +102,7 @@ situational_abilities: Dict[str, Dict[str, Any]] = {
                 "animation_type": "CastResolve",
                 "tag_id": 0,
                 "is_enter_mode": 0,
-                "links_to_roles": ["Cast"],
+                "links_to_roles": ["CastGround"],
             }
         ],
     },
@@ -119,8 +119,8 @@ situational_abilities: Dict[str, Dict[str, Any]] = {
                 "animation_type": "CastResolve",
                 "tag_id": 0,
                 "is_enter_mode": 0,
-                "links_to_roles": ["Cast"],
-            }
+                "links_to_roles": ["CastGround"],
+            },
         ],
     },
     "WormMovement": {
