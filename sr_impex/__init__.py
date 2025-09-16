@@ -6,12 +6,6 @@ from os.path import dirname, realpath
 import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
-from .sr_impex_socket import (
-    DRS_PT_SocketPanel,
-    StartSocketSyncOperator,
-    StopSocketSyncOperator,
-    send_path_to_gui,
-)
 from .drs_utility import (
     load_drs,
     save_drs,
@@ -23,13 +17,14 @@ from .ska_utility import export_ska, get_actions
 from . import addon_updater_ops
 from . import locator_editor
 from . import animation_set_editor
+from . import material_flow_editor
 
 bl_info = {
     "name": "SR-ImpEx",
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 4, 0),
-    "version": (3, 1, 0),
+    "version": (3, 2, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -70,12 +65,11 @@ def _attach_menus_idempotent():
     # Remove old callbacks if they exist (safe if they don't)
     try:
         bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         pass
     try:
         bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
-    # pylint: disable=broad-exception-caught
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         pass
     # Append once
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
@@ -87,7 +81,7 @@ def _detach_menus_safely():
     global _menus_attached
     try:
         bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         pass
     try:
         bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
@@ -136,8 +130,7 @@ class MyAddonPreferences(bpy.types.AddonPreferences):
     )  # type: ignore
 
     def draw(self, context):
-        layout = self.layout
-        # Create a 'Check for Update' button
+        layout = self.layout  # pylint: disable=unused-variable
         addon_updater_ops.check_for_update_background()
         addon_updater_ops.update_settings_ui(self, context)
         addon_updater_ops.update_notice_box_ui(self, context)
@@ -179,22 +172,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
     )  # type: ignore
     import_animation: BoolProperty(
         name="Import Animation", description="Import animation", default=True
-    )  # type: ignore
-    import_animation_type: EnumProperty(
-        name="Type",
-        description="Select the animation type to import",
-        items=[
-            ("FRAMES", "Frames", "Import animation in frames"),
-            ("SECONDS", "Seconds", "Import animation in seconds"),
-        ],
-        default="SECONDS",
-    )  # type: ignore
-    import_animation_fps: IntProperty(
-        name="Animation FPS",
-        description="FPS for the imported animation",
-        default=30,
-        min=1,
-        max=100,
     )  # type: ignore
     smooth_animation: BoolProperty(
         name="Import Animation Smoothing",
@@ -254,8 +231,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         # Create an Animation Section
         layout.label(text="Animation Settings", icon="ANIM_DATA")
         layout.prop(self, "import_animation")
-        layout.prop(self, "import_animation_type")
-        layout.prop(self, "import_animation_fps")
         layout.prop(self, "smooth_animation")
         layout.prop(self, "import_ik_atlas")
         # Add a separator
@@ -289,8 +264,6 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         )
         keywords["import_collision_shape"] = self.import_collision_shape
         keywords["import_animation"] = self.import_animation
-        keywords["import_animation_type"] = self.import_animation_type
-        keywords["import_animation_fps"] = self.import_animation_fps
         keywords["smooth_animation"] = self.smooth_animation
         keywords["import_ik_atlas"] = self.import_ik_atlas
         keywords["import_modules"] = self.import_modules
@@ -311,12 +284,10 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             keywords.pop("import_debris")
             keywords.pop("import_construction")
             load_drs(context, **keywords)
-            send_path_to_gui(self.filepath)
             return {"FINISHED"}
         elif self.filepath.endswith(".bmg"):
             keywords.pop("import_modules")
             load_bmg(context, **keywords)
-            send_path_to_gui(self.filepath)
             return {"FINISHED"}
         else:
             self.report({"ERROR"}, "Unsupported file type")
@@ -414,30 +385,30 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 
         save_drs(context, **keywords)
 
-        if self.model_type in {"AnimatedObjectNoCollision", "AnimatedObjectCollision"}:
-            # Get all Action
-            all_actions = get_actions()
-            export_folder = os.path.dirname(self.filepath)
+        # if self.model_type in {"AnimatedObjectNoCollision", "AnimatedObjectCollision"}:
+        #     # Get all Action
+        #     all_actions = get_actions()
+        #     export_folder = os.path.dirname(self.filepath)
 
-            # We only allow actions with the same name as the export animation name or _idle
-            nbr_actions = len(all_actions)
-            if nbr_actions == 1:
-                export_ska(
-                    context, os.path.join(export_folder, all_actions[0]), all_actions[0]
-                )
-            else:
-                for action_name in all_actions:
-                    action_name_without_ska = action_name.replace(".ska", "")
-                    if (
-                        action_name_without_ska == model_name
-                        or action_name_without_ska.find("_idle") != -1
-                    ):
+        #     # We only allow actions with the same name as the export animation name or _idle
+        #     nbr_actions = len(all_actions)
+        #     if nbr_actions == 1:
+        #         export_ska(
+        #             context, os.path.join(export_folder, all_actions[0]), all_actions[0]
+        #         )
+        #     else:
+        #         for action_name in all_actions:
+        #             action_name_without_ska = action_name.replace(".ska", "")
+        #             if (
+        #                 action_name_without_ska == model_name
+        #                 or action_name_without_ska.find("_idle") != -1
+        #             ):
 
-                        export_ska(
-                            context,
-                            os.path.join(export_folder, action_name),
-                            action_name,
-                        )
+        #                 export_ska(
+        #                     context,
+        #                     os.path.join(export_folder, action_name),
+        #                     action_name,
+        #                 )
 
         # Purge unused data blocks
         bpy.ops.outliner.orphans_purge(do_recursive=True)
@@ -633,11 +604,9 @@ def register():
     bpy.utils.register_class(ShowMessagesOperator)
     _attach_menus_idempotent()
     bpy.utils.register_class(MyAddonPreferences)
-    bpy.utils.register_class(DRS_PT_SocketPanel)
-    bpy.utils.register_class(StartSocketSyncOperator)
-    bpy.utils.register_class(StopSocketSyncOperator)
     # bpy.utils.register_class(DRS_OT_debug_obb_tree)
     locator_editor.register()
+    material_flow_editor.register()
     animation_set_editor.register()
 
 
@@ -650,9 +619,7 @@ def unregister():
     bpy.utils.unregister_class(ShowMessagesOperator)
     _detach_menus_safely()
     bpy.utils.unregister_class(MyAddonPreferences)
-    bpy.utils.unregister_class(DRS_PT_SocketPanel)
-    bpy.utils.unregister_class(StartSocketSyncOperator)
-    bpy.utils.unregister_class(StopSocketSyncOperator)
     # bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
     locator_editor.unregister()
+    material_flow_editor.unregister()
     animation_set_editor.unregister()

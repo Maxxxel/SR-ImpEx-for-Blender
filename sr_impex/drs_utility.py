@@ -11,6 +11,7 @@ from collections import defaultdict
 from typing import Tuple, List, Dict, Optional, Union
 import xml.etree.ElementTree as ET
 from mathutils import Matrix, Vector
+from mathutils.kdtree import KDTree
 import bpy
 from bmesh.ops import (
     triangulate as tri,
@@ -73,6 +74,8 @@ from .drs_definitions import (
     CGeoSphere,
     Matrix3x3,
     CDrwLocatorList,
+    AnimationMarkerSet,
+    AnimationMarker,
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -200,6 +203,7 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
             {
                 "vis_job": int(getattr(k, "vis_job", 0) or 0),
                 "variants": variants,
+                "special_mode": int(getattr(k, "special_mode", 0) or 0),
             }
         )
 
@@ -231,7 +235,6 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
         blob["marker_sets"].append(
             {
                 "anim_id": int(getattr(ms, "anim_id", 0) or 0),
-                # In the file this is 'name' (string) — UI uses 'file' for the action name.
                 "file": (getattr(ms, "name", "") or ""),
                 "animation_marker_id": am_id_str,
                 "markers": [marker],
@@ -239,6 +242,149 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
         )
 
     return blob
+
+
+# --- AnimationTimings <-> Blob ----------------------------------------------
+
+
+def _timing_direction_to_list(tdir) -> list[float]:
+    try:
+        return [float(tdir.x), float(tdir.y), float(tdir.z)]
+    except Exception:
+        return [0.0, 0.0, 0.0]
+
+
+def animtimings_to_blob(anim_timings) -> list[dict]:
+    """
+    Convert drs_definitions.AnimationTimings into a compact, deduped blob list.
+
+    Schema we emit:
+    [
+      {
+        "animation_type": int,
+        "animation_tag_id": int,
+        "is_enter_mode": int,
+        "variants": [
+           {
+             "variant_index": int,
+             "weight": int,
+             "cast_ms": int,
+             "resolve_ms": int,
+             "direction": [x,y,z],
+             "animation_marker_id": int
+           },
+           ...
+        ]
+      },
+      ...
+    ]
+    """
+    out = []
+    if not anim_timings:
+        return out
+
+    for at in getattr(anim_timings, "animation_timings", []) or []:
+        entry = {
+            "animation_type": int(getattr(at, "animation_type", 0) or 0),
+            "animation_tag_id": int(getattr(at, "animation_tag_id", 0) or 0),
+            "is_enter_mode": int(getattr(at, "is_enter_mode_animation", 0) or 0),
+            "variants": [],
+        }
+
+        for var in getattr(at, "timing_variants", []) or []:
+            v_idx = int(getattr(var, "variant_index", 0) or 0)
+            w = int(getattr(var, "weight", 100) or 100)
+
+            # Deduplicate timings inside the variant (files often repeat n×n)
+            seen = set()
+            picked = None
+            for t in getattr(var, "timings", []) or []:
+                sig = (
+                    int(getattr(t, "cast_ms", 0) or 0),
+                    int(getattr(t, "resolve_ms", 0) or 0),
+                    int(getattr(t, "animation_marker_id", 0) or 0),
+                    tuple(_timing_direction_to_list(getattr(t, "direction", None))),
+                )
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                picked = t
+                break
+
+            if picked is None:
+                # No timing data; still emit a stub so the UI can create it later
+                entry["variants"].append(
+                    {
+                        "variant_index": v_idx,
+                        "weight": w,
+                        "cast_ms": 0,
+                        "resolve_ms": 0,
+                        "direction": [0.0, 0.0, 0.0],
+                        "animation_marker_id": 0,
+                    }
+                )
+            else:
+                entry["variants"].append(
+                    {
+                        "variant_index": v_idx,
+                        "weight": w,
+                        "cast_ms": int(getattr(picked, "cast_ms", 0) or 0),
+                        "resolve_ms": int(getattr(picked, "resolve_ms", 0) or 0),
+                        "direction": _timing_direction_to_list(
+                            getattr(picked, "direction", None)
+                        ),
+                        "animation_marker_id": int(
+                            getattr(picked, "animation_marker_id", 0) or 0
+                        ),
+                    }
+                )
+
+        out.append(entry)
+
+    return out
+
+
+def blob_to_animationtimings(blob) -> "AnimationTimings":
+    from .drs_definitions import (
+        AnimationTimings,
+        AnimationTiming,
+        TimingVariant,
+        Timing,
+    )  # reuse your defs
+
+    at_root = AnimationTimings()
+    at_root.version = 4
+    at_root.animation_timings = []
+    for group in blob.get("timings") or []:
+        at = AnimationTiming()
+        at.animation_type = int(group.get("animation_type", 0) or 0)
+        at.animation_tag_id = int(group.get("animation_tag_id", 0) or 0)
+        at.is_enter_mode_animation = int(group.get("is_enter_mode", 0) or 0)
+        at.timing_variants = []
+        for v in group.get("variants") or []:
+            tv = TimingVariant()
+            tv.weight = int(v.get("weight", 100) or 100)
+            tv.variant_index = int(v.get("variant_index", 0) or 0)
+            # single unique Timing
+            t = Timing()
+            t.cast_ms = int(v.get("cast_ms", 0) or 0)
+            t.resolve_ms = int(v.get("resolve_ms", 0) or 0)
+            t.animation_marker_id = int(v.get("animation_marker_id", 0) or 0)
+            dx, dy, dz = v.get("direction") or [0.0, 0.0, 0.0]
+            t.direction.x, t.direction.y, t.direction.z = (
+                float(dx),
+                float(dy),
+                float(dz),
+            )
+            tv.timings = [t]
+            tv.timing_count = 1
+            at.timing_variants.append(tv)
+        at.variant_count = len(at.timing_variants)
+        at_root.animation_timings.append(at)
+
+    at_root.animation_timing_count = len(at_root.animation_timings)
+    # keep your StructV3 as-is; no change needed
+    return at_root
 
 
 def persist_animset_blob_on_collection(
@@ -254,6 +400,13 @@ def persist_animset_blob_on_collection(
     if anim is None:
         return None
     blob = animset_to_blob(anim)
+    try:
+        if hasattr(drs_file, "animation_timings") and drs_file.animation_timings:
+            blob["timings"] = animtimings_to_blob(drs_file.animation_timings)
+        else:
+            blob["timings"] = []
+    except Exception:
+        blob.setdefault("timings", [])
     source_collection[ANIM_BLOB_KEY] = json.dumps(
         blob, separators=(",", ":"), ensure_ascii=False
     )
@@ -370,7 +523,7 @@ def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
 
         unified_mesh.verts.ensure_lookup_table()
         unified_mesh.verts.index_update()
-        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=0.0001)
+        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=1e-6)
 
         if len(unified_mesh.verts) > 32767:
             logger.log(
@@ -632,9 +785,7 @@ def load_animated_bms_module(
     file_name: str,
     dir_name: str,
     parent_collection: bpy.types.Collection,
-    import_animation_fps,
     smooth_animation,
-    import_animation_type,
 ):
     # if filename has .module extension replace it with bms
     if file_name.endswith(".module"):
@@ -686,9 +837,9 @@ def load_animated_bms_module(
                             armature_object,
                             bone_list,
                             variant.file,
-                            import_animation_fps,
                             smooth_animation,
-                            import_animation_type,
+                            file_name,
+                            map_collection=parent_collection,
                         )
 
         return armature_object
@@ -699,9 +850,7 @@ def load_turret_animation(
     dir_name: str,
     armature_object: bpy.types.Object,
     bone_list: List[DRSBone],
-    import_animation_fps,
     smooth_animation,
-    import_animation_type,
 ):
     ska_file: SKA = SKA().read(os.path.join(dir_name, file_name))
     # Create the Animation
@@ -710,9 +859,17 @@ def load_turret_animation(
         armature_object,
         bone_list,
         file_name,
-        import_animation_fps,
         smooth_animation,
-        import_animation_type,
+        file_name,
+        map_collection=(
+            None
+            if armature_object is None
+            else (
+                armature_object.users_collection[0]
+                if armature_object.users_collection
+                else None
+            )
+        ),
     )
 
 
@@ -722,9 +879,7 @@ def process_slocator_import(
     bone_list: List[DRSBone],
     armature_object: bpy.types.Object,
     dir_name: str,
-    import_animation_fps,
     smooth_animation,
-    import_animation_type,
 ):
     locator_object: Union[bpy.types.Object, None] = None
 
@@ -753,9 +908,7 @@ def process_slocator_import(
             slocator.file_name,
             dir_name,
             source_collection,
-            import_animation_fps,
             smooth_animation,
-            import_animation_type,
         )
     elif slocator.class_type == "Turret" and slocator.file_name_length > 0:
         load_turret_animation(
@@ -763,10 +916,9 @@ def process_slocator_import(
             dir_name,
             armature_object,
             bone_list,
-            import_animation_fps,
             smooth_animation,
-            import_animation_type,
         )
+        return
     else:
         # We sometimes have .fxb files -> Effects, we ignore them for now
         # Create visual sphere for locator
@@ -1393,6 +1545,50 @@ def create_mesh_object(
     )
     mesh_data.materials.append(material)
 
+    # after you've created `mesh_object` for mesh index `mesh_index`…
+    # Seed Material flags + Flow custom props on the object so users can edit them.
+    try:
+        bf_mesh = drs_file.cdsp_mesh_file.meshes[mesh_index]
+        # bool_parameter
+        if hasattr(mesh_object, "drs_material") and mesh_object.drs_material:
+            mesh_object.drs_material.bool_parameter = int(bf_mesh.bool_parameter)
+            # ensure bits reflect the value
+            # (update callback in the PG expands bits from the raw int)
+        # flow
+        if hasattr(mesh_object, "drs_flow") and mesh_object.drs_flow:
+            f = bf_mesh.flow
+            # flow.length==4 indicates it is present in -86061050 branch
+            use = int(getattr(f, "length", 0) or 0) == 4
+            mesh_object.drs_flow.use_flow = use
+            if use:
+                mesh_object.drs_flow.max_flow_speed = (
+                    f.max_flow_speed.x,
+                    f.max_flow_speed.y,
+                    f.max_flow_speed.z,
+                    f.max_flow_speed.w,
+                )
+                mesh_object.drs_flow.min_flow_speed = (
+                    f.min_flow_speed.x,
+                    f.min_flow_speed.y,
+                    f.min_flow_speed.z,
+                    f.min_flow_speed.w,
+                )
+                mesh_object.drs_flow.flow_speed_change = (
+                    f.flow_speed_change.x,
+                    f.flow_speed_change.y,
+                    f.flow_speed_change.z,
+                    f.flow_speed_change.w,
+                )
+                mesh_object.drs_flow.flow_scale = (
+                    f.flow_scale.x,
+                    f.flow_scale.y,
+                    f.flow_scale.z,
+                    f.flow_scale.w,
+                )
+    except Exception:
+        # keep import robust if the PGs are not available for some reason
+        pass
+
     return mesh_object, mesh_data
 
 
@@ -1875,8 +2071,6 @@ def load_drs(
     apply_transform=True,
     import_collision_shape=False,
     import_animation=True,
-    import_animation_type="FRAMES",
-    import_animation_fps=30,
     smooth_animation=True,
     import_ik_atlas=False,
     import_modules=True,
@@ -1885,12 +2079,10 @@ def load_drs(
     limit_obb_depth=5,
     import_bb=False,
 ):
-
     start_time = time.time()
     base_name = os.path.basename(filepath).split(".")[0]
     dir_name = os.path.dirname(filepath)
     drs_file: DRS = DRS().read(filepath)
-    bpy.context.scene.render.fps = import_animation_fps
 
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
@@ -1931,9 +2123,9 @@ def load_drs(
                         armature_object,
                         bone_list,
                         variant.file,
-                        import_animation_fps,
                         smooth_animation,
-                        import_animation_type,
+                        filepath,
+                        map_collection=source_collection,
                     )
 
     if (
@@ -1954,9 +2146,7 @@ def load_drs(
                 bone_list,
                 armature_object,
                 dir_name,
-                import_animation_fps,
                 smooth_animation,
-                import_animation_type,
             )
         source_collection.children.link(slocator_collection)
 
@@ -1979,8 +2169,7 @@ def load_drs(
         import_bounding_box(drs_file.cdsp_mesh_file, debug_collection)
 
     # Apply the Transformations to the Source Collection
-    if apply_transform:
-        parent_under_game_axes(source_collection)
+    parent_under_game_axes(source_collection, apply_transform)
 
     # Print the Time Measurement
     logger.log(
@@ -2000,9 +2189,7 @@ def import_state_based_mesh_set(
     dir_name: str,
     bmg_file: DRS,
     import_animation: bool,
-    animation_type: str,
     smooth_animation,
-    fps: int,
     import_debris: bool,
     import_collision_shape: bool,
     import_ik_atlas: bool,
@@ -2095,9 +2282,9 @@ def import_state_based_mesh_set(
                                 armature_object,
                                 bone_list,
                                 variant.file,
-                                fps,
                                 smooth_animation,
-                                animation_type,
+                                base_name,
+                                map_collection=source_collection,
                             )
 
             if (
@@ -2209,8 +2396,6 @@ def load_bmg(
     apply_transform=True,
     import_collision_shape=False,
     import_animation=True,
-    import_animation_type="FRAMES",
-    import_animation_fps=30,
     smooth_animation=True,
     import_ik_atlas=False,
     import_debris=True,
@@ -2219,7 +2404,6 @@ def load_bmg(
     start_time = time.time()
     dir_name = os.path.dirname(filepath)
     base_name = os.path.basename(filepath).split(".")[0]
-    bpy.context.scene.render.fps = import_animation_fps
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
     )
@@ -2361,9 +2545,7 @@ def load_bmg(
                         construction_dir,
                         bms_file,
                         import_animation,
-                        import_animation_type,
                         smooth_animation,
-                        import_animation_fps,
                         import_debris,
                         import_collision_shape,
                         import_ik_atlas,
@@ -2427,14 +2609,13 @@ def load_bmg(
                         armature_object,
                         bone_list,
                         variant.file,
-                        import_animation_fps,
                         smooth_animation,
-                        import_animation_type,
+                        filepath,
+                        map_collection=source_collection,
                     )
 
     # Apply the Transformations to the Source Collection
-    if apply_transform:
-        parent_under_game_axes(source_collection)
+    parent_under_game_axes(source_collection, apply_transform)
 
     # Print the Time Measurement
     logger.log(
@@ -2586,7 +2767,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
 
         # Weld tiny duplicates after the transform
         bm_out.verts.ensure_lookup_table()
-        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-5)
+        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-6)
 
         # Bake to a new Mesh
         unified = bpy.data.meshes.new("unified_mesh")
@@ -3234,21 +3415,23 @@ def create_mesh(
                     refraction_map = node.inputs[7]
                 break
 
-    if flu_map is None or flu_map.is_linked is False:
-        # -86061055: no MaterialStuff, no Fluid, no String, no LOD
-        new_mesh.material_parameters = -86061055  # Hex: 0xFADED001
-    else:
-        # -86061050: All Materials
-        new_mesh.material_parameters = -86061050  # Hex: 0xFADED006
-        new_mesh.material_stuff = 0  # Added for Hex 0xFADED004+
-        # Level of Detail
-        new_mesh.level_of_detail = LevelOfDetail()  # Added for Hex 0xFADED002+
-        # Empty String
-        new_mesh.empty_string = EmptyString()  # Added for Hex 0xFADED003+
-        # Flow
-        new_mesh.flow = (
-            Flow()
-        )  # Maybe later we can add some flow data in blender. Added for Hex 0xFADED006
+    # if flu_map is None or flu_map.is_linked is False:
+    # new_mesh.material_parameters = -86061055
+    # -86061055: Bool, Textures, Refraction, Materials
+    # -86061054: Bool, Textures, Refraction, Materials, LOD
+    # -86061053: Bool, Textures, Refraction, Materials, LOD, Empty String
+    # -86061052: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff
+    # -86061051: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff
+    # else:
+    # -86061050: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff, Flow
+    new_mesh.material_parameters = -86061050  # Hex: 0xFADED006
+    new_mesh.material_stuff = 0  # Added for Hex 0xFADED004+
+    # Level of Detail
+    new_mesh.level_of_detail = LevelOfDetail()  # Added for Hex 0xFADED002+
+    # Empty String
+    new_mesh.empty_string = EmptyString()  # Added for Hex 0xFADED003+
+    # Flow
+    new_mesh.flow = Flow()
 
     # Individual Material Parameters depending on the MaterialID:
     new_mesh.bool_parameter = 0
@@ -3288,6 +3471,49 @@ def create_mesh(
 
     # Set the Bool Parameter by a bin -> dec conversion
     new_mesh.bool_parameter = int(str(bool_param_bit_flag), 2)
+    # --- SR override from UI: if the mesh has drs_material set, prefer that value
+    try:
+        mp = getattr(mesh, "drs_material", None)
+        if mp and int(mp.bool_parameter) >= 0:
+            new_mesh.bool_parameter = int(mp.bool_parameter) & 0xFFFFFFFF
+    except Exception:
+        pass
+    new_mesh.materials = Materials()
+
+    # --- SR override Flow from UI (only when enabled)
+    try:
+        fp = getattr(mesh, "drs_flow", None)
+        if fp and bool(fp.use_flow):
+            new_mesh.flow.length = 4
+            # push vectors
+            v = new_mesh.flow
+            # each is Vector4(x,y,z,w)
+            (
+                v.max_flow_speed.x,
+                v.max_flow_speed.y,
+                v.max_flow_speed.z,
+                v.max_flow_speed.w,
+            ) = fp.max_flow_speed
+            (
+                v.min_flow_speed.x,
+                v.min_flow_speed.y,
+                v.min_flow_speed.z,
+                v.min_flow_speed.w,
+            ) = fp.min_flow_speed
+            (
+                v.flow_speed_change.x,
+                v.flow_speed_change.y,
+                v.flow_speed_change.z,
+                v.flow_speed_change.w,
+            ) = fp.flow_speed_change
+            v.flow_scale.x, v.flow_scale.y, v.flow_scale.z, v.flow_scale.w = (
+                fp.flow_scale
+            )
+            # material_parameters path that includes Flow is -86061050 in your writer
+            # (that branch writes 'flow' and the extra material blocks)
+            new_mesh.material_parameters = -86061050
+    except Exception:
+        pass
 
     # Refraction
     refraction = Refraction()
@@ -3580,70 +3806,114 @@ def create_skin_info(
     meshes_collection: bpy.types.Collection,
     bone_map: Dict[str, Dict[str, int]],
 ) -> CSkSkinInfo:
-    """Create a SkinInfo."""
-    skin_info = CSkSkinInfo()
-    skin_info.vertex_data = []
-    skin_info.vertex_count += len(unified_mesh.vertices)
+    """Create CSkSkinInfo by matching world-space vertices to the unified mesh."""
+    TOL_DIGITS = 6  # ~1e-6 (your original rounding)
+    KD_TOL = 1e-5  # tolerant fallback for welded/shifted verts
 
-    unified_hashtable = {}
+    skin_info = CSkSkinInfo()
+    skin_info.vertex_count = len(unified_mesh.vertices)
+
+    # Build coordinate -> index hashtable (fast path). The unified mesh is already in WORLD space.
+    unified_hashtable: dict[tuple[float, float, float], int] = {}
     for v in unified_mesh.vertices:
-        key = tuple(round(coord, 6) for coord in v.co)
-        if key not in unified_hashtable:
-            unified_hashtable[key] = v.index
-        else:
+        key = (
+            round(v.co.x, TOL_DIGITS),
+            round(v.co.y, TOL_DIGITS),
+            round(v.co.z, TOL_DIGITS),
+        )
+        if key in unified_hashtable:
             logger.log(
                 f"Duplicate vertex found in unified mesh: {v.co}", "Error", "ERROR"
             )
+            skin_info.vertex_data = [
+                VertexData(bone_indices=[0, 0, 0, 0], weights=[0.0, 0.0, 0.0, 0.0])
+            ] * skin_info.vertex_count
             return skin_info
+        unified_hashtable[key] = v.index
 
-    vertex_data: List[VertexData] = [None] * len(unified_mesh.vertices)
-    for mesh in meshes_collection.objects:
-        if mesh.type == "MESH":
-            # We need to map the mesh vertex to the unified index
-            for vertex in mesh.data.vertices:
-                key = tuple(round(coord, 6) for coord in vertex.co)
-                if key in unified_hashtable:
-                    index = unified_hashtable[key]
+    # Build KDTree as a robust fallback (handles tiny weld shifts from remove_doubles)
+    kd = KDTree(len(unified_mesh.vertices))
+    for v in unified_mesh.vertices:
+        kd.insert(v.co, v.index)
+    kd.balance()
 
-                    if vertex_data[index] is None:
-                        vertex_data[index] = VertexData(bone_indices=[], weights=[])
+    vertex_data: list[VertexData | None] = [None] * skin_info.vertex_count
+    misses = 0
 
-                    # We need to get all vertex groups from the mesh and map them to the skeleton, we take the bone order from the armature
-                    for vertex_group in vertex.groups:
-                        # bone_index = vertex_group.group
-                        bone_group = vertex_group.group
-                        bone_name: str = mesh.vertex_groups[bone_group].name
-                        bone_data = bone_map.get(bone_name, -1)
-                        if bone_data == -1:
-                            logger.log(
-                                f"Bone {bone_name} not found in bone map for vertex {vertex.index}",
-                                "Error",
-                                "ERROR",
-                            )
-                            continue
-                        bone_index = bone_data["id"]
-                        bone_weight = vertex_group.weight
-                        if bone_index not in vertex_data[index].bone_indices:
-                            vertex_data[index].bone_indices.append(bone_index)
-                            vertex_data[index].weights.append(bone_weight)
-                else:
+    for obj in meshes_collection.objects:
+        if obj.type != "MESH":
+            continue
+        mw = obj.matrix_world.copy()
+        vgroups = obj.vertex_groups
+
+        for v in obj.data.vertices:
+            wco = mw @ v.co
+            key = (
+                round(wco.x, TOL_DIGITS),
+                round(wco.y, TOL_DIGITS),
+                round(wco.z, TOL_DIGITS),
+            )
+
+            idx = unified_hashtable.get(key)
+            if idx is None:
+                # KD fallback
+                _pos, kd_idx, dist = kd.find(wco)
+                if kd_idx is None or dist > KD_TOL:
+                    if misses < 20:  # avoid spam
+                        logger.log(
+                            f"Vertex {v.index} not found in unified mesh (ws: {wco})",
+                            "Warning",
+                            "WARNING",
+                        )
+                    misses += 1
+                    continue
+                idx = kd_idx
+
+            if vertex_data[idx] is None:
+                vertex_data[idx] = VertexData(bone_indices=[], weights=[])
+
+            for g in v.groups:
+                if g.weight <= 0.0:
+                    continue
+                bone_name = vgroups[g.group].name
+                bone_info = bone_map.get(bone_name, -1)
+                if bone_info == -1:
                     logger.log(
-                        f"Vertex {vertex.index} not found in unified mesh: {vertex.co}",
+                        f"Bone {bone_name} not in bone map for vertex {v.index}",
                         "Error",
                         "ERROR",
                     )
                     continue
+                bone_id = bone_info["id"]
+                if bone_id not in vertex_data[idx].bone_indices:
+                    vertex_data[idx].bone_indices.append(bone_id)
+                    vertex_data[idx].weights.append(g.weight)
 
-    # Fill the vertex data with zeros up to 4 bones
-    for vertex in vertex_data:
-        if vertex is None:
+    if misses > 20:
+        logger.log(
+            f"{misses} vertices could not be matched to the unified mesh (after KD fallback).",
+            "Warning",
+            "WARNING",
+        )
+
+    # Normalize to 4 influences per vertex (pad/truncate) — unchanged
+    for i, vd in enumerate(vertex_data):
+        if vd is None:
+            vertex_data[i] = VertexData(
+                bone_indices=[0, 0, 0, 0], weights=[0.0, 0.0, 0.0, 0.0]
+            )
             continue
-        while len(vertex.bone_indices) < 4:
-            vertex.bone_indices.append(0)
-            vertex.weights.append(0.0)
+        if len(vd.weights) > 4:
+            order = sorted(
+                range(len(vd.weights)), key=lambda k: vd.weights[k], reverse=True
+            )[:4]
+            vd.bone_indices = [vd.bone_indices[k] for k in order]
+            vd.weights = [vd.weights[k] for k in order]
+        while len(vd.bone_indices) < 4:
+            vd.bone_indices.append(0)
+            vd.weights.append(0.0)
 
-    skin_info.vertex_data = vertex_data
-
+    skin_info.vertex_data = vertex_data  # type: ignore[assignment]
     return skin_info
 
 
@@ -3763,81 +4033,302 @@ def create_skeleton(
 
 
 def create_animation_set(model_name: str) -> AnimationSet:
-    """Create an AnimationSet."""
-    animation_set = AnimationSet()
-    animation_set.version = 6
-    animation_set.default_run_speed = 4.8
-    animation_set.default_walk_speed = 2.3
-    animation_set.revision = 6
-    animation_set.mode_change_type = 0
-    animation_set.hovering_ground = 0
-    animation_set.fly_bank_scale = 1.0
-    animation_set.fly_accel_scale = 0
-    animation_set.fly_hit_scale = 1.0
-    animation_set.allign_to_terrain = 0
-    animation_set.has_atlas = 1
-    animation_set.atlas_count = 0
-    animation_set.ik_atlases = []  # Not needed here
-    animation_set.subversion = 2
-    animation_set.animation_marker_count = 0  # Not needed here
-    animation_set.animation_marker_sets = []  # Not needed here
-    animation_set.mode_animation_keys = []
+    """
+    Build an AnimationSet for export from the AnimationSetJSON blob.
+    Anything not present in the blob falls back to defaults.
+    """
 
-    # Get all Action
-    all_actions = get_actions()
-    available_action = []
-
-    # We only allow actions with the same name as the export animation name or _idle or if its the only action
-    nbr_actions = len(all_actions)
-    if nbr_actions == 1:
-        available_action.append(all_actions[0])
-    elif nbr_actions > 1:
-        for action_name in all_actions:
-            action_name_without_ska = action_name.replace(".ska", "")
-            if (
-                action_name_without_ska == model_name
-                or action_name_without_ska.find("_idle") != -1
-            ):
-                available_action.append(action_name)
-
-    if len(available_action) == 0:
-        logger.log(
-            "No valid Action found. Please check the Action Names.",
-            "Error",
-            "ERROR",
+    def _active_top_drsmodel() -> bpy.types.Collection | None:
+        alc = (
+            bpy.context.view_layer.active_layer_collection.collection
+            if bpy.context and bpy.context.view_layer
+            else None
         )
-        return animation_set
+        if not isinstance(alc, bpy.types.Collection):
+            return None
+        if not alc.name.startswith("DRSModel_"):
+            return None
+        for top in bpy.context.scene.collection.children:
+            if top == alc:
+                return alc
+        return None
 
-    animation_set.mode_animation_key_count = 1
-    animation_key = ModeAnimationKey()
-    animation_key.type = 6
-    animation_key.length = 11
-    animation_key.file = "Battleforge"
-    animation_key.unknown = 2
-    animation_key.unknown2 = 3
-    animation_key.vis_job = 0
-    animation_key.unknown3 = 3
-    animation_key.unknown4 = 0
-    animation_key.animation_set_variants = []
-    animation_key.variant_count = 0
+    def _read_blob(col: bpy.types.Collection) -> dict:
+        data = col.get(ANIM_BLOB_KEY)
+        if not data:
+            return {}
+        try:
+            b = json.loads(data)
+            if not isinstance(b, dict):
+                return {}
+            # ensure lists exist
+            b.setdefault("mode_keys", [])
+            b.setdefault("marker_sets", [])
+            return b
+        except Exception:  # noqa: BLE001
+            return {}
 
-    for action_name in available_action:
-        # Assure we have .ska at the end of the name
-        if not action_name.endswith(".ska"):
-            action_name += ".ska"
-        animation_key.variant_count += 1
-        variant = AnimationSetVariant()
-        variant.version = 4
-        variant.weight = 100 // len(available_action)
-        variant.start = 0
-        variant.end = 1
-        variant.length = len(action_name)
-        variant.file = action_name
-        animation_key.animation_set_variants.append(variant)
+    # -- defaults compatible with existing exporter ------------------------------------------------
+    anim = AnimationSet()
+    anim.version = 6
+    anim.revision = 6
+    anim.subversion = 2
+    anim.has_atlas = 1
+    anim.atlas_count = 0
+    anim.ik_atlases = []
+    anim.mode_animation_keys = []
+    anim.mode_animation_key_count = 0
 
-    animation_set.mode_animation_keys.append(animation_key)
+    # sensible defaults (these are the same values you previously emitted)
+    anim.default_run_speed = 4.8
+    anim.default_walk_speed = 2.3
+    anim.mode_change_type = 0
+    anim.hovering_ground = 0
+    anim.fly_bank_scale = 1.0
+    anim.fly_accel_scale = 0.0
+    anim.fly_hit_scale = 1.0
+    anim.allign_to_terrain = 0
 
-    return animation_set
+    # ---- try to read blob from the active model --------------------------------------------------
+    col = _active_top_drsmodel()
+    blob = _read_blob(col) if col else {}
+
+    # top-level scalars
+    def _bget(name, default):  # small helper with type coercion
+        val = blob.get(name, default)
+        return val if val is not None else default
+
+    anim.default_run_speed = float(_bget("default_run_speed", anim.default_run_speed))
+    anim.default_walk_speed = float(
+        _bget("default_walk_speed", anim.default_walk_speed)
+    )
+    anim.mode_change_type = int(_bget("mode_change_type", anim.mode_change_type))
+    anim.hovering_ground = int(_bget("hovering_ground", anim.hovering_ground))
+    anim.fly_bank_scale = float(_bget("fly_bank_scale", anim.fly_bank_scale))
+    anim.fly_accel_scale = float(_bget("fly_accel_scale", anim.fly_accel_scale))
+    anim.fly_hit_scale = float(_bget("fly_hit_scale", anim.fly_hit_scale))
+    anim.allign_to_terrain = int(_bget("align_to_terrain", anim.allign_to_terrain))
+
+    # ---- Mode Keys ------------------------------------------------------------------------------
+    mode_keys = blob.get("mode_keys", []) or []
+    for mkd in mode_keys:
+        try:
+            mk = ModeAnimationKey()
+            # keep legacy header values that the writer expects
+            mk.type = 6
+            mk.length = 11
+            mk.file = "Battleforge"
+            mk.unknown = 2
+            mk.unknown2 = 3
+            mk.unknown3 = 3
+
+            mk.vis_job = int(mkd.get("vis_job", 0) or 0)
+            mk.special_mode = int(mkd.get("special_mode", 0) or 0)
+
+            mk.animation_set_variants = []
+            mk.variant_count = 0
+
+            for vd in mkd.get("variants", []) or []:
+                # skip empty variants
+                f = (vd.get("file") or "").strip()
+                if not f or f == "NONE":
+                    continue
+                if not f.endswith(".ska"):
+                    f += ".ska"
+
+                var = AnimationSetVariant()
+                var.version = 7
+                var.weight = int(vd.get("weight", 100) or 0)
+                var.start = float(vd.get("start", 0.0) or 0.0)
+                var.end = float(vd.get("end", 1.0) or 1.0)
+                var.length = len(f)
+                var.allows_ik = int(vd.get("allows_ik", 1))
+                var.force_no_blend = bool(int(vd.get("force_no_blend", 0)))
+                var.file = f
+
+                mk.animation_set_variants.append(var)
+
+            mk.variant_count = len(mk.animation_set_variants)
+            # only append keys that have at least one valid variant
+            if mk.variant_count > 0:
+                anim.mode_animation_keys.append(mk)
+        except Exception:  # noqa: BLE001
+            # ignore individual bad keys; continue with the rest
+            continue
+
+    anim.mode_animation_key_count = len(anim.mode_animation_keys)
+
+    # ---- Marker sets -----------------------------------------------------------------
+    def _to_uint32(v) -> int:
+        """Return a non-negative uint32 from int/str/hex/anything."""
+        try:
+            if isinstance(v, int):
+                return v & 0xFFFFFFFF
+            s = str(v).strip()
+            # decimal?
+            try:
+                return int(s) & 0xFFFFFFFF
+            except Exception:
+                pass
+            # hex (allow 0x prefix or plain hex)
+            try:
+                return int(s, 16) & 0xFFFFFFFF
+            except Exception:
+                pass
+            # fallback: stable hash → first 4 bytes (little endian)
+            h = hashlib.sha1(s.encode("utf-8")).digest()[:4]
+            return int.from_bytes(h, "little", signed=False)
+        except Exception:
+            return 0
+
+    anim.animation_marker_sets = []
+    anim.animation_marker_count = 0
+
+    marker_sets_blob = blob.get("marker_sets") or []
+    for msd in marker_sets_blob:
+        try:
+            name = (msd.get("file") or "").strip()
+            if not name:
+                # nothing usable
+                continue
+
+            ms = AnimationMarkerSet()
+            ms.anim_id = int(msd.get("anim_id", 0) or 0)
+            ms.name = name
+            ms.length = len(ms.name)
+
+            raw_id = msd.get("animation_marker_id", 0)
+            ms.animation_marker_id = _to_uint32(raw_id)
+
+            # we keep exactly one marker per set; use first if multiple
+            md = (msd.get("markers") or [{}])[0] or {}
+            am = AnimationMarker()
+            am.is_spawn_animation = int(md.get("is_spawn_animation", 0) or 0)
+            am.time = float(md.get("time", 0.0) or 0.0)
+
+            # accept both "direction/position" and legacy "dir/pos" keys
+            dir3 = md.get("direction")
+            if dir3 is None:
+                dir3 = md.get("dir", [0.0, 0.0, 1.0])
+            pos3 = md.get("position")
+            if pos3 is None:
+                pos3 = md.get("pos", [0.0, 0.0, 0.0])
+
+            am.direction = Vector3(
+                x=float(dir3[0] if len(dir3) > 0 else 0.0),
+                y=float(dir3[1] if len(dir3) > 1 else 0.0),
+                z=float(dir3[2] if len(dir3) > 2 else 0.0),
+            )
+            am.position = Vector3(
+                x=float(pos3[0] if len(pos3) > 0 else 0.0),
+                y=float(pos3[1] if len(pos3) > 1 else 0.0),
+                z=float(pos3[2] if len(pos3) > 2 else 0.0),
+            )
+
+            ms.animation_markers = [am]
+            ms.marker_count = 1
+
+            anim.animation_marker_sets.append(ms)
+        except Exception:
+            # be conservative; skip broken entries
+            continue
+
+    anim.animation_marker_count = len(anim.animation_marker_sets)
+
+    # ---- Fallback if no blob or no valid variants -----------------------------------------------
+    if anim.mode_animation_key_count == 0:
+        # previous behavior: pick actions by name and synthesize a single key
+        all_actions = get_actions()
+        available_action: list[str] = []
+        if len(all_actions) == 1:
+            available_action.append(all_actions[0])
+        elif len(all_actions) > 1:
+            for a in all_actions:
+                base = a.replace(".ska", "")
+                if base == model_name or "_idle" in base:
+                    available_action.append(a)
+
+        if available_action:
+            mk = ModeAnimationKey()
+            mk.type = 6
+            mk.length = 11
+            mk.file = "Battleforge"
+            mk.unknown = 2
+            mk.unknown2 = 3
+            mk.vis_job = 0
+            mk.unknown3 = 3
+            mk.unknown4 = 0
+            mk.animation_set_variants = []
+            for a in available_action:
+                f = a if a.endswith(".ska") else (a + ".ska")
+                var = AnimationSetVariant()
+                var.version = 4
+                var.weight = 100 // max(1, len(available_action))
+                var.start = 0.0
+                var.end = 1.0
+                var.length = len(f)
+                var.file = f
+                var.allows_ik = 1
+                mk.animation_set_variants.append(var)
+            mk.variant_count = len(mk.animation_set_variants)
+            anim.mode_animation_keys = [mk]
+            anim.mode_animation_key_count = 1
+        else:
+            logger.log(
+                "No AnimationSet blob found (or it had no valid variants), and no suitable Actions in the scene.",
+                "Error",
+                "ERROR",
+            )
+
+    return anim
+
+
+def create_animation_timings() -> Optional[AnimationTimings]:
+    """
+    Build AnimationTimings for export from the AnimationSetJSON blob.
+    Returns None if no timings are present so the caller can skip writing.
+    """
+
+    # -- locate the active top-level DRSModel_* collection ------------
+    def _active_top_drsmodel() -> bpy.types.Collection | None:
+        alc = (
+            bpy.context.view_layer.active_layer_collection.collection
+            if bpy.context and bpy.context.view_layer
+            else None
+        )
+        if not isinstance(alc, bpy.types.Collection):
+            return None
+        if not alc.name.startswith("DRSModel_"):
+            return None
+        for top in bpy.context.scene.collection.children:
+            if top == alc:
+                return alc
+        return None
+
+    # -- read the JSON blob from the collection -----------------------
+    def _read_blob(col: bpy.types.Collection) -> dict:
+        data = col.get(ANIM_BLOB_KEY)
+        if not data:
+            return {}
+        try:
+            b = json.loads(data)
+            # timings lives alongside mode_keys/marker_sets in this blob
+            b.setdefault("timings", [])
+            return b
+        except Exception:
+            return {}
+
+    col = _active_top_drsmodel()
+    if not col:
+        return None
+
+    blob = _read_blob(col)
+    timings_list = blob.get("timings") or []
+    if not timings_list:
+        return None
+
+    # Use the existing helper to map blob -> AnimationTimings
+    return blob_to_animationtimings({"timings": timings_list})
 
 
 def create_bone_map(
@@ -4055,7 +4546,7 @@ def save_drs(
             new_drs_file.push_node_infos("AnimationSet", new_drs_file.animation_set)
         elif node == "AnimationTimings":
             # Empty Set and use external EntityEditor
-            new_drs_file.animation_timings = AnimationTimings()
+            new_drs_file.animation_timings = create_animation_timings()
             if new_drs_file.animation_timings is None:
                 logger.log(
                     "Failed to create AnimationTimings.",
@@ -4079,12 +4570,12 @@ def save_drs(
     new_drs_file.update_offsets()
 
     # === SAVE THE DRS FILE ====================================================
-    # try:
-    #     new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
-    # except Exception as e:  # pylint: disable=broad-except
-    #     logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
-    #     return abort(keep_debug_collections, source_collection_copy)
-    new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    try:
+        new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    except Exception as e:  # pylint: disable=broad-except
+        logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
+    # new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:

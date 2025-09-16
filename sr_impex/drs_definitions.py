@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
+from sys import version
 from typing import List, Union, BinaryIO, Optional
 from mathutils import Vector, Matrix, Quaternion
 from .file_io import FileReader, FileWriter
@@ -57,236 +58,6 @@ LocatorClass = {
     16: "Hit",  # Point of being hit by attacks/spells
     29: "Projectile_Spawn",  # Point to use attacks/spells from -> sometimes FXB
 }
-
-VIS_JOB_MAP = {
-    0: "Idle",
-    1: "Walk",
-    2: "Run",
-    3: "Spawn",
-    4: "HitFromBack",
-    5: "Cheer / Emote",
-    6: "SpellTargetShotSequenceAreaShotDelay / SpellTargetShotSequenceAreaIdle",
-    7: "UnDeploy",
-    8: "Attack",
-    9: "Deploy / Charge Attack Run",
-    10: "WormMovement Start",
-    11: "HitFromFront",
-    12: "Die",
-    13: "CorpseRot",
-    14: "SpellTargetShotSequenceAreaRecoil / HitFromLeft",
-    15: "Special Melee Attack (AnimTagID 114)",
-    16: "Special Melee Attack (AnimTagID 115)",
-    17: "WormMovement Loop",
-    18: "Cast",
-    19: "CastResolve",
-    21: "CastResolveAir",
-    22: "CastAir",
-    23: "HitFromRight",
-    24: "Talk",
-    27: "Impactful Movement / Trample",
-    28: "WormMovement End",
-    29: "PushBackStandUp Start",
-    30: "PushBackStandUp Loop",
-    31: "PushBackStandUp End",
-    35: "Immobilized / Trapped",
-    99: "Trailer",
-    128: "StampedeStart",
-    129: "StampedeRun",
-    130: "StampedeStop",
-    131: "EraseOverTimeInit / EraseOverTimeStart",
-    132: "EraseOverTimeWork / EraseOverTimeLoop",
-    133: "EraseOverTimeShutDown / EraseOverTimeEnd",
-    134: "GroundPounder (Tremor) Cast",
-    135: "GroundPounder (Tremor) Resolve",
-    136: "Firelance (Emberstrike) Cast",
-    137: "Firelance (Emberstrike) Resolve",
-    138: "Paralyze Cast",
-    139: "Paralyze Resolve",
-    140: "ThrowFlames Init",
-    141: "ThrowFlames Work",
-    142: "ThrowFlames ShutDown",
-    143: "ThrowShadowFlames Init",
-    144: "ThrowShadowFlames Work",
-    145: "ThrowShadowFlames ShutDown",
-    146: "Conflagration Init",
-    147: "Conflagration Work",
-    148: "Conflagration ShutDown",
-    149: "Exhaust Cast",
-    150: "Exhaust Resolve",
-    151: "UnholyArmor Cast",
-    152: "UnholyArmor Resolve",
-    153: "Frenzy Cast",
-    154: "Frenzy Resolve",
-    155: "SummonSkeletons Cast",
-    156: "SummonSkeletons Resolve",
-    157: "Deathwish Cast",
-    158: "Deathwish Resolve",
-    159: "SacrificeSquad Cast",
-    160: "SacrificeSquad Resolve",
-    161: "SuicidalBomb Cast",
-    162: "SuicidalBomb Resolve",
-    163: "CrushWalls Cast",
-    164: "CrushWalls Resolve",
-    165: "Rage (AnimTagID 31)",
-    166: "Rage (AnimTagID 32)",
-    167: "DisableTower Cast",
-    168: "DisableTower Resolve",
-    169: "PowerSteal Cast",
-    170: "PowerSteal Resolve",
-    173: "Heal Cast",
-    174: "Heal Resolve",
-    175: "ThunderousRoar Cast",
-    176: "ThunderousRoar Resolve",
-    177: "Heal Channel Start",
-    178: "Heal Channel Loop",
-    179: "Heal Channel End",
-    180: "Paralyze Channel Start",
-    181: "Paralyze Channel Loop",
-    182: "Paralyze Channel End",
-    183: "DisableTower CastAir",
-    184: "DisableTower ResolveAir",
-    185: "PreparedSalvo Cast",
-    186: "PreparedSalvo Resolve",
-    187: "PreparedSalvo CastAir",
-    188: "PreparedSalvo ResolveAir",
-    189: "Special Burrow Cast",
-    190: "Special Burrow Resolve",
-    191: "Turret Fire To Front Cast",
-    192: "Turret Fire To Front Resolve",
-    193: "Turret Fire To Left Cast",
-    194: "Turret Fire To Left Resolve",
-    195: "Turret Fire To Back Cast",
-    196: "Turret Fire To Back Resolve",
-    197: "Turret Fire To Right Cast",
-    198: "Turret Fire To Right Resolve",
-    199: "Charge Attack",
-    200: "SummonDemon Cast",
-    201: "SummonDemon Resolve",
-    202: "AreaFreeze Cast",
-    203: "AreaFreeze Resolve",
-    204: "HealingRay Cast",
-    205: "HealingRay Resolve",
-    206: "IceShield Channel Start (Previously Winter Witch aura)",
-    207: "IceShield Channel Loop",
-    208: "IceShield Channel End",
-    209: "FrostBeam Start",
-    210: "FrostBeam Loop",
-    211: "FrostBeam End",
-    212: "AntimagicField Start",
-    213: "AntimagicField Loop",
-    214: "AntimagicField End",
-    215: "FireStream Start",
-    216: "FireStream Loop",
-    217: "FireStream End",
-    218: "StasisField Cast",
-    219: "StasisField Resolve",
-    220: "BurningLiquid Cast",
-    221: "BurningLiquid Resolve",
-    222: "MindControl Cast",
-    223: "MindControl Resolve",
-    224: "IceShield Target Cast",
-    225: "IceShield Target Resolve",
-    226: "SonicScream Cast",
-    227: "SonicScream Resolve",
-    228: "TeleportSelf Cast",
-    229: "TeleportSelf Resolve",
-    230: "Repair Channel Start (AnimTagID 110)",
-    231: "Repair Channel Loop (AnimTagID 110)",
-    232: "Repair Channel End (AnimTagID 110)",
-    233: "Strike Cast",
-    234: "Strike Resolve",
-    235: "CriticalMass Cast",
-    236: "CriticalMass Resolve",
-    237: "SiegeTrumpet Cast",
-    238: "SiegeTrumpet Resolve",
-    239: "Bracing Zone Cast",
-    240: "Bracing Zone Resolve",
-    241: "Fireball Cast",
-    242: "Fireball Resolve",
-    243: "MassSleep Cast",
-    244: "MassSleep Resolve",
-    245: "ChainInsectRay Cast",
-    246: "ChainInsectRay Resolve",
-    247: "Repair Channel Start (AnimTagID 121)",
-    248: "Repair Channel Loop (AnimTagID 121)",
-    249: "Repair Channel End (AnimTagID 121)",
-    250: "BombRaid Cast",
-    251: "BombRaid Resolve",
-    252: "LifeLink Start",
-    253: "LifeLink Loop",
-    254: "LifeLink End",
-    255: "WormMovement_Hack Cast",
-    256: "WormMovement_Hack Resolve",
-    257: "skel_giant_hammer_attack_pve1 Cast",
-    258: "skel_giant_hammer_attack_pve1 Resolve",
-    259: "IceBombardment Near Start",
-    260: "IceBombardment Near Loop",
-    261: "IceBombardment Near End",
-    262: "IceBombardment Far Start",
-    263: "IceBombardment Far Loop",
-    264: "IceBombardment Far End",
-    265: "ParalyzingRoar Cast",
-    266: "ParalyzingRoar Resolve",
-    267: "SacrificeKill Cast",
-    268: "SacrificeKill Resolve",
-    269: "LifeTransfer Cast",
-    270: "LifeTransfer Resolve",
-    271: "Earthquake Start",
-    272: "Earthquake Loop",
-    273: "Earthquake End",
-    274: "PVEChannel Start",
-    275: "PVEChannel Loop",
-    276: "PVEChannel End",
-    277: "PVECastResolve Cast",
-    278: "PVECastResolve Resolve",
-    279: "PVEMelee Attack",
-    280: "AttachToBuilding Start",
-    281: "AttachToBuilding Loop",
-    282: "AttachToBuilding End",
-    283: "RepairCast Cast",
-    284: "RepairCast Resolve",
-    285: "RageCastStage1 Cast",
-    286: "RageCastStage1 Resolve",
-    287: "RageCastStage1 CastAir",
-    288: "RageCastStage1 ResolveAir",
-    289: "RageCastStage2 Cast",
-    290: "RageCastStage2 Resolve",
-    291: "RageCastStage2 CastAir",
-    292: "RageCastStage2 ResolveAir",
-    293: "SuicideAttack Cast",
-    294: "SuicideAttack Resolve",
-    295: "RelocateBuilding Cast",
-    296: "RelocateBuilding Resolve",
-    297: "DeathCounter Cast",
-    298: "DeathCounter Resolve",
-    299: "TombOfDeath Start",
-    300: "TombOfDeath Loop",
-    301: "TombOfDeath End",
-    302: "VersatileAirSpecial Cast",
-    303: "VersatileAirSpecial Resolve",
-    304: "PVECastResolve2 Cast",
-    305: "PVECastResolve2 Resolve",
-    306: "Taunt Cast",
-    307: "Taunt Resolve",
-    308: "Swap Cast",
-    309: "Swap Resolve",
-    310: "Disenchant Cast",
-    311: "Disenchant Resolve",
-    312: "GravitySurge Cast",
-    313: "GravitySurge Resolve",
-    314: "Enrage Cast",
-    315: "Enrage Resolve",
-    316: "SpecialRangedAir Cast",
-    317: "SpecialRangedAir Resolve",
-    318: "GlobalBuffChannel Start",
-    319: "GlobalBuffChannel Loop",
-    320: "GlobalBuffChannel End",
-    321: "Harpoon Cast",
-    322: "Harpoon Resolve",
-    323: "ThrowMines Cast",
-    324: "ThrowMines Resolve",
-}
-
 
 # Also Node Order
 InformationIndices = {
@@ -407,7 +178,7 @@ class RootNode:
     identifier: int = 0
     unknown: int = 0
     length: int = field(default=9, init=False)
-    name: str = "root name"
+    name: str = "root node"
 
     def read(self, file: BinaryIO) -> "RootNode":
         self.identifier, self.unknown, self.length = unpack("iii", file.read(12))
@@ -1813,20 +1584,22 @@ class CollisionShape:
 
 @dataclass(eq=False, repr=False)
 class DrwResourceMeta:
-    unknown: List[int] = field(default_factory=lambda: [0, 0])
+    version: int = 1
+    unknown: int = 1  # Units: 1, 0 - 3 are possible
     length: int = 0
     hash: str = ""
 
     def read(self, file: BinaryIO) -> "DrwResourceMeta":
         """Reads the DrwResourceMeta from the buffer"""
-        self.unknown = list(unpack("2i", file.read(8)))
+        self.version, self.unknown = unpack("2i", file.read(8))
         self.length = unpack("i", file.read(4))[0]
         self.hash = file.read(self.length).decode("utf-8").strip("\x00")
         return self
 
     def write(self, file: BinaryIO) -> None:
         """Writes the DrwResourceMeta to the buffer"""
-        file.write(pack("2i", *self.unknown))
+        file.write(pack("i", self.version))
+        file.write(pack("i", self.unknown))
         file.write(pack("i", self.length))
         file.write(self.hash.encode("utf-8"))
 
@@ -1959,7 +1732,7 @@ class AnimationSetVariant:
     start: float = 0.0
     end: float = 1.0
     allows_ik: int = 1
-    forceNoBlend: int = 0
+    force_no_blend: int = 0
 
     def read(self, file: BinaryIO) -> "AnimationSetVariant":
         """Reads the AnimationSetVariant from the buffer"""
@@ -1978,7 +1751,7 @@ class AnimationSetVariant:
         if self.version >= 5:
             self.allows_ik = unpack("B", file.read(1))[0]
         if self.version >= 7:
-            self.forceNoBlend = unpack("B", file.read(1))[0]
+            self.force_no_blend = unpack("B", file.read(1))[0]
 
         return self
 
@@ -1993,7 +1766,7 @@ class AnimationSetVariant:
         if self.version >= 5:
             file.write(pack("B", self.allows_ik))
         if self.version >= 7:
-            file.write(pack("B", self.forceNoBlend))
+            file.write(pack("B", self.force_no_blend))
         return self
 
     def size(self) -> int:
@@ -2019,7 +1792,7 @@ class ModeAnimationKey:
     unknown2: Union[List[int], int] = 3
     vis_job: int = 0
     unknown3: int = 3
-    unknown4: int = 0
+    special_mode: int = 0  # SpecialMode
     variant_count: int = 1
     animation_set_variants: List[AnimationSetVariant] = field(default_factory=list)
 
@@ -2040,12 +1813,12 @@ class ModeAnimationKey:
             self.unknown2 = list(unpack("24B", file.read(24)))
         elif self.type <= 5:
             self.unknown2 = unpack("i", file.read(4))[0]
-            self.unknown4 = unpack("h", file.read(2))[0]
+            self.special_mode = unpack("h", file.read(2))[0]
         elif self.type == 6:
             self.unknown2 = unpack("i", file.read(4))[0]
             self.vis_job = unpack("h", file.read(2))[0]
             self.unknown3 = unpack("i", file.read(4))[0]
-            self.unknown4 = unpack("h", file.read(2))[0]
+            self.special_mode = unpack("h", file.read(2))[0]
         self.variant_count = unpack("i", file.read(4))[0]
         self.animation_set_variants = [
             AnimationSetVariant().read(file) for _ in range(self.variant_count)
@@ -2062,12 +1835,12 @@ class ModeAnimationKey:
             file.write(pack("24B", *self.unknown2))
         elif self.type <= 5:
             file.write(pack("i", self.unknown2))
-            file.write(pack("h", self.unknown4))
+            file.write(pack("h", self.special_mode))
         elif self.type == 6:
             file.write(pack("i", self.unknown2))
             file.write(pack("h", self.vis_job))
             file.write(pack("i", self.unknown3))
-            file.write(pack("h", self.unknown4))
+            file.write(pack("h", self.special_mode))
         file.write(pack("i", self.variant_count))
         for animation_set_variant in self.animation_set_variants:
             animation_set_variant.write(file)
@@ -2438,29 +2211,23 @@ class AnimationSet:
 class Timing:
     cast_ms: int = 0  # Int
     resolve_ms: int = 0  # Int
-    uk_1: float = 0  # Float
-    uk_2: float = 0  # Float
-    uk_3: float = 0  # Float
-    animation_marker_id: int = 0  # Int
+    direction: Vector = Vector((0.0, 0.0, 1.0))  # Vector
+    animation_marker_id: int = 0  # UInt
 
     def read(self, file: BinaryIO) -> "Timing":
         """Reads the Timing from the buffer"""
         self.cast_ms = unpack("i", file.read(4))[0]
         self.resolve_ms = unpack("i", file.read(4))[0]
-        self.uk_1 = unpack("f", file.read(4))[0]
-        self.uk_2 = unpack("f", file.read(4))[0]
-        self.uk_3 = unpack("f", file.read(4))[0]
-        self.animation_marker_id = unpack("i", file.read(4))[0]
+        self.direction = Vector(unpack("fff", file.read(12)))
+        self.animation_marker_id = unpack("I", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> "Timing":
         """Writes the Timing to the buffer"""
         file.write(pack("i", self.cast_ms))
         file.write(pack("i", self.resolve_ms))
-        file.write(pack("f", self.uk_1))
-        file.write(pack("f", self.uk_2))
-        file.write(pack("f", self.uk_3))
-        file.write(pack("i", self.animation_marker_id))
+        file.write(pack("fff", *self.direction))
+        file.write(pack("I", self.animation_marker_id))
         return self
 
     def size(self) -> int:
