@@ -906,7 +906,7 @@ class AnimVariantPG(bpy.types.PropertyGroup):
     timing_is_enter: IntProperty(name="Is Enter Mode", default=0, options={"HIDDEN"})  # type: ignore
     timing_variant_index: IntProperty(name="VariantIndex", default=0, options={"HIDDEN"})  # type: ignore
     timing_cast_ms: IntProperty(name="Cast (ms)", default=0)  # type: ignore
-    timing_resolve_ms: IntProperty(name="Duration (ms)", default=0)  # type: ignore
+    resolve_ms: IntProperty(name="Duration (ms)", default=0)  # type: ignore
     timing_marker_id: StringProperty(name="MarkerID", default="")  # type: ignore  # CHANGED
     timing_dir: FloatVectorProperty(name="Direction", size=3, default=(0.0, 0.0, 1.0), subtype="DIRECTION")  # type: ignore
 
@@ -1252,7 +1252,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
             if picked is None:
                 # default (derive from the action + marker, nothing fancy)
                 total_ms = _act_ms(v.file)
-                v.timing_resolve_ms = int(total_ms)
+                v.resolve_ms = int(total_ms)
                 v.timing_cast_ms = int(round(float(mk.cast_to_resolve) * total_ms))
                 v.timing_dir = list(getattr(v, "marker_dir", (0.0, 0.0, 1.0)))
                 if requires_marker:
@@ -1266,7 +1266,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
                     v.timing_marker_id = getattr(v, "timing_marker_id", "") or "0"
             else:
                 v.timing_cast_ms = int(picked.get("cast_ms", 0) or 0)
-                v.timing_resolve_ms = int(picked.get("resolve_ms", 0) or 0)
+                v.resolve_ms = int(picked.get("resolve_ms", 0) or 0)
                 v.timing_dir = list(picked.get("direction") or [0.0, 0.0, 1.0])
                 v.timing_marker_id = str(
                     picked.get("animation_marker_id", "")
@@ -1425,7 +1425,7 @@ def _write_state_to_blob(col: bpy.types.Collection):
             return 0
 
     def _cast_ms_for_export(mk, v) -> int:
-        dur = int(getattr(v, "timing_resolve_ms", 0) or 0)
+        dur = int(getattr(v, "resolve_ms", 0) or 0)
         # prefer marker_time; fallback to mk.cast_to_resolve if marker absent
         if getattr(v, "marker_has", False):
             frac = 1.0 - float(getattr(v, "marker_time", 0.0) or 0.0)
@@ -1448,7 +1448,7 @@ def _write_state_to_blob(col: bpy.types.Collection):
                         "variant_index": int(idx),
                         "weight": int(v.weight),
                         "cast_ms": _cast_ms_for_export(mk, v),
-                        "resolve_ms": int(v.timing_resolve_ms),
+                        "resolve_ms": int(v.resolve_ms),
                         "direction": [
                             float(x) for x in (v.timing_dir or [0.0, 0.0, 1.0])
                         ],
@@ -1960,7 +1960,7 @@ def _draw_variant_editor(
                 if act_name and act_name != "NONE"
                 else 0
             )
-            v.timing_resolve_ms = frames_ms
+            v.resolve_ms = frames_ms
             v.timing_cast_ms = int(round(float(mk.cast_to_resolve) * frames_ms))
             v.timing_dir = list(getattr(v, "marker_dir", (0.0, 0.0, 1.0)))
             v.timing_marker_id = str(_new_uint10())  # string
@@ -1983,7 +1983,7 @@ def _draw_variant_editor(
         row.prop(v, "timing_cast_ms", text="Cast (ms)")
         row = tbox.row()
         row.enabled = False
-        row.prop(v, "timing_resolve_ms", text="Duration (ms)")
+        row.prop(v, "resolve_ms", text="Duration (ms)")
         row = tbox.row()
         row.enabled = False
         row.prop(v, "timing_marker_id", text="MarkerID")

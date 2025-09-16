@@ -73,6 +73,8 @@ from .drs_definitions import (
     CGeoSphere,
     Matrix3x3,
     CDrwLocatorList,
+    AnimationMarkerSet,
+    AnimationMarker,
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -298,7 +300,7 @@ def animtimings_to_blob(anim_timings) -> list[dict]:
             for t in getattr(var, "timings", []) or []:
                 sig = (
                     int(getattr(t, "cast_ms", 0) or 0),
-                    int(getattr(t, "cast_resolve_ms", 0) or 0),
+                    int(getattr(t, "resolve_ms", 0) or 0),
                     int(getattr(t, "animation_marker_id", 0) or 0),
                     tuple(_timing_direction_to_list(getattr(t, "direction", None))),
                 )
@@ -365,7 +367,7 @@ def blob_to_animationtimings(blob) -> "AnimationTimings":
             # single unique Timing
             t = Timing()
             t.cast_ms = int(v.get("cast_ms", 0) or 0)
-            t.cast_resolve_ms = int(v.get("resolve_ms", 0) or 0)
+            t.resolve_ms = int(v.get("resolve_ms", 0) or 0)
             t.animation_marker_id = int(v.get("animation_marker_id", 0) or 0)
             dx, dy, dz = v.get("direction") or [0.0, 0.0, 0.0]
             t.direction.x, t.direction.y, t.direction.z = (
@@ -520,7 +522,7 @@ def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
 
         unified_mesh.verts.ensure_lookup_table()
         unified_mesh.verts.index_update()
-        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=0.0001)
+        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=1e-6)
 
         if len(unified_mesh.verts) > 32767:
             logger.log(
@@ -2720,7 +2722,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
 
         # Weld tiny duplicates after the transform
         bm_out.verts.ensure_lookup_table()
-        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-5)
+        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-6)
 
         # Bake to a new Mesh
         unified = bpy.data.meshes.new("unified_mesh")
@@ -3717,7 +3719,7 @@ def create_skin_info(
     bone_map: Dict[str, Dict[str, int]],
 ) -> CSkSkinInfo:
     """Create CSkSkinInfo by matching world-space vertices to the unified mesh."""
-    TOL_DIGITS = 5  # matches 1e-5 used in remove_doubles
+    TOL_DIGITS = 6  # matches 1e-5 used in remove_doubles
     skin_info = CSkSkinInfo()
     skin_info.vertex_count = len(unified_mesh.vertices)
 
@@ -3933,7 +3935,6 @@ def create_animation_set(model_name: str) -> AnimationSet:
     Anything not present in the blob falls back to defaults.
     """
 
-    # -- helper: get active top-level DRSModel_* collection (same idea as editor) ----
     def _active_top_drsmodel() -> bpy.types.Collection | None:
         alc = (
             bpy.context.view_layer.active_layer_collection.collection
@@ -4056,10 +4057,7 @@ def create_animation_set(model_name: str) -> AnimationSet:
 
     anim.mode_animation_key_count = len(anim.mode_animation_keys)
 
-    # ---- Marker sets (optional) -----------------------------------------------------------------
-    # The blob may include marker info; if present and the struct type fits your writer,
-    # you can map it here. For now we keep defaults unless you need them in the file.
-    # (anim.animation_marker_sets stays empty, which matches prior behavior.)
+    # ---- Marker sets -----------------------------------------------------------------
 
     # ---- Fallback if no blob or no valid variants -----------------------------------------------
     if anim.mode_animation_key_count == 0:
