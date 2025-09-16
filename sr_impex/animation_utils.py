@@ -160,9 +160,7 @@ def import_ska_animation(
     arm_obj: bpy.types.Object,
     bone_list: List[DRSBone],
     name: str,
-    fps: int,
     use_bezier: bool = True,
-    import_type: str = "SECONDS",
     unit_name: str = "Name",
     map_collection: bpy.types.Collection | None = None,
 ) -> None:
@@ -192,6 +190,8 @@ def import_ska_animation(
 
     action = create_action(arm_obj, name=name, cyclic=(ska_file.repeat > 1))
     duration = ska_file.duration
+    frame_length = ska_file.frame_length
+    original_fps = frame_length / duration
 
     # ---- Mapping: blob filename -> actual Action name ----
     # Store on the model collection as JSON (ID props are fine, but JSON keeps it simple)
@@ -266,14 +266,7 @@ def import_ska_animation(
         ]
         seq.sort(key=lambda tk: tk[0])
         times_norm = [t for t, _ in seq]
-        frames = [
-            (
-                round(t * duration * fps)
-                if import_type == "FRAMES"
-                else t * duration * fps
-            )
-            for t in times_norm
-        ]
+        frames = [round(t * frame_length) for t in times_norm]
         # For each component axis
         for idx, ax in enumerate(axes):
             # Values and tangents
@@ -283,7 +276,9 @@ def import_ska_animation(
             if not vals:
                 continue
             if use_bezier:
-                insert_hermite_bezier_curve(fcurve, frames, vals, tans, duration, fps)
+                insert_hermite_bezier_curve(
+                    fcurve, frames, vals, tans, duration, original_fps
+                )
             else:
                 for fr, v in zip(frames, vals):
                     insert_or_replace_key(fcurve, fr, v, interpolation="LINEAR")
@@ -292,3 +287,7 @@ def import_ska_animation(
     strip = track.strips.new(action.name, 0, action)
     strip.repeat = ska_file.repeat
     track.name = action.name
+    # Save Original Duration in the Action
+    action["ska_original_duration"] = duration
+    action["ska_original_fps"] = original_fps
+    action["frame_length"] = ska_file.frame_length

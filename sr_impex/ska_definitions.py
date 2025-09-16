@@ -90,6 +90,7 @@ class SKA:
     unused4: int = 0
     unused5: int = 0
     unused6: list[int] = field(default_factory=list)
+    frame_length: int = 0  # only for type 7
     zeroes: list[int] = field(default_factory=list)
 
     def read(self, file_name: str) -> "SKA":
@@ -135,9 +136,9 @@ class SKA:
             self.duration = unpack("f", reader.read(calcsize("f")))[0]
             self.repeat = unpack("i", reader.read(calcsize("i")))[0]
             self.stutter_mode = unpack("i", reader.read(calcsize("i")))[0]
-            self.unused1 = unpack("i", reader.read(calcsize("i")))[0]
             if self.type == 7:
-                self.unused2 = unpack("i", reader.read(calcsize("i")))[0]
+                self.unused1 = unpack("i", reader.read(calcsize("i")))[0]
+            self.frame_length = unpack("i", reader.read(calcsize("i")))[0]
             self.zeroes = [unpack("i", reader.read(calcsize("i")))[0] for _ in range(3)]
         else:
             print(f"Unknown SKA type: {self.type}.")
@@ -179,7 +180,7 @@ class SKA:
                 file.write(pack("i", self.stutter_mode))
                 file.write(pack("i", self.unused1))
                 if self.type == 7:
-                    file.write(pack("i", self.unused2))
+                    file.write(pack("i", self.frame_length))
                 for zero in self.zeroes:
                     file.write(pack("i", zero))
             else:

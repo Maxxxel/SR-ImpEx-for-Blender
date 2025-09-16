@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import hashlib
 import os
-import json
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, Optional, Tuple
+
+import math
+from mathutils import Vector, Quaternion
+
 
 import bpy
 from bpy.props import (
@@ -17,6 +20,7 @@ from bpy.props import (
     CollectionProperty,
     PointerProperty,
     EnumProperty,
+    FloatVectorProperty,
 )
 
 # ---------------------------------------------------------------------------
@@ -33,18 +37,38 @@ from .abilities import (
 _ACTIONS_ENUM_CACHE = None
 _ACTIONS_ENUM_COUNT = -1
 
+# Stronger enum cache invalidation (by names signature)
+_ACTIONS_ENUM_SIG = ""
+
+
+def _actions_sig():
+    try:
+        names = sorted(a.name for a in bpy.data.actions)
+        # small & stable
+        return hashlib.sha1(("\n".join(names)).encode("utf-8")).hexdigest()
+    except Exception:  # pylint: disable=broad-exception-caught
+        return ""
+
+
+def _invalidate_actions_enum():
+    global _ACTIONS_ENUM_CACHE, _ACTIONS_ENUM_COUNT, _ACTIONS_ENUM_SIG  # pylint: disable=global-statement
+    _ACTIONS_ENUM_CACHE = None
+    _ACTIONS_ENUM_COUNT = -1
+    _ACTIONS_ENUM_SIG = ""
+
 
 def _actions_enum(_self, _ctx):
-    # Build once per action-count change (fast)
-    global _ACTIONS_ENUM_CACHE, _ACTIONS_ENUM_COUNT
+    global _ACTIONS_ENUM_CACHE, _ACTIONS_ENUM_COUNT, _ACTIONS_ENUM_SIG  # pylint: disable=global-statement
     acts = bpy.data.actions
-    if _ACTIONS_ENUM_CACHE is None or len(acts) != _ACTIONS_ENUM_COUNT:
+    sig = _actions_sig()
+    if (_ACTIONS_ENUM_CACHE is None) or (sig != _ACTIONS_ENUM_SIG):
         names = [a.name for a in acts]
-        names.sort()  # stable order, build once
+        names.sort()
         items = [("NONE", "<None>", "")]
         items.extend((n, n, "") for n in names)
         _ACTIONS_ENUM_CACHE = items
         _ACTIONS_ENUM_COUNT = len(acts)
+        _ACTIONS_ENUM_SIG = sig
     return _ACTIONS_ENUM_CACHE
 
 
@@ -83,33 +107,6 @@ VIS_JOB_ENUM = [
     for k in sorted(VIS_JOB_MAP.keys())
 ]
 VIS_JOB_DEFAULT = VIS_JOB_ENUM[0][0] if VIS_JOB_ENUM else "0"
-
-
-def _ability_components_map() -> Dict[str, Set[int]]:
-    out = {}
-    for name, data in _iter_all_abilities().items():
-        vids = set()
-        for c in data.get("components", []) or []:
-            try:
-                vids.add(int(c.get("vis_job_id")))
-            except:  # pylint: disable=bare-except
-                pass
-        if vids:
-            out[name] = vids
-    return out
-
-
-_ABILITY_COMPONENTS = _ability_components_map()
-
-
-def _present_vis_ids(st) -> Set[int]:
-    ids = set()
-    for mk in st.mode_keys:
-        try:
-            ids.add(int(mk.vis_job))
-        except:  # pylint: disable=bare-except
-            pass
-    return ids
 
 
 def _infer_ability_for_visjob(vis_id: int, _st=None) -> str:
@@ -169,7 +166,6 @@ def _draw_editor_ui(layout):
 
     # Show EACH mode_key (no dedup) so Cast Ground / Cast Air appear as separate items
     row = left.row()
-    col_list = row.column()
     # Build items for the left list
     items = []  # (display_label, representative_index)
     seen_groups = set()
@@ -258,7 +254,7 @@ def _draw_editor_ui(layout):
 
             btn = box.row(align=True)
             op = btn.operator("drs.animset_play_range", text="Play Cast", icon="PLAY")
-            op.mode_key_index, op.n0, op.n1 = (
+            op.mode_key_index, op.start, op.end = (
                 st.active_mode_key,
                 0.0,
                 mk.cast_to_resolve,
@@ -266,7 +262,7 @@ def _draw_editor_ui(layout):
             op = btn.operator(
                 "drs.animset_play_range", text="Play Resolve", icon="PLAY"
             )
-            op.mode_key_index, op.n0, op.n1 = (
+            op.mode_key_index, op.start, op.end = (
                 st.active_mode_key,
                 mk.cast_to_resolve,
                 1.0,
@@ -319,9 +315,9 @@ def _draw_editor_ui(layout):
 
             btn = box.row(align=True)
             op = btn.operator("drs.animset_play_range", text="Start", icon="PLAY")
-            op.mode_key_index, op.n0, op.n1 = s_idx, 0.0, s_mk.start_to_loop
+            op.mode_key_index, op.start, op.end = s_idx, 0.0, s_mk.start_to_loop
             op = btn.operator("drs.animset_play_range", text="Loop", icon="PLAY")
-            op.mode_key_index, op.n0, op.n1 = (
+            op.mode_key_index, op.start, op.end = (
                 l_idx,
                 s_mk.start_to_loop,
                 s_mk.loop_to_end,
@@ -329,7 +325,7 @@ def _draw_editor_ui(layout):
             if end:
                 e_idx, _ = end
                 op = btn.operator("drs.animset_play_range", text="End", icon="PLAY")
-                op.mode_key_index, op.n0, op.n1 = e_idx, s_mk.loop_to_end, 1.0
+                op.mode_key_index, op.start, op.end = e_idx, s_mk.loop_to_end, 1.0
 
         _draw_variant_editor(
             box,
@@ -338,6 +334,54 @@ def _draw_editor_ui(layout):
             is_cast=("cast" in role and "resolve" not in role),
             is_sle=bool(start and loop),
         )
+
+
+def _visjob_requires_marker(vis_job: int) -> bool:
+    for _name, data in _iter_all_abilities().items():
+        for c in data.get("components", []) or []:
+            try:
+                if int(c.get("vis_job_id", -1)) == int(vis_job) and bool(
+                    c.get("requires_marker", False)
+                ):
+                    return True
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+    return False
+
+
+def _marker_defaults_for_visjob(vis_job: int) -> dict:
+    # combine first matching defaults; fall back to sane values
+    for _name, data in _iter_all_abilities().items():
+        for c in data.get("components", []) or []:
+            try:
+                if int(c.get("vis_job_id", -1)) == int(vis_job):
+                    d = c.get("marker_defaults", {}) or {}
+                    return {
+                        "is_spawn_animation": int(d.get("is_spawn_animation", 0)),
+                        "time": float(d.get("time", 0.0)),
+                        "position": list(d.get("position", [0.0, 0.0, 0.0])),
+                        "direction": list(d.get("direction", [0.0, 0.0, 1.0])),
+                    }
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+    return {
+        "is_spawn_animation": 0,
+        "time": 0.0,
+        "position": [0.0, 0.0, 0.0],
+        "direction": [0.0, 0.0, 1.0],
+    }
+
+
+def _stable_marker_id(vis_job: int, file_name: str) -> str:
+    key = f"{int(vis_job)}|{(file_name or '').strip().lower()}"
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()
+
+
+def _norm_ska_name(name: str) -> str:
+    n = (name or "").strip()
+    if not n:
+        return ""
+    return n if n.lower().endswith(".ska") else (n + ".ska")
 
 
 # ---------- Filename -> Action resolver using model's mapping ----------
@@ -364,7 +408,7 @@ def _resolve_action_name(name: str) -> str:
         try:
             raw = col.get("_drs_action_map", "{}")
             mp = json.loads(raw) if isinstance(raw, str) else {}
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             mp = {}
         # Try different keys the blob might contain
         for key in (want, os.path.basename(want), base, os.path.basename(base)):
@@ -488,7 +532,7 @@ def _register_extra_mode(col: bpy.types.Collection, mode_val: int) -> None:
         if int(mode_val) not in extra:
             extra.append(int(mode_val))
         col["_drs_extra_modes"] = extra
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         pass
 
 
@@ -523,18 +567,131 @@ def _redraw_ui():
                 area.tag_redraw()
 
 
+# --- Action span in frames (normalized mapping) -----------------------------
+def _action_span_frames(act: bpy.types.Action) -> int:
+    # Prefer explicit frame length from importer; else use action range
+    try:
+        v = act.get("ska_original_frames", None)
+        if v is None:
+            v = act.get("frame_length", None)
+        if v is not None:
+            return int(round(float(v)))
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+    f0, f1 = act.frame_range
+    return int(max(1, round(f1 - f0)))
+
+
+# --- Marker objects management ----------------------------------------------
+_DRS_MARKERS_NAME = "DRSMarkers"
+
+
+def _get_or_create_marker_collection(
+    parent: bpy.types.Collection,
+) -> bpy.types.Collection:
+    coll = parent.children.get(_DRS_MARKERS_NAME)
+    if coll:
+        return coll
+    coll = bpy.data.collections.new(_DRS_MARKERS_NAME)
+    parent.children.link(coll)
+    return coll
+
+
+def _marker_object_name(vis_job: int, ska: str) -> str:
+    base = os.path.basename(ska) if ska else ""
+    return f"MK_{int(vis_job)}_{base}"
+
+
+def _ensure_marker_object(
+    parent: bpy.types.Collection, vis_job: int, ska: str
+) -> bpy.types.Object:
+    mcol = _get_or_create_marker_collection(parent)
+    name = _marker_object_name(vis_job, ska)
+    # reuse if exists
+    for o in mcol.objects:
+        if o.name == name:
+            return o
+    # create empty arrow
+    o = bpy.data.objects.new(name, None)
+    o.empty_display_type = "SINGLE_ARROW"
+    o.empty_display_size = 0.25
+    o.show_name = True
+    o.show_in_front = True
+    # Find the GameOrientation Object if present and parent to it
+    o.parent = bpy.data.objects.get("GameOrientation") or None
+    # custom prop for easy lookup
+    o["drs_marker_key"] = f"{int(vis_job)}|{ska}"
+    mcol.objects.link(o)
+    o.hide_set(True)
+    return o
+
+
+def _hide_all_markers(parent: bpy.types.Collection):
+    mcol = parent.children.get(_DRS_MARKERS_NAME)
+    if not mcol:
+        return
+    for o in mcol.objects:
+        try:
+            o.hide_set(True)
+        except Exception:
+            pass
+
+
+def _align_arrow_to_dir(obj: bpy.types.Object, direction: Vector):
+    # Align +Y to given direction (normalize; fallback to +Y if zero)
+    d = Vector(direction) if direction else Vector((0.0, 1.0, 0.0))
+    if d.length < 1e-6:
+        d = Vector((0.0, 1.0, 0.0))
+    d.normalize()
+    y = Vector((0.0, 1.0, 0.0))
+    dot = max(-1.0, min(1.0, y.dot(d)))
+    if abs(dot - 1.0) < 1e-6:
+        q = Quaternion()  # identity
+    elif abs(dot + 1.0) < 1e-6:
+        q = Quaternion(Vector((0.0, 0.0, 1.0)), math.pi)
+    else:
+        axis = y.cross(d)
+        axis.normalize()
+        angle = math.acos(dot)
+        q = Quaternion(axis, angle)
+    obj.rotation_mode = "QUATERNION"
+    obj.rotation_quaternion = q
+
+
+def _show_marker(parent: bpy.types.Collection, vis_job: int, ska: str, pos, direction):
+    obj = _ensure_marker_object(parent, vis_job, ska)
+    obj.location = Vector(pos or (0.0, 0.0, 0.0))
+    _align_arrow_to_dir(obj, Vector(direction or (0.0, 0.0, 1.0)))
+    obj.hide_set(False)
+
+
+# Build/refresh all marker objects from current state (hidden by default)
+def _sync_marker_objects_from_state():
+    col = _active_top_drsmodel()
+    if not col:
+        return
+    st = _state()
+    _hide_all_markers(col)
+    for mk in st.mode_keys:
+        vj = int(mk.vis_job) if mk.vis_job else 0
+        for v in mk.variants:
+            if not getattr(v, "marker_has", False):
+                continue
+            ska = (
+                v.raw_ska
+                or _norm_ska_name(v.file if v.file and v.file != "NONE" else "")
+            ).strip()
+            if not ska:
+                continue
+            _ensure_marker_object(col, vj, ska)
+
+
 # ---- Ability inventory helpers ---------------------------------------------
 
 
 # Build a flat abilities map from abilities.py
 def _all_abilities_map():
     d = {}
-    from .abilities import (
-        must_have_abilities,
-        situational_abilities,
-        additional_abilities,
-    )
-
     d.update(must_have_abilities)
     d.update(situational_abilities)
     d.update(additional_abilities)
@@ -562,13 +719,6 @@ def _ability_items_cb(self, _ctx):
 
 
 def _ability_catalog():
-    # flatten with categories
-    from .abilities import (
-        must_have_abilities,
-        situational_abilities,
-        additional_abilities,
-    )
-
     cat = {}
     for k in must_have_abilities.keys():
         cat[k] = ("Must-have", must_have_abilities[k])
@@ -619,6 +769,7 @@ def _empty_blob() -> Dict:
         "fly_hit_scale": 0.0,
         "align_to_terrain": False,
         "mode_keys": [],
+        "marker_sets": [],
     }
 
 
@@ -629,6 +780,7 @@ def _read_blob(col: bpy.types.Collection) -> Dict:
     try:
         b = json.loads(data)
         b.setdefault("mode_keys", [])
+        b.setdefault("marker_sets", [])
         return b
     except Exception:  # pylint: disable=broad-exception-caught
         return _empty_blob()
@@ -673,15 +825,13 @@ def _poll_editor_refresh():
         name = col.name if col else None
         sig = _blob_sig(col) if col else None
 
-        # If the active model changed, remember it, but do NOT clobber the UI unless empty.
         if name != _last["col_name"]:
             _last["col_name"] = name
             _last["blob_sig"] = sig
-            # Only pull from blob when editor has no data yet.
+            _invalidate_actions_enum()  # <-- add
             if col and len(_state().mode_keys) == 0:
                 _refresh_state_from_blob(col)
         else:
-            # Track sig, but never auto-apply it. User must press Reload.
             _last["blob_sig"] = sig
     except Exception:
         pass
@@ -695,6 +845,13 @@ class AnimVariantPG(bpy.types.PropertyGroup):
     allows_ik: BoolProperty(name="Allows IK", default=True)  # type: ignore
     force_no_blend: BoolProperty(name="Force No Blend", default=False)  # type: ignore
     file: EnumProperty(name="Action", items=_actions_enum)  # type: ignore
+    raw_ska: StringProperty(default="", options={"HIDDEN"})  # type: ignore
+    # --- marker fields (attached per-variant) ---
+    marker_has: BoolProperty(name="Has Marker", default=False, options={"HIDDEN"})  # type: ignore
+    marker_is_spawn: BoolProperty(name="Is Spawn Animation", default=False)  # type: ignore
+    marker_time: FloatProperty(name="Time (0..1)", default=0.0, min=0.0, max=1.0, precision=3)  # type: ignore
+    marker_pos: FloatVectorProperty(name="Position", size=3, default=(0.0, 0.0, 0.0), subtype="TRANSLATION")  # type: ignore
+    marker_dir: FloatVectorProperty(name="Direction", size=3, default=(0.0, 0.0, 1.0), subtype="DIRECTION")  # type: ignore
 
 
 def _update_cast_to_resolve(self, _ctx):
@@ -803,7 +960,6 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
         mk: ModeKeyPG = st.mode_keys.add()
         mk.vis_job = str(int(mkd.get("vis_job", 0)))
         mk.ability_name = ""
-        # role may be absent in blob; infer from abilities map if needed
         mk.role = VIS_JOB_TO_ROLE.get(int(mk.vis_job), mkd.get("role", ""))
         mk.special_mode = int(mkd.get("special_mode", 0))
         mk.start_to_loop = float(mkd.get("start_to_loop", 0.33))
@@ -818,10 +974,73 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
             v.end = float(vd.get("end", 1.0))
             v.allows_ik = bool(int(vd.get("allows_ik", 1)))
             v.force_no_blend = bool(int(vd.get("force_no_blend", 0)))
-            f = (vd.get("file") or "").strip()
-            v.file = _resolve_action_name(f)
+
+            raw_file = (vd.get("file") or "").strip()
+            v.raw_ska = _norm_ska_name(raw_file)
+            v.file = _resolve_action_name(raw_file)  # UI value
+
             vlist.append(v)
         tmp.append((mk, vlist))
+
+    # --- Map markers from blob to variants (by (anim_id=vis_job, file)) ---
+    marker_map = {}  # (vis_job:int, ska:str) -> marker dict
+    for ms in b.get("marker_sets", []) or []:
+        try:
+            vj = int(ms.get("anim_id", 0) or 0)
+            ska = _norm_ska_name(ms.get("file", "") or "")
+            m = (ms.get("markers") or [{}])[0] or {}
+
+            # accept both position/direction and pos/dir
+            pos = m.get("position")
+            if pos is None:
+                pos = m.get("pos", [0.0, 0.0, 0.0])
+            dire = m.get("direction")
+            if dire is None:
+                dire = m.get("dir", [0.0, 0.0, 1.0])
+
+            marker_map[(vj, ska)] = {
+                "is_spawn_animation": int(m.get("is_spawn_animation", 0) or 0),
+                "time": float(m.get("time", 0.0) or 0.0),
+                "position": list(pos),
+                "direction": list(dire),
+            }
+        except Exception:
+            continue
+
+    def _v_of(item):
+        return item[0] if isinstance(item, tuple) else item
+
+    def _ska_of(item):
+        if isinstance(item, tuple):
+            return item[1]
+        v = item
+        return getattr(v, "raw_ska", "") or _norm_ska_name(
+            v.file if v.file and v.file != "NONE" else ""
+        )
+
+    # attach markers to variants (use the raw SKA captured above!)
+    for mk, vlist in tmp:
+        vj = int(mk.vis_job)
+        requires = _visjob_requires_marker(vj)
+        for item in vlist:
+            v = _v_of(item)
+            ska = _ska_of(item)
+            if not ska:
+                continue
+            found = marker_map.get((vj, ska))
+            if found:
+                v.marker_has = True
+                v.marker_is_spawn = bool(int(found.get("is_spawn_animation", 0)))
+                v.marker_time = float(found.get("time", 0.0))
+                v.marker_pos = list(found.get("position", [0.0, 0.0, 0.0]))
+                v.marker_dir = list(found.get("direction", [0.0, 0.0, 1.0]))
+            elif requires:
+                d = _marker_defaults_for_visjob(vj)
+                v.marker_has = True
+                v.marker_is_spawn = bool(int(d["is_spawn_animation"]))
+                v.marker_time = float(d["time"])
+                v.marker_pos = list(d["position"])
+                v.marker_dir = list(d["direction"])
 
     # Second pass: derive sliders from actual variants (file truth)
     # - Cast: for EVERY cast-* ModeKey, set cast_to_resolve = its first variant's end
@@ -838,12 +1057,12 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
             return "cast"
         return r
 
-    # 2a) CAST: seed every cast-* entry individually
+    # 2a) CAST
     for mk, vlist in tmp:
         r = (mk.role or "").lower()
         if "cast" in r and "resolve" not in r:
             if vlist:
-                mk.cast_to_resolve = float(vlist[0].end)
+                mk.cast_to_resolve = float(_v_of(vlist[0]).end)
 
     # 2b) S/L/E grouped per (ability, special)
     buckets = {}
@@ -855,19 +1074,17 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
         roles = {}
         for mk, vlist in items:
             roles[_rolekey(mk)] = (mk, vlist)
-        # S/L/E
         if "start" in roles and "loop" in roles:
             mk_s, vl_s = roles["start"]
             mk_l, vl_l = roles["loop"]
             if vl_s:
-                mk_s.start_to_loop = float(vl_s[0].end)
+                mk_s.start_to_loop = float(_v_of(vl_s[0]).end)
             if vl_l:
-                mk_s.loop_to_end = float(vl_l[0].end)
+                mk_s.loop_to_end = float(_v_of(vl_l[0]).end)
 
     try:
         modes = sorted(_available_modes())
         st = _state()
-        # If current value invalid/empty, set to first mode's identifier
         if not modes:
             st.show_mode = "0"
         else:
@@ -876,6 +1093,9 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
                 st.show_mode = str(modes[0])
     except Exception:
         pass
+
+    # Build/update hidden marker objects for all present markers
+    _sync_marker_objects_from_state()
 
 
 def _write_state_to_blob(col: bpy.types.Collection):
@@ -890,12 +1110,16 @@ def _write_state_to_blob(col: bpy.types.Collection):
         "fly_hit_scale": float(st.fly_hit_scale),
         "align_to_terrain": int(st.align_to_terrain),
         "mode_keys": [],
+        "marker_sets": [],
     }
+    # collect for marker_sets while writing mode_keys
+    emitted_ms = set()  # guard against duplicates
     for mk in st.mode_keys:
         try:
             vj = int(mk.vis_job)
-        except:  # pylint: disable=bare-except
+        except Exception:  # noqa: BLE001
             vj = 0
+
         md = {
             "vis_job": vj,
             "role": mk.role,
@@ -905,7 +1129,11 @@ def _write_state_to_blob(col: bpy.types.Collection):
             "cast_to_resolve": float(mk.cast_to_resolve),
             "variants": [],
         }
+
+        requires = _visjob_requires_marker(vj)
+
         for v in mk.variants:
+            file_name = "" if v.file == "NONE" else v.file
             md["variants"].append(
                 {
                     "weight": int(v.weight),
@@ -913,10 +1141,39 @@ def _write_state_to_blob(col: bpy.types.Collection):
                     "end": float(v.end),
                     "allows_ik": 1 if v.allows_ik else 0,
                     "force_no_blend": 1 if v.force_no_blend else 0,
-                    "file": "" if v.file == "NONE" else v.file,
+                    "file": file_name,
                 }
             )
+
+            # Emit marker set only if required AND present (marker_has)
+            ska = _norm_ska_name(file_name)
+            if requires and ska and bool(v.marker_has):
+                key = (vj, ska)
+                if key in emitted_ms:
+                    continue
+                emitted_ms.add(key)
+                b["marker_sets"].append(
+                    {
+                        "anim_id": int(vj),
+                        "file": ska,  # UI uses 'file' name
+                        "animation_marker_id": _stable_marker_id(vj, ska),
+                        "markers": [
+                            {
+                                "is_spawn_animation": 1 if v.marker_is_spawn else 0,
+                                "time": float(v.marker_time),
+                                "position": [
+                                    float(x) for x in (v.marker_pos or [0.0, 0.0, 0.0])
+                                ],
+                                "direction": [
+                                    float(x) for x in (v.marker_dir or [0.0, 0.0, 1.0])
+                                ],
+                            }
+                        ],
+                    }
+                )
+
         b["mode_keys"].append(md)
+
     _write_blob(col, b)
 
 
@@ -961,6 +1218,7 @@ class DRS_OT_AnimSet_InitUnit(bpy.types.Operator):
                     1.0,
                     True,
                     "NONE",
+                    False,
                 )
                 existing.add(key)
         return {"FINISHED"}
@@ -974,6 +1232,7 @@ class DRS_OT_AnimSet_ClearAll(bpy.types.Operator):
     bl_options = {"INTERNAL"}
 
     def execute(self, _ctx):
+        _invalidate_actions_enum()
         st = _state()
         st.mode_keys.clear()
         st.active_mode_key = 0
@@ -988,6 +1247,7 @@ class DRS_OT_AnimSet_Reinit(bpy.types.Operator):
     bl_options = {"INTERNAL"}
 
     def execute(self, _ctx):
+        _invalidate_actions_enum()
         bpy.ops.drs.animset_clear_all()
         bpy.ops.drs.animset_init_unit()
         return {"FINISHED"}
@@ -1038,6 +1298,19 @@ class DRS_OT_ModeKey_AddAbility(bpy.types.Operator):
                 "NONE",
                 False,
             )
+            # after the existing v.* assignments:
+            try:
+                vj = int(mk.vis_job)
+            except Exception:
+                vj = 0
+            if _visjob_requires_marker(vj):
+                d = _marker_defaults_for_visjob(vj)
+                v.marker_has = True
+                v.marker_is_spawn = bool(int(d["is_spawn_animation"]))
+                v.marker_time = float(d["time"])
+                v.marker_pos = d["position"]
+                v.marker_dir = d["direction"]
+
             existing.add(key)
             added = True
 
@@ -1065,25 +1338,14 @@ class DRS_OT_ModeKey_Remove(bpy.types.Operator):
 _playback = {"handler": None, "end": None}
 
 
-def _stop_play():
-    if _playback["handler"]:
-        try:
-            bpy.app.handlers.frame_change_post.remove(_playback["handler"])
-        except:  # pylint: disable=bare-except
-            pass
-    _playback["handler"] = None
-    _playback["end"] = None
-    try:
-        if bpy.context.screen and bpy.context.screen.is_animation_playing:
-            bpy.ops.screen.animation_play()
-    except:  # pylint: disable=bare-except
-        pass
-
-
 def _on_frame(scene, _deps):
     endf = _playback.get("end")
     if endf is not None and scene.frame_current >= endf:
-        _stop_play()
+        if bpy.context.screen and bpy.context.screen.is_animation_playing:
+            bpy.context.scene.frame_current = endf
+            _playback["end"] = None
+            _playback["handler"] = None
+            bpy.ops.screen.animation_play()
 
 
 def _assign_action(arm: bpy.types.Object, act: bpy.types.Action):
@@ -1093,27 +1355,14 @@ def _assign_action(arm: bpy.types.Object, act: bpy.types.Action):
     arm.animation_data.action = act
 
 
-def _frame_from_nrange(act: bpy.types.Action, n0: float, n1: float) -> Tuple[int, int]:
-    f0, f1 = act.frame_range
-    span = max(1.0, (f1 - f0))
-    a = max(0.0, min(1.0, float(n0)))
-    b = max(0.0, min(1.0, float(n1)))
-    if b <= a:
-        b = min(1.0, a + 0.01)
-    start_f = int(round(f0 + a * span))
-    end_f = int(round(f0 + b * span))
-    end_f = max(start_f + 1, end_f)
-    return start_f, end_f
-
-
 class DRS_OT_PlayRange(bpy.types.Operator):
     bl_idname = "drs.animset_play_range"
     bl_label = "Play"
     bl_options = {"INTERNAL"}
 
     mode_key_index: IntProperty(default=-1)  # type: ignore
-    n0: FloatProperty(default=0.0)  # type: ignore
-    n1: FloatProperty(default=1.0)  # type: ignore
+    start: FloatProperty(default=0.0)  # type: ignore
+    end: FloatProperty(default=1.0)  # type: ignore
 
     def execute(self, context):
         st = _state()
@@ -1133,23 +1382,97 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         if not (act and arm):
             return {"CANCELLED"}
 
-        _assign_action(arm, act)
-        start_f, end_f = _frame_from_nrange(act, self.n0, self.n1)
+        # Hide all marker objects when a generic play is triggered
+        if model:
+            _hide_all_markers(model)
 
-        _stop_play()
-        context.scene.frame_current = start_f
-        context.scene.frame_start = start_f
-        context.scene.frame_end = end_f
-        _playback["end"] = end_f
+        _assign_action(arm, act)
+        original_frame_length = act["frame_length"]
+        if original_frame_length is None:
+            # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
+            original_frame_length = act.frame_range[1] - act.frame_range[0]
+
+        # Reset any existing playback state
+        _playback["end"] = None
+        _playback["handler"] = None
+
+        try:
+            bpy.app.handlers.frame_change_post.remove(_playback["handler"])
+        except:  # pylint: disable=bare-except
+            pass
+
+        # Stop any Existing Playback
+        if bpy.context.screen and bpy.context.screen.is_animation_playing:
+            bpy.ops.screen.animation_play()
+
+        start_frame = int(round(self.start * original_frame_length))
+        end_frame = int(round(self.end * original_frame_length))
+
+        context.scene.frame_current = start_frame
+        context.scene.frame_start = start_frame
+        context.scene.frame_end = end_frame
 
         if not _playback["handler"]:
             _playback["handler"] = _on_frame
+            _playback["end"] = end_frame
             bpy.app.handlers.frame_change_post.append(_on_frame)
+
         try:
-            bpy.context.scene.show_subframe = True
             bpy.ops.screen.animation_play()
-        except:  # pylint: disable=bare-except
+        except Exception as e:  # pylint: disable=bare-except
             pass
+        return {"FINISHED"}
+
+
+class DRS_OT_ShowMarker(bpy.types.Operator):
+    bl_idname = "drs.animset_show_marker"
+    bl_label = "Display Marker"
+    bl_options = {"INTERNAL"}
+
+    mode_key_index: IntProperty(default=-1)  # type: ignore
+
+    def execute(self, context):
+        st = _state()
+        if not 0 <= self.mode_key_index < len(st.mode_keys):
+            return {"CANCELLED"}
+        mk = st.mode_keys[self.mode_key_index]
+        if not 0 <= mk.active_variant < len(mk.variants):
+            return {"CANCELLED"}
+        v = mk.variants[mk.active_variant]
+        if not getattr(v, "marker_has", False):
+            return {"CANCELLED"}
+
+        act_name = (v.file or "").strip()
+        act = (
+            bpy.data.actions.get(act_name) if act_name and act_name != "NONE" else None
+        )
+        model = _active_model()
+        arm = _find_armature(model) if model else None
+        if not (act and arm and model):
+            return {"CANCELLED"}
+
+        # Assign action to armature
+        _assign_action(arm, act)
+
+        span = _action_span_frames(act)
+        f0 = int(act.frame_range[0])
+
+        # Jump to marker time
+        m_frame = int(round(f0 + float(v.marker_time) * span))
+        context.scene.frame_current = m_frame
+
+        # Show only the matching 3D marker for this variant
+        _hide_all_markers(model)
+        try:
+            vj = int(mk.vis_job)
+        except Exception:
+            vj = 0
+        ska = (
+            v.raw_ska or _norm_ska_name(v.file if v.file and v.file != "NONE" else "")
+        ).strip()
+        if ska:
+            _show_marker(model, vj, ska, v.marker_pos, v.marker_dir)
+
         return {"FINISHED"}
 
 
@@ -1220,6 +1543,7 @@ class DRS_OT_AnimSet_Reload(bpy.types.Operator):
     bl_options = {"INTERNAL"}
 
     def execute(self, _ctx):
+        _invalidate_actions_enum()
         col = _active_model()
         if not col:
             return {"CANCELLED"}
@@ -1265,10 +1589,50 @@ def _draw_variant_editor(
             # det.prop(v, "end")
             pass
 
+        # --- Marker UI (only if this vis_job requires it) ---
+        try:
+            vj = int(mk.vis_job)
+        except Exception:
+            vj = 0
+
+        if _visjob_requires_marker(vj):
+            mbox = box.box()
+            mbox.label(text="Marker")
+            mbox.use_property_split = True
+            mbox.use_property_decorate = False
+            # ensure marker exists if user switched action late
+            if not v.marker_has:
+                # seed minimal defaults
+                d = _marker_defaults_for_visjob(vj)
+                v.marker_has = True
+                v.marker_is_spawn = bool(int(d["is_spawn_animation"]))
+                v.marker_time = float(d["time"])
+                v.marker_pos = d["position"]
+                v.marker_dir = d["direction"]
+
+            mbox.prop(v, "marker_is_spawn", text="Is Spawn Animation")
+            mbox.prop(v, "marker_time", text="Time")
+            mbox.prop(v, "marker_pos", text="Position")
+            mbox.prop(v, "marker_dir", text="Direction")
+
+            btn = mbox.row(align=True)
+            op = btn.operator("drs.animset_play_range", text="Play Marker", icon="PLAY")
+            op.mode_key_index, op.start, op.end = (
+                mk_index,
+                0,
+                v.marker_time,
+            )
+
+            op2 = btn.operator(
+                "drs.animset_show_marker", text="Display Marker", icon="MARKER_HLT"
+            )
+            op2.mode_key_index = mk_index
+
+        # ... existing cast handling and Play button ...
         if not is_sle and not is_cast:
             pr = det.row(align=True)
             op = pr.operator("drs.animset_play_range", text="Play", icon="PLAY")
-            op.mode_key_index, op.n0, op.n1 = mk_index, float(v.start), float(v.end)
+            op.mode_key_index, op.start, op.end = mk_index, float(v.start), float(v.end)
 
 
 class DRS_UL_Variants(bpy.types.UIList):
@@ -1302,6 +1666,19 @@ class DRS_OT_VariantAdd(bpy.types.Operator):
             "NONE",
             False,
         )
+        # if this vis_job requires a marker, seed defaults now
+        try:
+            vj = int(mk.vis_job)
+        except Exception:
+            vj = 0
+        if _visjob_requires_marker(vj):
+            d = _marker_defaults_for_visjob(vj)
+            v.marker_has = True
+            v.marker_is_spawn = bool(int(d["is_spawn_animation"]))
+            v.marker_time = float(d["time"])
+            v.marker_pos = d["position"]
+            v.marker_dir = d["direction"]
+
         mk.active_variant = len(mk.variants) - 1
         _redraw_ui()
         return {"FINISHED"}
@@ -1514,6 +1891,7 @@ _classes = (
     DRS_OT_ModeKey_AddAbility,
     DRS_OT_ModeKey_Remove,
     DRS_OT_PlayRange,
+    DRS_OT_ShowMarker,
     DRS_UL_Variants,
     DRS_OT_VariantAdd,
     DRS_OT_VariantRemove,

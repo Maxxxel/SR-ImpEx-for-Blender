@@ -232,7 +232,6 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
         blob["marker_sets"].append(
             {
                 "anim_id": int(getattr(ms, "anim_id", 0) or 0),
-                # In the file this is 'name' (string) — UI uses 'file' for the action name.
                 "file": (getattr(ms, "name", "") or ""),
                 "animation_marker_id": am_id_str,
                 "markers": [marker],
@@ -633,9 +632,7 @@ def load_animated_bms_module(
     file_name: str,
     dir_name: str,
     parent_collection: bpy.types.Collection,
-    import_animation_fps,
     smooth_animation,
-    import_animation_type,
 ):
     # if filename has .module extension replace it with bms
     if file_name.endswith(".module"):
@@ -687,9 +684,7 @@ def load_animated_bms_module(
                             armature_object,
                             bone_list,
                             variant.file,
-                            import_animation_fps,
                             smooth_animation,
-                            import_animation_type,
                             file_name,
                             map_collection=parent_collection,
                         )
@@ -702,9 +697,7 @@ def load_turret_animation(
     dir_name: str,
     armature_object: bpy.types.Object,
     bone_list: List[DRSBone],
-    import_animation_fps,
     smooth_animation,
-    import_animation_type,
 ):
     ska_file: SKA = SKA().read(os.path.join(dir_name, file_name))
     # Create the Animation
@@ -713,9 +706,7 @@ def load_turret_animation(
         armature_object,
         bone_list,
         file_name,
-        import_animation_fps,
         smooth_animation,
-        import_animation_type,
         file_name,
         map_collection=(
             None
@@ -735,9 +726,7 @@ def process_slocator_import(
     bone_list: List[DRSBone],
     armature_object: bpy.types.Object,
     dir_name: str,
-    import_animation_fps,
     smooth_animation,
-    import_animation_type,
 ):
     locator_object: Union[bpy.types.Object, None] = None
 
@@ -766,9 +755,7 @@ def process_slocator_import(
             slocator.file_name,
             dir_name,
             source_collection,
-            import_animation_fps,
             smooth_animation,
-            import_animation_type,
         )
     elif slocator.class_type == "Turret" and slocator.file_name_length > 0:
         load_turret_animation(
@@ -776,9 +763,7 @@ def process_slocator_import(
             dir_name,
             armature_object,
             bone_list,
-            import_animation_fps,
             smooth_animation,
-            import_animation_type,
         )
         return
     else:
@@ -1889,8 +1874,6 @@ def load_drs(
     apply_transform=True,
     import_collision_shape=False,
     import_animation=True,
-    import_animation_type="FRAMES",
-    import_animation_fps=30,
     smooth_animation=True,
     import_ik_atlas=False,
     import_modules=True,
@@ -1899,12 +1882,10 @@ def load_drs(
     limit_obb_depth=5,
     import_bb=False,
 ):
-
     start_time = time.time()
     base_name = os.path.basename(filepath).split(".")[0]
     dir_name = os.path.dirname(filepath)
     drs_file: DRS = DRS().read(filepath)
-    bpy.context.scene.render.fps = import_animation_fps
 
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
@@ -1945,9 +1926,7 @@ def load_drs(
                         armature_object,
                         bone_list,
                         variant.file,
-                        import_animation_fps,
                         smooth_animation,
-                        import_animation_type,
                         filepath,
                         map_collection=source_collection,
                     )
@@ -1970,9 +1949,7 @@ def load_drs(
                 bone_list,
                 armature_object,
                 dir_name,
-                import_animation_fps,
                 smooth_animation,
-                import_animation_type,
             )
         source_collection.children.link(slocator_collection)
 
@@ -2015,9 +1992,7 @@ def import_state_based_mesh_set(
     dir_name: str,
     bmg_file: DRS,
     import_animation: bool,
-    animation_type: str,
     smooth_animation,
-    fps: int,
     import_debris: bool,
     import_collision_shape: bool,
     import_ik_atlas: bool,
@@ -2110,9 +2085,7 @@ def import_state_based_mesh_set(
                                 armature_object,
                                 bone_list,
                                 variant.file,
-                                fps,
                                 smooth_animation,
-                                animation_type,
                                 base_name,
                                 map_collection=source_collection,
                             )
@@ -2226,8 +2199,6 @@ def load_bmg(
     apply_transform=True,
     import_collision_shape=False,
     import_animation=True,
-    import_animation_type="FRAMES",
-    import_animation_fps=30,
     smooth_animation=True,
     import_ik_atlas=False,
     import_debris=True,
@@ -2236,7 +2207,6 @@ def load_bmg(
     start_time = time.time()
     dir_name = os.path.dirname(filepath)
     base_name = os.path.basename(filepath).split(".")[0]
-    bpy.context.scene.render.fps = import_animation_fps
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
     )
@@ -2378,9 +2348,7 @@ def load_bmg(
                         construction_dir,
                         bms_file,
                         import_animation,
-                        import_animation_type,
                         smooth_animation,
-                        import_animation_fps,
                         import_debris,
                         import_collision_shape,
                         import_ik_atlas,
@@ -2444,9 +2412,7 @@ def load_bmg(
                         armature_object,
                         bone_list,
                         variant.file,
-                        import_animation_fps,
                         smooth_animation,
-                        import_animation_type,
                         filepath,
                         map_collection=source_collection,
                     )
