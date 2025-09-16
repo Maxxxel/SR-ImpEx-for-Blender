@@ -522,7 +522,7 @@ def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
 
         unified_mesh.verts.ensure_lookup_table()
         unified_mesh.verts.index_update()
-        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=1e-6)
+        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=1e-5)
 
         if len(unified_mesh.verts) > 32767:
             logger.log(
@@ -2722,7 +2722,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
 
         # Weld tiny duplicates after the transform
         bm_out.verts.ensure_lookup_table()
-        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-6)
+        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-5)
 
         # Bake to a new Mesh
         unified = bpy.data.meshes.new("unified_mesh")
@@ -3719,7 +3719,7 @@ def create_skin_info(
     bone_map: Dict[str, Dict[str, int]],
 ) -> CSkSkinInfo:
     """Create CSkSkinInfo by matching world-space vertices to the unified mesh."""
-    TOL_DIGITS = 6  # matches 1e-5 used in remove_doubles
+    TOL_DIGITS = 5  # matches 1e-6 used in remove_doubles
     skin_info = CSkSkinInfo()
     skin_info.vertex_count = len(unified_mesh.vertices)
 
@@ -3973,8 +3973,6 @@ def create_animation_set(model_name: str) -> AnimationSet:
     anim.has_atlas = 1
     anim.atlas_count = 0
     anim.ik_atlases = []
-    anim.animation_marker_sets = []
-    anim.animation_marker_count = 0
     anim.mode_animation_keys = []
     anim.mode_animation_key_count = 0
 
@@ -4058,6 +4056,81 @@ def create_animation_set(model_name: str) -> AnimationSet:
     anim.mode_animation_key_count = len(anim.mode_animation_keys)
 
     # ---- Marker sets -----------------------------------------------------------------
+    def _to_uint32(v) -> int:
+        """Return a non-negative uint32 from int/str/hex/anything."""
+        try:
+            if isinstance(v, int):
+                return v & 0xFFFFFFFF
+            s = str(v).strip()
+            # decimal?
+            try:
+                return int(s) & 0xFFFFFFFF
+            except Exception:
+                pass
+            # hex (allow 0x prefix or plain hex)
+            try:
+                return int(s, 16) & 0xFFFFFFFF
+            except Exception:
+                pass
+            # fallback: stable hash → first 4 bytes (little endian)
+            h = hashlib.sha1(s.encode("utf-8")).digest()[:4]
+            return int.from_bytes(h, "little", signed=False)
+        except Exception:
+            return 0
+
+    anim.animation_marker_sets = []
+    anim.animation_marker_count = 0
+
+    marker_sets_blob = blob.get("marker_sets") or []
+    for msd in marker_sets_blob:
+        try:
+            name = (msd.get("file") or "").strip()
+            if not name:
+                # nothing usable
+                continue
+
+            ms = AnimationMarkerSet()
+            ms.anim_id = int(msd.get("anim_id", 0) or 0)
+            ms.name = name
+            ms.length = len(ms.name)
+
+            raw_id = msd.get("animation_marker_id", 0)
+            ms.animation_marker_id = _to_uint32(raw_id)
+
+            # we keep exactly one marker per set; use first if multiple
+            md = (msd.get("markers") or [{}])[0] or {}
+            am = AnimationMarker()
+            am.is_spawn_animation = int(md.get("is_spawn_animation", 0) or 0)
+            am.time = float(md.get("time", 0.0) or 0.0)
+
+            # accept both "direction/position" and legacy "dir/pos" keys
+            dir3 = md.get("direction")
+            if dir3 is None:
+                dir3 = md.get("dir", [0.0, 0.0, 1.0])
+            pos3 = md.get("position")
+            if pos3 is None:
+                pos3 = md.get("pos", [0.0, 0.0, 0.0])
+
+            am.direction = Vector3(
+                x=float(dir3[0] if len(dir3) > 0 else 0.0),
+                y=float(dir3[1] if len(dir3) > 1 else 0.0),
+                z=float(dir3[2] if len(dir3) > 2 else 0.0),
+            )
+            am.position = Vector3(
+                x=float(pos3[0] if len(pos3) > 0 else 0.0),
+                y=float(pos3[1] if len(pos3) > 1 else 0.0),
+                z=float(pos3[2] if len(pos3) > 2 else 0.0),
+            )
+
+            ms.animation_markers = [am]
+            ms.marker_count = 1
+
+            anim.animation_marker_sets.append(ms)
+        except Exception:
+            # be conservative; skip broken entries
+            continue
+
+    anim.animation_marker_count = len(anim.animation_marker_sets)
 
     # ---- Fallback if no blob or no valid variants -----------------------------------------------
     if anim.mode_animation_key_count == 0:
