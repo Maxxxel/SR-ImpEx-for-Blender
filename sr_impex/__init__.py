@@ -17,6 +17,7 @@ from .ska_utility import export_ska, get_actions
 from . import addon_updater_ops
 from . import locator_editor
 from . import animation_set_editor
+from . import material_flow_editor
 
 bl_info = {
     "name": "SR-ImpEx",
@@ -605,6 +606,7 @@ def register():
     bpy.utils.register_class(MyAddonPreferences)
     # bpy.utils.register_class(DRS_OT_debug_obb_tree)
     locator_editor.register()
+    material_flow_editor.register()
     animation_set_editor.register()
 
 
@@ -619,4 +621,5 @@ def unregister():
     bpy.utils.unregister_class(MyAddonPreferences)
     # bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
     locator_editor.unregister()
+    material_flow_editor.unregister()
     animation_set_editor.unregister()

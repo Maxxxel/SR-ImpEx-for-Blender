@@ -1545,6 +1545,50 @@ def create_mesh_object(
     )
     mesh_data.materials.append(material)
 
+    # after you've created `mesh_object` for mesh index `mesh_index`…
+    # Seed Material flags + Flow custom props on the object so users can edit them.
+    try:
+        bf_mesh = drs_file.cdsp_mesh_file.meshes[mesh_index]
+        # bool_parameter
+        if hasattr(mesh_object, "drs_material") and mesh_object.drs_material:
+            mesh_object.drs_material.bool_parameter = int(bf_mesh.bool_parameter)
+            # ensure bits reflect the value
+            # (update callback in the PG expands bits from the raw int)
+        # flow
+        if hasattr(mesh_object, "drs_flow") and mesh_object.drs_flow:
+            f = bf_mesh.flow
+            # flow.length==4 indicates it is present in -86061050 branch
+            use = int(getattr(f, "length", 0) or 0) == 4
+            mesh_object.drs_flow.use_flow = use
+            if use:
+                mesh_object.drs_flow.max_flow_speed = (
+                    f.max_flow_speed.x,
+                    f.max_flow_speed.y,
+                    f.max_flow_speed.z,
+                    f.max_flow_speed.w,
+                )
+                mesh_object.drs_flow.min_flow_speed = (
+                    f.min_flow_speed.x,
+                    f.min_flow_speed.y,
+                    f.min_flow_speed.z,
+                    f.min_flow_speed.w,
+                )
+                mesh_object.drs_flow.flow_speed_change = (
+                    f.flow_speed_change.x,
+                    f.flow_speed_change.y,
+                    f.flow_speed_change.z,
+                    f.flow_speed_change.w,
+                )
+                mesh_object.drs_flow.flow_scale = (
+                    f.flow_scale.x,
+                    f.flow_scale.y,
+                    f.flow_scale.z,
+                    f.flow_scale.w,
+                )
+    except Exception:
+        # keep import robust if the PGs are not available for some reason
+        pass
+
     return mesh_object, mesh_data
 
 
@@ -3427,6 +3471,49 @@ def create_mesh(
 
     # Set the Bool Parameter by a bin -> dec conversion
     new_mesh.bool_parameter = int(str(bool_param_bit_flag), 2)
+    # --- SR override from UI: if the mesh has drs_material set, prefer that value
+    try:
+        mp = getattr(mesh, "drs_material", None)
+        if mp and int(mp.bool_parameter) >= 0:
+            new_mesh.bool_parameter = int(mp.bool_parameter) & 0xFFFFFFFF
+    except Exception:
+        pass
+    new_mesh.materials = Materials()
+
+    # --- SR override Flow from UI (only when enabled)
+    try:
+        fp = getattr(mesh, "drs_flow", None)
+        if fp and bool(fp.use_flow):
+            new_mesh.flow.length = 4
+            # push vectors
+            v = new_mesh.flow
+            # each is Vector4(x,y,z,w)
+            (
+                v.max_flow_speed.x,
+                v.max_flow_speed.y,
+                v.max_flow_speed.z,
+                v.max_flow_speed.w,
+            ) = fp.max_flow_speed
+            (
+                v.min_flow_speed.x,
+                v.min_flow_speed.y,
+                v.min_flow_speed.z,
+                v.min_flow_speed.w,
+            ) = fp.min_flow_speed
+            (
+                v.flow_speed_change.x,
+                v.flow_speed_change.y,
+                v.flow_speed_change.z,
+                v.flow_speed_change.w,
+            ) = fp.flow_speed_change
+            v.flow_scale.x, v.flow_scale.y, v.flow_scale.z, v.flow_scale.w = (
+                fp.flow_scale
+            )
+            # material_parameters path that includes Flow is -86061050 in your writer
+            # (that branch writes 'flow' and the extra material blocks)
+            new_mesh.material_parameters = -86061050
+    except Exception:
+        pass
 
     # Refraction
     refraction = Refraction()
