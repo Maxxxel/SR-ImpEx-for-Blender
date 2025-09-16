@@ -11,6 +11,7 @@ from collections import defaultdict
 from typing import Tuple, List, Dict, Optional, Union
 import xml.etree.ElementTree as ET
 from mathutils import Matrix, Vector
+from mathutils.kdtree import KDTree
 import bpy
 from bmesh.ops import (
     triangulate as tri,
@@ -522,7 +523,7 @@ def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
 
         unified_mesh.verts.ensure_lookup_table()
         unified_mesh.verts.index_update()
-        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=1e-5)
+        remove_doubles(unified_mesh, verts=unified_mesh.verts, dist=1e-6)
 
         if len(unified_mesh.verts) > 32767:
             logger.log(
@@ -2722,7 +2723,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
 
         # Weld tiny duplicates after the transform
         bm_out.verts.ensure_lookup_table()
-        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-5)
+        remove_doubles(bm_out, verts=bm_out.verts, dist=1e-6)
 
         # Bake to a new Mesh
         unified = bpy.data.meshes.new("unified_mesh")
@@ -3719,11 +3720,13 @@ def create_skin_info(
     bone_map: Dict[str, Dict[str, int]],
 ) -> CSkSkinInfo:
     """Create CSkSkinInfo by matching world-space vertices to the unified mesh."""
-    TOL_DIGITS = 5  # matches 1e-6 used in remove_doubles
+    TOL_DIGITS = 6  # ~1e-6 (your original rounding)
+    KD_TOL = 1e-5  # tolerant fallback for welded/shifted verts
+
     skin_info = CSkSkinInfo()
     skin_info.vertex_count = len(unified_mesh.vertices)
 
-    # Build hashtable: unified mesh is already in WORLD SPACE
+    # Build coordinate -> index hashtable (fast path). The unified mesh is already in WORLD space.
     unified_hashtable: dict[tuple[float, float, float], int] = {}
     for v in unified_mesh.vertices:
         key = (
@@ -3735,43 +3738,53 @@ def create_skin_info(
             logger.log(
                 f"Duplicate vertex found in unified mesh: {v.co}", "Error", "ERROR"
             )
-            # early out with empty data but correct count
             skin_info.vertex_data = [
                 VertexData(bone_indices=[0, 0, 0, 0], weights=[0.0, 0.0, 0.0, 0.0])
             ] * skin_info.vertex_count
             return skin_info
         unified_hashtable[key] = v.index
 
-    # Accumulate per-vertex weights in unified index space
+    # Build KDTree as a robust fallback (handles tiny weld shifts from remove_doubles)
+    kd = KDTree(len(unified_mesh.vertices))
+    for v in unified_mesh.vertices:
+        kd.insert(v.co, v.index)
+    kd.balance()
+
     vertex_data: list[VertexData | None] = [None] * skin_info.vertex_count
+    misses = 0
 
     for obj in meshes_collection.objects:
         if obj.type != "MESH":
             continue
-
         mw = obj.matrix_world.copy()
         vgroups = obj.vertex_groups
+
         for v in obj.data.vertices:
-            # Convert OBJECT -> WORLD to match unified mesh space
             wco = mw @ v.co
             key = (
                 round(wco.x, TOL_DIGITS),
                 round(wco.y, TOL_DIGITS),
                 round(wco.z, TOL_DIGITS),
             )
+
             idx = unified_hashtable.get(key)
             if idx is None:
-                logger.log(
-                    f"Vertex {v.index} not found in unified mesh (ws: {wco})",
-                    "Error",
-                    "ERROR",
-                )
-                continue
+                # KD fallback
+                _pos, kd_idx, dist = kd.find(wco)
+                if kd_idx is None or dist > KD_TOL:
+                    if misses < 20:  # avoid spam
+                        logger.log(
+                            f"Vertex {v.index} not found in unified mesh (ws: {wco})",
+                            "Warning",
+                            "WARNING",
+                        )
+                    misses += 1
+                    continue
+                idx = kd_idx
 
             if vertex_data[idx] is None:
                 vertex_data[idx] = VertexData(bone_indices=[], weights=[])
 
-            # Map Blender vertex groups -> bone ids from bone_map
             for g in v.groups:
                 if g.weight <= 0.0:
                     continue
@@ -3789,23 +3802,26 @@ def create_skin_info(
                     vertex_data[idx].bone_indices.append(bone_id)
                     vertex_data[idx].weights.append(g.weight)
 
-    # Normalize to 4 influences per vertex (pad/truncate)
+    if misses > 20:
+        logger.log(
+            f"{misses} vertices could not be matched to the unified mesh (after KD fallback).",
+            "Warning",
+            "WARNING",
+        )
+
+    # Normalize to 4 influences per vertex (pad/truncate) — unchanged
     for i, vd in enumerate(vertex_data):
         if vd is None:
-            # no data collected for this unified vertex; keep it as zeros
             vertex_data[i] = VertexData(
                 bone_indices=[0, 0, 0, 0], weights=[0.0, 0.0, 0.0, 0.0]
             )
             continue
-
-        # Optional: sort by weight desc before clamping to 4
         if len(vd.weights) > 4:
             order = sorted(
                 range(len(vd.weights)), key=lambda k: vd.weights[k], reverse=True
             )[:4]
             vd.bone_indices = [vd.bone_indices[k] for k in order]
             vd.weights = [vd.weights[k] for k in order]
-
         while len(vd.bone_indices) < 4:
             vd.bone_indices.append(0)
             vd.weights.append(0.0)
