@@ -2400,6 +2400,10 @@ def load_bmg(
     import_ik_atlas=False,
     import_debris=True,
     import_construction=True,
+    import_geomesh=False,
+    import_obbtree=False,
+    limit_obb_depth=5,
+    import_bb=False,
 ):
     start_time = time.time()
     dir_name = os.path.dirname(filepath)
@@ -2409,6 +2413,9 @@ def load_bmg(
     )
     context.collection.children.link(source_collection)
     bmg_file: BMG = BMG().read(filepath)
+
+    # persist_locator_blob_on_collection(source_collection, bmg_file)
+    persist_animset_blob_on_collection(source_collection, bmg_file)
 
     # Models share the same Skeleton Files, so we only need to create one Armature and share it across all sub-modules!
     armature_object = None
