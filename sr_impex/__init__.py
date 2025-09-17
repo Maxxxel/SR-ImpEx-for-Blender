@@ -24,7 +24,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 4, 0),
-    "version": (3, 2, 0),
+    "version": (3, 2, 1),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -197,12 +197,12 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         default=True,
     )  # type: ignore
     import_geomesh: BoolProperty(
-        name="[DEBUG] Import CGeoMesh",
+        name="[DEBUG] Import CGeoMesh (DRS only)",
         description="Import additional geometry mesh data.",
         default=False,
     )  # type: ignore
     import_obbtree: BoolProperty(
-        name="[DEBUG] Import CGeoOBBTree",
+        name="[DEBUG] Import CGeoOBBTree (DRS only)",
         description="Import additional OBB tree data.",
         default=False,
     )  # type: ignore
@@ -214,7 +214,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         max=1000,
     )  # type: ignore
     import_bb: BoolProperty(
-        name="[DEBUG] Import MeshBoundingBox",
+        name="[DEBUG] Import MeshBoundingBox (DRS only)",
         description="Import additional axis-aligned bounding box data.",
         default=False,
     )  # type: ignore
