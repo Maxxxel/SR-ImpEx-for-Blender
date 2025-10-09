@@ -22,7 +22,7 @@ from . import material_flow_editor
 bl_info = {
     "name": "SR-ImpEx",
     "author": "Maxxxel",
-    "description": "Addon for importing and exporting Battleforge drs/bmg files.",
+    "description": "Addon for importing and exporting Spellforce 2 drs/bmg files.",
     "blender": (4, 4, 0),
     "version": (3, 2, 1),
     "location": "File > Import",
@@ -137,7 +137,7 @@ class MyAddonPreferences(bpy.types.AddonPreferences):
 
 
 class ImportBFModel(bpy.types.Operator, ImportHelper):
-    """Import a Battleforge drs/bmg file"""
+    """Import a Spellforce 2 drs/bmg file"""
 
     bl_idname = "import_scene.drs"
     bl_label = "Import DRS/BMG"
@@ -295,7 +295,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
 
 
 class ExportBFModel(bpy.types.Operator, ExportHelper):
-    """Export a Battleforge drs/bmg file"""
+    """Export a Spellforce 2 drs/bmg file"""
 
     bl_idname: str = "export_scene.drs"
     bl_label: str = "Export DRS"
@@ -417,7 +417,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 
 
 class ExportSKAFile(bpy.types.Operator, ExportHelper):
-    """Export a Battleforge ska animation file"""
+    """Export a Spellforce 2 ska animation file"""
 
     bl_idname: str = "export_animation.ska"
     bl_label: str = "Export SKA"
@@ -488,10 +488,10 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
 
 
 class NewBFScene(bpy.types.Operator, ImportHelper):
-    """Create a new Battleforge scene with selectable type and collision support"""
+    """Create a new Spellforce 2 scene with selectable type and collision support"""
 
     bl_idname = "scene.new_bf_scene"
-    bl_label = "New Battleforge Scene"
+    bl_label = "New Spellforce 2 Scene"
     bl_options = {"REGISTER", "UNDO"}
 
     scene_type: EnumProperty(  # type: ignore
@@ -517,7 +517,7 @@ class NewBFScene(bpy.types.Operator, ImportHelper):
 
     def execute(self, context):
         create_new_bf_scene(self.scene_type, self.collision_support)
-        self.report({"INFO"}, "New Battleforge scene created.")
+        self.report({"INFO"}, "New Spellforce 2 scene created.")
         return {"FINISHED"}
 
 
@@ -548,7 +548,7 @@ class ShowMessagesOperator(bpy.types.Operator):
 def menu_func_import(self, _context):
     self.layout.operator(
         ImportBFModel.bl_idname,
-        text="Battleforge (.drs) - "
+        text="Spellforce 2 (.drs) - "
         + (is_dev_version and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
@@ -559,7 +559,7 @@ def menu_func_import(self, _context):
     )
     self.layout.operator(
         NewBFScene.bl_idname,
-        text="New Battleforge Scene - "
+        text="New Spellforce 2 Scene - "
         + (is_dev_version and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
@@ -573,7 +573,7 @@ def menu_func_import(self, _context):
 def menu_func_export(self, _context):
     self.layout.operator(
         ExportBFModel.bl_idname,
-        text="Battleforge (.drs) - "
+        text="Spellforce 2 (.drs) - "
         + (is_dev_version and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
@@ -584,7 +584,7 @@ def menu_func_export(self, _context):
     )
     self.layout.operator(
         ExportSKAFile.bl_idname,
-        text="Battleforge Animation (.ska) - "
+        text="Spellforce 2 Animation (.ska) - "
         + (is_dev_version and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
@@ -600,7 +600,7 @@ def register():
     bpy.utils.register_class(ImportBFModel)
     bpy.utils.register_class(ExportBFModel)
     bpy.utils.register_class(ExportSKAFile)
-    bpy.utils.register_class(NewBFScene)
+    # bpy.utils.register_class(NewBFScene)
     bpy.utils.register_class(ShowMessagesOperator)
     _attach_menus_idempotent()
     bpy.utils.register_class(MyAddonPreferences)
@@ -615,7 +615,7 @@ def unregister():
     bpy.utils.unregister_class(ImportBFModel)
     bpy.utils.unregister_class(ExportBFModel)
     bpy.utils.unregister_class(ExportSKAFile)
-    bpy.utils.unregister_class(NewBFScene)
+    # bpy.utils.unregister_class(NewBFScene)
     bpy.utils.unregister_class(ShowMessagesOperator)
     _detach_menus_safely()
     bpy.utils.unregister_class(MyAddonPreferences)
