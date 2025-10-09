@@ -12,6 +12,12 @@ def unpack_data(file: BinaryIO, *formats: str) -> List[List[Union[float, int]]]:
         result.append(list(unpack(fmt, file.read(calcsize(fmt)))))
     return result
 
+ClassMagic = {
+    "CskSkeleton": 1558308612,
+    "CDspMeshFile": 1314189598,
+    "CGeoOBBTree": 1845540702,
+    "CGdLocatorList": 281702437,
+}
 
 MagicValues = {
     "CDspJointMap": -1340635850,
@@ -312,12 +318,20 @@ class Vertex:
     bone_indices: Optional[List[int]] = field(default_factory=list)
 
     def read(self, file: BinaryIO, revision: int) -> "Vertex":
-        if revision == 133121:
+        if (
+            revision == 133121
+            or revision == 134365185
+            or revision == 536905729
+            or revision == 134381569
+        ):
             data = unpack_data(file, "fff", "fff", "ff")
             self.position, self.normal, self.texture = data[0], data[1], data[2]
-        elif revision == 12288 or revision == 2049:
+        elif revision == 12288:
             data = unpack_data(file, "fff", "fff")
             self.tangent, self.bitangent = data[0], data[1]
+        elif revision == 2049:
+            data = unpack_data(file, "fff", "fff")
+            self.position, self.normal = data[0], data[1]
         elif revision == 12:
             data = unpack_data(file, "4B", "4B")
             self.raw_weights, self.bone_indices = data[0], data[1]
@@ -328,13 +342,21 @@ class Vertex:
         return self
 
     def write(self, file: BinaryIO, revision: int) -> None:
-        if revision == 133121:
+        if (
+            revision == 133121
+            or revision == 134365185
+            or revision == 536905729
+            or revision == 134381569
+        ):
             file.write(pack("fff", *self.position))
             file.write(pack("fff", *self.normal))
             file.write(pack("ff", *self.texture))
-        elif revision == 12288 or revision == 2049:
+        elif revision == 12288:
             file.write(pack("fff", *self.tangent))
             file.write(pack("fff", *self.bitangent))
+        elif revision == 2049:
+            file.write(pack("fff", *self.position))
+            file.write(pack("fff", *self.normal))
         elif revision == 12:
             file.write(pack("4B", *self.raw_weights))
             file.write(pack("4B", *self.bone_indices))
@@ -1426,6 +1448,49 @@ class CDrwLocatorList:
     def size(self) -> int:
         return 12 + sum(locator.size() for locator in self.slocators)
 
+
+@dataclass(eq=False, repr=False)
+class GDLocator:
+    cmat_coordinate_system: CMatCoordinateSystem = field(
+        default_factory=CMatCoordinateSystem
+    )
+    class_id: int = 0  # short
+    sub_id: int = 0  # short
+
+    def read(self, file: BinaryIO) -> "GDLocator":
+        self.cmat_coordinate_system = CMatCoordinateSystem().read(file)
+        self.class_id, self.sub_id = unpack("hh", file.read(4))
+        return self
+
+    def write(self, file: BinaryIO) -> None:
+        self.cmat_coordinate_system.write(file)
+        file.write(pack("hh", self.class_id, self.sub_id))
+
+    def size(self) -> int:
+        return self.cmat_coordinate_system.size() + 4
+
+@dataclass(eq=False, repr=False)
+class CGdLocatorList:
+    magic: int = 281702437
+    version: int = 2
+    length: int = 0
+    gdlocators: List[GDLocator] = field(default_factory=list)
+    
+    def read(self, file: BinaryIO) -> "CGdLocatorList":
+        self.magic, self.version = unpack("ii", file.read(8))
+        if self.version == 2:
+            self.length = unpack("i", file.read(4))[0]
+            self.gdlocators = [GDLocator().read(file) for _ in range(self.length)]
+        else:
+            print(f"\nnot implemented locator list version {self.version}\n")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("ii", self.magic, self.version))
+        if self.version == 2:
+            file.write(pack("i", self.length))
+            for locator in self.gdlocators:
+                locator.write(file)
 
 @dataclass(eq=False, repr=False)
 class CGeoAABox:
@@ -2874,6 +2939,15 @@ class MeshSetGrid:
 
 
 @dataclass(eq=False, repr=False)
+class PlacementShape:
+    size: int = 660 # Only for debugging purpose the whole size of the test file's class
+    
+    def read(self, file: BinaryIO) -> "PlacementShape":
+        """Reads the PlacementShape from the buffer"""
+        file.read(self.size)  # Just read the whole class for now
+        return self
+
+@dataclass(eq=False, repr=False)
 class DRS:
     operator: object = None
     context: object = None
@@ -2914,6 +2988,8 @@ class DRS:
     cdrw_locator_list: CDrwLocatorList = None
     effect_set: EffectSet = None
     animation_timings: AnimationTimings = None
+    placement_shape_node: Node = None
+    placement_shape: PlacementShape = None
     model_type: str = None
 
     def __post_init__(self):
@@ -2959,6 +3035,132 @@ class DRS:
             node_information.offset = self.data_offset
             self.data_offset += node_information.node_size
 
+    def read_v2(self, file_name: str) -> "DRS":
+        reader = FileReader(file_name)
+        (
+            self.magic,
+            self.number_of_models,
+            self.node_information_offset,
+            self.node_hierarchy_offset,
+            self.node_count,
+        ) = unpack("iiiiI", reader.read(20))
+
+        if self.magic != -981667554 or self.node_count < 1:
+            raise TypeError(
+                f"This is not a valid file. Magic: {self.magic}, NodeCount: {self.node_count}"
+            )
+
+        # Read Node Informations
+        reader.seek(self.node_information_offset)
+        self.node_informations[0] = RootNodeInformation().read(reader)
+        
+        node_information_map = {
+            -475734043: "animation_set_node",
+            -1900395636: "cdsp_mesh_file_node",
+            100449016: "cgeo_mesh_node",
+            -761174227: "csk_skin_info_node",
+            -2110567991: "csk_skeleton_node",
+            -1403092629: "animation_timings_node",
+            -1340635850: "cdsp_joint_map_node",
+            -933519637: "cgeo_obb_tree_node",
+            -183033339: "drw_resource_meta_node",
+            1396683476: "cgeo_primitive_container_node",
+            268607026: "collision_shape_node",
+            688490554: "effect_set_node",
+            735146985: "cdrw_locator_list_node",
+            -196433635: "gd_locator_list_node",  # Not yet implemented
+            -1424862619: "fx_master_node",  # Not yet implemented
+            -1746446328: "placement_shape_node",  # Not yet implemented
+        }
+        
+        for _ in range(self.node_count - 1):
+            node_info = NodeInformation().read(reader)
+            # Check if the node_info is in the node_information_map
+            if node_info.magic in node_information_map:
+                setattr(self, node_information_map[node_info.magic], node_info)
+                self.node_informations.append(node_info)
+            else:
+                raise TypeError(f"Unknown Node: {node_info.magic}")
+        
+        # Read Node Hierarchy
+        reader.seek(self.node_hierarchy_offset)
+        self.nodes[0] = RootNode().read(reader)
+        
+        node_map = {
+            "AnimationSet": "animation_set_node",
+            "CDspMeshFile": "cdsp_mesh_file_node",
+            "CGeoMesh": "cgeo_mesh_node",
+            "CSkSkinInfo": "csk_skin_info_node",
+            "CSkSkeleton": "csk_skeleton_node",
+            "AnimationTimings": "animation_timings_node",
+            "CDspJointMap": "cdsp_joint_map_node",
+            "CGeoOBBTree": "cgeo_obb_tree_node",
+            "DrwResourceMeta": "drw_resource_meta_node",
+            "CGeoPrimitiveContainer": "cgeo_primitive_container_node",
+            "collisionShape": "collision_shape_node",
+            "EffectSet": "effect_set_node",
+            "CDrwLocatorList": "cdrw_locator_list_node",
+            "CGdLocatorList": "gd_locator_list_node",  # Not yet implemented
+            "FxMaster": "fx_master_node",  # Not yet implemented
+            "placementShape": "placement_shape_node",  # Not yet implemented
+        }
+        
+        for _ in range(self.node_count - 1):
+            node = Node().read(reader)
+            self.nodes.append(node)
+            
+        # Read Nodes, not by their Type but simply by their offset and size from node_informations
+        for node in self.nodes:
+            if not hasattr(node, "info_index"):
+                # Root Node has no info_index
+                continue
+
+            node_info = self.node_informations[node.info_index]
+            if node_info is None:
+                raise TypeError(f"Node {node.name} not found")
+
+            node_info_type = node_information_map.get(node_info.magic, None)
+            reader.seek(node_info.offset)
+            node_magic = reader.read(4)
+            node_magic_int = unpack("i", node_magic)[0]
+            # Find note Type by ClassMagic str:int
+            node_type = None
+            for node_name, nodemagic in ClassMagic.items():
+                if node_magic_int == int(nodemagic):
+                    node_type = node_name
+                    break
+            
+            internal_node_name = node_map.get(node.name, None).replace("_node", "")
+            reader.seek(node_info.offset)
+            if node.name != node_type:
+                if node_type is None:
+                    # print(f"Unknown Node Type with Magic {node_magic_int} at offset {node_info.offset}. Trying to parse as {node.name}.")
+                    # Try to parse the Node as the expected type
+                    try:
+                        setattr(self, internal_node_name, globals()[node.name]().read(reader))
+                        # print("Successfully read node:", node.name)
+                    except Exception as e:
+                        # print(f"Failed to read node {node.name} at offset {node_info.offset}. Error: {e}. Trying as CGeoMesh.")
+                        reader.seek(node_info.offset)
+                        try:
+                            setattr(self, internal_node_name, globals()["CGeoMesh"]().read(reader))
+                            # print("Successfully read node as CGeoMesh.")
+                        except Exception as e2:
+                            print(f"Failed to read node as CGeoMesh. Error: {e2}. Skipping node.")
+                else:
+                    # print(f"Node type mismatch for node {node.name} at offset {node_info.offset}. Expected {node.name}, but got {node_type}. Parsing as {node_type}.")
+                    # Parse the Node with the correct type
+                    setattr(self, internal_node_name, globals()[node_type]().read(reader))
+                    # print("Successfully read fixed node:", node.name + " as " + node_type)
+            else:
+                # Parse the Node normally
+                setattr(self, internal_node_name, globals()[node.name]().read(reader))
+                # print("Successfully read node:", node.name)
+                
+        reader.close()
+        return self
+
+
     def read(self, file_name: str) -> "DRS":
         reader = FileReader(file_name)
         (
@@ -2994,6 +3196,7 @@ class DRS:
             735146985: "cdrw_locator_list_node",
             -196433635: "gd_locator_list_node",  # Not yet implemented
             -1424862619: "fx_master_node",  # Not yet implemented
+            -1746446328: "placement_shape_node",  # Not yet implemented
         }
 
         for _ in range(self.node_count - 1):
@@ -3025,6 +3228,7 @@ class DRS:
             "CDrwLocatorList": "cdrw_locator_list_node",
             "CGdLocatorList": "gd_locator_list_node",  # Not yet implemented
             "FxMaster": "fx_master_node",  # Not yet implemented
+            "placementShape": "placement_shape_node",  # Not yet implemented
         }
 
         for _ in range(self.node_count - 1):
@@ -3035,6 +3239,8 @@ class DRS:
                 val = node_map[node.name]
                 if val == "collisionShape":
                     val = "CollisionShape"
+                if val == "placementShape":
+                    val = "PlacementShape"
                 setattr(self, val, node)
                 self.nodes.append(node)
             else:
@@ -3057,6 +3263,8 @@ class DRS:
             val = node.name
             if val == "collisionShape":
                 val = "CollisionShape"
+            if val == "placementShape":
+                val = "PlacementShape"
 
             setattr(self, node_name, globals()[val]().read(reader))
 

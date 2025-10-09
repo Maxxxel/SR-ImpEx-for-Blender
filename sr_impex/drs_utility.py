@@ -1468,8 +1468,9 @@ def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Me
         vertex = battleforge_mesh_data.mesh_data[0].vertices[_]
         vertices.append(vertex.position)
         normals.append(vertex.normal)
-        # Negate the UVs Y Axis before adding them
-        uv_list.append((vertex.texture[0], -vertex.texture[1]))
+        # Negate the UVs Y Axis before adding them, if we have a UV
+        if vertex.texture:
+            uv_list.append((vertex.texture[0], -vertex.texture[1]))
 
     mesh_data.from_pydata(vertices, [], faces)
     mesh_data.polygons.foreach_set("use_smooth", [True] * len(mesh_data.polygons))
@@ -1486,6 +1487,11 @@ def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Me
     mesh_data.normals_split_custom_set(custom_normals)
     mesh_data.update()
 
+    # Create UV Map if we have UVs
+    if not uv_list:
+        return mesh_data
+    
+    # We need to expand the UVs to match the loops, not the vertices
     uv_list = [
         i
         for poly in mesh_data.polygons
@@ -2087,7 +2093,7 @@ def load_drs(
     start_time = time.time()
     base_name = os.path.basename(filepath).split(".")[0]
     dir_name = os.path.dirname(filepath)
-    drs_file: DRS = DRS().read(filepath)
+    drs_file: DRS = DRS().read_v2(filepath)
 
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
@@ -2110,7 +2116,7 @@ def load_drs(
         )
         mesh_collection.objects.link(mesh_object)
 
-    if drs_file.collision_shape is not None and import_collision_shape:
+    if drs_file.collision_shape is not None and hasattr(drs_file.collision_shape, "box_count") and import_collision_shape:
         import_collision_shapes(source_collection, drs_file)
 
     if (
