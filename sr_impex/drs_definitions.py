@@ -13,7 +13,7 @@ def unpack_data(file: BinaryIO, *formats: str) -> List[List[Union[float, int]]]:
     return result
 
 ClassMagic = {
-    "CskSkeleton": 1558308612,
+    "CSkSkeleton": 1558308612,
     "CDspMeshFile": 1314189598,
     "CGeoOBBTree": 1845540702,
     "CGdLocatorList": 281702437,
@@ -878,7 +878,7 @@ class Material:
             self.special = unpack("f", file.read(4))[0]
         else:
             self.unknown = unpack("f", file.read(4))[0]
-            raise TypeError(f"Unknown Material {self.unknown}")
+            print(f"Unknown Material {self.identifier}: {self.unknown}")
         return self
 
     def write(self, file: BinaryIO) -> None:
