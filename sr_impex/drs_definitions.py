@@ -801,6 +801,7 @@ class Material:
     wind_height: float = 0.0
     depth_write_threshold: float = 0.0
     saturation: float = 0.0
+    special: float = 16
     unknown: float = 0.0
 
     def __init__(self, index: int = None) -> None:
@@ -842,6 +843,9 @@ class Material:
             elif index == 11:
                 self.identifier = 1668510785
                 self.saturation = 1.0
+            elif index == 12:
+                self.identifier = 1936745324
+                self.special = 16
 
     def read(self, file: BinaryIO) -> "Material":
         """Reads the Material from the buffer"""
@@ -870,6 +874,8 @@ class Material:
             self.depth_write_threshold = unpack("f", file.read(4))[0]
         elif self.identifier == 1668510785:
             self.saturation = unpack("f", file.read(4))[0]
+        elif self.identifier == 1936745324:
+            self.special = unpack("f", file.read(4))[0]
         else:
             self.unknown = unpack("f", file.read(4))[0]
             raise TypeError(f"Unknown Material {self.unknown}")
@@ -902,6 +908,8 @@ class Material:
             file.write(pack("f", self.depth_write_threshold))
         elif self.identifier == 1668510785:
             file.write(pack("f", self.saturation))
+        elif self.identifier == 1936745324:
+            file.write(pack("f", self.special))
         else:
             file.write(pack("f", self.unknown))
             raise TypeError(f"Unknown Material {self.unknown}")
@@ -1202,7 +1210,7 @@ class BattleforgeMesh:
 class CDspMeshFile:
     magic: int = 1314189598
     zero: int = 0
-    mesh_count: int = 0
+    mesh_count: int = 1
     bounding_box_lower_left_corner: Vector3 = field(
         default_factory=lambda: Vector3(0, 0, 0)
     )
@@ -1226,6 +1234,10 @@ class CDspMeshFile:
             self.bounding_box_upper_right_corner = Vector3().read(file)
             self.meshes = [BattleforgeMesh().read(file) for _ in range(self.mesh_count)]
             self.some_points = [Vector4().read(file) for _ in range(3)]
+        elif self.magic == 1:
+            self.bounding_box_lower_left_corner = Vector3().read(file)
+            self.bounding_box_upper_right_corner = Vector3().read(file)
+            self.meshes = [BattleforgeMesh().read(file)]
         else:
             raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
         return self
@@ -1300,17 +1312,24 @@ class OBBNode:
 @dataclass(eq=False, repr=False)
 class CGeoOBBTree:
     magic: int = 1845540702
-    version: int = 3
+    version: int = 3 # Can be 1 too
     matrix_count: int = 0
     obb_nodes: List[OBBNode] = field(default_factory=list)
     triangle_count: int = 0
     faces: List[Face] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CGeoOBBTree":
-        self.magic, self.version, self.matrix_count = unpack("iii", file.read(12))
-        self.obb_nodes = [OBBNode().read(file) for _ in range(self.matrix_count)]
-        self.triangle_count = unpack("i", file.read(4))[0]
-        self.faces = [Face().read(file) for _ in range(self.triangle_count)]
+        self.magic, self.version = unpack("ii", file.read(8))
+        if self.version == 1:
+            print("Version 1 OBBTree found, not implemented yet.")
+        elif self.version == 3:
+            self.matrix_count = unpack("i", file.read(4))[0]
+            self.obb_nodes = [OBBNode().read(file) for _ in range(self.matrix_count)]
+            self.triangle_count = unpack("i", file.read(4))[0]
+            self.faces = [Face().read(file) for _ in range(self.triangle_count)]
+        else:
+            raise TypeError(f"Unknown OBBTree Version {self.version}")
+        
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -1481,6 +1500,8 @@ class CGdLocatorList:
         if self.version == 2:
             self.length = unpack("i", file.read(4))[0]
             self.gdlocators = [GDLocator().read(file) for _ in range(self.length)]
+        elif self.version == 1:
+            pass # Nothing else
         else:
             print(f"\nnot implemented locator list version {self.version}\n")
         return self
@@ -3119,7 +3140,7 @@ class DRS:
             if node_info is None:
                 raise TypeError(f"Node {node.name} not found")
 
-            node_info_type = node_information_map.get(node_info.magic, None)
+            # node_info_type = node_information_map.get(node_info.magic, None)
             reader.seek(node_info.offset)
             node_magic = reader.read(4)
             node_magic_int = unpack("i", node_magic)[0]
@@ -3134,28 +3155,28 @@ class DRS:
             reader.seek(node_info.offset)
             if node.name != node_type:
                 if node_type is None:
-                    # print(f"Unknown Node Type with Magic {node_magic_int} at offset {node_info.offset}. Trying to parse as {node.name}.")
+                    print(f"Unknown Node Type with Magic {node_magic_int} at offset {node_info.offset}. Trying to parse as {node.name}.")
                     # Try to parse the Node as the expected type
                     try:
                         setattr(self, internal_node_name, globals()[node.name]().read(reader))
-                        # print("Successfully read node:", node.name)
+                        print("Successfully read node:", node.name)
                     except Exception as e:
-                        # print(f"Failed to read node {node.name} at offset {node_info.offset}. Error: {e}. Trying as CGeoMesh.")
+                        print(f"Failed to read node {node.name} at offset {node_info.offset}. Error: {e}. Trying as CGeoMesh.")
                         reader.seek(node_info.offset)
                         try:
                             setattr(self, internal_node_name, globals()["CGeoMesh"]().read(reader))
-                            # print("Successfully read node as CGeoMesh.")
+                            print("Successfully read node as CGeoMesh.")
                         except Exception as e2:
                             print(f"Failed to read node as CGeoMesh. Error: {e2}. Skipping node.")
                 else:
-                    # print(f"Node type mismatch for node {node.name} at offset {node_info.offset}. Expected {node.name}, but got {node_type}. Parsing as {node_type}.")
+                    print(f"Node type mismatch for node {node.name} at offset {node_info.offset}. Expected {node.name}, but got {node_type}. Parsing as {node_type}.")
                     # Parse the Node with the correct type
                     setattr(self, internal_node_name, globals()[node_type]().read(reader))
-                    # print("Successfully read fixed node:", node.name + " as " + node_type)
+                    print("Successfully read fixed node:", node.name + " as " + node_type)
             else:
                 # Parse the Node normally
                 setattr(self, internal_node_name, globals()[node.name]().read(reader))
-                # print("Successfully read node:", node.name)
+                print("Successfully read node:", node.name)
                 
         reader.close()
         return self
