@@ -1403,13 +1403,18 @@ def import_csk_skeleton(
         f"{locator_prefix}CSkSkeleton"
     )
     # Create the Armature Object and add the Armature Data to it
+    armature_collection = bpy.data.collections.new(
+        f"{locator_prefix}Armature_Collection"
+    )
+    source_collection.children.link(armature_collection)
     armature_object: bpy.types.Object = bpy.data.objects.new(
         f"{locator_prefix}Armature", armature_data
     )
     # Link the Armature Object to the Scene Collection to ensure it's in the view layer
-    bpy.context.scene.collection.objects.link(armature_object)
+    # bpy.context.scene.collection.objects.link(armature_object)
     # Now link it to the intended destination collection
-    source_collection.objects.link(armature_object)
+    # source_collection.objects.link(armature_object)
+    armature_collection.objects.link(armature_object)
     # Create the Skeleton
     bone_list = init_bones(drs_file.csk_skeleton)
     # Directly set armature data to edit mode
