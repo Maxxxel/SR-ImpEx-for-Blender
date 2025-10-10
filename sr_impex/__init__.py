@@ -487,38 +487,38 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
         return {"FINISHED"}
 
 
-class NewBFScene(bpy.types.Operator, ImportHelper):
-    """Create a new Spellforce 2 scene with selectable type and collision support"""
+# class NewBFScene(bpy.types.Operator, ImportHelper):
+#     """Create a new Spellforce 2 scene with selectable type and collision support"""
 
-    bl_idname = "scene.new_bf_scene"
-    bl_label = "New Spellforce 2 Scene"
-    bl_options = {"REGISTER", "UNDO"}
+#     bl_idname = "scene.new_bf_scene"
+#     bl_label = "New Spellforce 2 Scene"
+#     bl_options = {"REGISTER", "UNDO"}
 
-    scene_type: EnumProperty(  # type: ignore
-        name="Scene Type",
-        description="Select the type of scene to create",
-        items=[
-            ("object", "Static Object", "Create a static object scene"),
-            ("object", "Animated Object", "Create an animated object scene"),
-        ],
-        default="object",
-    )
+#     scene_type: EnumProperty(  # type: ignore
+#         name="Scene Type",
+#         description="Select the type of scene to create",
+#         items=[
+#             ("object", "Static Object", "Create a static object scene"),
+#             ("object", "Animated Object", "Create an animated object scene"),
+#         ],
+#         default="object",
+#     )
 
-    collision_support: BoolProperty(  # type: ignore
-        name="Collision Support",
-        description="Include collision shape collections",
-        default=False,
-    )
+#     collision_support: BoolProperty(  # type: ignore
+#         name="Collision Support",
+#         description="Include collision shape collections",
+#         default=False,
+#     )
 
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, "scene_type")
-        layout.prop(self, "collision_support")
+#     def draw(self, context):
+#         layout = self.layout
+#         layout.prop(self, "scene_type")
+#         layout.prop(self, "collision_support")
 
-    def execute(self, context):
-        create_new_bf_scene(self.scene_type, self.collision_support)
-        self.report({"INFO"}, "New Spellforce 2 scene created.")
-        return {"FINISHED"}
+#     def execute(self, context):
+#         create_new_bf_scene(self.scene_type, self.collision_support)
+#         self.report({"INFO"}, "New Spellforce 2 scene created.")
+#         return {"FINISHED"}
 
 
 class ShowMessagesOperator(bpy.types.Operator):
@@ -557,17 +557,17 @@ def menu_func_import(self, _context):
         + "."
         + str(bl_info["version"][2]),
     )
-    self.layout.operator(
-        NewBFScene.bl_idname,
-        text="New Spellforce 2 Scene - "
-        + (is_dev_version and "DEV" or "")
-        + " v"
-        + str(bl_info["version"][0])
-        + "."
-        + str(bl_info["version"][1])
-        + "."
-        + str(bl_info["version"][2]),
-    )
+    # self.layout.operator(
+    #     NewBFScene.bl_idname,
+    #     text="New Spellforce 2 Scene - "
+    #     + (is_dev_version and "DEV" or "")
+    #     + " v"
+    #     + str(bl_info["version"][0])
+    #     + "."
+    #     + str(bl_info["version"][1])
+    #     + "."
+    #     + str(bl_info["version"][2]),
+    # )
 
 
 def menu_func_export(self, _context):

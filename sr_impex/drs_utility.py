@@ -4,6 +4,7 @@ from os.path import dirname, realpath
 from math import radians
 import time
 import uuid
+import re
 import hashlib
 import subprocess
 from struct import pack
@@ -1003,107 +1004,62 @@ def process_debris_import(state_based_mesh_set, source_collection, dir_name, bas
                     # Link the debris mesh object to the collection.
                     state_collection.objects.link(mesh_object)
 
-# <animationSet version="1">
-#     <animation job="12">
-#         <variant>./addon1/gfx/figures/fraction_4/figure_shaikan_commander_die.ska</variant>
-#     </animation>
-#     <animation job="11">
-#         <variant weight="34">./addon1/gfx/figures/fraction_4/figure_shaikan_commander_hit1.ska</variant>
-#         <variant weight="33">./addon1/gfx/figures/fraction_4/figure_shaikan_commander_hit2.ska</variant>
-#         <variant weight="33">./addon1/gfx/figures/fraction_4/figure_shaikan_commander_hit3.ska</variant>
-#     </animation>
-#     <animation job="8">
-#         <variant weight="40">./addon1/gfx/figures/fraction_4/figure_shaikan_commander_attackleft.ska</variant>
-#         <variant weight="40">./addon1/gfx/figures/fraction_4/figure_shaikan_commander_attackright.ska</variant>
-#         <variant weight="20">./addon1/gfx/figures/fraction_4/figure_shaikan_commander_attackspecial.ska</variant>
-#     </animation>
-#     <animation job="0">
-#         <variant weight="80">./addon1/gfx/figures/fraction_4/figure_shaikan_commander_idle.ska</variant>
-#         <variant weight="20">./addon1/gfx/figures/fraction_4/figure_shaikan_commander_idlespecial.ska</variant>
-#     </animation>
-#     <animation job="0" weapon="0" attitude="1">
-#         <variant>./addon1/gfx/figures/fraction_4/figure_shaikan_commander_idlewar.ska</variant>
-#     </animation>
-#     <animation job="2" distance="8.0">
-#         <variant>./addon1/gfx/figures/fraction_4/figure_shaikan_commander_run.ska</variant>
-#     </animation>    
-#     <animation job="18">
-#         <variant>./addon1/gfx/figures/fraction_4/figure_shaikan_commander_idle.ska</variant>
-#     </animation>
-#     <animation job="22">
-#         <variant>./addon1/gfx/figures/fraction_4/figure_shaikan_commander_idle.ska</variant>
-#     </animation>
-#     <animation job="25">
-#         <variant>./addon1/gfx/figures/fraction_4/figure_shaikan_commander_idle.ska</variant>
-#     </animation>
-#     <animation job="24">
-#         <variant>./addon1/gfx/figures/fraction_4/figure_shaikan_commander_idle.ska</variant>
-#     </animation>
-#     <animation job="1" distance="2.3">
-#         <variant>./addon1/gfx/figures/fraction_4/figure_shaikan_commander_walk.ska</variant>
-#     </animation>
-#     <attachment>
-#         <slot name="HealthBar">
-#             <link xOffset="0" yOffset="3.33" zOffset="0" />
-#         </slot>
-#         <slot name="A_Head">
-#             <link bone="AFig_head_tskel_a" />
-#         </slot>
-#         <slot name="LeftHand">
-#             <link bone="Fig_palm_l_tskel_a" />
-#         </slot>
-#         <slot name="RightHand">
-#             <link bone="Fig_palm_r_tskel_a" />
-#         </slot>
-#         <slot name="SpellCastHand_L">
-#             <link bone="Fig_palm_l_tskel_a" />
-#         </slot>
-#         <slot name="SpellCastHand_R">
-#             <link bone="Fig_palm_r_tskel_a" />
-#         </slot>
-#         <slot name="SpellHit">
-#             <link bone="Fig_spine_5_tskel_a" />
-#         </slot>
-#     </attachment>
-# </animationSet>
 def process_animation_set_import(model_dir, model_name) -> AnimationSet:
     # Look in the model directory for an model_name.ams file
     ams_path = os.path.join(model_dir, model_name + ".ams")
     if not os.path.exists(ams_path):
-        logger.log(
-            f"Animation Set file not found: {ams_path}",
-            "Warning",
-            "WARNING",
-        )
-        return None
+        # Check if we have multiple AnimationSets, e.g., model_flying.ams, model_talking.ams etc.
+        ams_files = [f for f in os.listdir(model_dir) if f.startswith(model_name) and f.endswith(".ams")]
+        if ams_files:
+            logger.log(
+                f"Multiple Animation Set files found for model '{model_name}'. Using the first one: {ams_files[0]}",
+                "Info",
+                "INFO",
+            )
+            ams_path = os.path.join(model_dir, ams_files[0])
+        else:
+            logger.log(
+                f"Animation Set file not found: {ams_path}",
+                "Warning",
+                "WARNING",
+            )
+            return None
     
     animation_set = AnimationSet()
-    ams_xml_file = ET.parse(ams_path)
-    ams_root = ams_xml_file.getroot()
-    animation_set.version = int(ams_root.attrib.get("version", "1"))
-    animation_set.length = 0
-    animation_set.version = ""
-    
-    animation_set.mode_animation_keys = []
-    for anim_elem in ams_root.findall("animation"):
-        mode_animation_key = ModeAnimationKey()
-        mode_animation_key.vis_job = int(anim_elem.attrib.get("job", "0"))
-        mode_animation_key.variant_count = 0
-        mode_animation_key.animation_set_variants = []
+    with open(ams_path, "r", encoding="utf-8") as f:
+        xml_text = f.read()
+        # Fix invalid < and > inside attribute values like name="<tail>"
+        # Replace < and > only when they appear inside quotes of attributes
+        xml_text = re.sub(r'name="<(.*?)>"', r'name="&lt;\1&gt;"', xml_text)
+
+        # Now parse safely from the sanitized string
+        parser = ET.XMLParser(encoding="utf-8")
+        ams_xml_file = ET.ElementTree(ET.fromstring(xml_text, parser=parser))
+        ams_root = ams_xml_file.getroot()
+        animation_set.version = int(ams_root.attrib.get("version", "1"))
+        animation_set.length = 0
+        animation_set.version = ""
         
-        for variant_elem in anim_elem.findall("variant"):
-            variant = AnimationSetVariant()
-            variant.weight = int(variant_elem.attrib.get("weight", "100"))
-            # we only want the *.ska file path, not the folder paths, we know the folder already!
-            variant.file = variant_elem.text.strip() if variant_elem.text else ""
-            variant.file = os.path.basename(variant.file)
-            mode_animation_key.animation_set_variants.append(variant)
-            mode_animation_key.variant_count += 1
-    
-        animation_set.mode_animation_keys.append(mode_animation_key)
+        animation_set.mode_animation_keys = []
+        for anim_elem in ams_root.findall("animation"):
+            mode_animation_key = ModeAnimationKey()
+            mode_animation_key.vis_job = int(anim_elem.attrib.get("job", "0"))
+            mode_animation_key.variant_count = 0
+            mode_animation_key.animation_set_variants = []
+            
+            for variant_elem in anim_elem.findall("variant"):
+                variant = AnimationSetVariant()
+                variant.weight = int(variant_elem.attrib.get("weight", "100"))
+                # we only want the *.ska file path, not the folder paths, we know the folder already!
+                variant.file = variant_elem.text.strip() if variant_elem.text else ""
+                variant.file = os.path.basename(variant.file)
+                mode_animation_key.animation_set_variants.append(variant)
+                mode_animation_key.variant_count += 1
         
-    animation_set.mode_animation_key_count = len(animation_set.mode_animation_keys)
-    return animation_set
+            animation_set.mode_animation_keys.append(mode_animation_key)
+            
+        animation_set.mode_animation_key_count = len(animation_set.mode_animation_keys)
+        return animation_set
 
 def convert_image_to_dds(
     img: bpy.types.Image,

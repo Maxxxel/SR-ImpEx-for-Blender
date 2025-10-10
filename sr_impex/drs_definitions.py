@@ -3151,7 +3151,7 @@ class DRS:
                 raise TypeError(f"Node {node.name} not found")
             
             if node_info.node_size == 0:
-                if node_info.linked_node != -1:
+                if node_info.linked_node > 0:
                     print(f"- Node {node.name} has size 0, but is linked to node index {node_info.linked_node}. Trying to read linked node.")
                     right_node_info = self.node_informations[node_info.linked_node]
                     print(f"- Linked node is {right_node_info.node_name} with size {right_node_info.node_size} at offset {right_node_info.offset}.")
