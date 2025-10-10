@@ -3151,8 +3151,15 @@ class DRS:
                 raise TypeError(f"Node {node.name} not found")
             
             if node_info.node_size == 0:
-                print(f"Node {node.name} has size 0, skipping for now and trying to load the Node later.")
-                continue
+                if node_info.linked_node != -1:
+                    print(f"- Node {node.name} has size 0, but is linked to node index {node_info.linked_node}. Trying to read linked node.")
+                    right_node_info = self.node_informations[node_info.linked_node]
+                    print(f"- Linked node is {right_node_info.node_name} with size {right_node_info.node_size} at offset {right_node_info.offset}.")
+                    node_info.offset = right_node_info.offset
+                    node_info.node_size = right_node_info.node_size
+                else:
+                    print(f"- Node {node.name} has size 0, skipping...")
+                    continue
 
             # node_info_type = node_information_map.get(node_info.magic, None)
             reader.seek(node_info.offset)
@@ -3167,35 +3174,35 @@ class DRS:
             
             internal_node_name = node_map.get(node.name, None)
             if internal_node_name is None:
-                print(f"Node {node.name} not found in node_map, skipping...")
+                print(f"- Node {node.name} not found in node_map, skipping...")
                 continue
             
             internal_node_name = internal_node_name.replace("_node", "")
             reader.seek(node_info.offset)
             if node.name != node_type:
                 if node_type is None:
-                    print(f"Unknown Node Type with Magic {node_magic_int} at offset {node_info.offset}. Trying to parse as {node.name}.")
+                    print(f"- Unknown Node Type with Magic {node_magic_int} at offset {node_info.offset}. Trying to parse as {node.name}.")
                     # Try to parse the Node as the expected type
                     try:
                         setattr(self, internal_node_name, globals()[node.name]().read(reader))
-                        print("Successfully read node:", node.name)
+                        print("-- Successfully read node:", node.name)
                     except Exception as e:
-                        print(f"Failed to read node {node.name} at offset {node_info.offset}. Error: {e}. Trying as CGeoMesh.")
+                        print(f"-- Failed to read node {node.name} at offset {node_info.offset}. Error: {e}. Trying as CGeoMesh.")
                         reader.seek(node_info.offset)
                         try:
                             setattr(self, internal_node_name, globals()["CGeoMesh"]().read(reader))
-                            print("Successfully read node as CGeoMesh.")
+                            print("--- Successfully read node as CGeoMesh.")
                         except Exception as e2:
-                            print(f"Failed to read node as CGeoMesh. Error: {e2}. Skipping node.")
+                            print(f"--- Failed to read node as CGeoMesh. Error: {e2}. Skipping node.")
                 else:
-                    print(f"Node type mismatch for node {node.name} at offset {node_info.offset}. Expected {node.name}, but got {node_type}. Parsing as {node_type}.")
+                    print(f"- Node type mismatch for node {node.name} at offset {node_info.offset}. Expected {node.name}, but got {node_type}. Parsing as {node_type}.")
                     # Parse the Node with the correct type
                     setattr(self, internal_node_name, globals()[node_type]().read(reader))
-                    print("Successfully read fixed node:", node.name + " as " + node_type)
+                    print("-- Successfully read fixed node:", node.name + " as " + node_type)
             else:
                 # Parse the Node normally
                 setattr(self, internal_node_name, globals()[node.name]().read(reader))
-                print("Successfully read node:", node.name)
+                print("- Successfully read node:", node.name)
                 
         reader.close()
         return self
