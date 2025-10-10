@@ -281,7 +281,10 @@ class NodeInformation:
     identifier: int = -1
     offset: int = -1
     node_size: int = field(init=False)
-    spacer: List[int] = field(default_factory=lambda: [0] * 16)
+    uk1: int = 0
+    linked_node: int = -1
+    uk2: int = 0
+    uk3: int = 0
     node_name: str = ""
 
     def __post_init__(self):
@@ -291,14 +294,20 @@ class NodeInformation:
         self.magic, self.identifier, self.offset, self.node_size = unpack(
             "iiii", file.read(16)
         )
-        self.spacer = unpack("16b", file.read(16))
+        self.uk1 = unpack("i", file.read(4))[0]
+        self.linked_node = unpack("i", file.read(4))[0]
+        self.uk2 = unpack("i", file.read(4))[0]
+        self.uk3 = unpack("i", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
         file.write(
             pack("iiii", self.magic, self.identifier, self.offset, self.node_size)
         )
-        file.write(pack("16b", *self.spacer))
+        file.write(pack("i", self.uk1))
+        file.write(pack("i", self.linked_node))
+        file.write(pack("i", self.uk2))
+        file.write(pack("i", self.uk3))
 
     def update_offset(self, offset: int) -> None:
         self.offset = offset
@@ -3092,6 +3101,7 @@ class DRS:
             -196433635: "gd_locator_list_node",  # Not yet implemented
             -1424862619: "fx_master_node",  # Not yet implemented
             -1746446328: "placement_shape_node",  # Not yet implemented
+            -1058658465: "unknown_node",  # Not yet implemented
         }
         
         for _ in range(self.node_count - 1):
@@ -3139,6 +3149,10 @@ class DRS:
             node_info = self.node_informations[node.info_index]
             if node_info is None:
                 raise TypeError(f"Node {node.name} not found")
+            
+            if node_info.node_size == 0:
+                print(f"Node {node.name} has size 0, skipping for now and trying to load the Node later.")
+                continue
 
             # node_info_type = node_information_map.get(node_info.magic, None)
             reader.seek(node_info.offset)
@@ -3151,7 +3165,12 @@ class DRS:
                     node_type = node_name
                     break
             
-            internal_node_name = node_map.get(node.name, None).replace("_node", "")
+            internal_node_name = node_map.get(node.name, None)
+            if internal_node_name is None:
+                print(f"Node {node.name} not found in node_map, skipping...")
+                continue
+            
+            internal_node_name = internal_node_name.replace("_node", "")
             reader.seek(node_info.offset)
             if node.name != node_type:
                 if node_type is None:
