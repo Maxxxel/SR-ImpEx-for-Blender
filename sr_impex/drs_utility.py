@@ -1004,62 +1004,144 @@ def process_debris_import(state_based_mesh_set, source_collection, dir_name, bas
                     # Link the debris mesh object to the collection.
                     state_collection.objects.link(mesh_object)
 
+
+def _sanitize_xml_attributes(xml_text: str) -> str:
+    """
+    Escape '<' and '>' inside *any* quoted attribute value without touching element text.
+    Handles both double-quoted and single-quoted attributes.
+    """
+    def _esc_double(m):
+        inner = m.group(1).replace('<', '&lt;').replace('>', '&gt;')
+        return f'="{inner}"'
+    def _esc_single(m):
+        inner = m.group(1).replace('<', '&lt;').replace('>', '&gt;')
+        return f"='{inner}'"
+    xml_text = re.sub(r'="([^"]*)"', _esc_double, xml_text)
+    xml_text = re.sub(r"='([^']*)'", _esc_single, xml_text)
+    return xml_text
+
+
 def process_animation_set_import(model_dir, model_name) -> AnimationSet:
-    # Look in the model directory for an model_name.ams file
-    ams_path = os.path.join(model_dir, model_name + ".ams")
-    if not os.path.exists(ams_path):
-        # Check if we have multiple AnimationSets, e.g., model_flying.ams, model_talking.ams etc.
-        ams_files = [f for f in os.listdir(model_dir) if f.startswith(model_name) and f.endswith(".ams")]
-        if ams_files:
-            logger.log(
-                f"Multiple Animation Set files found for model '{model_name}'. Using the first one: {ams_files[0]}",
-                "Info",
-                "INFO",
-            )
-            ams_path = os.path.join(model_dir, ams_files[0])
+    # Collect all .ams files that belong to this model (e.g., model.ams, model_flying.ams, model_talking.ams)
+    ams_files = [f for f in os.listdir(model_dir)
+                 if f.startswith(model_name) and f.endswith(".ams")]
+    ams_files.sort()
+
+    if not ams_files:
+        # Fallback to exact path check (in case caller expects the original behavior)
+        ams_path = os.path.join(model_dir, model_name + ".ams")
+        if os.path.exists(ams_path):
+            ams_files = [os.path.basename(ams_path)]
         else:
             logger.log(
-                f"Animation Set file not found: {ams_path}",
+                f"No Animation Set files found for model '{model_name}' in '{model_dir}'.",
                 "Warning",
                 "WARNING",
             )
             return None
-    
-    animation_set = AnimationSet()
-    with open(ams_path, "r", encoding="utf-8") as f:
-        xml_text = f.read()
-        # Fix invalid < and > inside attribute values like name="<tail>"
-        # Replace < and > only when they appear inside quotes of attributes
-        xml_text = re.sub(r'name="<(.*?)>"', r'name="&lt;\1&gt;"', xml_text)
 
-        # Now parse safely from the sanitized string
-        parser = ET.XMLParser(encoding="utf-8")
-        ams_xml_file = ET.ElementTree(ET.fromstring(xml_text, parser=parser))
-        ams_root = ams_xml_file.getroot()
-        animation_set.version = int(ams_root.attrib.get("version", "1"))
-        animation_set.length = 0
-        animation_set.version = ""
-        
-        animation_set.mode_animation_keys = []
-        for anim_elem in ams_root.findall("animation"):
-            mode_animation_key = ModeAnimationKey()
-            mode_animation_key.vis_job = int(anim_elem.attrib.get("job", "0"))
-            mode_animation_key.variant_count = 0
-            mode_animation_key.animation_set_variants = []
-            
+    # Prepare the aggregate AnimationSet
+    animation_set = AnimationSet()
+    animation_set.version = 1  # default; we’ll take the first file’s version if present
+    animation_set.length = 0
+    animation_set.mode_animation_keys = []
+
+    # Merge bucket: job -> ModeAnimationKey + (dedupe set of files)
+    by_job = {}  # job:int -> (mode_key:ModeAnimationKey, seen_files:set[str])
+
+    first_version_captured = False
+
+    for fname in ams_files:
+        path = os.path.join(model_dir, fname)
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                xml_text = f.read()
+        except Exception as e:
+            logger.log(f"Failed to read '{path}': {e}", "Warning", "WARNING")
+            continue
+
+        # Sanitize invalid tokens in attribute values (e.g., name="<tail>")
+        xml_text = _sanitize_xml_attributes(xml_text)
+
+        # Parse in memory
+        try:
+            parser = ET.XMLParser(encoding="utf-8")
+            ams_xml = ET.ElementTree(ET.fromstring(xml_text, parser=parser))
+            root = ams_xml.getroot()
+        except ET.ParseError as e:
+            logger.log(f"XML parse error in '{path}': {e}", "Warning", "WARNING")
+            continue
+
+        # Capture version from the first successfully parsed file
+        if not first_version_captured:
+            try:
+                animation_set.version = int(root.attrib.get("version", animation_set.version))
+            except ValueError:
+                pass
+            first_version_captured = True
+
+        # Merge all <animation> blocks
+        for anim_elem in root.findall("animation"):
+            try:
+                job = int(anim_elem.attrib.get("job", "0"))
+            except ValueError:
+                job = 0
+
+            if job not in by_job:
+                mode_key = ModeAnimationKey()
+                mode_key.vis_job = job
+                mode_key.variant_count = 0
+                mode_key.animation_set_variants = []
+                by_job[job] = (mode_key, set())  # seen_files for dedupe
+
+            mode_key, seen = by_job[job]
+
+            # Collect variants
             for variant_elem in anim_elem.findall("variant"):
-                variant = AnimationSetVariant()
-                variant.weight = int(variant_elem.attrib.get("weight", "100"))
-                # we only want the *.ska file path, not the folder paths, we know the folder already!
-                variant.file = variant_elem.text.strip() if variant_elem.text else ""
-                variant.file = os.path.basename(variant.file)
-                mode_animation_key.animation_set_variants.append(variant)
-                mode_animation_key.variant_count += 1
-        
-            animation_set.mode_animation_keys.append(mode_animation_key)
-            
-        animation_set.mode_animation_key_count = len(animation_set.mode_animation_keys)
-        return animation_set
+                weight_str = variant_elem.attrib.get("weight", "100")
+                try:
+                    weight = int(weight_str)
+                except ValueError:
+                    weight = 100
+
+                file_text = (variant_elem.text or "").strip()
+                if not file_text:
+                    continue
+                file_name = os.path.basename(file_text)
+
+                # Deduplicate per job by file name
+                if file_name in seen:
+                    continue
+                seen.add(file_name)
+
+                v = AnimationSetVariant()
+                v.weight = weight
+                v.file = file_name
+                mode_key.animation_set_variants.append(v)
+                mode_key.variant_count += 1
+
+    # Finalize list in a stable order (by job id)
+    for job in sorted(by_job.keys()):
+        animation_set.mode_animation_keys.append(by_job[job][0])
+
+    animation_set.mode_animation_key_count = len(animation_set.mode_animation_keys)
+
+    if animation_set.mode_animation_key_count == 0:
+        logger.log(
+            f"Parsed {len(ams_files)} file(s) but found no <animation> entries for '{model_name}'.",
+            "Warning",
+            "WARNING",
+        )
+        return None
+
+    logger.log(
+        f"Merged {len(ams_files)} Animation Set file(s) for '{model_name}' into "
+        f"{animation_set.mode_animation_key_count} job group(s).",
+        "Info",
+        "INFO",
+    )
+    return animation_set
 
 def convert_image_to_dds(
     img: bpy.types.Image,
