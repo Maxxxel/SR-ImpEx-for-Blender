@@ -3111,7 +3111,11 @@ class DRS:
                 setattr(self, node_information_map[node_info.magic], node_info)
                 self.node_informations.append(node_info)
             else:
-                raise TypeError(f"Unknown Node: {node_info.magic}")
+                #specifically SF2 uses a lot of _shapeOrig nodes with different magic left right and center. 
+                #to avoid crashes every time let's have work around to make them at least importable
+                setattr(self, "unknown_node", node_info)
+                self.node_informations.append(node_info)
+                #raise TypeError(f"Unknown Node: {node_info.magic}")
         
         # Read Node Hierarchy
         reader.seek(self.node_hierarchy_offset)

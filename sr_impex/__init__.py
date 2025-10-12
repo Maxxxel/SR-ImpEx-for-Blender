@@ -24,7 +24,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Spellforce 2 drs/bmg files.",
     "blender": (4, 4, 0),
-    "version": (3, 3, 0),
+    "version": (3, 3, 1),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
