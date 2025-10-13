@@ -3102,6 +3102,7 @@ class DRS:
             -1424862619: "fx_master_node",  # Not yet implemented
             -1746446328: "placement_shape_node",  # Not yet implemented
             -1058658465: "unknown_node",  # Not yet implemented
+            -1967569622: "unknown_node_2",  # Not yet implemented
         }
         
         for _ in range(self.node_count - 1):
