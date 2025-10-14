@@ -1319,7 +1319,6 @@ def create_bone_tree(armature_data: bpy.types.Armature,bone_list: list[DRSBone],
         create_bone_tree(armature_data, bone_list, child, bone_len)
 
 
-
 def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
     bone_list: list[DRSBone] = []
 
