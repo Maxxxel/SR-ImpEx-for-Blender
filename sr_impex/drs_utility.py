@@ -1420,9 +1420,50 @@ def import_csk_skeleton(
     # Directly set armature data to edit mode
     bpy.context.view_layer.objects.active = armature_object
     # bpy.context.view_layer.objects.active = armature_object
+    super_parent_flat_tuple = drs_file.csk_skeleton.super_parent.matrix
     with ensure_mode("EDIT"):
         # Create the Bone Tree without using bpy.ops or context
         create_bone_tree(armature_data, bone_list, bone_list[0])
+        # Parent the bones using the parent_index from the DRSBone objects
+        edit_bones = armature_data.edit_bones
+        for _, bone_data in enumerate(bone_list):
+            if bone_data.parent != -1:  # Root bones have a parent_index of -1
+                child_bone = edit_bones.get(bone_data.name)
+                # The parent is found by its index in the bone_list
+                parent_bone_data = bone_list[bone_data.parent]
+                parent_bone = edit_bones.get(parent_bone_data.name)
+
+                if child_bone and parent_bone:
+                    child_bone.parent = parent_bone
+                    # For connected bones, where the child's head attaches to the parent's tail
+                    # child_bone.use_connect = True
+            else:
+                # use CSkSkeleton's super parent (tuple = e. g. ((0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0)))
+                super_parent_matrix = drs_file.csk_skeleton.super_parent
+                # # Create a new bone for the super parent if it doesn't exist
+                # if "SuperParent" not in edit_bones:
+                #     super_parent_bone = edit_bones.new("SuperParent")
+                #     super_parent_bone.head = Vector((0, 0, 0))
+                #     super_parent_bone.tail = Vector((0, 0.1, 0))
+                #     # Reshape the flat tuple of 16 numbers into a 4x4 list of lists
+                #     matrix_rows = [
+                #         super_parent_flat_tuple[0:4],
+                #         super_parent_flat_tuple[4:8],
+                #         super_parent_flat_tuple[8:12],
+                #         super_parent_flat_tuple[12:16],
+                #     ]
+
+                #     # Create the Matrix object from the correctly shaped rows and assign it
+                #     super_parent_bone.matrix = Matrix(matrix_rows)
+                #     super_parent_bone.length = 0.1
+                # else:
+                #     super_parent_bone = edit_bones["SuperParent"]
+        
+                # child_bone = edit_bones.get(bone_data.name)
+                # if child_bone:
+                #     child_bone.parent = super_parent_bone
+                
+        
     record_bind_pose(bone_list, armature_data)
     return armature_object, bone_list
 
