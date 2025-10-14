@@ -1287,25 +1287,37 @@ def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> 
         bone_data.bind_rot = matrix_local.to_quaternion()
 
 
-def create_bone_tree(
-    armature_data: bpy.types.Armature, bone_list: list[DRSBone], bone_data: DRSBone
-):
-    edit_bones = armature_data.edit_bones
-    edit_bone = edit_bones.new(bone_data.name)
+def create_bone_tree(armature_data: bpy.types.Armature,bone_list: list[DRSBone],bone_data: DRSBone,bone_len: float = 0.1):
+    eb = armature_data.edit_bones.new(bone_data.name)
     armature_data.display_type = "STICK"
-    edit_bone.head = bone_data.bone_matrix @ Vector((0, 0, 0))
-    edit_bone.tail = bone_data.bone_matrix @ Vector((0, 1, 0))
-    edit_bone.align_roll(bone_data.bone_matrix.to_3x3() @ Vector((0, 0, 1)))
-    edit_bone.length = 0.1
 
-    # Set the parent bone
+    M = bone_data.bone_matrix
+    R = M.to_3x3()
+
+    # exact head from bind pose
+    eb.head = M @ Vector((0, 0, 0))
+
+    # make tail along local +Y of the bind pose, fixed short length
+    y_dir = (R @ Vector((0, 1, 0))).normalized()
+    if y_dir.length < 1e-8:
+        y_dir = Vector((0, 1, 0))  # extremely defensive
+    eb.tail = eb.head + y_dir * bone_len
+
+    # roll from bind pose Z axis
+    eb.align_roll(R @ Vector((0, 0, 1)))
+
+    # never force connection for coincident heads
     if bone_data.parent != -1:
-        parent_bone_name = bone_list[bone_data.parent].name
-        edit_bone.parent = armature_data.edit_bones.get(parent_bone_name)
+        parent_name = bone_list[bone_data.parent].name
+        parent_bone = armature_data.edit_bones.get(parent_name)
+        if parent_bone:
+            eb.parent = parent_bone
+            eb.use_connect = False  # critical: OFFSET parenting, no merging
 
-    # Recursively create child bones
-    for child_bone in [b for b in bone_list if b.parent == bone_data.identifier]:
-        create_bone_tree(armature_data, bone_list, child_bone)
+    # recurse
+    for child in [b for b in bone_list if b.parent == bone_data.identifier]:
+        create_bone_tree(armature_data, bone_list, child, bone_len)
+
 
 
 def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
@@ -1410,22 +1422,20 @@ def import_csk_skeleton(
     armature_object: bpy.types.Object = bpy.data.objects.new(
         f"{locator_prefix}Armature", armature_data
     )
-    # Link the Armature Object to the Scene Collection to ensure it's in the view layer
-    # bpy.context.scene.collection.objects.link(armature_object)
     # Now link it to the intended destination collection
-    # source_collection.objects.link(armature_object)
     armature_collection.objects.link(armature_object)
     # Create the Skeleton
     bone_list = init_bones(drs_file.csk_skeleton)
     # Directly set armature data to edit mode
     bpy.context.view_layer.objects.active = armature_object
-    # bpy.context.view_layer.objects.active = armature_object
-    super_parent_flat_tuple = drs_file.csk_skeleton.super_parent.matrix
+
     with ensure_mode("EDIT"):
         # Create the Bone Tree without using bpy.ops or context
         create_bone_tree(armature_data, bone_list, bone_list[0])
         # Parent the bones using the parent_index from the DRSBone objects
         edit_bones = armature_data.edit_bones
+        
+        # Old Approach, working but ugly
         for _, bone_data in enumerate(bone_list):
             if bone_data.parent != -1:  # Root bones have a parent_index of -1
                 child_bone = edit_bones.get(bone_data.name)
@@ -1435,37 +1445,14 @@ def import_csk_skeleton(
 
                 if child_bone and parent_bone:
                     child_bone.parent = parent_bone
-                    # For connected bones, where the child's head attaches to the parent's tail
-                    # child_bone.use_connect = True
-            else:
-                # use CSkSkeleton's super parent (tuple = e. g. ((0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0)))
-                super_parent_matrix = drs_file.csk_skeleton.super_parent
-                # # Create a new bone for the super parent if it doesn't exist
-                # if "SuperParent" not in edit_bones:
-                #     super_parent_bone = edit_bones.new("SuperParent")
-                #     super_parent_bone.head = Vector((0, 0, 0))
-                #     super_parent_bone.tail = Vector((0, 0.1, 0))
-                #     # Reshape the flat tuple of 16 numbers into a 4x4 list of lists
-                #     matrix_rows = [
-                #         super_parent_flat_tuple[0:4],
-                #         super_parent_flat_tuple[4:8],
-                #         super_parent_flat_tuple[8:12],
-                #         super_parent_flat_tuple[12:16],
-                #     ]
 
-                #     # Create the Matrix object from the correctly shaped rows and assign it
-                #     super_parent_bone.matrix = Matrix(matrix_rows)
-                #     super_parent_bone.length = 0.1
-                # else:
-                #     super_parent_bone = edit_bones["SuperParent"]
-        
-                # child_bone = edit_bones.get(bone_data.name)
-                # if child_bone:
-                #     child_bone.parent = super_parent_bone
-                
-        
+    # Your bind pose recording function is correct and should be called at the end.
     record_bind_pose(bone_list, armature_data)
+    
+    # auto_align_tails(armature_object)
+    
     return armature_object, bone_list
+        
 
 
 def create_bone_weights(
