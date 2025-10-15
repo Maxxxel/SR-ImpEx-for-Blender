@@ -274,6 +274,9 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             # Delete all collections
             for collection in bpy.data.collections:
                 bpy.data.collections.remove(collection)
+            # Also clean all actions
+            for action in bpy.data.actions:
+                bpy.data.actions.remove(action)
             bpy.ops.object.select_all(action="SELECT")
             bpy.ops.object.delete(use_global=False)
             # Purge unused data blocks

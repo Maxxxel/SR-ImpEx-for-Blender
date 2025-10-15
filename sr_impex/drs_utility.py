@@ -2202,6 +2202,36 @@ def load_drs(
 
     # Apply the Transformations to the Source Collection
     parent_under_game_axes(source_collection, apply_transform)
+    
+    # Create a duplicate of the armature and call it control_rig
+    if armature_object:
+        # Select the armature object
+        bpy.ops.object.select_all(action='DESELECT')
+        armature_object.select_set(True)
+        bpy.context.view_layer.objects.active = armature_object
+        # Duplicate the armature
+        bpy.ops.object.duplicate()
+        control_rig = bpy.context.view_layer.objects.active
+        control_rig.name = f"{armature_object.name}_Control_Rig"
+        
+        # Now we need to set constraints on the original armature to copy transforms from the control rig
+        with ensure_mode('POSE'):
+            for bone in armature_object.pose.bones:
+                # Add a Copy Transforms constraint
+                constraint = bone.constraints.new(type='COPY_TRANSFORMS')
+                constraint.target_space = "WORLD"
+                constraint.owner_space = "WORLD"
+                constraint.target = control_rig
+                constraint.subtarget = bone.name
+        with ensure_mode('EDIT'):
+            for bone in control_rig.data.edit_bones:
+                bone.use_deform = False  # Disable deformation on the original armature
+        
+        # Link the both Rigs to the GRT_Action_Bakery_Global_Settings if available
+        if hasattr(bpy.context.scene, "GRT_Action_Bakery_Global_Settings"):
+            bpy.context.scene.GRT_Action_Bakery_Global_Settings.Target_Armature = armature_object
+            bpy.context.scene.GRT_Action_Bakery_Global_Settings.Source_Armature = control_rig
+
 
     # Print the Time Measurement
     logger.log(

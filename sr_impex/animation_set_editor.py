@@ -117,6 +117,7 @@ def _infer_ability_for_visjob(vis_id: int, _st=None) -> str:
     # O(1) – direct mapping is enough for labels/grouping
     return VIS_JOB_TO_ABILITY.get(vis_id, VIS_JOB_MAP.get(vis_id, "Unknown"))
 
+_CURRENT_MODEL = None
 
 def _draw_editor_ui(layout):
     st = _state()
@@ -867,22 +868,29 @@ def _blob_sig(col: bpy.types.Collection) -> str | None:
 
 
 def _poll_editor_refresh():
+    """Run periodically to detect if the active DRSModel_* collection changed."""
     try:
         col = _active_top_drsmodel()
         name = col.name if col else None
-        sig = _blob_sig(col) if col else None
 
-        if name != _last["col_name"]:
+        # check only the model name difference
+        if name and name.startswith("DRSModel_") and name != _last.get("col_name"):
+            print(f"[DRS Editor] Detected active model change: {name} (previous: {_last.get('col_name')})")
             _last["col_name"] = name
-            _last["blob_sig"] = sig
-            _invalidate_actions_enum()  # <-- add
-            if col and len(_state().mode_keys) == 0:
-                _refresh_state_from_blob(col)
-        else:
-            _last["blob_sig"] = sig
+
+            # Trigger reset/reload only if the model actually changed
+            try:
+                bpy.ops.drs.animset_reload()
+                print(f"[DRS Editor] Model changed to {name}, reloading editor state.")
+            except Exception as e:
+                print(f"[DRS Editor] Failed to reload on model change: {e}")
+
     except Exception:
         pass
+
+    # Re-run this every 0.5 seconds
     return 0.5
+
 
 
 class AnimVariantPG(bpy.types.PropertyGroup):
@@ -1874,6 +1882,7 @@ class DRS_OT_AnimSet_Reload(bpy.types.Operator):
     bl_options = {"INTERNAL"}
 
     def execute(self, _ctx):
+        print("Reloading Animation Set from blob...")
         _invalidate_actions_enum()
         col = _active_model()
         if not col:
