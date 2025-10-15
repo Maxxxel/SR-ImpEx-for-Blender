@@ -117,6 +117,7 @@ def _infer_ability_for_visjob(vis_id: int, _st=None) -> str:
     # O(1) – direct mapping is enough for labels/grouping
     return VIS_JOB_TO_ABILITY.get(vis_id, VIS_JOB_MAP.get(vis_id, "Unknown"))
 
+_CURRENT_MODEL = None
 
 def _draw_editor_ui(layout):
     st = _state()
@@ -867,22 +868,29 @@ def _blob_sig(col: bpy.types.Collection) -> str | None:
 
 
 def _poll_editor_refresh():
+    """Run periodically to detect if the active DRSModel_* collection changed."""
     try:
         col = _active_top_drsmodel()
         name = col.name if col else None
-        sig = _blob_sig(col) if col else None
 
-        if name != _last["col_name"]:
+        # check only the model name difference
+        if name and name.startswith("DRSModel_") and name != _last.get("col_name"):
+            print(f"[DRS Editor] Detected active model change: {name} (previous: {_last.get('col_name')})")
             _last["col_name"] = name
-            _last["blob_sig"] = sig
-            _invalidate_actions_enum()  # <-- add
-            if col and len(_state().mode_keys) == 0:
-                _refresh_state_from_blob(col)
-        else:
-            _last["blob_sig"] = sig
+
+            # Trigger reset/reload only if the model actually changed
+            try:
+                bpy.ops.drs.animset_reload()
+                print(f"[DRS Editor] Model changed to {name}, reloading editor state.")
+            except Exception as e:
+                print(f"[DRS Editor] Failed to reload on model change: {e}")
+
     except Exception:
         pass
+
+    # Re-run this every 0.5 seconds
     return 0.5
+
 
 
 class AnimVariantPG(bpy.types.PropertyGroup):
@@ -1630,7 +1638,7 @@ class DRS_OT_ModeKey_Remove(bpy.types.Operator):
 
 
 # Playback helper (simple, scoped to selected Action)
-_playback = {"handler": None, "end": None}
+_playback = {"handler": None, "end": None, "start_subframe": 0.0, "end_subframe": 0.0}
 
 
 def _on_frame(scene, _deps):
@@ -1638,8 +1646,11 @@ def _on_frame(scene, _deps):
     if endf is not None and scene.frame_current >= endf:
         if bpy.context.screen and bpy.context.screen.is_animation_playing:
             bpy.context.scene.frame_current = endf
+            bpy.context.scene.frame_subframe = _playback.get("end_subframe", 0.0)
             _playback["end"] = None
             _playback["handler"] = None
+            _playback["start_subframe"] = 0.0
+            _playback["end_subframe"] = 0.0
             bpy.ops.screen.animation_play()
 
 
@@ -1695,6 +1706,8 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         # Reset any existing playback state
         _playback["end"] = None
         _playback["handler"] = None
+        _playback["start_subframe"] = 0.0
+        _playback["end_subframe"] = 0.0
 
         try:
             bpy.app.handlers.frame_change_post.remove(_playback["handler"])
@@ -1705,16 +1718,27 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         if bpy.context.screen and bpy.context.screen.is_animation_playing:
             bpy.ops.screen.animation_play()
 
+        start_range_float = self.start * original_frame_length
+        end_range_float = self.end * original_frame_length
+        
+        start_sub_frame = start_range_float - int(start_range_float)
+        end_sub_frame = end_range_float - int(end_range_float)
+
         start_frame = int(round(self.start * original_frame_length))
         end_frame = int(round(self.end * original_frame_length))
-
+        
+        # Enable Show Subframes
+        context.scene.show_subframe = True
         context.scene.frame_current = start_frame
         context.scene.frame_start = start_frame
         context.scene.frame_end = end_frame
+        context.scene.frame_subframe = start_sub_frame
 
         if not _playback["handler"]:
             _playback["handler"] = _on_frame
             _playback["end"] = end_frame
+            _playback["start_subframe"] = start_sub_frame
+            _playback["end_subframe"] = end_sub_frame
             bpy.app.handlers.frame_change_post.append(_on_frame)
 
         try:
@@ -1753,13 +1777,28 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
 
         # Assign action to armature
         _assign_action(arm, act)
+        original_frame_length = act["frame_length"]
+        if original_frame_length is None:
+            # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
+            original_frame_length = act.frame_range[1] - act.frame_range[0]
+
+        original_fps = act["ska_original_fps"]
+        if original_fps:
+            # Set the scene fps to the original fps of the animation
+            context.scene.render.fps = int(original_fps)
+        
+        # Enable Show Subframes
+        context.scene.show_subframe = True
 
         span = _action_span_frames(act)
         f0 = int(act.frame_range[0])
 
         # Jump to marker time
+        float_marker_time = float(v.marker_time)
+        subframe = float_marker_time * original_frame_length
         m_frame = int(round(f0 + float(v.marker_time) * span))
         context.scene.frame_current = m_frame
+        context.scene.frame_subframe = subframe - int(subframe)
 
         # Show only the matching 3D marker for this variant
         _hide_all_markers(model)
@@ -1843,6 +1882,7 @@ class DRS_OT_AnimSet_Reload(bpy.types.Operator):
     bl_options = {"INTERNAL"}
 
     def execute(self, _ctx):
+        print("Reloading Animation Set from blob...")
         _invalidate_actions_enum()
         col = _active_model()
         if not col:

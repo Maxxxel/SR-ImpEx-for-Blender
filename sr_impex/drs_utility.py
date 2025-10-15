@@ -1287,25 +1287,36 @@ def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> 
         bone_data.bind_rot = matrix_local.to_quaternion()
 
 
-def create_bone_tree(
-    armature_data: bpy.types.Armature, bone_list: list[DRSBone], bone_data: DRSBone
-):
-    edit_bones = armature_data.edit_bones
-    edit_bone = edit_bones.new(bone_data.name)
+def create_bone_tree(armature_data: bpy.types.Armature,bone_list: list[DRSBone],bone_data: DRSBone,bone_len: float = 0.1):
+    eb = armature_data.edit_bones.new(bone_data.name)
     armature_data.display_type = "STICK"
-    edit_bone.head = bone_data.bone_matrix @ Vector((0, 0, 0))
-    edit_bone.tail = bone_data.bone_matrix @ Vector((0, 1, 0))
-    edit_bone.align_roll(bone_data.bone_matrix.to_3x3() @ Vector((0, 0, 1)))
-    edit_bone.length = 0.1
 
-    # Set the parent bone
+    M = bone_data.bone_matrix
+    R = M.to_3x3()
+
+    # exact head from bind pose
+    eb.head = M @ Vector((0, 0, 0))
+
+    # make tail along local +Y of the bind pose, fixed short length
+    y_dir = (R @ Vector((0, 1, 0))).normalized()
+    if y_dir.length < 1e-8:
+        y_dir = Vector((0, 1, 0))  # extremely defensive
+    eb.tail = eb.head + y_dir * bone_len
+
+    # roll from bind pose Z axis
+    eb.align_roll(R @ Vector((0, 0, 1)))
+
+    # never force connection for coincident heads
     if bone_data.parent != -1:
-        parent_bone_name = bone_list[bone_data.parent].name
-        edit_bone.parent = armature_data.edit_bones.get(parent_bone_name)
+        parent_name = bone_list[bone_data.parent].name
+        parent_bone = armature_data.edit_bones.get(parent_name)
+        if parent_bone:
+            eb.parent = parent_bone
+            eb.use_connect = False  # critical: OFFSET parenting, no merging
 
-    # Recursively create child bones
-    for child_bone in [b for b in bone_list if b.parent == bone_data.identifier]:
-        create_bone_tree(armature_data, bone_list, child_bone)
+    # recurse
+    for child in [b for b in bone_list if b.parent == bone_data.identifier]:
+        create_bone_tree(armature_data, bone_list, child, bone_len)
 
 
 def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
@@ -1403,23 +1414,44 @@ def import_csk_skeleton(
         f"{locator_prefix}CSkSkeleton"
     )
     # Create the Armature Object and add the Armature Data to it
+    armature_collection = bpy.data.collections.new(
+        f"{locator_prefix}Armature_Collection"
+    )
+    source_collection.children.link(armature_collection)
     armature_object: bpy.types.Object = bpy.data.objects.new(
         f"{locator_prefix}Armature", armature_data
     )
-    # Link the Armature Object to the Scene Collection to ensure it's in the view layer
-    bpy.context.scene.collection.objects.link(armature_object)
     # Now link it to the intended destination collection
-    source_collection.objects.link(armature_object)
+    armature_collection.objects.link(armature_object)
     # Create the Skeleton
     bone_list = init_bones(drs_file.csk_skeleton)
     # Directly set armature data to edit mode
     bpy.context.view_layer.objects.active = armature_object
-    # bpy.context.view_layer.objects.active = armature_object
+
     with ensure_mode("EDIT"):
         # Create the Bone Tree without using bpy.ops or context
         create_bone_tree(armature_data, bone_list, bone_list[0])
+        # Parent the bones using the parent_index from the DRSBone objects
+        edit_bones = armature_data.edit_bones
+        
+        # Old Approach, working but ugly
+        for _, bone_data in enumerate(bone_list):
+            if bone_data.parent != -1:  # Root bones have a parent_index of -1
+                child_bone = edit_bones.get(bone_data.name)
+                # The parent is found by its index in the bone_list
+                parent_bone_data = bone_list[bone_data.parent]
+                parent_bone = edit_bones.get(parent_bone_data.name)
+
+                if child_bone and parent_bone:
+                    child_bone.parent = parent_bone
+
+    # Your bind pose recording function is correct and should be called at the end.
     record_bind_pose(bone_list, armature_data)
+    
+    # auto_align_tails(armature_object)
+    
     return armature_object, bone_list
+        
 
 
 def create_bone_weights(
@@ -2170,6 +2202,36 @@ def load_drs(
 
     # Apply the Transformations to the Source Collection
     parent_under_game_axes(source_collection, apply_transform)
+    
+    # Create a duplicate of the armature and call it control_rig
+    if armature_object:
+        # Select the armature object
+        bpy.ops.object.select_all(action='DESELECT')
+        armature_object.select_set(True)
+        bpy.context.view_layer.objects.active = armature_object
+        # Duplicate the armature
+        bpy.ops.object.duplicate()
+        control_rig = bpy.context.view_layer.objects.active
+        control_rig.name = f"{armature_object.name}_Control_Rig"
+        
+        # Now we need to set constraints on the original armature to copy transforms from the control rig
+        with ensure_mode('POSE'):
+            for bone in armature_object.pose.bones:
+                # Add a Copy Transforms constraint
+                constraint = bone.constraints.new(type='COPY_TRANSFORMS')
+                constraint.target_space = "WORLD"
+                constraint.owner_space = "WORLD"
+                constraint.target = control_rig
+                constraint.subtarget = bone.name
+        with ensure_mode('EDIT'):
+            for bone in control_rig.data.edit_bones:
+                bone.use_deform = False  # Disable deformation on the original armature
+        
+        # Link the both Rigs to the GRT_Action_Bakery_Global_Settings if available
+        if hasattr(bpy.context.scene, "GRT_Action_Bakery_Global_Settings"):
+            bpy.context.scene.GRT_Action_Bakery_Global_Settings.Target_Armature = armature_object
+            bpy.context.scene.GRT_Action_Bakery_Global_Settings.Source_Armature = control_rig
+
 
     # Print the Time Measurement
     logger.log(

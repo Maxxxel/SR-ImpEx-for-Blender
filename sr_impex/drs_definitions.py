@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
-from sys import version
 from typing import List, Union, BinaryIO, Optional
 from mathutils import Vector, Matrix, Quaternion
 from .file_io import FileReader, FileWriter

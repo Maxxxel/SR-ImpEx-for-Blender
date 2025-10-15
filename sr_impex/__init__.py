@@ -24,7 +24,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 4, 0),
-    "version": (3, 2, 1),
+    "version": (3, 3, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -274,6 +274,9 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             # Delete all collections
             for collection in bpy.data.collections:
                 bpy.data.collections.remove(collection)
+            # Also clean all actions
+            for action in bpy.data.actions:
+                bpy.data.actions.remove(action)
             bpy.ops.object.select_all(action="SELECT")
             bpy.ops.object.delete(use_global=False)
             # Purge unused data blocks
