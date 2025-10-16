@@ -25,38 +25,64 @@ def get_current_armature() -> bpy.types.Object:
     current_collection = get_current_collection()
     if current_collection is None:
         return None
+    
+    # Assure we have the right collection Name -> Should be Armature_Collection
+    if "Armature" not in current_collection.name:
+        # We are for sure in the main Collection DRSModel... so we need to dig one level deeper
+        for coll in current_collection.children:
+            if "Armature" in coll.name:
+                current_collection = coll
+                break
+        else:
+            print("No Armature collection found.")
+            return None
 
     for obj in current_collection.objects:
-        if obj.type == "ARMATURE":
+        if obj.type == "ARMATURE" and "Control_Rig" not in obj.name:
             return obj
 
     return None
 
 
-def get_actions() -> List[str]:
+def get_actions(current_collection: bpy.types.Collection = None) -> List[str]:
     """Get all actions relevant to the current selected object."""
-    current_collection = get_current_collection()
-
+    current_collection = get_current_collection() if current_collection is None else current_collection
     if current_collection is None:
+        print("No active collection found.")
         return []
+    # Check for the collection Name -> Should be Armature_Collection
+    if "Armature" not in current_collection.name:
+        # We are for sure in the main Collection DRSModel... so we need to dig one level deeper
+        for coll in current_collection.children:
+            if "Armature" in coll.name:
+                current_collection = coll
+                break
+        else:
+            print("No Armature collection found.")
+            return []
 
     relevant_actions = set()
 
     # Iterate over all objects in the current collection
     for obj in current_collection.objects:
-        if obj.animation_data:
+        if obj.animation_data and "Control_Rig" not in obj.name:
             # Add the current active action of this object, if any
             if obj.animation_data.action:
                 relevant_actions.add(obj.animation_data.action.name)
 
         # Additionally, find actions that animate this object indirectly via FCurves
         for action in bpy.data.actions:
+            # But avoid actions linked to Control_Rig Armatures
+            if "Control_Rig" in action.name:
+                continue
+            
             for fcurve in action.fcurves:
                 # Check if the action references this object's properties or pose bones
                 if fcurve.data_path.startswith(("location", "rotation", "scale")):
                     relevant_actions.add(action.name)
                     break
-                if obj.type == "ARMATURE" and fcurve.data_path.startswith("pose.bones"):
+                if obj.type == "ARMATURE" and fcurve.data_path.startswith("pose.bones") and not "Control_Rig" in obj.name:
+                    # Extract the bone name from the data path
                     relevant_actions.add(action.name)
                     break
 
@@ -304,4 +330,5 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     if not filepath.endswith(".ska"):
         filepath += ".ska"
     ska_file.write(filepath)
+    logger.log(f"Exported SKA file to {filepath}", "info", "INFO")
     logger.display()

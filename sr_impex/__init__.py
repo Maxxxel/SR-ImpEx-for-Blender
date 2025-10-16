@@ -24,7 +24,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 4, 0),
-    "version": (3, 3, 0),
+    "version": (3, 3, 1),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -459,6 +459,15 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
 
         armature = next((o for o in active_coll.objects if o.type == "ARMATURE"), None)
         if armature is None:
+            # Check for an Armature_Collection inside the active collection
+            armature_coll = active_coll.children.get("Armature_Collection")
+            if armature_coll:
+                # Be sure not to take the Control_Rig Armature, but the actual Armature*
+                armature = next(
+                    (o for o in armature_coll.objects if o.type == "ARMATURE" and not o.name.startswith("Control_Rig")), None
+                )
+                
+        if armature is None:
             self.report({"ERROR"}, "No armature found in the selected collection")
             return {"CANCELLED"}
 
@@ -469,12 +478,17 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
 
         bpy.ops.object.mode_set(mode="OBJECT")
 
-        actions = get_actions()
+        actions = get_actions(armature_coll)
         if not actions:
             self.report({"ERROR"}, "No actions found in the selected armature")
             return {"CANCELLED"}
-
-        self.action = actions[0]
+        
+        # Get the first valid action
+        first_action = next((act for act in actions if act != "None"), None)
+        if first_action is None:
+            self.report({"ERROR"}, "No valid actions found in the selected armature")
+            return {"CANCELLED"}
+        self.action = first_action
         self.filepath = bpy.path.ensure_ext(self.action, ".ska")
 
         context.window_manager.fileselect_add(self)
@@ -487,6 +501,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
         export_ska(context, self.filepath, self.action)
+        
         return {"FINISHED"}
 
 
