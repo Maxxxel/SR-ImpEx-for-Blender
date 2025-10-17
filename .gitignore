@@ -6,8 +6,10 @@
 /sr_impex/sr_impex_updater*
 /sr_impex/__pycache__
 /sr_impex/debug*
+/sr_impex/resources/temp
 *.code-workspace
 *.pyc
 create_release_package.py
 pyrightconfig.json
 output.json
+!/sr_impex/resources/texconv.*

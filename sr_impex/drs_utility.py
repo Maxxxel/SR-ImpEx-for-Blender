@@ -1022,7 +1022,15 @@ def convert_image_to_dds(
 
     # Save the image as PNG using Blender's save_render function
     img.file_format = "PNG"
-    img.save(filepath=temp_path)
+    try:
+        img.save(filepath=temp_path)
+    except Exception as e: # pylint: disable=broad-except
+        logger.log(
+            f"Failed to save image {output_filename} as PNG: {e}",
+            "Error",
+            "ERROR",
+        )
+        return (1, "", f"Failed to save image as PNG: {e}")
 
     # Build the argument list for texconv.exe
     texconv_exe = os.path.join(resource_dir, "texconv.exe")
@@ -1043,15 +1051,23 @@ def convert_image_to_dds(
 
     final_cmd = subprocess.list2cmdline(args)
 
-    result = subprocess.run(
-        final_cmd,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        errors="replace",
-        shell=False,
-    )
+    try:
+        result = subprocess.run(
+            final_cmd,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            shell=False,
+        )
+    except Exception as e:  # pylint: disable=broad-except
+        logger.log(
+            f"Failed to run texconv.exe for {output_filename}: {e}. Command: {final_cmd}",
+            "Error",
+            "ERROR",
+        )
+        return (1, "", f"Failed to run texconv.exe: {e}")
 
     # Construct the expected output DDS file path.
     output_path = os.path.join(folder_path, output_filename + ".dds")
@@ -1139,19 +1155,35 @@ def get_converted_texture(
         texture_name = f"{model_name}{mesh_index}{file_ending}"
 
     # Call your conversion function (make sure convert_image_to_dds is defined and available)
-    ret_code, _, stderr = convert_image_to_dds(
-        img, texture_name, folder_path, dxt_format, extra_args
-    )
-    if ret_code != 0:
+    try:
+        ret_code, _, stderr = convert_image_to_dds(
+            img, texture_name, folder_path, dxt_format, extra_args
+        )
+        if ret_code != 0:
+            logger.log(
+                f"Conversion failed for {model_name}'s {file_ending} map: {stderr}",
+                "Error",
+                "ERROR",
+            )
+            return None
+    except Exception as e:
         logger.log(
-            f"Conversion failed for {model_name}'s {file_ending} map: {stderr}",
+            f"Exception during conversion for {model_name}'s {file_ending} map: {e}",
             "Error",
             "ERROR",
         )
         return None
 
     # Assume the DDS file is generated as <texture_name>.dds in folder_path.
-    dds_path = os.path.join(texture_name)
+    try:
+        dds_path = os.path.join(texture_name)
+    except Exception as e:
+        logger.log(
+            f"Failed to construct DDS path for {model_name}'s {file_ending} map: {e}",
+            "Error",
+            "ERROR",
+        )
+        return None
     cache[key] = dds_path
     return dds_path
 
@@ -3509,33 +3541,57 @@ def create_mesh(
     new_mesh.textures = Textures()
 
     # Check if the Color Map is set
-    if not set_color_map(color_map, new_mesh, mesh_index, model_name, folder_path):
+    try:
+        if not set_color_map(color_map, new_mesh, mesh_index, model_name, folder_path):
+            return None, per_mesh_bone_data
+    except Exception as e: # pylint: disable=broad-except
+        logger.log(
+            f"An error occurred while setting the Color Map for mesh {mesh.name}: {e}",
+            "Error",
+            "ERROR",
+        )
         return None, per_mesh_bone_data
 
     # Check if the Normal Map is set
     if not skip_normal_map:
-        bool_param_bit_flag = set_normal_map(
-            normal_map,
-            new_mesh,
-            mesh_index,
-            model_name,
-            folder_path,
-            bool_param_bit_flag,
-        )
+        try:
+            bool_param_bit_flag = set_normal_map(
+                normal_map,
+                new_mesh,
+                mesh_index,
+                model_name,
+                folder_path,
+                bool_param_bit_flag,
+            )
+        except Exception as e: # pylint: disable=broad-except
+            logger.log(
+                f"An error occurred while setting the Normal Map for mesh {mesh.name}: {e}",
+                "Error",
+                "ERROR",
+            )
+            return None, per_mesh_bone_data
 
     # Check if the Metallic, Roughness and Emission Map is set
     if not skip_param_map:
-        bool_param_bit_flag = set_metallic_roughness_emission_map(
-            metallic_map,
-            roughness_map,
-            emission_map,
-            new_mesh,
-            mesh_index,
-            model_name,
-            folder_path,
-            bool_param_bit_flag,
-        )
-        if bool_param_bit_flag == -1:
+        try:
+            bool_param_bit_flag = set_metallic_roughness_emission_map(
+                metallic_map,
+                roughness_map,
+                emission_map,
+                new_mesh,
+                mesh_index,
+                model_name,
+                folder_path,
+                bool_param_bit_flag,
+            )
+            if bool_param_bit_flag == -1:
+                return None, per_mesh_bone_data
+        except Exception as e: # pylint: disable=broad-except
+            logger.log(
+                f"An error occurred while setting the Parameter Map for mesh {mesh.name}: {e}",
+                "Error",
+                "ERROR",
+            )
             return None, per_mesh_bone_data
 
     # Set the Bool Parameter by a bin -> dec conversion
@@ -3546,6 +3602,11 @@ def create_mesh(
         if mp and int(mp.bool_parameter) >= 0:
             new_mesh.bool_parameter = int(mp.bool_parameter) & 0xFFFFFFFF
     except Exception:
+        logger.log(
+            f"An error occurred while setting the Bool Parameter override for mesh {mesh.name}.",
+            "Warning",
+            "WARNING",
+        )
         pass
     new_mesh.materials = Materials()
 
@@ -3582,7 +3643,11 @@ def create_mesh(
             # (that branch writes 'flow' and the extra material blocks)
             new_mesh.material_parameters = -86061050
     except Exception:
-        pass
+        logger.log(
+            f"An error occurred while setting the Flow override for mesh {mesh.name}.",
+            "Warning",
+            "WARNING",
+        )
 
     # Refraction
     refraction = Refraction()
@@ -3612,21 +3677,29 @@ def create_cdsp_mesh_file(
 
     mesh_bone_data: List[Dict[str, int]] = []
 
-    for mesh in meshes_collection.objects:
-        if mesh.type == "MESH":
-            _mesh, _per_mesh_bone_data = create_mesh(
-                mesh,
-                _cdsp_meshfile.mesh_count,
-                model_name,
-                filepath,
-                flip_normals,
-                add_skin_mesh,
-            )
-            if _mesh is None:
-                return
-            _cdsp_meshfile.meshes.append(_mesh)
-            _cdsp_meshfile.mesh_count += 1
-            mesh_bone_data.append(_per_mesh_bone_data)
+    try:
+        for mesh in meshes_collection.objects:
+            if mesh.type == "MESH":
+                _mesh, _per_mesh_bone_data = create_mesh(
+                    mesh,
+                    _cdsp_meshfile.mesh_count,
+                    model_name,
+                    filepath,
+                    flip_normals,
+                    add_skin_mesh,
+                )
+                if _mesh is None:
+                    return
+                _cdsp_meshfile.meshes.append(_mesh)
+                _cdsp_meshfile.mesh_count += 1
+                mesh_bone_data.append(_per_mesh_bone_data)
+    except Exception as e: # pylint: disable=broad-except
+        logger.log(
+            f"An error occurred while creating the CDspMeshFile: {e}",
+            "Error",
+            "ERROR",
+        )
+        return None, None
 
     _cdsp_meshfile.bounding_box_lower_left_corner = Vector3(0, 0, 0)
     _cdsp_meshfile.bounding_box_upper_right_corner = Vector3(0, 0, 0)
@@ -4513,22 +4586,43 @@ def save_drs(
     armature_object = None
     add_skin_mesh = False
     bone_map: Dict[str, Dict[str, Optional[int]]] = {}
+    # get the Armature_Collection
+    armature_collection = None
+    for child in source_collection_copy.children:
+        if "Armature_Collection" in child.name:
+            armature_collection = child
+            break
+    if armature_collection is None and model_type in [
+        "AnimatedObjectNoCollision",
+        "AnimatedObjectCollision",
+    ]:
+        logger.log(
+            "No Armature_Collection found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature_Collection to the Collection.",
+            "Error",
+            "ERROR",
+        )
+        return abort(keep_debug_collections, source_collection_copy)
+    # Get the armature object from the Armature_Collection, but avoid the "*Control_Rig" armature
     if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
-        for obj in source_collection_copy.objects:
-            if obj.type == "ARMATURE":
-                armature_object = obj
-                add_skin_mesh = True
-                # Limit the Weights to max. 4 bones per vertex
-                bpy.ops.object.vertex_group_limit_total(limit=4)
-                # Create a bone map from the armature
-                bone_map = create_bone_map(armature_object)
-                break
-        if armature_object is None:
-            logger.log(
-                "No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection.",
-                "Error",
-                "ERROR",
-            )
+        try:
+            for obj in armature_collection.objects:
+                if obj.type == "ARMATURE" and "Control_Rig" not in obj.name:
+                    armature_object = obj
+                    add_skin_mesh = True
+                    # Limit the Weights to max. 4 bones per vertex
+                    bpy.ops.object.vertex_group_limit_total(limit=4)
+                    # Create a bone map from the armature
+                    bone_map = create_bone_map(armature_object)
+                    break
+            if armature_object is None:
+                logger.log(
+                    "No Armature found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature to the Collection.",
+                    "Error",
+                    "ERROR",
+                )
+                return abort(keep_debug_collections, source_collection_copy)
+        except Exception as e:  # pylint: disable=broad-except
+            logger.log(f"Error processing armature: {e}", "Armature Error", "ERROR")
             return abort(keep_debug_collections, source_collection_copy)
 
     try:
@@ -4548,15 +4642,19 @@ def save_drs(
         return abort(keep_debug_collections, source_collection_copy)
 
     # Generate the CDspMeshFile
-    cdsp_mesh_file, mesh_bone_data = create_cdsp_mesh_file(
-        meshes_collection,
-        model_name,
-        folder_path,
-        flip_normals,
-        add_skin_mesh,
-    )
-    if cdsp_mesh_file is None:
-        logger.log("Failed to create CDspMeshFile.", "Mesh File Error", "ERROR")
+    try:
+        cdsp_mesh_file, mesh_bone_data = create_cdsp_mesh_file(
+            meshes_collection,
+            model_name,
+            folder_path,
+            flip_normals,
+            add_skin_mesh,
+        )
+        if cdsp_mesh_file is None:
+            logger.log("Failed to create CDspMeshFile.", "Mesh File Error", "ERROR")
+            return abort(keep_debug_collections, source_collection_copy)
+    except Exception as e:  # pylint: disable=broad-except
+        logger.log(f"Error creating CDspMeshFile: {e}", "Mesh File Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
 
     nodes = InformationIndices[model_type]
