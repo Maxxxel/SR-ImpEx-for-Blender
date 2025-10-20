@@ -1,5 +1,6 @@
 import os
 import json
+import zlib
 from os.path import dirname, realpath
 from math import radians
 import time
@@ -4679,8 +4680,13 @@ def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLoc
         return _empty()
 
 
-def create_effect_set(source_collection: bpy.types.Collection) -> EffectSet:
+def create_effect_set(file_name: str) -> EffectSet:
     new_effect_set = EffectSet()
+    new_effect_set.type = 11
+    # Calc CRC of the file
+    crc_file_name = zlib.crc32(file_name.encode("utf-8")) & 0xFFFFFFFF
+    new_effect_set.checksum = f"sr-{crc_file_name}-0"
+    new_effect_set.checksum_length = len(new_effect_set.checksum)
     
     # Check for existing blob to fill
     # TODO
@@ -4916,7 +4922,7 @@ def save_drs(
                 "CDrwLocatorList", new_drs_file.cdrw_locator_list
             )
         elif node == "EffectSet":
-            new_drs_file.effect_set = create_effect_set(source_collection_copy)
+            new_drs_file.effect_set = create_effect_set(model_name + ".drs")
             if new_drs_file.effect_set is None:
                 logger.log(
                     "Failed to create EffectSet.", "Effect Set Error", "ERROR"
