@@ -24,7 +24,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 4, 0),
-    "version": (3, 3, 2),
+    "version": (3, 3, 3),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
