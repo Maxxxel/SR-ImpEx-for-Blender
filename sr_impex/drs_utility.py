@@ -1,5 +1,6 @@
 import os
 import json
+import zlib
 from os.path import dirname, realpath
 from math import radians
 import time
@@ -76,6 +77,8 @@ from .drs_definitions import (
     CDrwLocatorList,
     AnimationMarkerSet,
     AnimationMarker,
+    EffectSet,
+    LocatorClass
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -88,7 +91,7 @@ from .transform_utils import (
 from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
 from .animation_utils import import_ska_animation
 from .message_logger import MessageLogger
-from .locator_editor import BLOB_KEY, UID_KEY
+from .locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
 
 logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -4215,7 +4218,7 @@ def create_animation_set(model_name: str) -> AnimationSet:
     anim.version = 6
     anim.revision = 6
     anim.subversion = 2
-    anim.has_atlas = 1
+    anim.has_atlas = 2
     anim.atlas_count = 0
     anim.ik_atlases = []
     anim.mode_animation_keys = []
@@ -4532,6 +4535,165 @@ def update_mesh_file_root_reference(
     return cdsp_mesh_file
 
 
+def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLocatorList:
+    """
+    Build CDrwLocatorList for export.
+
+    Priority:
+      1) Use the editor's stored JSON blob on the DRSModel_* collection (authoritative).
+      2) If missing/malformed, derive from scene objects following the same rules
+         as the editor's "Sync from Scene" (bone local vs world-in-game-space),
+         then convert that temporary blob via `blob_to_cdrw`.
+    """
+    def _empty(version: int = 5) -> CDrwLocatorList:
+        return CDrwLocatorList(magic=0, version=int(version or 5), length=0, slocators=[])
+
+    if not source_collection:
+        return _empty()
+
+    # --- 1) Prefer the blob exactly as authored in the editor ----------------
+    try:
+        raw = source_collection.get(BLOB_KEY)
+        if raw:
+            blob = json.loads(raw)
+            if "locators" in blob:
+                cdrw = blob_to_cdrw(blob)
+                cdrw.length = len(cdrw.slocators or [])
+                if not getattr(cdrw, "version", None):
+                    cdrw.version = int(blob.get("version", 5) or 5)
+                if not getattr(cdrw, "magic", None):
+                    cdrw.magic = 0
+                return cdrw
+    except Exception:
+        # Fall through to scene derivation
+        pass
+    # -------------------------------------------------------------------------
+
+    # --- 2) Fallback: derive a blob from the scene like the editor -----------
+    # Helpers mirror the editor's logic (names/UID search, GO handling, bone-local vs world)
+    LOCATOR_PREFIX = "Locator_"
+
+    def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
+        def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
+            for o in c.objects:
+                if o.type == "ARMATURE" and "Control_Rig" not in o.name:
+                    return o
+            for ch in c.children:
+                a = visit(ch)
+                if a:
+                    return a
+            return None
+        return visit(col)
+
+    def _find_game_orientation(root: bpy.types.Collection) -> Optional[bpy.types.Object]:
+        TARGET = "GameOrientation"
+        def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
+            for o in c.objects:
+                if o.name == TARGET:
+                    return o
+            for ch in c.children:
+                got = visit(ch)
+                if got:
+                    return got
+            return None
+        return visit(root)
+
+    def _iter_locator_objects(root: bpy.types.Collection):
+        out = []
+        def visit(c: bpy.types.Collection):
+            for o in c.objects:
+                if (UID_KEY in o.keys()) or o.name.startswith(LOCATOR_PREFIX):
+                    out.append(o)
+            for ch in c.children:
+                visit(ch)
+        visit(root)
+        return out
+
+    def _bone_index_from_name(arm: bpy.types.Object, name: str) -> int:
+        if not arm or not name:
+            return -1
+        return arm.data.bones.find(name)
+
+    def _flatten_m3(m) -> list[float]:
+        try:
+            return [float(m[i][j]) for i in range(3) for j in range(3)]
+        except Exception:
+            v = list(m)
+            if len(v) == 9:
+                return [float(x) for x in v]
+            return [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+
+    def _infer_class_id_from_name(name: str) -> int:
+        # Same rule the editor uses
+        if name.startswith(LOCATOR_PREFIX):
+            t = name[len(LOCATOR_PREFIX):]
+            for k, v in LocatorClass.items():
+                if v == t:
+                    return int(k)
+        return 0
+
+    arm = _find_armature(source_collection)
+    go = _find_game_orientation(source_collection)
+
+    # Build a temporary blob compatible with blob_to_cdrw()
+    temp_blob = {"version": 5, "locators": []}
+
+    for obj in _iter_locator_objects(source_collection):
+        entry = {
+            "uid": obj.get(UID_KEY) or "",   # not strictly required for export
+            "class_id": int(obj.get("_class_id", _infer_class_id_from_name(obj.name))),
+            "file": obj.get("_file", ""),
+            "bone_id": -1,
+            "uk_int": -1,
+            "rot3x3": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            "pos": [0, 0, 0],
+        }
+
+        # Bone-local -> store LOCAL (bone space). Non-bone -> WORLD IN GAME SPACE.
+        if (
+            obj.parent_type == "BONE"
+            and obj.parent is not None
+            and obj.parent.type == "ARMATURE"
+            and obj.parent_bone
+        ):
+            entry["bone_id"] = int(_bone_index_from_name(obj.parent, obj.parent_bone))
+            entry["pos"] = list(obj.location)
+            entry["rot3x3"] = _flatten_m3(obj.matrix_basis.to_3x3())
+        else:
+            entry["bone_id"] = -1
+            if go and obj.parent == go:
+                mw_game = go.matrix_world.inverted() @ obj.matrix_world
+            else:
+                mw_game = obj.matrix_world
+            entry["pos"] = list(mw_game.translation)
+            entry["rot3x3"] = _flatten_m3(mw_game.to_3x3())
+
+        temp_blob["locators"].append(entry)
+
+    try:
+        cdrw = blob_to_cdrw(temp_blob)
+        cdrw.length = len(cdrw.slocators or [])
+        cdrw.version = int(temp_blob.get("version", 5) or 5)
+        cdrw.magic = 281702437
+        return cdrw
+    except Exception:
+        return _empty()
+
+
+def create_effect_set(file_name: str) -> EffectSet:
+    new_effect_set = EffectSet()
+    new_effect_set.type = 11
+    # Calc CRC of the file
+    crc_file_name = zlib.crc32(file_name.encode("utf-8")) & 0xFFFFFFFF
+    new_effect_set.checksum = f"sr-{crc_file_name}-0"
+    new_effect_set.checksum_length = len(new_effect_set.checksum)
+    
+    # Check for existing blob to fill
+    # TODO
+    
+    return new_effect_set
+
+
 def save_drs(
     context: bpy.types.Context,
     filepath: str,
@@ -4595,6 +4757,7 @@ def save_drs(
     if armature_collection is None and model_type in [
         "AnimatedObjectNoCollision",
         "AnimatedObjectCollision",
+        "AnimatedUnit",
     ]:
         logger.log(
             "No Armature_Collection found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature_Collection to the Collection.",
@@ -4603,7 +4766,7 @@ def save_drs(
         )
         return abort(keep_debug_collections, source_collection_copy)
     # Get the armature object from the Armature_Collection, but avoid the "*Control_Rig" armature
-    if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
+    if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision", "AnimatedUnit"]:
         try:
             for obj in armature_collection.objects:
                 if obj.type == "ARMATURE" and "Control_Rig" not in obj.name:
@@ -4710,6 +4873,21 @@ def save_drs(
                     "Failed to create AnimationSet.", "Animation Set Error", "ERROR"
                 )
                 return abort(keep_debug_collections, source_collection_copy)
+            # Fox for Animated Object -> No Markers, hasAtlas = 1, allow only modekeys with visJob = 0
+            if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
+                new_drs_file.animation_set.has_atlas = 1
+                new_drs_file.animation_set.animation_marker_count = 0
+                new_drs_file.animation_set.animation_marker_sets = []
+                # Filter mode keys
+                filtered_keys = [
+                    mk
+                    for mk in new_drs_file.animation_set.mode_animation_keys
+                    if mk.vis_job == 0
+                ]
+                new_drs_file.animation_set.mode_animation_keys = filtered_keys
+                new_drs_file.animation_set.mode_animation_key_count = len(
+                    filtered_keys
+                )
             new_drs_file.push_node_infos("AnimationSet", new_drs_file.animation_set)
         elif node == "AnimationTimings":
             # Empty Set and use external EntityEditor
@@ -4721,9 +4899,36 @@ def save_drs(
                     "ERROR",
                 )
                 return abort(keep_debug_collections, source_collection_copy)
+            # Fix Timing if only an Animated Object -> no Timings at all
+            if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
+                new_drs_file.animation_timings.version = 3
+                new_drs_file.animation_timings.animation_timings = []
+                new_drs_file.animation_timings.animation_timing_count = 0
             new_drs_file.push_node_infos(
                 "AnimationTimings", new_drs_file.animation_timings
             )
+        elif node == "CDrwLocatorList":
+            new_drs_file.cdrw_locator_list = create_cdrw_locator_list(
+                source_collection_copy
+            )
+            if new_drs_file.cdrw_locator_list is None:
+                logger.log(
+                    "Failed to create CDrwLocatorList.",
+                    "Locator List Error",
+                    "ERROR",
+                )
+                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos(
+                "CDrwLocatorList", new_drs_file.cdrw_locator_list
+            )
+        elif node == "EffectSet":
+            new_drs_file.effect_set = create_effect_set(model_name + ".drs")
+            if new_drs_file.effect_set is None:
+                logger.log(
+                    "Failed to create EffectSet.", "Effect Set Error", "ERROR"
+                )
+                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos("EffectSet", new_drs_file.effect_set)
         elif node == "CGeoPrimitiveContainer":
             pass  # Nothing happens here
         else:

@@ -735,6 +735,7 @@ class Texture:
         return self
 
     def write(self, file: BinaryIO) -> None:
+        print(f"[DEBUG] Writing texture: {self.name}")
         file.write(pack("ii", self.identifier, self.length))
         file.write(self.name.encode("utf-8"))
         file.write(pack("i", self.spacer))
@@ -754,6 +755,7 @@ class Textures:
         return self
 
     def write(self, file: BinaryIO) -> None:
+        print(f"[DEBUG] Writing {len(self.textures)} textures")
         self.length = len(self.textures)
         file.write(pack("i", self.length))
         for texture in self.textures:
@@ -901,6 +903,7 @@ class Materials:
         return self
 
     def write(self, file: BinaryIO) -> None:
+        print(f"[DEBUG] Writing Materials with length {self.length}.")
         self.length = len(self.materials)
         file.write(pack("i", self.length))
         for material in self.materials:
@@ -929,6 +932,7 @@ class Refraction:
         return self
 
     def write(self, file: BinaryIO) -> None:
+        print(f"[DEBUG] Writing Refraction with length {self.length}.")
         file.write(pack("i", self.length))
         if self.length == 1:
             file.write(pack("i", self.identifier))
@@ -953,6 +957,7 @@ class LevelOfDetail:
         return self
 
     def write(self, file: BinaryIO) -> None:
+        print(f"[DEBUG] Writing LevelOfDetail with length {self.length}.")
         file.write(pack("i", self.length))
         if self.length == 1:
             file.write(pack("i", self.lod_level))
@@ -977,6 +982,7 @@ class EmptyString:
         return self
 
     def write(self, file: BinaryIO) -> None:
+        print(f"[DEBUG] Writing EmptyString with length {self.length}.")
         file.write(
             pack(
                 f"i{self.length * 2}s", self.length, self.unknown_string.encode("utf-8")
@@ -1013,6 +1019,7 @@ class Flow:
         return self
 
     def write(self, file: BinaryIO) -> None:
+        print(f"[DEBUG] Writing Flow with length {self.length}.")
         file.write(pack("i", self.length))
         if self.length == 4:
             file.write(pack("i", self.max_flow_speed_identifier))
@@ -1109,38 +1116,84 @@ class BattleforgeMesh:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("ii", self.vertex_count, self.face_count))
-        for face in self.faces:
-            face.write(file)
-        file.write(pack("B", self.mesh_count))
-        for mesh_data in self.mesh_data:
-            mesh_data.write(file)
-        self.bounding_box_lower_left_corner.write(file)
-        self.bounding_box_upper_right_corner.write(file)
-        file.write(pack("=hi", self.material_id, self.material_parameters))
+        print(f"[DEBUG] Writing BattleforgeMesh with {self.vertex_count} vertices and {self.face_count} faces.")
+        try:
+            file.write(pack("ii", self.vertex_count, self.face_count))
+        except Exception:
+            print(f"[DEBUG] Error writing BattleforgeMesh vertex_count or face_count.")
+            raise TypeError(
+                f"Error writing BattleforgeMesh vertex_count {self.vertex_count} or face_count {self.face_count}"
+            )
+        
+        print(f"[DEBUG] Writing {len(self.faces)} faces.")
+        try:
+            for face in self.faces:
+                face.write(file)
+        except Exception as e:
+            print(f"[DEBUG] Error writing BattleforgeMesh faces. Exception: {e}")
+            raise TypeError("Error writing BattleforgeMesh faces")
+        
+        print(f"[DEBUG] Writing BattleforgeMesh with mesh_count {self.mesh_count}.")
+        try:
+            file.write(pack("B", self.mesh_count))
+        except Exception:
+            print(f"[DEBUG] Error writing BattleforgeMesh mesh_count.")
+            raise TypeError(f"Error writing BattleforgeMesh mesh_count {self.mesh_count}")
+        
+        print(f"[DEBUG] Writing {len(self.mesh_data)} mesh data entries.")
+        try:
+            for mesh_data in self.mesh_data:
+                mesh_data.write(file)
+        except Exception:
+            print(f"[DEBUG] Error writing BattleforgeMesh mesh data.")
+            raise TypeError("Error writing BattleforgeMesh mesh data")
+        
+        print(f"[DEBUG] Writing BattleforgeMesh bounding boxes.")
+        try:
+            self.bounding_box_lower_left_corner.write(file)
+            self.bounding_box_upper_right_corner.write(file)
+        except Exception:
+            print(f"[DEBUG] Error writing BattleforgeMesh bounding boxes.")
+            raise TypeError("Error writing BattleforgeMesh bounding boxes")
+        
+        print(f"[DEBUG] Writing BattleforgeMesh material_id {self.material_id} and material_parameters {self.material_parameters}.")
+        try:
+            file.write(pack("=hi", self.material_id, self.material_parameters))
+        except Exception:
+            print(f"[DEBUG] Error writing BattleforgeMesh material_id or material_parameters.")
+            raise TypeError(
+                f"Error writing BattleforgeMesh material_id {self.material_id} or material_parameters {self.material_parameters}"
+            )
 
-        if self.material_parameters == -86061050:
-            file.write(pack("ii", self.material_stuff, self.bool_parameter))
-            self.textures.write(file)
-            self.refraction.write(file)
-            self.materials.write(file)
-            self.level_of_detail.write(file)
-            self.empty_string.write(file)
-            self.flow.write(file)
-        elif self.material_parameters == -86061051:
-            file.write(pack("ii", self.material_stuff, self.bool_parameter))
-            self.textures.write(file)
-            self.refraction.write(file)
-            self.materials.write(file)
-            self.level_of_detail.write(file)
-            self.empty_string.write(file)
-        elif self.material_parameters == -86061055:
-            file.write(pack("i", self.bool_parameter))
-            self.textures.write(file)
-            self.refraction.write(file)
-            self.materials.write(file)
-        else:
-            raise TypeError(f"Unknown MaterialParameters {self.material_parameters}")
+        print(f"[DEBUG] Writing BattleforgeMesh material data for MaterialParameters {self.material_parameters}.")
+        try:
+            if self.material_parameters == -86061050:
+                file.write(pack("ii", self.material_stuff, self.bool_parameter))
+                self.textures.write(file)
+                self.refraction.write(file)
+                self.materials.write(file)
+                self.level_of_detail.write(file)
+                self.empty_string.write(file)
+                self.flow.write(file)
+            elif self.material_parameters == -86061051:
+                file.write(pack("ii", self.material_stuff, self.bool_parameter))
+                self.textures.write(file)
+                self.refraction.write(file)
+                self.materials.write(file)
+                self.level_of_detail.write(file)
+                self.empty_string.write(file)
+            elif self.material_parameters == -86061055:
+                file.write(pack("i", self.bool_parameter))
+                self.textures.write(file)
+                self.refraction.write(file)
+                self.materials.write(file)
+            else:
+                raise TypeError(f"Unknown MaterialParameters {self.material_parameters}")
+        except Exception:
+            print(f"[DEBUG] Error writing BattleforgeMesh material data.")
+            raise TypeError("Error writing BattleforgeMesh material data")
+
+        print(f"[DEBUG] Finished writing BattleforgeMesh.")
 
     def size(self) -> int:
         size = 8  # VertexCount + FaceCount
@@ -1208,17 +1261,38 @@ class CDspMeshFile:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("i", self.magic))
+        print(f"[DEBUG] Writing CDspMeshFile with magic {self.magic} and mesh_count {self.mesh_count}.")
+        try:
+            file.write(pack("i", self.magic))
+        except Exception:
+            raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
+        
         if self.magic == 1314189598:
-            file.write(pack("ii", self.zero, self.mesh_count))
-            self.bounding_box_lower_left_corner.write(file)
-            self.bounding_box_upper_right_corner.write(file)
+            try:
+                file.write(pack("ii", self.zero, self.mesh_count))
+            except Exception:
+                raise TypeError(f"This Mesh has the wrong Mesh Count: {self.mesh_count}")
+            try:
+                self.bounding_box_lower_left_corner.write(file)
+            except Exception:
+                raise TypeError("Error writing bounding_box_lower_left_corner")
+            
+            try:
+                self.bounding_box_upper_right_corner.write(file)
+            except Exception:
+                raise TypeError("Error writing bounding_box_upper_right_corner")
 
-            for mesh in self.meshes:
-                mesh.write(file)
+            try:
+                for mesh in self.meshes:
+                    mesh.write(file)
+            except Exception:
+                raise TypeError("Error writing meshes")
 
-            for point in self.some_points:
-                point.write(file)
+            try:
+                for point in self.some_points:
+                    point.write(file)
+            except Exception:
+                raise TypeError("Error writing some_points")
         else:
             raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
 
@@ -1405,7 +1479,7 @@ class SLocator:
 
 @dataclass(eq=False, repr=False)
 class CDrwLocatorList:
-    magic: int = 0
+    magic: int = 281702437
     version: int = 0
     length: int = 0
     slocators: List[SLocator] = field(default_factory=list)
@@ -2023,7 +2097,7 @@ class AnimationSet:
     allign_to_terrain: int = 0
     mode_animation_key_count: int = 0  # How many different animations are there?
     mode_animation_keys: List[ModeAnimationKey] = field(default_factory=list)
-    has_atlas: int = 1  # 1 or 2
+    has_atlas: int = 2  # 1 or 2
     atlas_count: int = 0  # Animated Objects: 0
     ik_atlases: List[IKAtlas] = field(default_factory=list)
     uk_len: int = 0
@@ -3070,39 +3144,63 @@ class DRS:
         self.node_hierarchy_offset = (
             self.node_information_offset + 32 + (self.node_count - 1) * 32
         )
-        writer.write(
-            pack(
-                "iiiiI",
-                self.magic,
-                self.number_of_models,
-                self.node_information_offset,
-                self.node_hierarchy_offset,
-                self.node_count,
+        
+        try:
+            writer.write(
+                pack(
+                    "iiiiI",
+                    self.magic,
+                    self.number_of_models,
+                    self.node_information_offset,
+                    self.node_hierarchy_offset,
+                    self.node_count,
+                )
             )
-        )
+        except Exception as e: # pylint: disable=broad-except
+            print(f"Error writing header: {e}")
+            writer.close()
+            return
 
         # Write Data Packets (in correct Order)
-        for node_name in WriteOrder[self.model_type]:
-            # get the right node from self.node_informations
-            node_information = next(
-                (
-                    node_info
-                    for node_info in self.node_informations
-                    if node_info.node_name == node_name
-                ),
-                None,
-            )
+        try:
+            for node_name in WriteOrder[self.model_type]:
+                # get the right node from self.node_informations
+                node_information = next(
+                    (
+                        node_info
+                        for node_info in self.node_informations
+                        if node_info.node_name == node_name
+                    ),
+                    None,
+                )
 
-            if node_name != "CGeoPrimitiveContainer":
-                node_information.data_object.write(writer)
+                if node_name != "CGeoPrimitiveContainer":
+                    print(f"[DEBUG] Writing node: {node_name} at offset {node_information.offset} with size {node_information.node_size}")
+                    node_information.data_object.write(writer)
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"Error writing node {node_name}: {e}")
+            writer.close()
+            return
 
         # Write Node Informations
-        for node_info in self.node_informations:
-            node_info.write(writer)
+        try:
+            for node_info in self.node_informations:
+                print(f"[DEBUG] Writing node info: {node_info.node_name}.")
+                node_info.write(writer)
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"Error writing node informations: {e}")
+            writer.close()
+            return
 
         # Write Node Hierarchy
-        for node in self.nodes:
-            node.write(writer)
+        try:
+            for node in self.nodes:
+                print(f"[DEBUG] Writing node hierarchy: {node.name}")
+                node.write(writer)
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"Error writing node hierarchy: {e}")
+            writer.close()
+            return
 
         writer.close()
 
