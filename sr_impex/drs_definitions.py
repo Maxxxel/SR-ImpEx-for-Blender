@@ -1479,7 +1479,7 @@ class SLocator:
 
 @dataclass(eq=False, repr=False)
 class CDrwLocatorList:
-    magic: int = 0
+    magic: int = 281702437
     version: int = 0
     length: int = 0
     slocators: List[SLocator] = field(default_factory=list)
@@ -2097,7 +2097,7 @@ class AnimationSet:
     allign_to_terrain: int = 0
     mode_animation_key_count: int = 0  # How many different animations are there?
     mode_animation_keys: List[ModeAnimationKey] = field(default_factory=list)
-    has_atlas: int = 1  # 1 or 2
+    has_atlas: int = 2  # 1 or 2
     atlas_count: int = 0  # Animated Objects: 0
     ik_atlases: List[IKAtlas] = field(default_factory=list)
     uk_len: int = 0
@@ -3185,7 +3185,7 @@ class DRS:
         # Write Node Informations
         try:
             for node_info in self.node_informations:
-                print(f"[DEBUG] Writing node info: {node_info.node_name} with size {node_info.node_size} at offset {node_info.offset}")
+                print(f"[DEBUG] Writing node info: {node_info.node_name}.")
                 node_info.write(writer)
         except Exception as e:  # pylint: disable=broad-except
             print(f"Error writing node informations: {e}")

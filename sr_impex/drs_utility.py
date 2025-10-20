@@ -77,6 +77,7 @@ from .drs_definitions import (
     AnimationMarkerSet,
     AnimationMarker,
     EffectSet,
+    LocatorClass
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -4216,7 +4217,7 @@ def create_animation_set(model_name: str) -> AnimationSet:
     anim.version = 6
     anim.revision = 6
     anim.subversion = 2
-    anim.has_atlas = 1
+    anim.has_atlas = 2
     anim.atlas_count = 0
     anim.ik_atlases = []
     anim.mode_animation_keys = []
@@ -4533,50 +4534,149 @@ def update_mesh_file_root_reference(
     return cdsp_mesh_file
 
 
-def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> "CDrwLocatorList":
+def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLocatorList:
     """
-    Build CDrwLocatorList for export from the stored editor blob on the DRSModel_* collection.
-    Falls back to an empty list (version=5) if no blob is present or it cannot be parsed.
+    Build CDrwLocatorList for export.
+
+    Priority:
+      1) Use the editor's stored JSON blob on the DRSModel_* collection (authoritative).
+      2) If missing/malformed, derive from scene objects following the same rules
+         as the editor's "Sync from Scene" (bone local vs world-in-game-space),
+         then convert that temporary blob via `blob_to_cdrw`.
     """
-    # Defensive defaults
     def _empty(version: int = 5) -> CDrwLocatorList:
         return CDrwLocatorList(magic=0, version=int(version or 5), length=0, slocators=[])
 
-    if source_collection is None:
+    if not source_collection:
         return _empty()
 
-    # Try to read the JSON blob the editor writes on the collection
-    blob_str = None
+    # --- 1) Prefer the blob exactly as authored in the editor ----------------
     try:
-        if BLOB_KEY in source_collection.keys():
-            blob_str = source_collection[BLOB_KEY]
+        raw = source_collection.get(BLOB_KEY)
+        if raw:
+            blob = json.loads(raw)
+            if "locators" in blob:
+                cdrw = blob_to_cdrw(blob)
+                cdrw.length = len(cdrw.slocators or [])
+                if not getattr(cdrw, "version", None):
+                    cdrw.version = int(blob.get("version", 5) or 5)
+                if not getattr(cdrw, "magic", None):
+                    cdrw.magic = 0
+                return cdrw
     except Exception:
-        # Some Blender builds throw on .keys() for ID props when uninitialized
-        blob_str = None
+        # Fall through to scene derivation
+        pass
+    # -------------------------------------------------------------------------
 
-    if not blob_str:
-        return _empty()
+    # --- 2) Fallback: derive a blob from the scene like the editor -----------
+    # Helpers mirror the editor's logic (names/UID search, GO handling, bone-local vs world)
+    LOCATOR_PREFIX = "Locator_"
 
-    # Parse and convert using the editor's canonical converter
+    def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
+        def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
+            for o in c.objects:
+                if o.type == "ARMATURE" and "Control_Rig" not in o.name:
+                    return o
+            for ch in c.children:
+                a = visit(ch)
+                if a:
+                    return a
+            return None
+        return visit(col)
+
+    def _find_game_orientation(root: bpy.types.Collection) -> Optional[bpy.types.Object]:
+        TARGET = "GameOrientation"
+        def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
+            for o in c.objects:
+                if o.name == TARGET:
+                    return o
+            for ch in c.children:
+                got = visit(ch)
+                if got:
+                    return got
+            return None
+        return visit(root)
+
+    def _iter_locator_objects(root: bpy.types.Collection):
+        out = []
+        def visit(c: bpy.types.Collection):
+            for o in c.objects:
+                if (UID_KEY in o.keys()) or o.name.startswith(LOCATOR_PREFIX):
+                    out.append(o)
+            for ch in c.children:
+                visit(ch)
+        visit(root)
+        return out
+
+    def _bone_index_from_name(arm: bpy.types.Object, name: str) -> int:
+        if not arm or not name:
+            return -1
+        return arm.data.bones.find(name)
+
+    def _flatten_m3(m) -> list[float]:
+        try:
+            return [float(m[i][j]) for i in range(3) for j in range(3)]
+        except Exception:
+            v = list(m)
+            if len(v) == 9:
+                return [float(x) for x in v]
+            return [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+
+    def _infer_class_id_from_name(name: str) -> int:
+        # Same rule the editor uses
+        if name.startswith(LOCATOR_PREFIX):
+            t = name[len(LOCATOR_PREFIX):]
+            for k, v in LocatorClass.items():
+                if v == t:
+                    return int(k)
+        return 0
+
+    arm = _find_armature(source_collection)
+    go = _find_game_orientation(source_collection)
+
+    # Build a temporary blob compatible with blob_to_cdrw()
+    temp_blob = {"version": 5, "locators": []}
+
+    for obj in _iter_locator_objects(source_collection):
+        entry = {
+            "uid": obj.get(UID_KEY) or "",   # not strictly required for export
+            "class_id": int(obj.get("_class_id", _infer_class_id_from_name(obj.name))),
+            "file": obj.get("_file", ""),
+            "bone_id": -1,
+            "uk_int": -1,
+            "rot3x3": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+            "pos": [0, 0, 0],
+        }
+
+        # Bone-local -> store LOCAL (bone space). Non-bone -> WORLD IN GAME SPACE.
+        if (
+            obj.parent_type == "BONE"
+            and obj.parent is not None
+            and obj.parent.type == "ARMATURE"
+            and obj.parent_bone
+        ):
+            entry["bone_id"] = int(_bone_index_from_name(obj.parent, obj.parent_bone))
+            entry["pos"] = list(obj.location)
+            entry["rot3x3"] = _flatten_m3(obj.matrix_basis.to_3x3())
+        else:
+            entry["bone_id"] = -1
+            if go and obj.parent == go:
+                mw_game = go.matrix_world.inverted() @ obj.matrix_world
+            else:
+                mw_game = obj.matrix_world
+            entry["pos"] = list(mw_game.translation)
+            entry["rot3x3"] = _flatten_m3(mw_game.to_3x3())
+
+        temp_blob["locators"].append(entry)
+
     try:
-        blob = json.loads(blob_str)
-    except Exception:
-        return _empty()
-
-    try:
-        cdrw = blob_to_cdrw(blob)
-        # Ensure header length is consistent
+        cdrw = blob_to_cdrw(temp_blob)
         cdrw.length = len(cdrw.slocators or [])
-        # If the blob carried a version, keep it; else default to 5
-        if not getattr(cdrw, "version", None):
-            cdrw.version = int(blob.get("version", 5) or 5)
-        # Keep magic as 0 unless your writer sets it later
-        if not getattr(cdrw, "magic", None):
-            cdrw.magic = 0
+        cdrw.version = int(temp_blob.get("version", 5) or 5)
+        cdrw.magic = 281702437
         return cdrw
     except Exception:
-        return _empty(int(blob.get("version", 5) if isinstance(blob, dict) else 5))
-
+        return _empty()
 
 
 def create_effect_set(source_collection: bpy.types.Collection) -> EffectSet:
