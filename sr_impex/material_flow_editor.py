@@ -79,33 +79,38 @@ def _highest_relevant_bit(value: int) -> int:
     return min(max(h, 7), 31)
 
 
+def _in_meshes_collection(obj: bpy.types.Object) -> bool:
+    return any(col.name == "Meshes_Collection" for col in obj.users_collection)
+
+def _active_mesh(ctx) -> bpy.types.Object | None:
+    o = getattr(ctx, "object", None)
+    if o and o.type == "MESH" and _in_meshes_collection(o):
+        return o
+    return None
+
 # --- Panels -------------------------------------------------------------------
 class DRS_PT_MaterialFlags(Panel):
     bl_label = "Material (bool_parameter)"
-    bl_category = "SR-IMPEx"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_context = "object"
+    bl_category = "DRS Editor"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
 
     @classmethod
-    def poll(cls, ctx):
-        o = ctx.object
-        return (
-            o is not None
-            and o.type == "MESH"
-            and _in_meshes_collection(o)
-            and hasattr(o, "drs_material")
-            and o.drs_material is not None
-        )
+    def poll(cls, _ctx):
+        # Keep panel visible in the DRS Editor; draw() handles messaging
+        return True
 
     def draw(self, ctx):
         layout = self.layout
-        o = ctx.object
-        flags = o.drs_material
+        o = _active_mesh(ctx)
+        if not o or not hasattr(o, "drs_material") or o.drs_material is None:
+            box = layout.box()
+            box.label(text="Select a Mesh inside 'Meshes_Collection' to edit material flags.", icon="INFO")
+            return
 
+        flags = o.drs_material
         layout.prop(flags, "bool_parameter")
 
-        # Draw bit checkboxes up to the most relevant bit (plus known named ones)
         max_known = max(KNOWN_MATERIAL_FLAGS.keys()) if KNOWN_MATERIAL_FLAGS else 0
         max_bit = max(_highest_relevant_bit(flags.bool_parameter), max_known, 7)
 
@@ -114,39 +119,34 @@ class DRS_PT_MaterialFlags(Panel):
             label = KNOWN_MATERIAL_FLAGS.get(i, f"Unknown Bitflag #{i+1}")
             col.prop(flags, f"bit_{i}", text=f"{label} (Bit {i})")
 
-
 class DRS_PT_Flow(Panel):
     bl_label = "Flow"
-    bl_category = "SR-IMPEx"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_context = "object"
+    bl_category = "DRS Editor"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
 
     @classmethod
-    def poll(cls, ctx):
-        o = ctx.object
-        return (
-            o is not None
-            and o.type == "MESH"
-            and _in_meshes_collection(o)
-            and hasattr(o, "drs_flow")
-            and o.drs_flow is not None
-        )
+    def poll(cls, _ctx):
+        # Keep panel visible in the DRS Editor; draw() handles messaging
+        return True
 
     def draw(self, ctx):
         layout = self.layout
-        f = ctx.object.drs_flow
+        o = _active_mesh(ctx)
+        if not o or not hasattr(o, "drs_flow") or o.drs_flow is None:
+            box = layout.box()
+            box.label(text="Select a Mesh inside 'Meshes_Collection' to edit flow.", icon="INFO")
+            return
 
+        f = o.drs_flow
         layout.prop(f, "use_flow")
         box = layout.box()
         box.enabled = f.use_flow
-
         grid = box.grid_flow(columns=1, even_columns=True, even_rows=True, align=True)
         grid.prop(f, "max_flow_speed")
         grid.prop(f, "min_flow_speed")
         grid.prop(f, "flow_speed_change")
         grid.prop(f, "flow_scale")
-
 
 # --- Register -----------------------------------------------------------------
 classes = (

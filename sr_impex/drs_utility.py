@@ -76,6 +76,7 @@ from .drs_definitions import (
     CDrwLocatorList,
     AnimationMarkerSet,
     AnimationMarker,
+    EffectSet,
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -88,7 +89,7 @@ from .transform_utils import (
 from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
 from .animation_utils import import_ska_animation
 from .message_logger import MessageLogger
-from .locator_editor import BLOB_KEY, UID_KEY
+from .locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
 
 logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -4532,6 +4533,61 @@ def update_mesh_file_root_reference(
     return cdsp_mesh_file
 
 
+def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> "CDrwLocatorList":
+    """
+    Build CDrwLocatorList for export from the stored editor blob on the DRSModel_* collection.
+    Falls back to an empty list (version=5) if no blob is present or it cannot be parsed.
+    """
+    # Defensive defaults
+    def _empty(version: int = 5) -> CDrwLocatorList:
+        return CDrwLocatorList(magic=0, version=int(version or 5), length=0, slocators=[])
+
+    if source_collection is None:
+        return _empty()
+
+    # Try to read the JSON blob the editor writes on the collection
+    blob_str = None
+    try:
+        if BLOB_KEY in source_collection.keys():
+            blob_str = source_collection[BLOB_KEY]
+    except Exception:
+        # Some Blender builds throw on .keys() for ID props when uninitialized
+        blob_str = None
+
+    if not blob_str:
+        return _empty()
+
+    # Parse and convert using the editor's canonical converter
+    try:
+        blob = json.loads(blob_str)
+    except Exception:
+        return _empty()
+
+    try:
+        cdrw = blob_to_cdrw(blob)
+        # Ensure header length is consistent
+        cdrw.length = len(cdrw.slocators or [])
+        # If the blob carried a version, keep it; else default to 5
+        if not getattr(cdrw, "version", None):
+            cdrw.version = int(blob.get("version", 5) or 5)
+        # Keep magic as 0 unless your writer sets it later
+        if not getattr(cdrw, "magic", None):
+            cdrw.magic = 0
+        return cdrw
+    except Exception:
+        return _empty(int(blob.get("version", 5) if isinstance(blob, dict) else 5))
+
+
+
+def create_effect_set(source_collection: bpy.types.Collection) -> EffectSet:
+    new_effect_set = EffectSet()
+    
+    # Check for existing blob to fill
+    # TODO
+    
+    return new_effect_set
+
+
 def save_drs(
     context: bpy.types.Context,
     filepath: str,
@@ -4595,6 +4651,7 @@ def save_drs(
     if armature_collection is None and model_type in [
         "AnimatedObjectNoCollision",
         "AnimatedObjectCollision",
+        "AnimatedUnit",
     ]:
         logger.log(
             "No Armature_Collection found in the Collection. If this is a skinned model, the animation export will fail. Please add an Armature_Collection to the Collection.",
@@ -4603,7 +4660,7 @@ def save_drs(
         )
         return abort(keep_debug_collections, source_collection_copy)
     # Get the armature object from the Armature_Collection, but avoid the "*Control_Rig" armature
-    if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
+    if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision", "AnimatedUnit"]:
         try:
             for obj in armature_collection.objects:
                 if obj.type == "ARMATURE" and "Control_Rig" not in obj.name:
@@ -4724,6 +4781,28 @@ def save_drs(
             new_drs_file.push_node_infos(
                 "AnimationTimings", new_drs_file.animation_timings
             )
+        elif node == "CDrwLocatorList":
+            new_drs_file.cdrw_locator_list = create_cdrw_locator_list(
+                source_collection_copy
+            )
+            if new_drs_file.cdrw_locator_list is None:
+                logger.log(
+                    "Failed to create CDrwLocatorList.",
+                    "Locator List Error",
+                    "ERROR",
+                )
+                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos(
+                "CDrwLocatorList", new_drs_file.cdrw_locator_list
+            )
+        elif node == "EffectSet":
+            new_drs_file.effect_set = create_effect_set(source_collection_copy)
+            if new_drs_file.effect_set is None:
+                logger.log(
+                    "Failed to create EffectSet.", "Effect Set Error", "ERROR"
+                )
+                return abort(keep_debug_collections, source_collection_copy)
+            new_drs_file.push_node_infos("EffectSet", new_drs_file.effect_set)
         elif node == "CGeoPrimitiveContainer":
             pass  # Nothing happens here
         else:

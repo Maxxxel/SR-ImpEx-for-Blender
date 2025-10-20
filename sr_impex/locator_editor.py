@@ -63,18 +63,24 @@ def _m3_from_list(r9: List[float]) -> Matrix:
     return Matrix(((r[0], r[1], r[2]), (r[3], r[4], r[5]), (r[6], r[7], r[8])))
 
 
-def _active_model_collection() -> Optional[bpy.types.Collection]:
-    alc = bpy.context.view_layer.active_layer_collection
-    if not alc:
+def _active_top_drsmodel(context=None) -> Optional[bpy.types.Collection]:
+    ctx = context or bpy.context
+    alc = ctx.view_layer.active_layer_collection.collection if ctx.view_layer else None
+    if not isinstance(alc, bpy.types.Collection):
         return None
-    col = alc.collection
-    return col if col and col.name.startswith("DRSModel_") else None
+    if not alc.name.startswith("DRSModel_"):
+        return None
+    # only accept top-level children of the scene (the “right” DRSModel)
+    for top in ctx.scene.collection.children:
+        if top == alc:
+            return alc
+    return None
 
 
 def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
     def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
         for o in c.objects:
-            if o.type == "ARMATURE":
+            if o.type == "ARMATURE" and "Control_Rig" not in o.name:
                 return o
         for ch in c.children:
             a = visit(ch)
@@ -518,7 +524,7 @@ class DRS_OT_OpenLocatorEditor(bpy.types.Operator):
     bl_options = {"REGISTER", "INTERNAL"}
 
     def invoke(self, context, _event):
-        col = _active_model_collection()
+        col = _active_top_drsmodel(context)
         if not col:
             self.report({"ERROR"}, "Select a DRSModel_* collection in the Outliner.")
             return {"CANCELLED"}
@@ -691,58 +697,35 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
 
 
 # ---- Simple launcher panel in N-panel ---------------------------------------
-
-
-# class DRS_PT_LocatorEditorLauncher(bpy.types.Panel):
-#     bl_label = "CDrwLocatorList"
-#     bl_idname = "DRS_PT_LocatorEditorLauncher"
-#     bl_space_type = "VIEW_3D"
-#     bl_region_type = "UI"
-#     bl_category = "DRS"
-
-#     def draw(self, _context):
-#         col = self.layout.column()
-
-#         model = _active_model_collection()
-#         if not model:
-#             col.label(
-#                 text="Select a DRSModel_* collection in the Outliner.", icon="INFO"
-#             )
-#             return
-
-#         # Store the active model on our state and (cheaply) refresh UI data from blob
-#         st = _state()
-#         if st.model != model:
-#             st.model = model
-#             _refresh_state_from_blob(model)
-
-#         # Draw the full editor (list + details + buttons) inside the panel
-#         _draw_editor_body(col)
-
-
-class DRS_PT_LocatorEditorProps(bpy.types.Panel):
+class DRS_PT_LocatorEditorDock(bpy.types.Panel):
     bl_label = "CDrwLocatorList"
-    bl_idname = "DRS_PT_LocatorEditorProps"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_context = "collection"  # Collection properties tab
+    bl_idname = "DRS_PT_LocatorEditorDock"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "DRS Editor"
+    bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
-    def poll(cls, context):
-        col = getattr(context, "collection", None)
-        return bool(
-            col
-            and isinstance(col, bpy.types.Collection)
-            and col.name.startswith("DRSModel_")
-        )
+    def poll(cls, _ctx):
+        return True
 
     def draw(self, context):
+        layout = self.layout
+        model = _active_top_drsmodel(context)
+
+        if not model:
+            box = layout.box()
+            box.label(text="No valid DRSModel selected.", icon="INFO")
+            box.label(text="Select a TOP-LEVEL collection named 'DRSModel_*' in the Outliner.")
+            box.label(text="Tip: make it the active Layer Collection (View Layer).")
+            return
+
         st = _state()
-        model = context.collection  # currently selected collection in Properties
         if st.model != model:
             st.model = model
             _refresh_state_from_blob(model)
-        _draw_editor_body(self.layout)  # uses your existing drawer
+
+        _draw_editor_body(layout)
 
 
 # ---- Registration ------------------------------------------------------------
@@ -756,8 +739,7 @@ _classes = (
     DRS_OT_LocatorRemove,
     DRS_OT_LocatorSync,
     DRS_OT_LocatorSaveItem,
-    # DRS_PT_LocatorEditorLauncher,
-    DRS_PT_LocatorEditorProps,
+    DRS_PT_LocatorEditorDock,
 )
 
 
