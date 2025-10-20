@@ -4867,6 +4867,21 @@ def save_drs(
                     "Failed to create AnimationSet.", "Animation Set Error", "ERROR"
                 )
                 return abort(keep_debug_collections, source_collection_copy)
+            # Fox for Animated Object -> No Markers, hasAtlas = 1, allow only modekeys with visJob = 0
+            if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
+                new_drs_file.animation_set.has_atlas = 1
+                new_drs_file.animation_set.animation_marker_count = 0
+                new_drs_file.animation_set.animation_marker_sets = []
+                # Filter mode keys
+                filtered_keys = [
+                    mk
+                    for mk in new_drs_file.animation_set.mode_animation_keys
+                    if mk.vis_job == 0
+                ]
+                new_drs_file.animation_set.mode_animation_keys = filtered_keys
+                new_drs_file.animation_set.mode_animation_key_count = len(
+                    filtered_keys
+                )
             new_drs_file.push_node_infos("AnimationSet", new_drs_file.animation_set)
         elif node == "AnimationTimings":
             # Empty Set and use external EntityEditor
@@ -4878,6 +4893,11 @@ def save_drs(
                     "ERROR",
                 )
                 return abort(keep_debug_collections, source_collection_copy)
+            # Fix Timing if only an Animated Object -> no Timings at all
+            if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
+                new_drs_file.animation_timings.version = 3
+                new_drs_file.animation_timings.animation_timings = []
+                new_drs_file.animation_timings.animation_timing_count = 0
             new_drs_file.push_node_infos(
                 "AnimationTimings", new_drs_file.animation_timings
             )
