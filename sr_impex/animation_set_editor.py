@@ -1693,12 +1693,22 @@ class DRS_OT_PlayRange(bpy.types.Operator):
             _hide_all_markers(model)
 
         _assign_action(arm, act)
-        original_frame_length = act["frame_length"]
+        try:
+            original_frame_length = act["frame_length"]
+        except Exception:
+            original_frame_length = None
+            print("Warning: Action missing 'frame_length' property. Using frame range instead.")
+        
         if original_frame_length is None:
             # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
             original_frame_length = act.frame_range[1] - act.frame_range[0]
 
-        original_fps = act["ska_original_fps"]
+        try:
+            original_fps = act["ska_original_fps"]
+        except Exception:
+            original_fps = None
+            print("Warning: Action missing 'ska_original_fps' property. Using current scene fps.")
+
         if original_fps:
             # Set the scene fps to the original fps of the animation
             context.scene.render.fps = int(original_fps)
@@ -1777,12 +1787,22 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
 
         # Assign action to armature
         _assign_action(arm, act)
-        original_frame_length = act["frame_length"]
+        try:
+            original_frame_length = act["frame_length"]
+        except Exception:
+            original_frame_length = None
+            print("Warning: Action missing 'frame_length' property. Using frame range instead.")
+        
         if original_frame_length is None:
             # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
             original_frame_length = act.frame_range[1] - act.frame_range[0]
 
-        original_fps = act["ska_original_fps"]
+        try:
+            original_fps = act["ska_original_fps"]
+        except Exception:
+            original_fps = None
+            print("Warning: Action missing 'ska_original_fps' property. Using current scene fps.")
+        
         if original_fps:
             # Set the scene fps to the original fps of the animation
             context.scene.render.fps = int(original_fps)
