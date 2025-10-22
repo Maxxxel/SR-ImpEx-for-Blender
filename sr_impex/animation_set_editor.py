@@ -576,9 +576,7 @@ def _redraw_ui():
 def _action_span_frames(act: bpy.types.Action) -> int:
     # Prefer explicit frame length from importer; else use action range
     try:
-        v = act.get("ska_original_frames", None)
-        if v is None:
-            v = act.get("frame_length", None)
+        v = act.get("frame_length", None)
         if v is not None:
             return int(round(float(v)))
     except Exception:  # pylint: disable=broad-exception-caught
@@ -806,13 +804,13 @@ ANIM_BLOB_KEY = "AnimationSetJSON"
 
 def _empty_blob() -> Dict:
     return {
-        "default_run_speed": 5.0,
-        "default_walk_speed": 2.0,
+        "default_run_speed": 4.8,
+        "default_walk_speed": 2.4,
         "mode_change_type": 0,
         "hovering_ground": False,
-        "fly_bank_scale": 0.0,
+        "fly_bank_scale": 1.0,
         "fly_accel_scale": 0.0,
-        "fly_hit_scale": 0.0,
+        "fly_hit_scale": 1.0,
         "align_to_terrain": False,
         "mode_keys": [],
         "marker_sets": [],
@@ -985,15 +983,20 @@ def _active_model() -> Optional[bpy.types.Collection]:
 
 def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
     def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
+        fallback_ctrl = None
         for o in c.objects:
             if o.type == "ARMATURE":
-                return o
+                # Prefer the deform rig
+                if "Control_Rig" in o.name:
+                    return o
+                # Remember a control rig only as fallback
+                if fallback_ctrl is None:
+                    fallback_ctrl = o
         for ch in c.children:
-            r = visit(ch)
-            if r:
-                return r
-        return None
-
+            got = visit(ch)
+            if got:
+                return got
+        return fallback_ctrl  # if nothing else found
     return visit(col)
 
 
@@ -1697,7 +1700,7 @@ class DRS_OT_PlayRange(bpy.types.Operator):
             original_frame_length = act["frame_length"]
         except Exception:
             original_frame_length = None
-            print("Warning: Action missing 'frame_length' property. Using frame range instead.")
+            print(f"Warning: Action {act_name} missing 'frame_length' property. Using frame range instead.")
         
         if original_frame_length is None:
             # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
@@ -1707,7 +1710,7 @@ class DRS_OT_PlayRange(bpy.types.Operator):
             original_fps = act["ska_original_fps"]
         except Exception:
             original_fps = None
-            print("Warning: Action missing 'ska_original_fps' property. Using current scene fps.")
+            print(f"Warning: Action {act_name} missing 'ska_original_fps' property. Using current scene fps.")
 
         if original_fps:
             # Set the scene fps to the original fps of the animation
@@ -1798,10 +1801,10 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
             original_frame_length = act.frame_range[1] - act.frame_range[0]
 
         try:
-            original_fps = act["ska_original_fps"]
+            original_fps = act["original_fps"]
         except Exception:
             original_fps = None
-            print("Warning: Action missing 'ska_original_fps' property. Using current scene fps.")
+            print("Warning: Action missing 'original_fps' property. Using current scene fps.")
         
         if original_fps:
             # Set the scene fps to the original fps of the animation

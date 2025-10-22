@@ -327,7 +327,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         # type: ignore # ignore
         name="Flip Normals",
         description="Flip normals if you see them 'blue' in Blender",
-        default=True,
+        default=False,
     )
     keep_debug_collections: BoolProperty(
         # type: ignore # ignore
@@ -347,14 +347,39 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         ],
         default="StaticObjectNoCollision",
     )  # type: ignore
+    export_all_ska_actions: BoolProperty(
+        name="Export All SKA Actions",
+        description="Export all SKA actions associated with the model",
+        default=True,
+    )  # type: ignore
+    set_model_name_prefix: EnumProperty(
+        name="Model Name Prefix",
+        description="Set a prefix for the exported SKA actions",
+        items=[
+            ("none", "No Prefix", "Export SKA actions without any prefix: idle.ska"),
+            ("model_name", "Model Name Prefix", "Prefix SKA actions with the model name: new_model_idle.ska"),
+            ("folder_name", "Folder Name Prefix", "Prefix SKA actions with the folder name: new_model_folder_idle.ska"),
+            ("keep_existing", "Keep Existing Prefix", "Keep existing prefixes of imported SKA actions: skel_human_2h_idle.ska"),
+        ],
+        default="none",
+    )  # type: ignore
 
     def draw(self, context):
         layout = self.layout
         layout.label(text="Export Settings", icon="EXPORT")
+        layout.prop(self, "model_type")
+        layout.separator()
+        layout.label(text="Mesh Export Settings", icon="MESH_CUBE")
         layout.prop(self, "split_mesh_by_uv_islands")
         layout.prop(self, "flip_normals")
+        layout.separator()
+        layout.label(text="SKA Export Settings", icon="ANIM_DATA")
+        layout.prop(self, "export_all_ska_actions")
+        layout.prop(self, "set_model_name_prefix")
+        layout.separator()
+        layout.label(text="MISC Settings", icon="PREFERENCES")
         layout.prop(self, "keep_debug_collections")
-        layout.prop(self, "model_type")
+        
 
     def invoke(self, context, event):
         # Retrieve the active collection from the active layer collection
@@ -378,6 +403,8 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         keywords["flip_normals"] = self.flip_normals
         keywords["keep_debug_collections"] = self.keep_debug_collections
         keywords["model_type"] = self.model_type
+        keywords["export_all_ska_actions"] = self.export_all_ska_actions
+        keywords["set_model_name_prefix"] = self.set_model_name_prefix
 
         # update model_name by file_path
         model_name = os.path.basename(self.filepath)

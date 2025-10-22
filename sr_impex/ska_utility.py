@@ -89,7 +89,6 @@ def get_actions(current_collection: bpy.types.Collection = None) -> List[str]:
     # Return sorted list for consistent ordering
     return sorted(relevant_actions)
 
-
 def generate_bone_id(bone_name: str) -> int:
     """Generate a unique bone ID based on the bone name."""
     # Generate a unique ID for the bone based on its name
@@ -104,10 +103,26 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     action = bpy.data.actions.get(action_name)
     if action is None:
         raise ValueError(f"Action '{action_name}' not found in the current context.")
+    
+    try:
+        frame_length = action["frame_length"]
+    except Exception:
+        frame_length = None
+        print(f"Warning: Action {action_name} missing 'frame_length' property. Using frame range instead.")
+    
+    if frame_length is None:
+        # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
+        frame_length = action.frame_range[1] - action.frame_range[0]
 
-    # Get the frames per second of the current scene
-    fps = context.scene.render.fps
-    duration = action.frame_range[1] / fps
+    try:
+        fps = action["original_fps"]
+    except Exception:
+        fps = None
+        print(f"Warning: Action {action_name} missing 'original_fps' property. Using current scene fps.")
+    
+    fps = context.scene.render.fps = int(fps)
+
+    duration = frame_length / fps
 
     # Get the Bones of the Armature
     armature = get_current_armature()
@@ -157,6 +172,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
             for kp in fcurve.keyframe_points:
                 coords[axis_index].append(kp.co[1])  # X | Y | Z value over time
                 if axis_index == 0:
+                    assert duration > 0, f"Duration is zero: {action.frame_range[1]} / {fps}"
+                    assert fps > 0, "FPS is zero"
                     t = (kp.co[0] / fps) / duration
                     bone_lib[bone_name]["loc_per_time"]["times"].append(t)
 
@@ -317,7 +334,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     # We will use type 6 for now
     ska_file.type = 6
     ska_file.duration = duration
-    ska_file.repeat = 1  # TODO: get this from the action
+    ska_file.repeat = action["repeat"] if "repeat" in action else 0
     ska_file.stutter_mode = 2  # smooth animation
     ska_file.zeroes = [0, 0, 0]
     ska_file.header_count = len(headers)
@@ -325,10 +342,11 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     ska_file.time_count = len(times)
     ska_file.times = times
     ska_file.keyframes = keyframes
+    ska_file.frame_length = frame_length
     # Write the SKA file to disk
     # Assure filepath has the .ska extension
     if not filepath.endswith(".ska"):
         filepath += ".ska"
     ska_file.write(filepath)
-    logger.log(f"Exported SKA file to {filepath}", "info", "INFO")
+    logger.log(f"Exported SKA file to {filepath} with {fps} FPS", "info", "INFO")
     logger.display()

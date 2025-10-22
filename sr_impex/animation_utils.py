@@ -285,10 +285,11 @@ def import_ska_animation(
     # Add NLA track strip
     track = arm_obj.animation_data.nla_tracks.new()
     strip = track.strips.new(action.name, 0, action)
-    strip.repeat = ska_file.repeat
 
     track.name = action.name
     # Save Original Duration in the Action
-    action["ska_original_duration"] = duration
-    action["ska_original_fps"] = original_fps
+    action["original_duration"] = duration
+    action["original_fps"] = original_fps
     action["frame_length"] = ska_file.frame_length
+    action["repeat"] = ska_file.repeat
+    action["prefix"] = parent_folder
