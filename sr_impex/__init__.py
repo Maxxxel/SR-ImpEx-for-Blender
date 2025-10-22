@@ -387,12 +387,16 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 
         self.filepath = bpy.path.ensure_ext(self.filepath, ".drs")
 
-        save_drs(context, **keywords)
+        result = save_drs(context, **keywords)
+        if result == {"FINISHED"}:
+            self.report({"INFO"}, "Export erfolgreich.")
+        else:
+            self.report({"ERROR"}, "Export fehlgeschlagen. Details im Popup.")
 
         # Purge unused data blocks
         bpy.ops.outliner.orphans_purge(do_recursive=True)
 
-        return {"FINISHED"}
+        return result
 
 
 class ExportSKAFile(bpy.types.Operator, ExportHelper):

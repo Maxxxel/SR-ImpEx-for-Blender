@@ -78,7 +78,9 @@ from .drs_definitions import (
     AnimationMarkerSet,
     AnimationMarker,
     EffectSet,
-    LocatorClass
+    LocatorClass,
+    IKAtlas,
+    Constraint
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
@@ -92,6 +94,13 @@ from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmes
 from .animation_utils import import_ska_animation
 from .message_logger import MessageLogger
 from .locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
+
+try:
+    # when installed as a Blender add-on package
+    from .drs_definitions import ExportError
+except Exception:
+    # fallback when running the files as loose scripts (no package)
+    from drs_definitions import ExportError
 
 logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -1194,6 +1203,81 @@ def get_converted_texture(
 def clean_vector(vec, tol=1e-6):
     """Set any component of vec to 0 if its absolute value is below tol."""
     return Vector([0.0 if abs(c) < tol else c for c in vec])
+
+
+def collect_ik_atlases_from_blender(
+    armature_object: bpy.types.Object,
+    bone_map: Dict[str, Dict[str, Optional[int]]],
+    *,
+    constraint_name: str = "_LimitRotation",
+    accept_custom_prop: str = "drs_ik",   # optional custom marker
+    default_purpose_flags: int = 3,
+) -> list[IKAtlas]:
+    """
+    Scan pose bones for LIMIT_ROTATION constraints that represent DRS IK limits
+    and build IKAtlas entries using `bone_map` to resolve BoneID.
+
+    - We first try exact `constraint_name`.
+    - If not found, we accept constraints with custom prop `drs_ik=True`.
+    - Angles are read in radians (Blender internal) which matches DRS storage.
+    """
+    if armature_object is None or armature_object.type != "ARMATURE":
+        return []
+
+    def _pick_constraint(pb: bpy.types.PoseBone):
+        for c in pb.constraints:
+            if c.type == "LIMIT_ROTATION" and constraint_name in c.name:
+                return c
+        return None
+
+    atlases: list[IKAtlas] = []
+
+    for pose_bone in armature_object.pose.bones:
+        limit = _pick_constraint(pose_bone)
+        if not limit:
+            continue
+
+        # Resolve BoneID via bone_map (same pattern used elsewhere)
+        info = bone_map.get(pose_bone.name, None)
+        if not info or "id" not in info or info["id"] is None:
+            logger.log(
+                f"IK export: Bone '{pose_bone.name}' not found in bone_map.", "Warning", "WARNING"
+            )
+            continue
+        bone_id = int(info["id"])
+
+        def _mk_constraint(use_limit: bool, min_ang: float, max_ang: float) -> Constraint:
+            c = Constraint()  # defaults: full ±2π, ratio 0
+            if not use_limit:
+                return c
+            c.left_angle = float(min_ang)
+            c.right_angle = float(max_ang)
+            c.left_damp_start = c.left_angle
+            c.right_damp_start = c.right_angle
+            c.damp_ratio = 0.0
+            return c
+
+        c_x = _mk_constraint(getattr(limit, "use_limit_x", False),
+                             getattr(limit, "min_x", -6.283185),
+                             getattr(limit, "max_x",  6.283185))
+        c_y = _mk_constraint(getattr(limit, "use_limit_y", False),
+                             getattr(limit, "min_y", -6.283185),
+                             getattr(limit, "max_y",  6.283185))
+        c_z = _mk_constraint(getattr(limit, "use_limit_z", False),
+                             getattr(limit, "min_z", -6.283185),
+                             getattr(limit, "max_z",  6.283185))
+
+        atlas = IKAtlas()
+        atlas.identifier = bone_id
+        atlas.version = 2
+        atlas.axis = 2
+        atlas.chain_order = 0
+        atlas.constraints = [c_x, c_y, c_z]
+        atlas.purpose_flags = int(default_purpose_flags)
+
+        atlases.append(atlas)
+
+    return atlases
 
 
 # class DRS_OT_debug_obb_tree(bpy.types.Operator):
@@ -4177,7 +4261,7 @@ def create_skeleton(
     return csk_skeleton
 
 
-def create_animation_set(model_name: str) -> AnimationSet:
+def create_animation_set(model_name: str, armature_object: bpy.types.Object, bone_map) -> AnimationSet:
     """
     Build an AnimationSet for export from the AnimationSetJSON blob.
     Anything not present in the blob falls back to defaults.
@@ -4379,6 +4463,13 @@ def create_animation_set(model_name: str) -> AnimationSet:
             continue
 
     anim.animation_marker_count = len(anim.animation_marker_sets)
+
+    # ---- IK Atlases ----------------------------------------------------------------------
+    # Its always empty in the blob but we already imported them in the normal procedure and maybe we have new ones later
+    atlases = collect_ik_atlases_from_blender(armature_object, bone_map)
+    anim.ik_atlases = atlases
+    anim.atlas_count = len(atlases)
+
 
     # ---- Fallback if no blob or no valid variants -----------------------------------------------
     if anim.mode_animation_key_count == 0:
@@ -4867,7 +4958,7 @@ def save_drs(
             new_drs_file.push_node_infos("CSkSkeleton", new_drs_file.csk_skeleton)
         elif node == "AnimationSet":
             # Empty Set and use external EntityEditor
-            new_drs_file.animation_set = create_animation_set(model_name)
+            new_drs_file.animation_set = create_animation_set(model_name, armature_object, bone_map)
             if new_drs_file.animation_set is None:
                 logger.log(
                     "Failed to create AnimationSet.", "Animation Set Error", "ERROR"
@@ -4944,10 +5035,12 @@ def save_drs(
     # === SAVE THE DRS FILE ====================================================
     try:
         new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
-    except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
+    except ExportError as e:
+        logger.log(str(e), "Export Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
-    # new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    except Exception as e:
+        logger.log(f"Unexpected error during save: {e}", "Export Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:
