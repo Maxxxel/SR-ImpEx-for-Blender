@@ -2506,17 +2506,17 @@ class Variant:
 
 @dataclass(eq=False, repr=False)
 class Keyframe:
-    time: float = 0.0
-    keyframe_type: int = 0
-    min_falloff: float = 0.0
+    time: float = 0.0 # when to play [0 - 1]
+    keyframe_type: int = 0 # [0: audio (snr/wav), 1: effect (fxb), 2: effect (fxb), 3: permanent effect (fxb), 4: permanent effect (fxb)]
+    min_falloff: float = 0.0 # 
     max_falloff: float = 0.0
     volume: float = 0.0
     pitch_shift_min: float = 0.0
     pitch_shift_max: float = 0.0
-    offset: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])  # Vector3
-    interruptable: int = 0
-    uk: Optional[int] = None  # Only if type != 10 and type != 11
-    variant_count: int = 0
+    offset: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0]) # Is used for 3D sound positioning i guess
+    interruptable: int = 0 # 1 or 0
+    condition: Optional[int] = -1  # Only if type != 10 and type != 11. Is used for what?
+    variant_count: int = 0 # needs to be atleast 1
     variants: List[Variant] = field(default_factory=list)
 
     def read(self, file: BinaryIO, _type: int) -> "Keyframe":
@@ -2533,7 +2533,7 @@ class Keyframe:
         self.interruptable = unpack("B", file.read(1))[0]
 
         if _type not in [10, 11]:
-            self.uk = unpack("B", file.read(1))[0]
+            self.condition = unpack("B", file.read(1))[0]
 
         self.variant_count = unpack("i", file.read(4))[0]
         self.variants = [Variant().read(file) for _ in range(self.variant_count)]
@@ -2555,8 +2555,8 @@ class Keyframe:
         file.write(pack("3f", *self.offset))
         file.write(pack("B", self.interruptable))
 
-        if self.uk is not None:
-            file.write(pack("B", self.uk))
+        if self.keyframe_type not in [10, 11]:
+            file.write(pack("B", self.condition))
 
         file.write(pack("i", self.variant_count))
         for variant in self.variants:
@@ -2564,7 +2564,7 @@ class Keyframe:
 
     def size(self) -> int:
         size = 28 + 12 + 1
-        if self.uk is not None:
+        if self.keyframe_type not in [10, 11]:
             size += 1
         size += 4
         for variant in self.variants:
@@ -2575,13 +2575,13 @@ class Keyframe:
 @dataclass(eq=False, repr=False)
 class SkelEff:
     length: int = 0  # Int
-    name: str = ""  # CString split into length and name
-    keyframe_count: int = 0
+    animation_name: str = "" # needs to link to a SKA animation
+    keyframe_count: int = 0 # need to be bigger than 0
     keyframes: List[Keyframe] = field(default_factory=list)
 
     def read(self, file: BinaryIO, _type: int) -> "SkelEff":
         self.length = unpack("i", file.read(4))[0]
-        self.name = file.read(self.length).decode("utf-8").strip("\x00")
+        self.animation_name = file.read(self.length).decode("utf-8").strip("\x00")
         self.keyframe_count = unpack("i", file.read(4))[0]
         self.keyframes = [
             Keyframe().read(file, _type) for _ in range(self.keyframe_count)
@@ -2590,7 +2590,7 @@ class SkelEff:
 
     def write(self, file: BinaryIO) -> None:
         file.write(pack("i", self.length))
-        file.write(self.name.encode("utf-8"))
+        file.write(self.animation_name.encode("utf-8"))
         file.write(pack("i", self.keyframe_count))
         for keyframe in self.keyframes:
             keyframe.write(file)
@@ -2727,7 +2727,7 @@ class UKS3:
 class EffectSet:
     type: int = 12  # Short
     checksum_length: int = 0  # Int
-    checksum: str = ""  # CString split into length and name
+    checksum: str = "" 
     length: int = 0
     skel_effekts: List[SkelEff] = field(default_factory=list)
     unknown: List[float] = field(
