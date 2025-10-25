@@ -363,6 +363,11 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         ],
         default="none",
     )  # type: ignore
+    auto_fix_quad_faces: BoolProperty(
+        name="Auto-fix Quad Faces",
+        description="Automatically fix quad faces that may cause issues in Battleforge",
+        default=True,
+    )  # type: ignore
 
     def draw(self, context):
         layout = self.layout
@@ -372,6 +377,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         layout.label(text="Mesh Export Settings", icon="MESH_CUBE")
         layout.prop(self, "split_mesh_by_uv_islands")
         layout.prop(self, "flip_normals")
+        layout.prop(self, "auto_fix_quad_faces")
         layout.separator()
         layout.label(text="SKA Export Settings", icon="ANIM_DATA")
         layout.prop(self, "export_all_ska_actions")
@@ -405,6 +411,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         keywords["model_type"] = self.model_type
         keywords["export_all_ska_actions"] = self.export_all_ska_actions
         keywords["set_model_name_prefix"] = self.set_model_name_prefix
+        keywords["auto_fix_quad_faces"] = self.auto_fix_quad_faces
 
         # update model_name by file_path
         model_name = os.path.basename(self.filepath)

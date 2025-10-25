@@ -445,7 +445,10 @@ class Face:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("3H", *self.indices))
+        try:
+            file.write(pack("3H", *self.indices))
+        except Exception as e:
+            raise RuntimeError(f"Face write failed for indices {self.indices}: {e}") from e
 
     def size(self) -> int:
         return 6
@@ -1175,11 +1178,8 @@ class BattleforgeMesh:
                 f"Error writing BattleforgeMesh vertex_count {self.vertex_count} or face_count {self.face_count}"
             )
         
-        try:
-            for face in self.faces:
-                face.write(file)
-        except Exception as e:
-            raise TypeError("Error writing BattleforgeMesh faces")
+        for face in self.faces:
+            face.write(file)
         
         try:
             file.write(pack("B", self.mesh_count))
@@ -1317,11 +1317,8 @@ class CDspMeshFile:
             except Exception:
                 raise TypeError("Error writing bounding_box_upper_right_corner")
 
-            try:
-                for mesh in self.meshes:
-                    mesh.write(file)
-            except Exception:
-                raise TypeError("Error writing meshes")
+            for mesh in self.meshes:
+                mesh.write(file)
 
             try:
                 for point in self.some_points:

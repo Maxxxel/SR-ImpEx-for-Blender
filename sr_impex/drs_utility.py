@@ -518,7 +518,6 @@ def triangulate(meshes_collection: bpy.types.Collection) -> None:
         if obj.type == "MESH":
             with new_bmesh_from_object(obj) as bm:
                 tri(bm, faces=bm.faces[:])  # pylint: disable=E1111, E1120
-                # V2.79 : bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method=0, ngon_method=0)
 
 
 def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
@@ -5035,6 +5034,7 @@ def save_drs(
     model_name: str,
     export_all_ska_actions: bool,
     set_model_name_prefix: str,
+    auto_fix_quad_faces: bool,
 ):
     """Save the DRS file."""
     global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref  # pylint: disable=global-statement
@@ -5062,11 +5062,12 @@ def save_drs(
 
     # === MESH PREPARATION =====================================================
     meshes_collection = get_collection(source_collection_copy, "Meshes_Collection")
-    try:
-        triangulate(source_collection_copy)
-    except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Error during triangulation: {e}", "Triangulation Error", "ERROR")
-        return abort(keep_debug_collections, source_collection_copy)
+    if auto_fix_quad_faces:
+        try:
+            triangulate(meshes_collection)
+        except Exception as e:  # pylint: disable=broad-except
+            logger.log(f"Error during triangulation: {e}", "Triangulation Error", "ERROR")
+            return abort(keep_debug_collections, source_collection_copy)
 
     if not verify_mesh_vertex_count(meshes_collection):
         logger.log(
