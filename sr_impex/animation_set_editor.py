@@ -36,6 +36,9 @@ from .abilities import (
 
 from .drs_definitions import AnimationType as DRS_ANIM_TYPE
 
+from .drs_resolvers import resolve_action_from_blob_name as _resolve_action_name
+
+
 _ANIMTYPE_BY_ID = {v: k for k, v in DRS_ANIM_TYPE.items()}
 
 _ACTIONS_ENUM_CACHE = None
@@ -388,89 +391,6 @@ def _norm_ska_name(name: str) -> str:
         return ""
     return n if n.lower().endswith(".ska") else (n + ".ska")
 
-
-# ---------- Filename -> Action resolver using model's mapping ----------
-_BL_MAX = 63
-
-
-def _resolve_action_name(name: str) -> str:
-    """Resolve blob filename to a valid Action name shown in Enum.
-    Priority:
-      1) Model mapping (_drs_action_map) on active top-level DRSModel_*
-      2) Exact matches in bpy.data.actions
-      3) .ska <-> no .ska
-      4) Blender 63-char truncation (+ numbered variants)
-      5) Prefix fallback
-    """
-    if not name:
-        return "NONE"
-    want = name.strip()
-    base = want[:-4] if want.lower().endswith(".ska") else want
-
-    # 1) mapping from importer
-    col = _active_top_drsmodel()
-    if col:
-        try:
-            raw = col.get("_drs_action_map", "{}")
-            mp = json.loads(raw) if isinstance(raw, str) else {}
-        except Exception:  # pylint: disable=broad-exception-caught
-            mp = {}
-        # Try different keys the blob might contain
-        for key in (want, os.path.basename(want), base, os.path.basename(base)):
-            act = mp.get(key)
-            if act and act in bpy.data.actions:
-                return act
-
-    names = [a.name for a in bpy.data.actions]
-    name_set = set(names)
-
-    def hit(cand: str) -> Optional[str]:
-        return cand if cand in name_set else None
-
-    # 2) exact
-    if hit(want):
-        return want
-    # 3) with / without .ska
-    if hit(base):
-        return base
-    if hit(base + ".ska"):
-        return base + ".ska"
-    # 4) truncation
-    t_want, t_base, t_with_ska = (
-        want[:_BL_MAX],
-        base[:_BL_MAX],
-        (base + ".ska")[:_BL_MAX],
-    )
-    if hit(t_want):
-        return t_want
-    if hit(t_base):
-        return t_base
-    if hit(t_with_ska):
-        return t_with_ska
-    # … numbered collisions
-    prefix = t_base.rstrip(".")
-    numbered = [n for n in names if n.startswith(prefix + ".")]
-    if numbered:
-
-        def parse_suffix(nm: str):
-            try:
-                return int(nm.split(".")[-1])
-            except:
-                return 99999
-
-        numbered.sort(key=parse_suffix)
-        return numbered[0]
-    # 5) weak prefix fallback
-    best = None
-    best_score = -1
-    for n in names:
-        nb = n[:-4] if n.lower().endswith(".ska") else n
-        score = len(os.path.commonprefix([nb, base]))
-        if score > best_score:
-            best_score, best = score, n
-    return best if best and best_score >= max(8, len(base) // 2) else "NONE"
-
-
 # ---- Mode labeling (generic) ----
 def _mode_label(m: int) -> str:
     return {
@@ -576,9 +496,7 @@ def _redraw_ui():
 def _action_span_frames(act: bpy.types.Action) -> int:
     # Prefer explicit frame length from importer; else use action range
     try:
-        v = act.get("ska_original_frames", None)
-        if v is None:
-            v = act.get("frame_length", None)
+        v = act.get("frame_length", None)
         if v is not None:
             return int(round(float(v)))
     except Exception:  # pylint: disable=broad-exception-caught
@@ -806,13 +724,13 @@ ANIM_BLOB_KEY = "AnimationSetJSON"
 
 def _empty_blob() -> Dict:
     return {
-        "default_run_speed": 5.0,
-        "default_walk_speed": 2.0,
+        "default_run_speed": 4.8,
+        "default_walk_speed": 2.4,
         "mode_change_type": 0,
         "hovering_ground": False,
-        "fly_bank_scale": 0.0,
+        "fly_bank_scale": 1.0,
         "fly_accel_scale": 0.0,
-        "fly_hit_scale": 0.0,
+        "fly_hit_scale": 1.0,
         "align_to_terrain": False,
         "mode_keys": [],
         "marker_sets": [],
@@ -985,15 +903,20 @@ def _active_model() -> Optional[bpy.types.Collection]:
 
 def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
     def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
+        fallback_ctrl = None
         for o in c.objects:
             if o.type == "ARMATURE":
-                return o
+                # Prefer the deform rig
+                if "Control_Rig" in o.name:
+                    return o
+                # Remember a control rig only as fallback
+                if fallback_ctrl is None:
+                    fallback_ctrl = o
         for ch in c.children:
-            r = visit(ch)
-            if r:
-                return r
-        return None
-
+            got = visit(ch)
+            if got:
+                return got
+        return fallback_ctrl  # if nothing else found
     return visit(col)
 
 
@@ -1693,12 +1616,22 @@ class DRS_OT_PlayRange(bpy.types.Operator):
             _hide_all_markers(model)
 
         _assign_action(arm, act)
-        original_frame_length = act["frame_length"]
+        try:
+            original_frame_length = act["frame_length"]
+        except Exception:
+            original_frame_length = None
+            print(f"Warning: Action {act_name} missing 'frame_length' property. Using frame range instead.")
+        
         if original_frame_length is None:
             # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
             original_frame_length = act.frame_range[1] - act.frame_range[0]
 
-        original_fps = act["ska_original_fps"]
+        try:
+            original_fps = act["ska_original_fps"]
+        except Exception:
+            original_fps = None
+            print(f"Warning: Action {act_name} missing 'ska_original_fps' property. Using current scene fps.")
+
         if original_fps:
             # Set the scene fps to the original fps of the animation
             context.scene.render.fps = int(original_fps)
@@ -1777,12 +1710,22 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
 
         # Assign action to armature
         _assign_action(arm, act)
-        original_frame_length = act["frame_length"]
+        try:
+            original_frame_length = act["frame_length"]
+        except Exception:
+            original_frame_length = None
+            print("Warning: Action missing 'frame_length' property. Using frame range instead.")
+        
         if original_frame_length is None:
             # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
             original_frame_length = act.frame_range[1] - act.frame_range[0]
 
-        original_fps = act["ska_original_fps"]
+        try:
+            original_fps = act["original_fps"]
+        except Exception:
+            original_fps = None
+            print("Warning: Action missing 'original_fps' property. Using current scene fps.")
+        
         if original_fps:
             # Set the scene fps to the original fps of the animation
             context.scene.render.fps = int(original_fps)

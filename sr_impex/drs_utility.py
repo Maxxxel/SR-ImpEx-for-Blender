@@ -78,11 +78,13 @@ from .drs_definitions import (
     AnimationMarkerSet,
     AnimationMarker,
     EffectSet,
-    LocatorClass
+    LocatorClass,
+    IKAtlas,
+    Constraint
 )
 from .drs_material import DRSMaterial
 from .ska_definitions import SKA
-from .ska_utility import get_actions
+from .ska_utility import get_actions, export_ska
 from .transform_utils import (
     ensure_mode,
     parent_under_game_axes,
@@ -92,6 +94,19 @@ from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmes
 from .animation_utils import import_ska_animation
 from .message_logger import MessageLogger
 from .locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
+from .animation_set_editor import DRS_OT_AnimSet_Save, ANIM_BLOB_KEY
+from .effect_set_editor import (
+    effectset_to_blob as _effectset_to_blob,
+    blob_to_effectset as _blob_to_effectset,
+    EFFECT_BLOB_KEY,
+)
+
+try:
+    # when installed as a Blender add-on package
+    from .drs_definitions import ExportError
+except Exception:
+    # fallback when running the files as loose scripts (no package)
+    from drs_definitions import ExportError
 
 logger = MessageLogger()
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -104,9 +119,6 @@ with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
 
 # region General Helper Functions
-BLOB_KEY = "CDrwLocatorListJSON"
-ANIM_BLOB_KEY = "AnimationSetJSON"
-
 
 def persist_locator_blob_on_collection(
     source_collection: bpy.types.Collection, drs_file: "DRS"
@@ -116,6 +128,20 @@ def persist_locator_blob_on_collection(
         return None
     blob = _cdrw_to_blob(drs_file.cdrw_locator_list)
     source_collection[BLOB_KEY] = json.dumps(
+        blob, separators=(",", ":"), ensure_ascii=False
+    )
+    return blob
+
+
+def persist_effect_blob_on_collection(
+    source_collection: bpy.types.Collection, drs_file: "DRS"
+) -> dict | None:
+    """Create and store the EffectSet blob on the model collection."""
+    eff = getattr(drs_file, "effect_set", None)
+    if eff is None:
+        return None
+    blob = _effectset_to_blob(eff)
+    source_collection[EFFECT_BLOB_KEY] = json.dumps(
         blob, separators=(",", ":"), ensure_ascii=False
     )
     return blob
@@ -198,6 +224,7 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
                     "start": float(getattr(var, "start", 0.0) or 0.0),
                     "end": float(getattr(var, "end", 1.0) or 1.0),
                     "allows_ik": int(getattr(var, "allows_ik", 0) or 0),
+                    "original_file_name": (getattr(var, "file", "") or ""),
                     "file": (getattr(var, "file", "") or ""),
                 }
             )
@@ -238,6 +265,7 @@ def animset_to_blob(anim: "AnimationSet") -> dict:
         blob["marker_sets"].append(
             {
                 "anim_id": int(getattr(ms, "anim_id", 0) or 0),
+                "original_file_name": (getattr(ms, "name", "") or ""),
                 "file": (getattr(ms, "name", "") or ""),
                 "animation_marker_id": am_id_str,
                 "markers": [marker],
@@ -506,7 +534,6 @@ def triangulate(meshes_collection: bpy.types.Collection) -> None:
         if obj.type == "MESH":
             with new_bmesh_from_object(obj) as bm:
                 tri(bm, faces=bm.faces[:])  # pylint: disable=E1111, E1120
-                # V2.79 : bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method=0, ngon_method=0)
 
 
 def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
@@ -1196,6 +1223,266 @@ def clean_vector(vec, tol=1e-6):
     return Vector([0.0 if abs(c) < tol else c for c in vec])
 
 
+def collect_ik_atlases_from_blender(
+    armature_object: bpy.types.Object,
+    bone_map: Dict[str, Dict[str, Optional[int]]],
+    *,
+    constraint_name: str = "_LimitRotation",
+    accept_custom_prop: str = "drs_ik",   # optional custom marker
+    default_purpose_flags: int = 3,
+) -> list[IKAtlas]:
+    """
+    Scan pose bones for LIMIT_ROTATION constraints that represent DRS IK limits
+    and build IKAtlas entries using `bone_map` to resolve BoneID.
+
+    - We first try exact `constraint_name`.
+    - If not found, we accept constraints with custom prop `drs_ik=True`.
+    - Angles are read in radians (Blender internal) which matches DRS storage.
+    """
+    if armature_object is None or armature_object.type != "ARMATURE":
+        return []
+
+    def _pick_constraint(pb: bpy.types.PoseBone):
+        for c in pb.constraints:
+            if c.type == "LIMIT_ROTATION" and constraint_name in c.name:
+                return c
+        return None
+
+    atlases: list[IKAtlas] = []
+
+    for pose_bone in armature_object.pose.bones:
+        limit = _pick_constraint(pose_bone)
+        if not limit:
+            continue
+
+        # Resolve BoneID via bone_map (same pattern used elsewhere)
+        info = bone_map.get(pose_bone.name, None)
+        if not info or "id" not in info or info["id"] is None:
+            logger.log(
+                f"IK export: Bone '{pose_bone.name}' not found in bone_map.", "Warning", "WARNING"
+            )
+            continue
+        bone_id = int(info["id"])
+
+        def _mk_constraint(use_limit: bool, min_ang: float, max_ang: float) -> Constraint:
+            c = Constraint()  # defaults: full ±2π, ratio 0
+            if not use_limit:
+                return c
+            c.left_angle = float(min_ang)
+            c.right_angle = float(max_ang)
+            c.left_damp_start = c.left_angle
+            c.right_damp_start = c.right_angle
+            c.damp_ratio = 0.0
+            return c
+
+        c_x = _mk_constraint(getattr(limit, "use_limit_x", False),
+                             getattr(limit, "min_x", -6.283185),
+                             getattr(limit, "max_x",  6.283185))
+        c_y = _mk_constraint(getattr(limit, "use_limit_y", False),
+                             getattr(limit, "min_y", -6.283185),
+                             getattr(limit, "max_y",  6.283185))
+        c_z = _mk_constraint(getattr(limit, "use_limit_z", False),
+                             getattr(limit, "min_z", -6.283185),
+                             getattr(limit, "max_z",  6.283185))
+
+        atlas = IKAtlas()
+        atlas.identifier = bone_id
+        atlas.version = 2
+        atlas.axis = 2
+        atlas.chain_order = 0
+        atlas.constraints = [c_x, c_y, c_z]
+        atlas.purpose_flags = int(default_purpose_flags)
+
+        atlases.append(atlas)
+
+    return atlases
+
+
+# --- Action export helpers (localize actions & rewrite blob) -----------------
+
+def _find_armature_in(col: bpy.types.Collection) -> bpy.types.Object | None:
+    """Armature in a DRS model collection, ignoring any Control_Rig."""
+    def visit(c: bpy.types.Collection) -> bpy.types.Object | None:
+        for o in c.objects:
+            if o.type == "ARMATURE" and "Control_Rig" not in o.name:
+                return o
+        for ch in c.children:
+            ao = visit(ch)
+            if ao:
+                return ao
+        return None
+    return visit(col)
+
+
+def _collect_action_names_for(col: bpy.types.Collection) -> list[str]:
+    """Reuse your existing list function if available; otherwise, be robust."""
+    try:
+        from .ska_utility import get_actions
+        names = list(get_actions(col) or [])
+    except Exception:
+        names = []
+    # strip sentinel if present
+    return [n for n in names if n and n != "None"]
+
+
+def _ensure_local_actions_with_prefix(
+    current_collection: bpy.types.Collection,
+    prefix: str | None,
+) -> tuple[dict[str, str], list[bpy.types.Action]]:
+    arm = _find_armature_in(current_collection)
+    if not arm:
+        return {}, []
+
+    # 1) pull names from the copied blob
+    raw = current_collection.get(ANIM_BLOB_KEY)
+    try:
+        blob = json.loads(raw) if raw else {}
+    except Exception:
+        blob = {}
+    want_files = []
+    for mk in blob.get("mode_keys", []) or []:
+        for v in mk.get("variants", []) or []:
+            f = (v.get("file") or "").strip()
+            if not f:
+                continue
+            want_files.append(f[:-4] if f.lower().endswith(".ska") else f)
+    # unique preserve order
+    seen, src_names = set(), []
+    for n in want_files:
+        if n not in seen:
+            seen.add(n)
+            src_names.append(n)
+
+    created: list[bpy.types.Action] = []
+    name_map: dict[str, str] = {}
+
+    def _unique(name: str) -> str:
+        base = name[:63]
+        if base not in bpy.data.actions:
+            return base
+        i = 1
+        while True:
+            cand = f"{base[:60]}.{i:02d}"
+            if cand not in bpy.data.actions:
+                return cand
+            i += 1
+
+    for src_blob_name in src_names:
+        # 2) resolve 'skel_human_2h_idle1' -> 'idle1' (existing Action)
+        resolved_act_name = _resolve_action_from_blob_name(current_collection, src_blob_name)
+        if not resolved_act_name:
+            continue
+        src_act = bpy.data.actions.get(resolved_act_name)
+        if not src_act:
+            continue
+
+        # 3) build short duplicate name from the *resolved* (short) action name
+        short = src_act.name  # e.g. 'idle1'
+        eff_prefix = src_act.get("prefix", "") if prefix is None else (prefix or "")
+        dup_name_base = f"{eff_prefix}_{short}" if eff_prefix and not short.startswith(eff_prefix + "_") else short
+        new_name = _unique(dup_name_base)
+
+        dup = src_act.copy()
+        dup.name = new_name
+        dup["prefix"] = eff_prefix
+        created.append(dup)
+
+        # map the blob key (original) -> duplicate short name
+        name_map[src_blob_name] = dup.name
+
+    if not arm.animation_data:
+        arm.animation_data_create()
+
+    return name_map, created
+
+
+def _rewrite_anim_blob_variant_files(
+    col: bpy.types.Collection,
+    name_map: dict[str, str],
+) -> None:
+    raw = col.get(ANIM_BLOB_KEY)
+    if not raw:
+        return
+    try:
+        b = json.loads(raw)
+    except Exception:
+        return
+
+    def norm(s: str) -> str:
+        s = (s or "").strip()
+        return s[:-4] if s.lower().endswith(".ska") else s
+
+    # Build resolver: original (bare) -> duplicate (bare)
+    nm = {}
+    for k, v in (name_map or {}).items():
+        nm[norm(k)] = v
+        nm[norm(os.path.basename(k))] = v
+
+    changed = False
+    for mk in b.get("mode_keys", []) or []:
+        for v in mk.get("variants", []) or []:
+            cur = (v.get("file") or "").strip()
+            key = norm(cur)
+            # remember previous original if missing
+            if not v.get("original_file_name"):
+                v["original_file_name"] = cur if cur else (v.get("original_file_name") or "")
+            # replace 'file' with the local duplicate short name
+            dup = name_map.get(key) or name_map.get(os.path.basename(key))
+            if dup:
+                v["file"] = dup if dup.lower().endswith(".ska") else (dup + ".ska")
+                changed = True
+
+    if changed:
+        col[ANIM_BLOB_KEY] = json.dumps(b, separators=(",", ":"), ensure_ascii=False)
+
+
+def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str) -> str:
+    """
+    Map 'skel_human_2h_idle1(.ska)' -> actual Action name (e.g. 'idle1').
+    Tries:
+      - user mapping _drs_action_map
+      - animation_set_editor._resolve_action_name
+      - basename / .ska stripping / truncations
+    Returns the Action name that exists in bpy.data.actions or "".
+    """
+    if not file_or_base:
+        return ""
+    s = (file_or_base or "").strip()
+    base = s[:-4] if s.lower().endswith(".ska") else s
+    # try mapping saved by importer
+    try:
+        raw = col.get("_drs_action_map", "{}")
+        mp = json.loads(raw) if isinstance(raw, str) else {}
+    except Exception:
+        mp = {}
+    for key in (s, os.path.basename(s), base, os.path.basename(base)):
+        cand = mp.get(key)
+        if cand and cand in bpy.data.actions:
+            return cand
+
+    # fall back to the editor's robust resolver
+    try:
+        from .animation_set_editor import _resolve_action_name as _editor_resolve
+        cand = _editor_resolve(s)
+        if cand != "NONE" and cand in bpy.data.actions:
+            return cand
+    except Exception:
+        pass
+
+    # naive fallbacks
+    for cand in (base, os.path.basename(base), base + ".ska"):
+        if cand in bpy.data.actions:
+            return cand
+
+    # truncation fallback (Blender 63-char)
+    t = base[:63]
+    if t in bpy.data.actions:
+        return t
+
+    return ""
+
+
+
 # class DRS_OT_debug_obb_tree(bpy.types.Operator):
 #     """Calculates and visualizes an OBBTree for the selected collection's meshes."""
 
@@ -1441,6 +1728,34 @@ def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
     return bone_list
 
 
+def _find_layer_collection(root: bpy.types.LayerCollection, col: bpy.types.Collection):
+    if root.collection == col:
+        return root
+    for ch in root.children:
+        f = _find_layer_collection(ch, col)
+        if f:
+            return f
+    return None
+
+def ensure_in_view_layer(col: bpy.types.Collection):
+    """Guarantee `col` is present (and not excluded) in the current ViewLayer."""
+    scene = bpy.context.scene
+    vl = bpy.context.view_layer
+    lc = _find_layer_collection(vl.layer_collection, col)
+    if lc is None:
+        # Not in the scene tree at all → link under scene root
+        try:
+            scene.collection.children.link(col)
+        except RuntimeError:
+            pass  # already linked somewhere in the scene
+        lc = _find_layer_collection(vl.layer_collection, col)
+
+    # Make sure it isn't excluded/hidden in the ViewLayer
+    if lc:
+        lc.exclude = False
+        lc.hide_viewport = False
+
+
 def import_csk_skeleton(
     source_collection: bpy.types.Collection, drs_file: DRS, locator_prefix: str = ""
 ) -> Tuple[bpy.types.Object, list[DRSBone]]:
@@ -1453,6 +1768,10 @@ def import_csk_skeleton(
         f"{locator_prefix}Armature_Collection"
     )
     source_collection.children.link(armature_collection)
+    # Ensure both collections are visible in the current ViewLayer
+    ensure_in_view_layer(source_collection)
+    ensure_in_view_layer(armature_collection)
+    
     armature_object: bpy.types.Object = bpy.data.objects.new(
         f"{locator_prefix}Armature", armature_data
     )
@@ -2158,6 +2477,7 @@ def load_drs(
 
     persist_locator_blob_on_collection(source_collection, drs_file)
     persist_animset_blob_on_collection(source_collection, drs_file)
+    persist_effect_blob_on_collection(source_collection, drs_file)
 
     armature_object, bone_list = setup_armature(source_collection, drs_file)
 
@@ -4177,10 +4497,11 @@ def create_skeleton(
     return csk_skeleton
 
 
-def create_animation_set(model_name: str) -> AnimationSet:
+def create_animation_set(model_name: str, armature_object: bpy.types.Object, bone_map, source_collection_for_blob: bpy.types.Collection | None = None,) -> AnimationSet:
     """
     Build an AnimationSet for export from the AnimationSetJSON blob.
     Anything not present in the blob falls back to defaults.
+    Reads from the provided collection (export copy) if given.
     """
 
     def _active_top_drsmodel() -> bpy.types.Collection | None:
@@ -4235,7 +4556,11 @@ def create_animation_set(model_name: str) -> AnimationSet:
     anim.allign_to_terrain = 0
 
     # ---- try to read blob from the active model --------------------------------------------------
-    col = _active_top_drsmodel()
+    col = source_collection_for_blob
+    if not col:
+        # fallback (should not happen in our export path)
+        alc = bpy.context.view_layer.active_layer_collection.collection if bpy.context and bpy.context.view_layer else None
+        col = alc if isinstance(alc, bpy.types.Collection) else None
     blob = _read_blob(col) if col else {}
 
     # top-level scalars
@@ -4278,6 +4603,7 @@ def create_animation_set(model_name: str) -> AnimationSet:
                 f = (vd.get("file") or "").strip()
                 if not f or f == "NONE":
                     continue
+                # Ensure the file ends with .ska
                 if not f.endswith(".ska"):
                     f += ".ska"
 
@@ -4379,6 +4705,13 @@ def create_animation_set(model_name: str) -> AnimationSet:
             continue
 
     anim.animation_marker_count = len(anim.animation_marker_sets)
+
+    # ---- IK Atlases ----------------------------------------------------------------------
+    # Its always empty in the blob but we already imported them in the normal procedure and maybe we have new ones later
+    atlases = collect_ik_atlases_from_blender(armature_object, bone_map)
+    anim.ik_atlases = atlases
+    anim.atlas_count = len(atlases)
+
 
     # ---- Fallback if no blob or no valid variants -----------------------------------------------
     if anim.mode_animation_key_count == 0:
@@ -4693,6 +5026,75 @@ def create_effect_set(file_name: str) -> EffectSet:
     
     return new_effect_set
 
+def create_effect_set(file_name: str, source_collection_copy: bpy.types.Collection) -> EffectSet:
+    """
+    Create EffectSet for export:
+    - If the model collection has an EffectSet blob → convert blob back to DRS.
+    - Else create an empty set seeded with a deterministic checksum from filename.
+    """
+    raw = source_collection_copy.get(EFFECT_BLOB_KEY)
+    if raw:
+        try:
+            blob = json.loads(raw)
+            return _blob_to_effectset(blob)
+        except Exception:
+            pass
+
+    # fallback: empty EffectSet with checksum
+    new_effect_set = EffectSet()
+    new_effect_set.type = 12
+    crc_file_name = zlib.crc32(file_name.encode("utf-8")) & 0xFFFFFFFF
+    new_effect_set.checksum = f"sr-{crc_file_name}-0" # TODO check if we need to change the zero here
+    new_effect_set.checksum_length = len(new_effect_set.checksum)
+    new_effect_set.skel_effekts = []
+    return new_effect_set
+
+
+def _ska_names_from_blob(col: bpy.types.Collection) -> list[str]:
+    raw = col.get(ANIM_BLOB_KEY)
+    if not raw:
+        return []
+    try:
+        b = json.loads(raw)
+    except Exception:
+        return []
+    names = []
+    for mk in b.get("mode_keys", []) or []:
+        for v in mk.get("variants", []) or []:
+            f = (v.get("file") or "").strip()
+            if not f:
+                continue
+            if f.lower().endswith(".ska"):
+                f = f[:-4]
+            names.append(f)
+    # unique while preserving order
+    seen = set()
+    out = []
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+
+
+def export_ska_actions_all(
+    folder_path: str,
+    current_collection: bpy.types.Collection,
+    context: bpy.types.Context,
+    only_names: list[str] | None = None,
+):
+    """Export SKAs referenced by the blob (or a provided whitelist)."""
+    if only_names is None:
+        action_names = _ska_names_from_blob(current_collection)
+    else:
+        action_names = list(dict.fromkeys(only_names))  # unique, order-preserving
+
+    for action_name in action_names:
+        # guard: export only if the action exists
+        if bpy.data.actions.get(action_name) is None:
+            continue
+        export_ska(context, os.path.join(folder_path, action_name), action_name)
+
 
 def save_drs(
     context: bpy.types.Context,
@@ -4702,6 +5104,9 @@ def save_drs(
     keep_debug_collections: bool,
     model_type: str,
     model_name: str,
+    export_all_ska_actions: bool,
+    set_model_name_prefix: str,
+    auto_fix_quad_faces: bool,
 ):
     """Save the DRS file."""
     global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref  # pylint: disable=global-statement
@@ -4718,14 +5123,31 @@ def save_drs(
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Failed to duplicate collection: {e}. Type {type(e)}", "ERROR")
         return abort(keep_debug_collections, None)
+    
+    # Copy the AnimationSet blob from the source into the export copy (full fidelity)
+    try:
+        raw_blob = source_collection.get(ANIM_BLOB_KEY)
+        if raw_blob:
+            source_collection_copy[ANIM_BLOB_KEY] = raw_blob
+    except Exception:
+        pass
+    
+    # Copy the EffectSet blob from the source into the export copy (full fidelity)
+    try:
+        raw_effect_blob = source_collection.get(EFFECT_BLOB_KEY)
+        if raw_effect_blob:
+            source_collection_copy[EFFECT_BLOB_KEY] = raw_effect_blob
+    except Exception:
+        pass
 
     # === MESH PREPARATION =====================================================
     meshes_collection = get_collection(source_collection_copy, "Meshes_Collection")
-    try:
-        triangulate(source_collection_copy)
-    except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Error during triangulation: {e}", "Triangulation Error", "ERROR")
-        return abort(keep_debug_collections, source_collection_copy)
+    if auto_fix_quad_faces:
+        try:
+            triangulate(meshes_collection)
+        except Exception as e:  # pylint: disable=broad-except
+            logger.log(f"Error during triangulation: {e}", "Triangulation Error", "ERROR")
+            return abort(keep_debug_collections, source_collection_copy)
 
     if not verify_mesh_vertex_count(meshes_collection):
         logger.log(
@@ -4793,7 +5215,32 @@ def save_drs(
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Error setting origin for meshes: {e}", "Origin Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
+    
+    # === Action name strategy for export =========================================
+    export_prefix: str | None
+    if set_model_name_prefix == "model_name":
+        export_prefix = model_name
+    elif set_model_name_prefix == "folder_name":
+        export_prefix = os.path.basename(os.path.dirname(filepath))
+        # assure there are no spaces
+        export_prefix = export_prefix.replace(" ", "_")
+    elif set_model_name_prefix == "none":
+        export_prefix = ""
+    else:  # keep_existing
+        export_prefix = None
 
+    # Localize actions (duplicate inside the *copy*) and apply prefix on duplicates
+    local_name_map, _dups  = _ensure_local_actions_with_prefix(
+        source_collection_copy, export_prefix
+    )
+
+    # Rewrite only the copied collection's AnimationSet blob to point to the local names
+    # (No changes to the original/main collection.)
+    try:
+        _rewrite_anim_blob_variant_files(source_collection_copy, local_name_map)
+    except Exception as e:
+        logger.log(f"Warning: failed to rewrite variant files on export copy: {e}", "Warning", "WARNING")
+    
     # === CREATE DRS STRUCTURE =================================================
     folder_path = os.path.dirname(filepath)
 
@@ -4867,7 +5314,7 @@ def save_drs(
             new_drs_file.push_node_infos("CSkSkeleton", new_drs_file.csk_skeleton)
         elif node == "AnimationSet":
             # Empty Set and use external EntityEditor
-            new_drs_file.animation_set = create_animation_set(model_name)
+            new_drs_file.animation_set = create_animation_set(model_name, armature_object, bone_map, source_collection_copy)
             if new_drs_file.animation_set is None:
                 logger.log(
                     "Failed to create AnimationSet.", "Animation Set Error", "ERROR"
@@ -4922,7 +5369,7 @@ def save_drs(
                 "CDrwLocatorList", new_drs_file.cdrw_locator_list
             )
         elif node == "EffectSet":
-            new_drs_file.effect_set = create_effect_set(model_name + ".drs")
+            new_drs_file.effect_set = create_effect_set(model_name + ".drs", source_collection_copy)
             if new_drs_file.effect_set is None:
                 logger.log(
                     "Failed to create EffectSet.", "Effect Set Error", "ERROR"
@@ -4944,10 +5391,20 @@ def save_drs(
     # === SAVE THE DRS FILE ====================================================
     try:
         new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
-    except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Error saving DRS file: {e}", "Save Error", "ERROR")
+    except ExportError as e:
+        logger.log(str(e), "Export Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
-    # new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+    except Exception as e:
+        logger.log(f"Unexpected error during save: {e}", "Export Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
+
+    # === Export of SKA Actions ==============================================
+    try:
+        if export_all_ska_actions:
+            export_ska_actions_all(folder_path, source_collection_copy, context, only_names=list(local_name_map.values()))
+    except Exception as e:  # pylint: disable=broad-except
+        logger.log(f"Error exporting SKA actions: {e}", "SKA Export Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:

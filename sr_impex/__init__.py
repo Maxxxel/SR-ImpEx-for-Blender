@@ -18,13 +18,15 @@ from . import addon_updater_ops
 from . import locator_editor
 from . import animation_set_editor
 from . import material_flow_editor
+from . import effect_set_editor
+from . import asset_library
 
 bl_info = {
     "name": "SR-ImpEx",
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
-    "blender": (4, 4, 0),
-    "version": (3, 3, 3),
+    "blender": (4, 5, 0),
+    "version": (3, 4, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -128,10 +130,21 @@ class MyAddonPreferences(bpy.types.AddonPreferences):
         min=0,
         max=59,
     )  # type: ignore
+    skylords_root: StringProperty(
+        name="Skylords Reborn Folder",
+        description="Path to the game's installation (root folder containing PAKs)",
+        subtype="DIR_PATH",
+        default="",
+    )  # type: ignore
 
     def draw(self, context):
-        layout = self.layout  # pylint: disable=unused-variable
+        layout = self.layout
         addon_updater_ops.check_for_update_background()
+        # Add path picker on top
+        box = layout.box()
+        box.label(text="Asset Library", icon="ASSET_MANAGER")
+        box.prop(self, "skylords_root")
+        # existing updater UI
         addon_updater_ops.update_settings_ui(self, context)
         addon_updater_ops.update_notice_box_ui(self, context)
 
@@ -327,7 +340,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         # type: ignore # ignore
         name="Flip Normals",
         description="Flip normals if you see them 'blue' in Blender",
-        default=True,
+        default=False,
     )
     keep_debug_collections: BoolProperty(
         # type: ignore # ignore
@@ -347,14 +360,45 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         ],
         default="StaticObjectNoCollision",
     )  # type: ignore
+    export_all_ska_actions: BoolProperty(
+        name="Export All SKA Actions",
+        description="Export all SKA actions associated with the model",
+        default=True,
+    )  # type: ignore
+    set_model_name_prefix: EnumProperty(
+        name="Model Name Prefix",
+        description="Set a prefix for the exported SKA actions",
+        items=[
+            ("none", "No Prefix", "Export SKA actions without any prefix: idle.ska"),
+            ("model_name", "Model Name Prefix", "Prefix SKA actions with the model name: new_model_idle.ska"),
+            ("folder_name", "Folder Name Prefix", "Prefix SKA actions with the folder name: new_model_folder_idle.ska"),
+            ("keep_existing", "Keep Existing Prefix", "Keep existing prefixes of imported SKA actions: skel_human_2h_idle.ska"),
+        ],
+        default="none",
+    )  # type: ignore
+    auto_fix_quad_faces: BoolProperty(
+        name="Auto-fix Quad Faces",
+        description="Automatically fix quad faces that may cause issues in Battleforge",
+        default=True,
+    )  # type: ignore
 
     def draw(self, context):
         layout = self.layout
         layout.label(text="Export Settings", icon="EXPORT")
+        layout.prop(self, "model_type")
+        layout.separator()
+        layout.label(text="Mesh Export Settings", icon="MESH_CUBE")
         layout.prop(self, "split_mesh_by_uv_islands")
         layout.prop(self, "flip_normals")
+        layout.prop(self, "auto_fix_quad_faces")
+        layout.separator()
+        layout.label(text="SKA Export Settings", icon="ANIM_DATA")
+        layout.prop(self, "export_all_ska_actions")
+        layout.prop(self, "set_model_name_prefix")
+        layout.separator()
+        layout.label(text="MISC Settings", icon="PREFERENCES")
         layout.prop(self, "keep_debug_collections")
-        layout.prop(self, "model_type")
+        
 
     def invoke(self, context, event):
         # Retrieve the active collection from the active layer collection
@@ -378,6 +422,9 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         keywords["flip_normals"] = self.flip_normals
         keywords["keep_debug_collections"] = self.keep_debug_collections
         keywords["model_type"] = self.model_type
+        keywords["export_all_ska_actions"] = self.export_all_ska_actions
+        keywords["set_model_name_prefix"] = self.set_model_name_prefix
+        keywords["auto_fix_quad_faces"] = self.auto_fix_quad_faces
 
         # update model_name by file_path
         model_name = os.path.basename(self.filepath)
@@ -387,12 +434,16 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
 
         self.filepath = bpy.path.ensure_ext(self.filepath, ".drs")
 
-        save_drs(context, **keywords)
+        result = save_drs(context, **keywords)
+        if result == {"FINISHED"}:
+            self.report({"INFO"}, "Export erfolgreich.")
+        else:
+            self.report({"ERROR"}, "Export fehlgeschlagen. Details im Popup.")
 
         # Purge unused data blocks
         bpy.ops.outliner.orphans_purge(do_recursive=True)
 
-        return {"FINISHED"}
+        return result
 
 
 class ExportSKAFile(bpy.types.Operator, ExportHelper):
@@ -602,6 +653,8 @@ def register():
     locator_editor.register()
     material_flow_editor.register()
     animation_set_editor.register()
+    effect_set_editor.register()
+    # asset_library.register()
 
 
 def unregister():
@@ -617,3 +670,5 @@ def unregister():
     locator_editor.unregister()
     material_flow_editor.unregister()
     animation_set_editor.unregister()
+    effect_set_editor.unregister()
+    # asset_library.unregister()

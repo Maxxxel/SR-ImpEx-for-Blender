@@ -178,10 +178,8 @@ class SKA:
                 file.write(pack("f", self.duration))
                 file.write(pack("i", self.repeat))
                 file.write(pack("i", self.stutter_mode))
-                file.write(pack("i", self.unused1))
                 if self.type == 7:
-                    file.write(pack("i", self.frame_length))
-                for zero in self.zeroes:
-                    file.write(pack("i", zero))
+                    file.write(pack("i", self.unused1))
+                file.write(pack("i", self.frame_length))
             else:
                 print(f"Unknown SKA type: {self.type}.")

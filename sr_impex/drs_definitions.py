@@ -1,15 +1,66 @@
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
 from typing import List, Union, BinaryIO, Optional
 from mathutils import Vector, Matrix, Quaternion
 from .file_io import FileReader, FileWriter
 
+class ExportError(RuntimeError):
+    """Unified export error that bubbles up to the operator/UI."""
+    pass
+
+
+@contextmanager
+def error_context(ctx: str):
+    """Attach human-readable context to any exception and re-raise as ExportError."""
+    try:
+        yield
+    except ExportError:
+        # already normalized, bubble up unchanged
+        raise
+    except Exception as e:
+        raise ExportError(f"{ctx}: {e}") from e
+
+__all__ = ["ExportError", "error_context", ...]
 
 def unpack_data(file: BinaryIO, *formats: str) -> List[List[Union[float, int]]]:
     result = []
     for fmt in formats:
         result.append(list(unpack(fmt, file.read(calcsize(fmt)))))
     return result
+
+
+def _wrap_write_method(cls):
+    """Wrap cls.write(self, file, ...) so any exception becomes ExportError with class/name context."""
+    orig = getattr(cls, "write", None)
+    if not callable(orig):
+        return
+
+    def wrapped(self, *args, **kwargs):
+        try:
+            return orig(self, *args, **kwargs)
+        except ExportError:
+            # Already normalized somewhere deeper.
+            raise
+        except Exception as e:
+            # Try to enrich with a useful identifier if present
+            ident = None
+            for attr in ("name", "id", "mesh_name", "material_name"):
+                if hasattr(self, attr):
+                    ident = getattr(self, attr)
+                    if ident:
+                        break
+            extra = f" name={ident}" if ident else ""
+            raise ExportError(f"{cls.__name__}.write failed{extra}: {e}") from e
+
+    setattr(cls, "write", wrapped)
+
+
+def _auto_wrap_all_write_methods(module_globals: dict):
+    """Find all classes defined in this module and wrap their write methods."""
+    for _name, obj in list(module_globals.items()):
+        if isinstance(obj, type) and hasattr(obj, "write") and callable(getattr(obj, "write")):
+            _wrap_write_method(obj)
 
 
 MagicValues = {
@@ -394,7 +445,10 @@ class Face:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("3H", *self.indices))
+        try:
+            file.write(pack("3H", *self.indices))
+        except Exception as e:
+            raise RuntimeError(f"Face write failed for indices {self.indices}: {e}") from e
 
     def size(self) -> int:
         return 6
@@ -565,9 +619,17 @@ class MeshData:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("ii", self.revision, self.vertex_size))
-        for i, vertex in enumerate(self.vertices):
-            vertex.write(file, self.revision)
+        try:
+            file.write(pack("ii", self.revision, self.vertex_size))
+        except Exception as e:
+            raise RuntimeError(f"MeshData header write failed [revision={self.revision}, vertex_size={self.vertex_size}]: {e}") from e
+
+        try:
+            for i, vertex in enumerate(self.vertices):
+                vertex.write(file, self.revision)
+        except Exception as e:
+            raise RuntimeError(f"Vertex write failed at index {i}, revision={self.revision}: {e}") from e
+
 
     def size(self) -> int:
         s = 8 + self.vertex_size * len(self.vertices)
@@ -602,7 +664,7 @@ class Bone:
         self.name = self.name.replace("building_nature_versatile_tower_", "")
         if len(self.name) > 63:
             self.name = str(hash(self.name))
-            print(f"Hashed Bone Name: {self.name}")
+            # print(f"Hashed Bone Name: {self.name}")
         self.child_count = unpack("i", file.read(4))[0]
         self.children = list(
             unpack(f"{self.child_count}i", file.read(calcsize(f"{self.child_count}i")))
@@ -735,7 +797,6 @@ class Texture:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing texture: {self.name}")
         file.write(pack("ii", self.identifier, self.length))
         file.write(self.name.encode("utf-8"))
         file.write(pack("i", self.spacer))
@@ -755,7 +816,6 @@ class Textures:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing {len(self.textures)} textures")
         self.length = len(self.textures)
         file.write(pack("i", self.length))
         for texture in self.textures:
@@ -903,7 +963,6 @@ class Materials:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing Materials with length {self.length}.")
         self.length = len(self.materials)
         file.write(pack("i", self.length))
         for material in self.materials:
@@ -928,11 +987,10 @@ class Refraction:
             for _ in range(self.length):
                 self.identifier = unpack("i", file.read(4))[0]
                 self.rgb = list(unpack("3f", file.read(12)))
-            print(f"Found {self.length} refraction values!!!")
+            # print(f"Found {self.length} refraction values!!!")
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing Refraction with length {self.length}.")
         file.write(pack("i", self.length))
         if self.length == 1:
             file.write(pack("i", self.identifier))
@@ -957,7 +1015,6 @@ class LevelOfDetail:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing LevelOfDetail with length {self.length}.")
         file.write(pack("i", self.length))
         if self.length == 1:
             file.write(pack("i", self.lod_level))
@@ -982,7 +1039,6 @@ class EmptyString:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing EmptyString with length {self.length}.")
         file.write(
             pack(
                 f"i{self.length * 2}s", self.length, self.unknown_string.encode("utf-8")
@@ -1019,7 +1075,6 @@ class Flow:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing Flow with length {self.length}.")
         file.write(pack("i", self.length))
         if self.length == 4:
             file.write(pack("i", self.max_flow_speed_identifier))
@@ -1116,56 +1171,40 @@ class BattleforgeMesh:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing BattleforgeMesh with {self.vertex_count} vertices and {self.face_count} faces.")
         try:
             file.write(pack("ii", self.vertex_count, self.face_count))
         except Exception:
-            print(f"[DEBUG] Error writing BattleforgeMesh vertex_count or face_count.")
             raise TypeError(
                 f"Error writing BattleforgeMesh vertex_count {self.vertex_count} or face_count {self.face_count}"
             )
         
-        print(f"[DEBUG] Writing {len(self.faces)} faces.")
-        try:
-            for face in self.faces:
-                face.write(file)
-        except Exception as e:
-            print(f"[DEBUG] Error writing BattleforgeMesh faces. Exception: {e}")
-            raise TypeError("Error writing BattleforgeMesh faces")
+        for face in self.faces:
+            face.write(file)
         
-        print(f"[DEBUG] Writing BattleforgeMesh with mesh_count {self.mesh_count}.")
         try:
             file.write(pack("B", self.mesh_count))
         except Exception:
-            print(f"[DEBUG] Error writing BattleforgeMesh mesh_count.")
             raise TypeError(f"Error writing BattleforgeMesh mesh_count {self.mesh_count}")
         
-        print(f"[DEBUG] Writing {len(self.mesh_data)} mesh data entries.")
         try:
             for mesh_data in self.mesh_data:
                 mesh_data.write(file)
         except Exception:
-            print(f"[DEBUG] Error writing BattleforgeMesh mesh data.")
             raise TypeError("Error writing BattleforgeMesh mesh data")
         
-        print(f"[DEBUG] Writing BattleforgeMesh bounding boxes.")
         try:
             self.bounding_box_lower_left_corner.write(file)
             self.bounding_box_upper_right_corner.write(file)
         except Exception:
-            print(f"[DEBUG] Error writing BattleforgeMesh bounding boxes.")
             raise TypeError("Error writing BattleforgeMesh bounding boxes")
         
-        print(f"[DEBUG] Writing BattleforgeMesh material_id {self.material_id} and material_parameters {self.material_parameters}.")
         try:
             file.write(pack("=hi", self.material_id, self.material_parameters))
         except Exception:
-            print(f"[DEBUG] Error writing BattleforgeMesh material_id or material_parameters.")
             raise TypeError(
                 f"Error writing BattleforgeMesh material_id {self.material_id} or material_parameters {self.material_parameters}"
             )
 
-        print(f"[DEBUG] Writing BattleforgeMesh material data for MaterialParameters {self.material_parameters}.")
         try:
             if self.material_parameters == -86061050:
                 file.write(pack("ii", self.material_stuff, self.bool_parameter))
@@ -1190,10 +1229,7 @@ class BattleforgeMesh:
             else:
                 raise TypeError(f"Unknown MaterialParameters {self.material_parameters}")
         except Exception:
-            print(f"[DEBUG] Error writing BattleforgeMesh material data.")
             raise TypeError("Error writing BattleforgeMesh material data")
-
-        print(f"[DEBUG] Finished writing BattleforgeMesh.")
 
     def size(self) -> int:
         size = 8  # VertexCount + FaceCount
@@ -1261,7 +1297,6 @@ class CDspMeshFile:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        print(f"[DEBUG] Writing CDspMeshFile with magic {self.magic} and mesh_count {self.mesh_count}.")
         try:
             file.write(pack("i", self.magic))
         except Exception:
@@ -1282,11 +1317,8 @@ class CDspMeshFile:
             except Exception:
                 raise TypeError("Error writing bounding_box_upper_right_corner")
 
-            try:
-                for mesh in self.meshes:
-                    mesh.write(file)
-            except Exception:
-                raise TypeError("Error writing meshes")
+            for mesh in self.meshes:
+                mesh.write(file)
 
             try:
                 for point in self.some_points:
@@ -2474,17 +2506,17 @@ class Variant:
 
 @dataclass(eq=False, repr=False)
 class Keyframe:
-    time: float = 0.0
-    keyframe_type: int = 0
-    min_falloff: float = 0.0
+    time: float = 0.0 # when to play [0 - 1]
+    keyframe_type: int = 0 # [0: audio (snr/wav), 1: effect (fxb), 2: effect (fxb), 3: permanent effect (fxb), 4: permanent effect (fxb)]
+    min_falloff: float = 0.0 # 
     max_falloff: float = 0.0
     volume: float = 0.0
     pitch_shift_min: float = 0.0
     pitch_shift_max: float = 0.0
-    offset: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])  # Vector3
-    interruptable: int = 0
-    uk: Optional[int] = None  # Only if type != 10 and type != 11
-    variant_count: int = 0
+    offset: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0]) # Is used for 3D sound positioning i guess
+    interruptable: int = 0 # 1 or 0
+    condition: Optional[int] = -1  # Only if type != 10 and type != 11. Is used for what? Signed Byte!
+    variant_count: int = 0 # needs to be atleast 1
     variants: List[Variant] = field(default_factory=list)
 
     def read(self, file: BinaryIO, _type: int) -> "Keyframe":
@@ -2501,7 +2533,7 @@ class Keyframe:
         self.interruptable = unpack("B", file.read(1))[0]
 
         if _type not in [10, 11]:
-            self.uk = unpack("B", file.read(1))[0]
+            self.condition = unpack("b", file.read(1))[0]
 
         self.variant_count = unpack("i", file.read(4))[0]
         self.variants = [Variant().read(file) for _ in range(self.variant_count)]
@@ -2523,8 +2555,8 @@ class Keyframe:
         file.write(pack("3f", *self.offset))
         file.write(pack("B", self.interruptable))
 
-        if self.uk is not None:
-            file.write(pack("B", self.uk))
+        if self.keyframe_type not in [10, 11]:
+            file.write(pack("b", self.condition))
 
         file.write(pack("i", self.variant_count))
         for variant in self.variants:
@@ -2532,7 +2564,7 @@ class Keyframe:
 
     def size(self) -> int:
         size = 28 + 12 + 1
-        if self.uk is not None:
+        if self.keyframe_type not in [10, 11]:
             size += 1
         size += 4
         for variant in self.variants:
@@ -2543,8 +2575,8 @@ class Keyframe:
 @dataclass(eq=False, repr=False)
 class SkelEff:
     length: int = 0  # Int
-    name: str = ""  # CString split into length and name
-    keyframe_count: int = 0
+    name: str = "" # needs to link to a SKA animation
+    keyframe_count: int = 0 # need to be bigger than 0
     keyframes: List[Keyframe] = field(default_factory=list)
 
     def read(self, file: BinaryIO, _type: int) -> "SkelEff":
@@ -2695,7 +2727,7 @@ class UKS3:
 class EffectSet:
     type: int = 12  # Short
     checksum_length: int = 0  # Int
-    checksum: str = ""  # CString split into length and name
+    checksum: str = "" 
     length: int = 0
     skel_effekts: List[SkelEff] = field(default_factory=list)
     unknown: List[float] = field(
@@ -3138,71 +3170,50 @@ class DRS:
 
     def save(self, file_name: str):
         writer = FileWriter(file_name)
-
-        for node_info in self.node_informations:
-            self.node_information_offset += node_info.node_size
-        self.node_hierarchy_offset = (
-            self.node_information_offset + 32 + (self.node_count - 1) * 32
-        )
-        
         try:
-            writer.write(
-                pack(
+            # offsets
+            for ni in self.node_informations:
+                self.node_information_offset += ni.node_size
+            self.node_hierarchy_offset = self.node_information_offset + 32 + (self.node_count - 1) * 32
+
+            # header
+            with error_context("DRS header"):
+                writer.write(pack(
                     "iiiiI",
                     self.magic,
                     self.number_of_models,
                     self.node_information_offset,
                     self.node_hierarchy_offset,
                     self.node_count,
-                )
-            )
-        except Exception as e: # pylint: disable=broad-except
-            print(f"Error writing header: {e}")
-            writer.close()
-            return
+                ))
 
-        # Write Data Packets (in correct Order)
-        try:
+            # packets (in WriteOrder)
             for node_name in WriteOrder[self.model_type]:
-                # get the right node from self.node_informations
-                node_information = next(
-                    (
-                        node_info
-                        for node_info in self.node_informations
-                        if node_info.node_name == node_name
-                    ),
-                    None,
-                )
+                if node_name == "CGeoPrimitiveContainer":
+                    continue
+                node_info = next((ni for ni in self.node_informations if ni.node_name == node_name), None)
+                with error_context(f"{node_name}.write"):
+                    node_info.data_object.write(writer)
 
-                if node_name != "CGeoPrimitiveContainer":
-                    print(f"[DEBUG] Writing node: {node_name} at offset {node_information.offset} with size {node_information.node_size}")
-                    node_information.data_object.write(writer)
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"Error writing node {node_name}: {e}")
-            writer.close()
-            return
-
-        # Write Node Informations
-        try:
+            # node infos
             for node_info in self.node_informations:
-                print(f"[DEBUG] Writing node info: {node_info.node_name}.")
-                node_info.write(writer)
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"Error writing node informations: {e}")
-            writer.close()
-            return
+                with error_context(f"NodeInformation[{node_info.node_name}].write"):
+                    node_info.write(writer)
 
-        # Write Node Hierarchy
-        try:
+            # hierarchy
             for node in self.nodes:
-                print(f"[DEBUG] Writing node hierarchy: {node.name}")
-                node.write(writer)
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"Error writing node hierarchy: {e}")
-            writer.close()
-            return
+                with error_context(f"Hierarchy node '{node.name}'.write"):
+                    node.write(writer)
 
-        writer.close()
+        except ExportError:
+            # bubble normalized errors
+            raise
+        except Exception as e:
+            # normalize anything else
+            raise ExportError(f"DRS.save failed: {e}") from e
+        finally:
+            writer.close()
+
 
 
 @dataclass(eq=False, repr=False)
@@ -3385,3 +3396,5 @@ class BMG:
 
         reader.close()
         return self
+
+_auto_wrap_all_write_methods(globals())
