@@ -94,7 +94,12 @@ from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmes
 from .animation_utils import import_ska_animation
 from .message_logger import MessageLogger
 from .locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
-from .animation_set_editor import DRS_OT_AnimSet_Save
+from .animation_set_editor import DRS_OT_AnimSet_Save, ANIM_BLOB_KEY
+from .effect_set_editor import (
+    effectset_to_blob as _effectset_to_blob,
+    blob_to_effectset as _blob_to_effectset,
+    EFFECT_BLOB_KEY,
+)
 
 try:
     # when installed as a Blender add-on package
@@ -114,9 +119,6 @@ with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
 
 # region General Helper Functions
-BLOB_KEY = "CDrwLocatorListJSON"
-ANIM_BLOB_KEY = "AnimationSetJSON"
-
 
 def persist_locator_blob_on_collection(
     source_collection: bpy.types.Collection, drs_file: "DRS"
@@ -126,6 +128,20 @@ def persist_locator_blob_on_collection(
         return None
     blob = _cdrw_to_blob(drs_file.cdrw_locator_list)
     source_collection[BLOB_KEY] = json.dumps(
+        blob, separators=(",", ":"), ensure_ascii=False
+    )
+    return blob
+
+
+def persist_effect_blob_on_collection(
+    source_collection: bpy.types.Collection, drs_file: "DRS"
+) -> dict | None:
+    """Create and store the EffectSet blob on the model collection."""
+    eff = getattr(drs_file, "effect_set", None)
+    if eff is None:
+        return None
+    blob = _effectset_to_blob(eff)
+    source_collection[EFFECT_BLOB_KEY] = json.dumps(
         blob, separators=(",", ":"), ensure_ascii=False
     )
     return blob
@@ -1712,6 +1728,34 @@ def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
     return bone_list
 
 
+def _find_layer_collection(root: bpy.types.LayerCollection, col: bpy.types.Collection):
+    if root.collection == col:
+        return root
+    for ch in root.children:
+        f = _find_layer_collection(ch, col)
+        if f:
+            return f
+    return None
+
+def ensure_in_view_layer(col: bpy.types.Collection):
+    """Guarantee `col` is present (and not excluded) in the current ViewLayer."""
+    scene = bpy.context.scene
+    vl = bpy.context.view_layer
+    lc = _find_layer_collection(vl.layer_collection, col)
+    if lc is None:
+        # Not in the scene tree at all → link under scene root
+        try:
+            scene.collection.children.link(col)
+        except RuntimeError:
+            pass  # already linked somewhere in the scene
+        lc = _find_layer_collection(vl.layer_collection, col)
+
+    # Make sure it isn't excluded/hidden in the ViewLayer
+    if lc:
+        lc.exclude = False
+        lc.hide_viewport = False
+
+
 def import_csk_skeleton(
     source_collection: bpy.types.Collection, drs_file: DRS, locator_prefix: str = ""
 ) -> Tuple[bpy.types.Object, list[DRSBone]]:
@@ -1724,6 +1768,10 @@ def import_csk_skeleton(
         f"{locator_prefix}Armature_Collection"
     )
     source_collection.children.link(armature_collection)
+    # Ensure both collections are visible in the current ViewLayer
+    ensure_in_view_layer(source_collection)
+    ensure_in_view_layer(armature_collection)
+    
     armature_object: bpy.types.Object = bpy.data.objects.new(
         f"{locator_prefix}Armature", armature_data
     )
@@ -2429,6 +2477,7 @@ def load_drs(
 
     persist_locator_blob_on_collection(source_collection, drs_file)
     persist_animset_blob_on_collection(source_collection, drs_file)
+    persist_effect_blob_on_collection(source_collection, drs_file)
 
     armature_object, bone_list = setup_armature(source_collection, drs_file)
 
@@ -4977,6 +5026,29 @@ def create_effect_set(file_name: str) -> EffectSet:
     
     return new_effect_set
 
+def create_effect_set(file_name: str, source_collection_copy: bpy.types.Collection) -> EffectSet:
+    """
+    Create EffectSet for export:
+    - If the model collection has an EffectSet blob → convert blob back to DRS.
+    - Else create an empty set seeded with a deterministic checksum from filename.
+    """
+    raw = source_collection_copy.get(EFFECT_BLOB_KEY)
+    if raw:
+        try:
+            blob = json.loads(raw)
+            return _blob_to_effectset(blob)
+        except Exception:
+            pass
+
+    # fallback: empty EffectSet with checksum
+    new_effect_set = EffectSet()
+    new_effect_set.type = 12
+    crc_file_name = zlib.crc32(file_name.encode("utf-8")) & 0xFFFFFFFF
+    new_effect_set.checksum = f"sr-{crc_file_name}-0" # TODO check if we need to change the zero here
+    new_effect_set.checksum_length = len(new_effect_set.checksum)
+    new_effect_set.skel_effekts = []
+    return new_effect_set
+
 
 def _ska_names_from_blob(col: bpy.types.Collection) -> list[str]:
     raw = col.get(ANIM_BLOB_KEY)
@@ -5057,6 +5129,14 @@ def save_drs(
         raw_blob = source_collection.get(ANIM_BLOB_KEY)
         if raw_blob:
             source_collection_copy[ANIM_BLOB_KEY] = raw_blob
+    except Exception:
+        pass
+    
+    # Copy the EffectSet blob from the source into the export copy (full fidelity)
+    try:
+        raw_effect_blob = source_collection.get(EFFECT_BLOB_KEY)
+        if raw_effect_blob:
+            source_collection_copy[EFFECT_BLOB_KEY] = raw_effect_blob
     except Exception:
         pass
 
@@ -5289,7 +5369,7 @@ def save_drs(
                 "CDrwLocatorList", new_drs_file.cdrw_locator_list
             )
         elif node == "EffectSet":
-            new_drs_file.effect_set = create_effect_set(model_name + ".drs")
+            new_drs_file.effect_set = create_effect_set(model_name + ".drs", source_collection_copy)
             if new_drs_file.effect_set is None:
                 logger.log(
                     "Failed to create EffectSet.", "Effect Set Error", "ERROR"

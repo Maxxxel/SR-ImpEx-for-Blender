@@ -18,13 +18,15 @@ from . import addon_updater_ops
 from . import locator_editor
 from . import animation_set_editor
 from . import material_flow_editor
+from . import effect_set_editor
+from . import asset_library
 
 bl_info = {
     "name": "SR-ImpEx",
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
-    "blender": (4, 4, 0),
-    "version": (3, 3, 3),
+    "blender": (4, 5, 0),
+    "version": (3, 4, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -128,10 +130,21 @@ class MyAddonPreferences(bpy.types.AddonPreferences):
         min=0,
         max=59,
     )  # type: ignore
+    skylords_root: StringProperty(
+        name="Skylords Reborn Folder",
+        description="Path to the game's installation (root folder containing PAKs)",
+        subtype="DIR_PATH",
+        default="",
+    )  # type: ignore
 
     def draw(self, context):
-        layout = self.layout  # pylint: disable=unused-variable
+        layout = self.layout
         addon_updater_ops.check_for_update_background()
+        # Add path picker on top
+        box = layout.box()
+        box.label(text="Asset Library", icon="ASSET_MANAGER")
+        box.prop(self, "skylords_root")
+        # existing updater UI
         addon_updater_ops.update_settings_ui(self, context)
         addon_updater_ops.update_notice_box_ui(self, context)
 
@@ -640,6 +653,8 @@ def register():
     locator_editor.register()
     material_flow_editor.register()
     animation_set_editor.register()
+    effect_set_editor.register()
+    # asset_library.register()
 
 
 def unregister():
@@ -655,3 +670,5 @@ def unregister():
     locator_editor.unregister()
     material_flow_editor.unregister()
     animation_set_editor.unregister()
+    effect_set_editor.unregister()
+    # asset_library.unregister()

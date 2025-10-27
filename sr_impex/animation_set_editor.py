@@ -36,6 +36,9 @@ from .abilities import (
 
 from .drs_definitions import AnimationType as DRS_ANIM_TYPE
 
+from .drs_resolvers import resolve_action_from_blob_name as _resolve_action_name
+
+
 _ANIMTYPE_BY_ID = {v: k for k, v in DRS_ANIM_TYPE.items()}
 
 _ACTIONS_ENUM_CACHE = None
@@ -387,89 +390,6 @@ def _norm_ska_name(name: str) -> str:
     if not n:
         return ""
     return n if n.lower().endswith(".ska") else (n + ".ska")
-
-
-# ---------- Filename -> Action resolver using model's mapping ----------
-_BL_MAX = 63
-
-
-def _resolve_action_name(name: str) -> str:
-    """Resolve blob filename to a valid Action name shown in Enum.
-    Priority:
-      1) Model mapping (_drs_action_map) on active top-level DRSModel_*
-      2) Exact matches in bpy.data.actions
-      3) .ska <-> no .ska
-      4) Blender 63-char truncation (+ numbered variants)
-      5) Prefix fallback
-    """
-    if not name:
-        return "NONE"
-    want = name.strip()
-    base = want[:-4] if want.lower().endswith(".ska") else want
-
-    # 1) mapping from importer
-    col = _active_top_drsmodel()
-    if col:
-        try:
-            raw = col.get("_drs_action_map", "{}")
-            mp = json.loads(raw) if isinstance(raw, str) else {}
-        except Exception:  # pylint: disable=broad-exception-caught
-            mp = {}
-        # Try different keys the blob might contain
-        for key in (want, os.path.basename(want), base, os.path.basename(base)):
-            act = mp.get(key)
-            if act and act in bpy.data.actions:
-                return act
-
-    names = [a.name for a in bpy.data.actions]
-    name_set = set(names)
-
-    def hit(cand: str) -> Optional[str]:
-        return cand if cand in name_set else None
-
-    # 2) exact
-    if hit(want):
-        return want
-    # 3) with / without .ska
-    if hit(base):
-        return base
-    if hit(base + ".ska"):
-        return base + ".ska"
-    # 4) truncation
-    t_want, t_base, t_with_ska = (
-        want[:_BL_MAX],
-        base[:_BL_MAX],
-        (base + ".ska")[:_BL_MAX],
-    )
-    if hit(t_want):
-        return t_want
-    if hit(t_base):
-        return t_base
-    if hit(t_with_ska):
-        return t_with_ska
-    # … numbered collisions
-    prefix = t_base.rstrip(".")
-    numbered = [n for n in names if n.startswith(prefix + ".")]
-    if numbered:
-
-        def parse_suffix(nm: str):
-            try:
-                return int(nm.split(".")[-1])
-            except:
-                return 99999
-
-        numbered.sort(key=parse_suffix)
-        return numbered[0]
-    # 5) weak prefix fallback
-    best = None
-    best_score = -1
-    for n in names:
-        nb = n[:-4] if n.lower().endswith(".ska") else n
-        score = len(os.path.commonprefix([nb, base]))
-        if score > best_score:
-            best_score, best = score, n
-    return best if best and best_score >= max(8, len(base) // 2) else "NONE"
-
 
 # ---- Mode labeling (generic) ----
 def _mode_label(m: int) -> str:

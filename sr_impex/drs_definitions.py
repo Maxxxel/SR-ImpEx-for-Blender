@@ -2515,7 +2515,7 @@ class Keyframe:
     pitch_shift_max: float = 0.0
     offset: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0]) # Is used for 3D sound positioning i guess
     interruptable: int = 0 # 1 or 0
-    condition: Optional[int] = -1  # Only if type != 10 and type != 11. Is used for what?
+    condition: Optional[int] = -1  # Only if type != 10 and type != 11. Is used for what? Signed Byte!
     variant_count: int = 0 # needs to be atleast 1
     variants: List[Variant] = field(default_factory=list)
 
@@ -2533,7 +2533,7 @@ class Keyframe:
         self.interruptable = unpack("B", file.read(1))[0]
 
         if _type not in [10, 11]:
-            self.condition = unpack("B", file.read(1))[0]
+            self.condition = unpack("b", file.read(1))[0]
 
         self.variant_count = unpack("i", file.read(4))[0]
         self.variants = [Variant().read(file) for _ in range(self.variant_count)]
@@ -2556,7 +2556,7 @@ class Keyframe:
         file.write(pack("B", self.interruptable))
 
         if self.keyframe_type not in [10, 11]:
-            file.write(pack("B", self.condition))
+            file.write(pack("b", self.condition))
 
         file.write(pack("i", self.variant_count))
         for variant in self.variants:
@@ -2575,13 +2575,13 @@ class Keyframe:
 @dataclass(eq=False, repr=False)
 class SkelEff:
     length: int = 0  # Int
-    animation_name: str = "" # needs to link to a SKA animation
+    name: str = "" # needs to link to a SKA animation
     keyframe_count: int = 0 # need to be bigger than 0
     keyframes: List[Keyframe] = field(default_factory=list)
 
     def read(self, file: BinaryIO, _type: int) -> "SkelEff":
         self.length = unpack("i", file.read(4))[0]
-        self.animation_name = file.read(self.length).decode("utf-8").strip("\x00")
+        self.name = file.read(self.length).decode("utf-8").strip("\x00")
         self.keyframe_count = unpack("i", file.read(4))[0]
         self.keyframes = [
             Keyframe().read(file, _type) for _ in range(self.keyframe_count)
@@ -2590,7 +2590,7 @@ class SkelEff:
 
     def write(self, file: BinaryIO) -> None:
         file.write(pack("i", self.length))
-        file.write(self.animation_name.encode("utf-8"))
+        file.write(self.name.encode("utf-8"))
         file.write(pack("i", self.keyframe_count))
         for keyframe in self.keyframes:
             keyframe.write(file)
