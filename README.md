@@ -1,6 +1,6 @@
-<div align="center">
+<p align="center">
   <img src="/sr_impex/assets/images/favicon.png" alt="Favicon">
-</div>
+</p>
 
 # Battleforge Model Importer/Exporter for Blender
 
