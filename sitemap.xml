@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/</loc>
+         <lastmod>2025-10-28</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/glossary/</loc>
+         <lastmod>2025-10-28</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cgeomesh/</loc>
+         <lastmod>2025-10-28</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cgeoobbtree/</loc>
+         <lastmod>2025-10-28</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cgeoprimitivecontainer/</loc>
+         <lastmod>2025-10-28</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/collisionshape/</loc>
+         <lastmod>2025-10-28</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/common/</loc>
+         <lastmod>2025-10-28</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/header/</loc>
+         <lastmod>2025-10-28</lastmod>
+    </url>
+</urlset>
