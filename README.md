@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="/sr_impex/assets/images/favicon.png" alt="Favicon">
+</div>
+
 # Battleforge Model Importer/Exporter for Blender
 
 A Blender Add-on designed for easy importing and exporting of Battleforge game assets (`.drs`, `.bmg`). Streamline your workflow by quickly importing, editing, animating, and exporting models directly within Blender.
