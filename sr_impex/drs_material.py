@@ -266,6 +266,8 @@ class DRSMaterial:
                 self.color_tex_node.outputs["Color"],
                 self.group_node.inputs["IN-Color Map"],
             )
+            # Alpha connection will be managed by material_flow_editor based on Enable Alpha Test flag
+            # By default, connect it (will be disconnected if flag is off)
             links.new(
                 self.color_tex_node.outputs["Alpha"],
                 self.group_node.inputs["IN-Color Map Alpha"],
@@ -437,6 +439,7 @@ class DRSMaterial:
         img = self.load_image(texture_name, dir_path)
         if img:
             self.color_tex_node.image = img
+            self.color_tex_node.image.alpha_mode = 'NONE'
             # Color maps contain color data, typically use sRGB (default), so no change needed
 
     def set_parameter_map(self, texture_name: str, dir_path: str) -> None:

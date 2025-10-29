@@ -1940,6 +1940,9 @@ def create_mesh_object(
             mesh_object.drs_material.bool_parameter = int(bf_mesh.bool_parameter)
             # ensure bits reflect the value
             # (update callback in the PG expands bits from the raw int)
+            # Also ensure the alpha connection in the shader graph matches the Enable Alpha Test flag
+            from .material_flow_editor import _update_alpha_connection
+            _update_alpha_connection(mesh_object)
         # flow
         if hasattr(mesh_object, "drs_flow") and mesh_object.drs_flow:
             f = bf_mesh.flow

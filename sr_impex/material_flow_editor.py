@@ -20,15 +20,80 @@ _MAX_BITS = 32
 _updating_flags = False  # guard to avoid recursive updates
 
 
+def _update_alpha_connection(obj):
+    """Update the alpha connection in DRS Material based on Enable Alpha Test flag."""
+    if not obj or obj.type != 'MESH':
+        return
+    if not obj.active_material or not obj.active_material.use_nodes:
+        return
+    
+    mat = obj.active_material
+    node_tree = mat.node_tree
+    
+    # Find the DRS group node
+    drs_node = None
+    for node in node_tree.nodes:
+        if node.type == 'GROUP' and node.name == 'DRS':
+            drs_node = node
+            break
+    
+    if not drs_node:
+        return
+    
+    # Find the color texture node (the one connected to IN-Color Map)
+    color_tex_node = None
+    for node in node_tree.nodes:
+        if node.type == 'TEX_IMAGE' and node.label == 'Color Map':
+            color_tex_node = node
+            break
+    
+    if not color_tex_node:
+        return
+    
+    # Check if Enable Alpha Test is enabled (bit 0)
+    enable_alpha = getattr(obj.drs_material, 'bit_0', False)
+    
+    # Find existing alpha link
+    alpha_link = None
+    for link in node_tree.links:
+        if (link.from_node == color_tex_node and 
+            link.from_socket.name == 'Alpha' and
+            link.to_node == drs_node and
+            link.to_socket.name == 'IN-Color Map Alpha'):
+            alpha_link = link
+            break
+    
+    if enable_alpha:
+        # Enable Alpha Test: ensure alpha is connected
+        if not alpha_link:
+            node_tree.links.new(
+                color_tex_node.outputs['Alpha'],
+                drs_node.inputs['IN-Color Map Alpha']
+            )
+    else:
+        # Disable Alpha Test: remove alpha connection and set default to 1.0
+        if alpha_link:
+            node_tree.links.remove(alpha_link)
+        # Set default alpha to fully opaque when not using alpha test
+        if 'IN-Color Map Alpha' in drs_node.inputs:
+            drs_node.inputs['IN-Color Map Alpha'].default_value = 1.0
+
+
 def _on_raw_changed(self, _ctx):
     global _updating_flags
     if _updating_flags:
         return
     _updating_flags = True
     v = int(self.bool_parameter) & 0xFFFFFFFF
+    old_bit_0 = getattr(self, 'bit_0', False)
     for i in range(_MAX_BITS):
         setattr(self, f"bit_{i}", bool((v >> i) & 1))
     _updating_flags = False
+    # Update alpha connection if bit 0 changed
+    new_bit_0 = getattr(self, 'bit_0', False)
+    if old_bit_0 != new_bit_0:
+        obj = _ctx.object if hasattr(_ctx, 'object') else None
+        _update_alpha_connection(obj)
 
 
 def _on_bit_changed(self, _ctx):
@@ -42,6 +107,13 @@ def _on_bit_changed(self, _ctx):
             v |= 1 << i
     self.bool_parameter = v
     _updating_flags = False
+
+
+def _on_bit_0_changed(self, ctx):
+    """Special handler for bit 0 (Enable Alpha Test) that updates shader graph."""
+    _on_bit_changed(self, ctx)
+    obj = ctx.object if hasattr(ctx, 'object') else None
+    _update_alpha_connection(obj)
 
 
 class DRS_MaterialFlagsPG(PropertyGroup):
@@ -163,10 +235,12 @@ def register():
 
     # Dynamically add bit_0..bit_31 BoolProperties
     for i in range(_MAX_BITS):
+        # Use special update callback for bit_0 (Enable Alpha Test)
+        update_func = _on_bit_0_changed if i == 0 else _on_bit_changed
         setattr(
             DRS_MaterialFlagsPG,
             f"bit_{i}",
-            BoolProperty(name=f"Bit {i}", default=False, update=_on_bit_changed),
+            BoolProperty(name=f"Bit {i}", default=False, update=update_func),
         )
 
     bpy.types.Object.drs_material = PointerProperty(type=DRS_MaterialFlagsPG)  # type: ignore
