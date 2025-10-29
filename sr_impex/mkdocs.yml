@@ -51,6 +51,17 @@ nav:
       - CGeoPrimitiveContainer: drs/cgeoprimitivecontainer.md
       - CGeoOBBTree: drs/cgeoobbtree.md
       - collisionShape: drs/collisionshape.md
+      - CDspMeshFile: drs/cdspmeshfile.md
+  - Animation & Effects:
+      - CSkSkinInfo: drs/cskskininfo.md
+      - CSkSkeleton: drs/cskskeleton.md
+      - CDspJointMap: drs/cdspjointmap.md
+      - CDrwLocatorList: drs/cdrwlocatorlist.md
+      - AnimationSet: drs/animationset.md
+      - AnimationTimings: drs/animationtimings.md
+      - EffectSet: drs/effectset.md
+  - Miscellaneous:
+      - DrwResourceMeta: drs/drwresourcemeta.md
   - Reference:
       - Glossary (Enums): glossary.md
 

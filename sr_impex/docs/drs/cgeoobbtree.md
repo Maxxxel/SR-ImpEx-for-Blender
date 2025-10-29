@@ -1,67 +1,98 @@
 # CGeoOBBTree (Oriented Bounding Box Tree)
 <a id="cgeoobb"></a>
 
-Stores an **oriented bounding box hierarchy** for fast intersection/collision and a compact triangle index list. For export we use a newer OBB-fitting algorithm that can yield **smaller, tighter** boxes. 
+Stores an **oriented bounding box hierarchy** (flat array of nodes) plus a compact **triangle list** for fast hit-tests, selection and simple collisions. Nodes are `OBBNode` structs with transform + child/skip indices and triangle span.
 
 ---
 
 ## Overview
 
-- **Purpose:** Spatial acceleration for meshes (broad-phase tests, selection, simple collisions).
-- **Composition:** A flat array of OBB nodes that forms a binary tree + a triangle list.
-- **Coordinate System:** Each node carries a `CMatCoordinateSystem` (rotation basis `Matrix3x3` + position `Vector3`). See [CMatCoordinateSystem](common.md#cmatcoordinatesystem). 
+- **Purpose:** Broad/narrow-phase acceleration for mesh intersection and selection.
+- **Where it shows up:** Most renderable assets that need picking or collisions.
+- **Engine impact:** Tighter boxes and fewer nodes = fewer tests and faster queries.
 
 ---
 
-## CGeoOBBTree
+## Structure
 <a id="cgeoobb-struct"></a>
 
-| Field           | Type     | Bytes | Description |
-|----------------|----------|------:|-------------|
-| `magic`        | int32    | 4     | **1845540702** — structure magic (not NodeInformation magic). |
-| `version`      | int32    | 4     | **3**. |
-| `matrix_count` | int32    | 4     | Number of OBB nodes. |
-| `obb_nodes`    | array    | var   | `matrix_count` × [OBBNode](#obbnode). |
-| `triangle_count` | int32  | 4     | Number of triangles listed below. |
-| `faces`        | array    | var   | `triangle_count` × `Face` (3×uint16 indices). See [Face](common.md#face-struct). |
+| Field              | Type   | Default | Description |
+|-------------------:|-------:|:-------:|-------------|
+| `magic`            | `int32` | 1845540702 | Block signature (not NodeInformation.magic). |
+| `version`          | `int32` | 3 | Current layout version. |
+| `matrix_count`     | `int32` | – | Number of OBB nodes. |
+| `obb_nodes`        | `array` | – | `matrix_count` × [OBBNode](#obbnode). |
+| `triangle_count`   | `int32` | – | Number of triangles referenced by the tree. |
+| `faces`            | `array` | – | `triangle_count` × `Face` (3×`uint16` indices). See [Face](../drs/common.md#face-struct). |
 
-**Notes**
-- The node array is stored **contiguously**; parent/child relationships are defined by indices. 
+> Nodes are stored **contiguously**; parent/child relations are via indices into this array. Faces form one **global** list shared by all leaves. See shared structs in [Common](../drs/common.md).
 
 ---
 
 ## OBBNode
 <a id="obbnode"></a>
 
-| Field                    | Type                    | Bytes | Description |
-|-------------------------|-------------------------|------:|-------------|
-| `oriented_bounding_box` | `CMatCoordinateSystem`  | 48    | Node’s oriented box transform (rotation basis + center). |
-| `first_child_index`     | uint16                  | 2     | Index into the node array, or `0` if leaf. |
-| `second_child_index`    | uint16                  | 2     | Index into the node array, or `0` if leaf. |
-| `skip_pointer`          | uint16                  | 2     | Index to **skip** an entire subtree during traversal. |
-| `node_depth`            | uint16                  | 2     | Depth in the tree (root = 0). |
-| `triangle_offset`       | uint32                  | 4     | Start index into the global triangle list for this node’s span. |
-| `total_triangles`       | uint32                  | 4     | Number of triangles covered by this node (leaf usually > 0). |
+| Field                    | Type                       | Bytes | Description |
+|-------------------------|----------------------------|------:|-------------|
+| `oriented_bounding_box` | `CMatCoordinateSystem`     | 48    | Rotation basis (`Matrix3x3`) + position (`Vector3`). No scale. |
+| `first_child_index`     | `uint16`                   | 2     | Index into `obb_nodes`, or `0` if leaf. |
+| `second_child_index`    | `uint16`                   | 2     | Index into `obb_nodes`, or `0` if leaf. |
+| `skip_pointer`          | `uint16`                   | 2     | Index used to **skip** an entire subtree (stackless traversal). |
+| `node_depth`            | `uint16`                   | 2     | Depth (root = 0). |
+| `triangle_offset`       | `uint32`                   | 4     | Start into the global face list for this node’s span. |
+| `total_triangles`       | `uint32`                   | 4     | Number of triangles covered by this node. |
 
 **Leaf vs. Internal**
-- **Leaf:** child indices are `0`; triangles are defined by `triangle_offset`+`total_triangles`.
-- **Internal:** child indices point to two other nodes; triangle span can be 0 at internals (implementation-dependent). 
-
-**Traversal Hints**
-- **Bounding test first:** check the node’s oriented box; only descend if needed.
-- **Skip pointer:** jump over a whole subtree when pruning (useful in stackless traversals).  
-  (Exact usage is engine-dependent; the field is stored to support fast forward-jumps.) 
+- **Leaf:** both child indices are `0`; triangles are defined by `triangle_offset` + `total_triangles`.
+- **Internal:** child indices point to two nodes; triangle span may be `0` for non-leaves.
 
 ---
 
-## Conventions & Constraints
-- **Transform only:** `CMatCoordinateSystem` carries **rotation + position**; **no scale** is encoded. Consumers assume a **valid rotation basis**. See [Matrix3x3](common.md#matrix3x3). 
-- **Indices:** Child pointers/skip pointer are array indices into `obb_nodes`. The tree is typically **binary** and stored in a layout that favors sequential reads.
-- **Triangle list:** `faces` are shared globally for the whole tree; leaf nodes reference ranges via `triangle_offset`/`total_triangles`. `Face` = 3×uint16, 6 bytes each. 
-- **Export note:** Our exporter may use a **newer OBB fitting** that yields tighter boxes than legacy data. That’s expected—and beneficial—for collision/selection.
+## Authoring & In-Game Behavior
+
+- **What artists control:** The shape ultimately follows your exported mesh. Cleaner topology → tighter OBBs → fewer false hits.
+- **Transforms:** Nodes store **rotation + position** only; **no scale**. Keep rotations valid (orthonormal-ish) to avoid degenerate boxes. See [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem).
+- **Exporter note:** The plugin uses a newer OBB fitting that can produce **smaller boxes** than legacy data — that’s expected and good. 
+- **Triangles:** The tree references the **same face list** (3×`uint16` indices). Respect 16-bit limits from [Face](../drs/common.md#face-struct).
 
 ---
 
-## Cross-references
-- Glossary: [`MagicValues → CGeoOBBTree`](glossary.md#magicvalues)  
-- Common types: [`CMatCoordinateSystem`](common.md#cmatcoordinatesystem), [`Vector3`](common.md#vector3), [`Matrix3x3`](common.md#matrix3x3), [`Face`](common.md#face-struct)
+## Validation Rules
+
+| Rule | Why it matters |
+|------|----------------|
+| `magic == 1845540702`, `version == 3` | Confirms block layout.
+| `matrix_count == len(obb_nodes)` | Node array integrity.
+| Child/skip indices `< matrix_count` (or `0` for leaf) | Prevents OOB traversal.
+| `triangle_offset + total_triangles ≤ triangle_count` | Valid leaf spans.
+| Face indices `< vertex_count` (from the linked mesh) | Keeps references valid (16-bit).
+| OBB basis ~orthonormal | Invalid bases break collision math.
+
+---
+
+## Performance Notes
+
+- **Tighter OBBs** and balanced splits reduce tests.
+- **Skip pointer** enables **stackless** traversal; big win in broad-phase pruning.
+- Triangle list is shared → good cache behavior when testing neighboring leaves.
+
+---
+
+## Cross-References
+
+- **Header link:** How the node points here → [Header → NodeInformation](../drs/header.md#nodeinformation).
+- **Glossary:** [MagicValues → `CGeoOBBTree`](../glossary.md#magicvalues) for the container-level magic ID.
+- **Common data:** [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem), [Vector3](../drs/common.md#vector3), [Matrix3x3](../drs/common.md#matrix3x3), [Face](../drs/common.md#face-struct).
+- **Related geometry:** The faces come from your visual mesh; see [CGeoMesh](./cgeomesh.md).
+
+---
+
+## Known Variants / Game Differences
+
+- Legacy data may have looser OBBs from older fitting routines; the block layout itself remains the same.
+
+---
+
+## Nice to know
+
+- Nodes are laid out to favor **sequential reads** (CPU cache friendly). Leaves often cluster triangles from nearby space.

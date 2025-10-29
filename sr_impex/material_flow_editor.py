@@ -1,6 +1,6 @@
 # sr_impex/material_flow_editor_blender.py
 import bpy
-from bpy.props import IntProperty, BoolProperty, FloatVectorProperty, PointerProperty
+from bpy.props import IntProperty, BoolProperty, FloatVectorProperty, PointerProperty, FloatProperty
 from bpy.types import Panel, PropertyGroup
 
 # Same labels you used in the PyQt material editor (so users see familiar names)
@@ -20,15 +20,131 @@ _MAX_BITS = 32
 _updating_flags = False  # guard to avoid recursive updates
 
 
+def _update_alpha_connection(obj):
+    """Update the alpha connection in DRS Material based on Enable Alpha Test flag."""
+    if not obj or obj.type != 'MESH':
+        return
+    if not obj.active_material or not obj.active_material.use_nodes:
+        return
+    
+    mat = obj.active_material
+    node_tree = mat.node_tree
+    
+    # Find the DRS group node
+    drs_node = None
+    for node in node_tree.nodes:
+        if node.type == 'GROUP' and node.name == 'DRS':
+            drs_node = node
+            break
+    
+    if not drs_node:
+        return
+    
+    # Find the color texture node (the one connected to IN-Color Map)
+    color_tex_node = None
+    for node in node_tree.nodes:
+        if node.type == 'TEX_IMAGE' and node.label == 'Color Map':
+            color_tex_node = node
+            break
+    
+    if not color_tex_node:
+        return
+    
+    # Check if Enable Alpha Test is enabled (bit 0)
+    enable_alpha = getattr(obj.drs_material, 'bit_0', False)
+    
+    # Find existing alpha link
+    alpha_link = None
+    for link in node_tree.links:
+        if (link.from_node == color_tex_node and 
+            link.from_socket.name == 'Alpha' and
+            link.to_node == drs_node and
+            link.to_socket.name == 'IN-Color Map Alpha'):
+            alpha_link = link
+            break
+    
+    if enable_alpha:
+        # Enable Alpha Test: ensure alpha is connected
+        if not alpha_link:
+            node_tree.links.new(
+                color_tex_node.outputs['Alpha'],
+                drs_node.inputs['IN-Color Map Alpha']
+            )
+    else:
+        # Disable Alpha Test: remove alpha connection and set default to 1.0
+        if alpha_link:
+            node_tree.links.remove(alpha_link)
+        # Set default alpha to fully opaque when not using alpha test
+        if 'IN-Color Map Alpha' in drs_node.inputs:
+            drs_node.inputs['IN-Color Map Alpha'].default_value = 1.0
+
+
+# In material_flow_editor.py
+
+def _update_wind_nodes_logic(drs_wind_pg):
+    """
+    Finds the GN modifier and updates the named nodes
+    with values from the property group.
+    """
+    if not drs_wind_pg:
+        return
+    
+    # id_data is the object (e.g., Mesh) that owns this PropertyGroup
+    obj = drs_wind_pg.id_data 
+    if not obj or obj.type != 'MESH':
+        return
+
+    # Get the values from the property group
+    wind_response = drs_wind_pg.wind_response
+    wind_height = drs_wind_pg.wind_height
+    
+    # Find the GN modifier
+    geo_mod = None
+    for mod in obj.modifiers:
+        # Check for name to be safe, in case of multiple GN mods
+        if mod.type == 'NODES' and "WindEffect" in mod.name: 
+            geo_mod = mod
+            break
+    
+    if not geo_mod or not geo_mod.node_group:
+        return
+    
+    node_tree = geo_mod.node_group
+    
+    # Find the named "Wind Response" node and set its value
+    response_node = node_tree.nodes.get("Wind Response")
+    if response_node:
+        response_node.inputs[1].default_value = wind_response
+    
+    # Find the named "Wind Height" node and set its value
+    height_node = node_tree.nodes.get("Wind Height")
+    if height_node and "From Min" in height_node.inputs:
+        # 'wind_height' from DRS is the minimum height for the effect
+        height_node.inputs["From Min"].default_value = wind_height
+
+def _update_wind_geometry_nodes(self, _ctx):
+    """This is the update callback for the UI properties."""
+    _update_wind_nodes_logic(self) # 'self' is the drs_wind_pg
+
+def _update_wind_nodes(drs_wind_pg):
+    """This is the function called by the importer in drs_utility.py."""
+    _update_wind_nodes_logic(drs_wind_pg)
+
 def _on_raw_changed(self, _ctx):
     global _updating_flags
     if _updating_flags:
         return
     _updating_flags = True
     v = int(self.bool_parameter) & 0xFFFFFFFF
+    old_bit_0 = getattr(self, 'bit_0', False)
     for i in range(_MAX_BITS):
         setattr(self, f"bit_{i}", bool((v >> i) & 1))
     _updating_flags = False
+    # Update alpha connection if bit 0 changed
+    new_bit_0 = getattr(self, 'bit_0', False)
+    if old_bit_0 != new_bit_0:
+        obj = _ctx.object if hasattr(_ctx, 'object') else None
+        _update_alpha_connection(obj)
 
 
 def _on_bit_changed(self, _ctx):
@@ -42,6 +158,13 @@ def _on_bit_changed(self, _ctx):
             v |= 1 << i
     self.bool_parameter = v
     _updating_flags = False
+
+
+def _on_bit_0_changed(self, ctx):
+    """Special handler for bit 0 (Enable Alpha Test) that updates shader graph."""
+    _on_bit_changed(self, ctx)
+    obj = ctx.object if hasattr(ctx, 'object') else None
+    _update_alpha_connection(obj)
 
 
 class DRS_MaterialFlagsPG(PropertyGroup):
@@ -67,17 +190,31 @@ class DRS_FlowPG(PropertyGroup):
     flow_scale: FloatVectorProperty(name="Flow Scale", size=4, default=(0, 0, 0, 0))  # type: ignore
 
 
+class DRS_WindPG(PropertyGroup):
+    wind_response: FloatProperty(
+        name="Wind Response",
+        description="Wind response strength",
+        default=0.0,
+        min=0.0,
+        update=_update_wind_geometry_nodes,
+    )  # type: ignore
+    wind_height: FloatProperty(
+        name="Wind Height",
+        description="Wind height offset",
+        default=0.0,
+        update=_update_wind_geometry_nodes,
+    )  # type: ignore
+
+
 # --- Helpers ------------------------------------------------------------------
 def _in_meshes_collection(obj: bpy.types.Object) -> bool:
     return any(col.name == "Meshes_Collection" for col in obj.users_collection)
-
 
 def _highest_relevant_bit(value: int) -> int:
     if value <= 0:
         return 7  # show at least 0..7 when nothing is set
     h = value.bit_length() - 1
     return min(max(h, 7), 31)
-
 
 def _in_meshes_collection(obj: bpy.types.Object) -> bool:
     return any(col.name == "Meshes_Collection" for col in obj.users_collection)
@@ -89,15 +226,34 @@ def _active_mesh(ctx) -> bpy.types.Object | None:
     return None
 
 # --- Panels -------------------------------------------------------------------
-class DRS_PT_MaterialFlags(Panel):
-    bl_label = "Material (bool_parameter)"
+class DRS_PT_Material(Panel):
+    bl_label = "Material"
     bl_category = "DRS Editor"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
 
     @classmethod
     def poll(cls, _ctx):
-        # Keep panel visible in the DRS Editor; draw() handles messaging
+        return True
+
+    def draw(self, ctx):
+        layout = self.layout
+        o = _active_mesh(ctx)
+        if not o:
+            box = layout.box()
+            box.label(text="Select a Mesh inside 'Meshes_Collection' to edit material properties.", icon="INFO")
+
+
+class DRS_PT_MaterialFlags(Panel):
+    bl_label = "Flags (bool_parameter)"
+    bl_parent_id = "DRS_PT_Material"
+    bl_category = "DRS Editor"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, _ctx):
         return True
 
     def draw(self, ctx):
@@ -121,13 +277,14 @@ class DRS_PT_MaterialFlags(Panel):
 
 class DRS_PT_Flow(Panel):
     bl_label = "Flow"
+    bl_parent_id = "DRS_PT_Material"
     bl_category = "DRS Editor"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, _ctx):
-        # Keep panel visible in the DRS Editor; draw() handles messaging
         return True
 
     def draw(self, ctx):
@@ -148,12 +305,42 @@ class DRS_PT_Flow(Panel):
         grid.prop(f, "flow_speed_change")
         grid.prop(f, "flow_scale")
 
+
+class DRS_PT_Wind(Panel):
+    bl_label = "Wind"
+    bl_parent_id = "DRS_PT_Material"
+    bl_category = "DRS Editor"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, _ctx):
+        return True
+
+    def draw(self, ctx):
+        layout = self.layout
+        o = _active_mesh(ctx)
+        if not o or not hasattr(o, "drs_wind") or o.drs_wind is None:
+            box = layout.box()
+            box.label(text="Select a Mesh inside 'Meshes_Collection' to edit wind.", icon="INFO")
+            return
+
+        w = o.drs_wind
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(w, "wind_response")
+        layout.prop(w, "wind_height")
+
 # --- Register -----------------------------------------------------------------
 classes = (
     DRS_MaterialFlagsPG,
     DRS_FlowPG,
+    DRS_WindPG,
+    DRS_PT_Material,
     DRS_PT_MaterialFlags,
     DRS_PT_Flow,
+    DRS_PT_Wind,
 )
 
 
@@ -163,17 +350,21 @@ def register():
 
     # Dynamically add bit_0..bit_31 BoolProperties
     for i in range(_MAX_BITS):
+        # Use special update callback for bit_0 (Enable Alpha Test)
+        update_func = _on_bit_0_changed if i == 0 else _on_bit_changed
         setattr(
             DRS_MaterialFlagsPG,
             f"bit_{i}",
-            BoolProperty(name=f"Bit {i}", default=False, update=_on_bit_changed),
+            BoolProperty(name=f"Bit {i}", default=False, update=update_func),
         )
 
     bpy.types.Object.drs_material = PointerProperty(type=DRS_MaterialFlagsPG)  # type: ignore
-    bpy.types.Object.drs_flow = PointerProperty(type=DRS_FlowPG)  # keep name stable
+    bpy.types.Object.drs_flow = PointerProperty(type=DRS_FlowPG)  # type: ignore
+    bpy.types.Object.drs_wind = PointerProperty(type=DRS_WindPG)  # type: ignore
 
 
 def unregister():
+    del bpy.types.Object.drs_wind
     del bpy.types.Object.drs_flow
     del bpy.types.Object.drs_material
 

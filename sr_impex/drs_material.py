@@ -1,3 +1,5 @@
+from audioop import mul
+from email.mime import nonmultipart
 import os
 import bpy
 from mathutils import Vector
@@ -266,6 +268,8 @@ class DRSMaterial:
                 self.color_tex_node.outputs["Color"],
                 self.group_node.inputs["IN-Color Map"],
             )
+            # Alpha connection will be managed by material_flow_editor based on Enable Alpha Test flag
+            # By default, connect it (will be disconnected if flag is off)
             links.new(
                 self.color_tex_node.outputs["Alpha"],
                 self.group_node.inputs["IN-Color Map Alpha"],
@@ -432,12 +436,12 @@ class DRSMaterial:
         )
         return img
 
-    def set_color_map(self, texture_name: str, dir_path: str) -> None:
+    def set_color_map(self, texture_name: str, dir_path: str, alpha_test: bool) -> None:
         """Assign the Color (albedo) map texture by name (without extension)."""
         img = self.load_image(texture_name, dir_path)
         if img:
             self.color_tex_node.image = img
-            # Color maps contain color data, typically use sRGB (default), so no change needed
+            self.color_tex_node.image.alpha_mode = 'STRAIGHT' if alpha_test else 'NONE' # 'Straight' if using alpha test, else 'NONE'
 
     def set_parameter_map(self, texture_name: str, dir_path: str) -> None:
         """Assign the combined parameter map (RGBA) texture by name. Applicable if not using separate maps."""
@@ -448,8 +452,9 @@ class DRSMaterial:
         img = self.load_image(texture_name, dir_path)
         if img:
             self.param_tex_node.image = img
-            # Treat combined parameter maps as non-color data (grayscale channels)&#8203;:contentReference[oaicite:4]{index=4}
+            # Treat combined parameter maps as non-color data
             img.colorspace_settings.name = "Non-Color"
+            img.alpha_mode = "CHANNEL_PACKED"
 
     def set_metallic_map(self, texture_name: str, dir_path: str) -> None:
         """Assign the Metallic map (grayscale) texture by name. Applicable if using separate maps."""
@@ -505,3 +510,90 @@ class DRSMaterial:
         if rgb:
             argb = tuple(rgb) + (1.0,)
             self.refraction_color_node.outputs[0].default_value = argb
+
+    def create_wind_nodes(self, mesh_object: bpy.types.Object) -> None:
+        """Uses Geometry Nodes to create a wind effect on the material's assigned object."""
+        if mesh_object is None or mesh_object.type != 'MESH':
+            raise ValueError("A valid mesh object must be provided for wind effect.")
+            
+        # Create the new GeometryNodes modifier
+        modifier = mesh_object.modifiers.new(name="WindEffect", type="NODES")
+        node_group = bpy.data.node_groups.new("WindEffectTree", "GeometryNodeTree")
+        node_group.interface.new_socket(name="Geometry In", in_out ="INPUT", socket_type="NodeSocketGeometry")
+        node_group.interface.new_socket(name="Geometry Out", in_out ="OUTPUT", socket_type="NodeSocketGeometry")
+        links = node_group.links
+        # Input Node
+        input_node = node_group.nodes.new("NodeGroupInput")
+        input_node.location = (0, 0)
+        # Output Node
+        output_node = node_group.nodes.new("NodeGroupOutput")
+        output_node.location = (1350, -300)
+        # Create a scene time node
+        scene_time = node_group.nodes.new("GeometryNodeInputSceneTime")
+        scene_time.location = (0, -300)
+        # Create a math (multiply) node
+        multiply_node = node_group.nodes.new("ShaderNodeMath")
+        multiply_node.name = "Wind Response"
+        multiply_node.location = (150, -300)
+        multiply_node.operation = "MULTIPLY"
+        multiply_node.inputs["Value"].default_value = 0.0
+        links.new(scene_time.outputs["Seconds"], multiply_node.inputs[0])
+        # Create a noise texture node
+        noise_texture = node_group.nodes.new("ShaderNodeTexNoise")
+        noise_texture.location = (300, -300)
+        noise_texture.noise_dimensions = '1D'
+        links.new(multiply_node.outputs["Value"], noise_texture.inputs["W"])
+        # Create a Vector (subtract) node to center noise around 0
+        subtract_node = node_group.nodes.new("ShaderNodeVectorMath")
+        subtract_node.location = (450, -300)
+        subtract_node.operation = "SUBTRACT"
+        links.new(noise_texture.outputs["Color"], subtract_node.inputs[0])
+        # Create a separate XYZ node
+        separate_xyz = node_group.nodes.new("ShaderNodeSeparateXYZ")
+        separate_xyz.location = (600, -300)
+        links.new(subtract_node.outputs["Vector"], separate_xyz.inputs["Vector"])
+        # Create a combine XYZ node for offset
+        combine_xyz = node_group.nodes.new("ShaderNodeCombineXYZ")
+        combine_xyz.location = (750, -300)
+        combine_xyz.inputs["Y"].default_value = 0.0
+        combine_xyz.inputs["Z"].default_value = 0.0
+        links.new(separate_xyz.outputs["X"], combine_xyz.inputs["X"])
+        # Create a Position node
+        position_node = node_group.nodes.new("GeometryNodeInputPosition")
+        position_node.location = (450, 0)
+        # Create a second separate XYZ node for original position
+        separate_y = node_group.nodes.new("ShaderNodeSeparateXYZ")
+        separate_y.location = (600, 0)
+        links.new(position_node.outputs["Position"], separate_y.inputs["Vector"])
+        # Create a map range node to control wind height
+        y_values = [corner[1] for corner in mesh_object.bound_box]
+        min_y = min(y_values)
+        max_y = max(y_values)
+        map_range = node_group.nodes.new("ShaderNodeMapRange")
+        map_range.name = "Wind Height"
+        map_range.location = (750, 0)
+        map_range.inputs["From Min"].default_value = 0.0
+        map_range.inputs["From Max"].default_value = (max_y - min_y)
+        map_range.inputs["To Min"].default_value = 0.0
+        map_range.inputs["To Max"].default_value = 1.0
+        links.new(separate_y.outputs["Y"], map_range.inputs["Value"])
+        # Create a Scale node
+        scale_node = node_group.nodes.new("ShaderNodeVectorMath")
+        scale_node.location = (900, -300)
+        scale_node.operation = "SCALE"
+        links.new(combine_xyz.outputs["Vector"], scale_node.inputs["Vector"])
+        links.new(map_range.outputs["Result"], scale_node.inputs["Scale"])
+        # Create a second control scale node for wind strength
+        control_scale = node_group.nodes.new("ShaderNodeVectorMath")
+        control_scale.location = (1050, -300)
+        control_scale.operation = "SCALE"
+        control_scale.inputs["Scale"].default_value = 1.0
+        links.new(scale_node.outputs["Vector"], control_scale.inputs["Vector"])
+        # Create a final set position node
+        set_position = node_group.nodes.new("GeometryNodeSetPosition")
+        set_position.location = (1200, -300)
+        links.new(input_node.outputs["Geometry In"], set_position.inputs["Geometry"])
+        links.new(set_position.outputs["Geometry"], output_node.inputs["Geometry Out"])
+        links.new(control_scale.outputs["Vector"], set_position.inputs["Offset"])
+        # Finish linking input and output
+        modifier.node_group = node_group

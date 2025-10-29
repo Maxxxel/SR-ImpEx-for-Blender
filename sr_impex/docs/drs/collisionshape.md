@@ -1,125 +1,134 @@
-# CollisionShape
+# collisionShape
 <a id="collisionshape"></a>
 
-Defines one or more simple **collision volumes** (boxes, spheres, cylinders) that describe the physical space of a static or animated object.  
-Used mainly for hit detection, selection, and physics approximation.  
-Each shape is positioned and rotated through its own [`CMatCoordinateSystem`](common.md#cmatcoordinatesystem).
+Holds a **set of simple collision volumes** (boxes, spheres, cylinders) used by **static objects** and some **animated objects (non-unit)** for hit checks, selection and placement.  
+**Not used by units** (`AnimatedUnit`); those rely on other mechanisms.
 
 ---
 
 ## Overview
 
-A `CollisionShape` block can include **multiple primitives** of different types:
-- **BoxShape** – rectangular volumes (axis-aligned or oriented)
-- **SphereShape** – spherical volumes
-- **CylinderShape** – cylindrical volumes
-
-All primitives are stored together in one structure along with their counts.
+- **Purpose:** Fast, approximate collisions without per-triangle tests.
+- **Where it shows up:** Present in *StaticObjectCollision* and *AnimatedObjectCollision* models; **absent** in *AnimatedUnit*.
+- **Engine impact:** Cheap broad-phase tests. Triangle trees (e.g. `CGeoOBBTree`) may be consulted only if needed.
 
 ---
 
-## General Structure
+## Structure
+<a id="collisionshape-struct"></a>
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `version` | byte | Format version (usually `1`). |
-| `box_count` | uint | Number of box shapes. |
-| `boxes` | List of [BoxShape](#boxshape) | Box-shaped volumes. |
-| `sphere_count` | uint | Number of sphere shapes. |
-| `spheres` | List of [SphereShape](#sphereshape) | Spherical volumes. |
-| `cylinder_count` | uint | Number of cylinder shapes. |
-| `cylinders` | List of [CylinderShape](#cylindershape) | Cylindrical volumes. |
+A compact header plus three counted arrays. There is **no** “CollisionPrimitive” union; shapes are stored by concrete type.
+
+| Field            | Type    | Default | Description |
+|------------------|---------|:------:|-------------|
+| `version`        | `byte`  | `1`    | Format version. |
+| `box_count`      | `uint`  | –      | Number of boxes. |
+| `boxes`          | `BoxShape[box_count]` | – | See [BoxShape](#boxshape). |
+| `sphere_count`   | `uint`  | –      | Number of spheres. |
+| `spheres`        | `SphereShape[sphere_count]` | – | See [SphereShape](#sphereshape). |
+| `cylinder_count` | `uint`  | –      | Number of cylinders. |
+| `cylinders`      | `CylinderShape[cylinder_count]` | – | See [CylinderShape](#cylindershape). |
 
 ---
 
 ## BoxShape
 <a id="boxshape"></a>
 
-Represents a **rectangular volume** in 3D space.  
-Consists of an oriented transform and a size definition.
+Rectangular volume with local transform + AABB extents.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `coord_system` | [CMatCoordinateSystem](common.md#cmatcoordinatesystem) | Orientation and position of the box. |
-| `geo_aabox` | [CGeoAABox](#cgeoaabox) | Defines the box’s dimensions via lower and upper corners. |
+| Field            | Type                              | Description |
+|------------------|-----------------------------------|-------------|
+| `coord_system`   | [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem) | Local orientation and position (no scale). |
+| `geo_aabox`      | [CGeoAABox](#cgeoaabox)           | Lower/upper corners in local space. |
 
-**Usage**  
-Used for most environment and structure collisions — simple and efficient for broad-phase physics.
-
----
-
-## CGeoAABox
+### CGeoAABox
 <a id="cgeoaabox"></a>
 
-Defines the **axis-aligned bounding box** dimensions for a box shape.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `lower_left_corner` | [Vector3](common.md#vector3) | One corner of the box. |
-| `upper_right_corner` | [Vector3](common.md#vector3) | Opposite corner of the box. |
-
-**Interpretation**  
-Together, these corners define the local extents of the box relative to its coordinate system.
+| Field               | Type                         | Description |
+|---------------------|------------------------------|-------------|
+| `lower_left_corner` | [Vector3](../drs/common.md#vector3) | One corner of the box. |
+| `upper_right_corner`| [Vector3](../drs/common.md#vector3) | Opposite corner of the box. |
 
 ---
 
 ## SphereShape
 <a id="sphereshape"></a>
 
-Represents a **spherical collision volume**.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `coord_system` | [CMatCoordinateSystem](common.md#cmatcoordinatesystem) | Position and orientation (only position is relevant). |
-| `geo_sphere` | [CGeoSphere](#cgeosphere) | Radius and center of the sphere. |
+| Field            | Type                              | Description |
+|------------------|-----------------------------------|-------------|
+| `coord_system`   | [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem) | Position (orientation irrelevant). |
+| `geo_sphere`     | [CGeoSphere](#cgeosphere)         | Radius + center. |
 
 ### CGeoSphere
 <a id="cgeosphere"></a>
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `radius` | float | Radius of the sphere. |
-| `center` | [Vector3](common.md#vector3) | Sphere center (usually `(0,0,0)` in local space). |
+| Field     | Type                         | Description |
+|-----------|------------------------------|-------------|
+| `radius`  | `float`                      | Sphere radius. |
+| `center`  | [Vector3](../drs/common.md#vector3) | Center in local space (often 0,0,0). |
 
 ---
 
 ## CylinderShape
 <a id="cylindershape"></a>
 
-Defines a **cylindrical collision volume**, useful for tall objects or units with circular bases.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `coord_system` | [CMatCoordinateSystem](common.md#cmatcoordinatesystem) | Orientation and position of the cylinder. |
-| `geo_cylinder` | [CGeoCylinder](#cgeocylinder) | Geometric data (center, height, radius). |
+| Field            | Type                              | Description |
+|------------------|-----------------------------------|-------------|
+| `coord_system`   | [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem) | Local orientation and position. |
+| `geo_cylinder`   | [CGeoCylinder](#cgeocylinder)     | Center, height, radius. |
 
 ### CGeoCylinder
 <a id="cgeocylinder"></a>
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `center` | [Vector3](common.md#vector3) | Central point of the cylinder. |
-| `height` | float | Cylinder height along its local up-axis. |
-| `radius` | float | Radius of the base circle. |
+| Field     | Type                         | Description |
+|-----------|------------------------------|-------------|
+| `center`  | [Vector3](../drs/common.md#vector3) | Cylinder center in local space. |
+| `height`  | `float`                      | Height along the local up-axis. |
+| `radius`  | `float`                      | Base radius. |
 
 ---
 
-## Concept Summary
+## Authoring & In-Game Behavior
 
-- Each primitive is defined **in its own local coordinate system**, enabling rotation and translation relative to the model.  
-- Combined, all primitives form a **compound collision volume** approximating the full object shape.  
-- The data structure focuses on **efficiency and simplicity**, not per-triangle accuracy.  
-- Primarily used by static geometry or units where precise physics simulation is not needed.
+- **Blender workflow:** Create dedicated collision objects (box/sphere/cylinder) and tag them; the exporter writes them into the respective arrays.
+- **Transforms:** Apply scale/rotation before export. `CMatCoordinateSystem` stores rotation + position (no non-uniform scale), while dimensions live in the geo structs.
+- **Usage pattern:** These primitives provide quick acceptance/rejection. If a model also has `CGeoOBBTree`, detailed triangle tests can follow.
+
+---
+
+## Validation Rules
+
+| Rule                                           | Why |
+|------------------------------------------------|-----|
+| `version == 1`                                 | Confirms layout. |
+| Counts match array lengths                     | Prevents read overruns. |
+| Positive dimensions (radius/height/extents)    | Zero/negative sizes break tests. |
+| Orthonormal rotation in `coord_system`         | Keeps boxes/cylinders well-formed. |
+
+---
+
+## Performance Notes
+
+- Spheres are the cheapest test, boxes next, cylinders slightly heavier.
+- Keep the number of shapes minimal; a few well-placed volumes beat many tiny ones.
 
 ---
 
 ## Cross-References
-- See [CGeoMesh](cgeomesh.md) for visual geometry.  
-- See [CMatCoordinateSystem](common.md#cmatcoordinatesystem) for how transformations are stored.  
-- Glossary: [`MagicValues → collisionShape`](glossary.md#magicvalues)
 
---
+- **Header / Nodes:** See [Header → NodeInformation](../drs/header.md#nodeinformation) for how this block is linked.
+- **Glossary:** [MagicValues → `collisionShape`](../glossary.md#magicvalues) for the container-level magic ID.
+- **Geometry:** Often paired with [CGeoOBBTree](./cgeoobbtree.md) and [CGeoMesh](./cgeomesh.md).
+- **Common structs:** [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem), [Vector3](../drs/common.md#vector3).
+
+---
+
+## Known Variants / Game Differences
+
+- Current data uses the three concrete shape arrays shown above. No union/variant record is present.
+
+---
 
 ## Nice to know
 
-The node is saved as `collisionShape` with a lowercase c.
+The node name is stored as **`collisionShape`** (lowercase **c**) in the hierarchy.
