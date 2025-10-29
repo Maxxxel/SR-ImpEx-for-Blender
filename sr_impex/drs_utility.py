@@ -1974,6 +1974,10 @@ def create_mesh_object(
                     f.flow_scale.z,
                     f.flow_scale.w,
                 )
+        # wind
+        if hasattr(mesh_object, "drs_wind") and mesh_object.drs_wind:
+            mesh_object.drs_wind.wind_response = float(bf_mesh.wind_response)
+            mesh_object.drs_wind.wind_height = float(bf_mesh.wind_height)
     except Exception:
         # keep import robust if the PGs are not available for some reason
         pass
@@ -3971,6 +3975,19 @@ def create_mesh(
     except Exception:
         logger.log(
             f"An error occurred while setting the Flow override for mesh {mesh.name}.",
+            "Warning",
+            "WARNING",
+        )
+
+    # --- SR override Wind from UI
+    try:
+        wp = getattr(mesh, "drs_wind", None)
+        if wp:
+            new_mesh.wind_response = float(wp.wind_response)
+            new_mesh.wind_height = float(wp.wind_height)
+    except Exception:
+        logger.log(
+            f"An error occurred while setting the Wind override for mesh {mesh.name}.",
             "Warning",
             "WARNING",
         )

@@ -1,6 +1,6 @@
 # sr_impex/material_flow_editor_blender.py
 import bpy
-from bpy.props import IntProperty, BoolProperty, FloatVectorProperty, PointerProperty
+from bpy.props import IntProperty, BoolProperty, FloatVectorProperty, PointerProperty, FloatProperty
 from bpy.types import Panel, PropertyGroup
 
 # Same labels you used in the PyQt material editor (so users see familiar names)
@@ -139,6 +139,21 @@ class DRS_FlowPG(PropertyGroup):
     flow_scale: FloatVectorProperty(name="Flow Scale", size=4, default=(0, 0, 0, 0))  # type: ignore
 
 
+# --- Wind PG ------------------------------------------------------------------
+class DRS_WindPG(PropertyGroup):
+    wind_response: FloatProperty(
+        name="Wind Response",
+        description="Wind response strength",
+        default=0.0,
+        min=0.0,
+    )  # type: ignore
+    wind_height: FloatProperty(
+        name="Wind Height",
+        description="Wind height offset",
+        default=0.0,
+    )  # type: ignore
+
+
 # --- Helpers ------------------------------------------------------------------
 def _in_meshes_collection(obj: bpy.types.Object) -> bool:
     return any(col.name == "Meshes_Collection" for col in obj.users_collection)
@@ -161,15 +176,34 @@ def _active_mesh(ctx) -> bpy.types.Object | None:
     return None
 
 # --- Panels -------------------------------------------------------------------
-class DRS_PT_MaterialFlags(Panel):
-    bl_label = "Material (bool_parameter)"
+class DRS_PT_Material(Panel):
+    bl_label = "Material"
     bl_category = "DRS Editor"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
 
     @classmethod
     def poll(cls, _ctx):
-        # Keep panel visible in the DRS Editor; draw() handles messaging
+        return True
+
+    def draw(self, ctx):
+        layout = self.layout
+        o = _active_mesh(ctx)
+        if not o:
+            box = layout.box()
+            box.label(text="Select a Mesh inside 'Meshes_Collection' to edit material properties.", icon="INFO")
+
+
+class DRS_PT_MaterialFlags(Panel):
+    bl_label = "Flags (bool_parameter)"
+    bl_parent_id = "DRS_PT_Material"
+    bl_category = "DRS Editor"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, _ctx):
         return True
 
     def draw(self, ctx):
@@ -193,13 +227,14 @@ class DRS_PT_MaterialFlags(Panel):
 
 class DRS_PT_Flow(Panel):
     bl_label = "Flow"
+    bl_parent_id = "DRS_PT_Material"
     bl_category = "DRS Editor"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, _ctx):
-        # Keep panel visible in the DRS Editor; draw() handles messaging
         return True
 
     def draw(self, ctx):
@@ -220,12 +255,42 @@ class DRS_PT_Flow(Panel):
         grid.prop(f, "flow_speed_change")
         grid.prop(f, "flow_scale")
 
+
+class DRS_PT_Wind(Panel):
+    bl_label = "Wind"
+    bl_parent_id = "DRS_PT_Material"
+    bl_category = "DRS Editor"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, _ctx):
+        return True
+
+    def draw(self, ctx):
+        layout = self.layout
+        o = _active_mesh(ctx)
+        if not o or not hasattr(o, "drs_wind") or o.drs_wind is None:
+            box = layout.box()
+            box.label(text="Select a Mesh inside 'Meshes_Collection' to edit wind.", icon="INFO")
+            return
+
+        w = o.drs_wind
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(w, "wind_response")
+        layout.prop(w, "wind_height")
+
 # --- Register -----------------------------------------------------------------
 classes = (
     DRS_MaterialFlagsPG,
     DRS_FlowPG,
+    DRS_WindPG,
+    DRS_PT_Material,
     DRS_PT_MaterialFlags,
     DRS_PT_Flow,
+    DRS_PT_Wind,
 )
 
 
@@ -244,10 +309,12 @@ def register():
         )
 
     bpy.types.Object.drs_material = PointerProperty(type=DRS_MaterialFlagsPG)  # type: ignore
-    bpy.types.Object.drs_flow = PointerProperty(type=DRS_FlowPG)  # keep name stable
+    bpy.types.Object.drs_flow = PointerProperty(type=DRS_FlowPG)  # type: ignore
+    bpy.types.Object.drs_wind = PointerProperty(type=DRS_WindPG)  # type: ignore
 
 
 def unregister():
+    del bpy.types.Object.drs_wind
     del bpy.types.Object.drs_flow
     del bpy.types.Object.drs_material
 
