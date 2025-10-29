@@ -100,6 +100,7 @@ from .effect_set_editor import (
     blob_to_effectset as _blob_to_effectset,
     EFFECT_BLOB_KEY,
 )
+from .material_flow_editor import _update_wind_geometry_nodes, _update_alpha_connection, _update_wind_nodes
 
 try:
     # when installed as a Blender add-on package
@@ -1034,27 +1035,105 @@ def process_debris_import(state_based_mesh_set, source_collection, dir_name, bas
                     state_collection.objects.link(mesh_object)
 
 
+def save_image_copy_as_png(img: bpy.types.Image, output_path: str, file_ending: str = None) -> None:
+    """
+    Save a COPY of `img` to `output_path` as PNG, without mutating `img`.
+    Uses numpy + foreach_get/foreach_set for speed and avoids odd states
+    in the original image by rebuilding a fresh 8-bit sRGB image.
+
+    Raises:
+        RuntimeError on failure (with a useful message).
+    """
+    # Ensure the image actually has pixel data
+    try:
+        if hasattr(img, "reload") and not file_ending:
+            img.reload()
+    except Exception:
+        # non-fatal; continue
+        pass
+
+
+    if file_ending == "_par":
+        new_img = img # we already have a copy
+    else:
+        if img.size[0] <= 0 or img.size[1] <= 0:
+            raise RuntimeError("Invalid image size.")
+
+        width, height = int(img.size[0]), int(img.size[1])
+
+        # Blender stores pixels as RGBA float32 in [0..1]; foreach_get is fastest with numpy
+        numel = width * height * 4  # RGBA
+        buf = np.empty(numel, dtype=np.float32)
+        img.pixels.foreach_get(buf)
+
+        # Create a new 8-bit image (PNG-friendly) and copy pixels
+        new_img = bpy.data.images.new(
+            name=f"__tmp_copy__{os.path.basename(output_path)}",
+            width=width,
+            height=height,
+            alpha=True,        # keep alpha; PNG supports it and RGBA buffer expects it
+            float_buffer=False # 8-bit per channel
+        )
+
+    try:
+        if file_ending != "_par":
+            # Override Alpha Mode to Straight to avoid premult issues
+            new_img.alpha_mode = "STRAIGHT"
+            
+            # colorspace: default to sRGB; try to mirror source if possible
+            try:
+                src_cs = getattr(img, "colorspace_settings", None)
+                if src_cs and src_cs.name:
+                    new_img.colorspace_settings.name = src_cs.name
+                else:
+                    new_img.colorspace_settings.name = "sRGB"
+            except Exception:
+                # best-effort; sRGB is fine
+                pass
+            
+            new_img.pixels.foreach_set(buf)  # fast vectorized copy
+
+            # Save as PNG without touching the original image
+            new_img.file_format = "PNG"
+            # Older Blender versions may use color_mode to ensure alpha is written
+            try:
+                new_img.color_mode = "RGBA"
+            except Exception:
+                pass
+
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        new_img.save(filepath=os.path.abspath(output_path))
+
+        # Basic post-check to ensure file materialized
+        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            raise RuntimeError("PNG not created or empty after save().")
+    finally:
+        # Clean up the temporary datablock
+        try:
+            bpy.data.images.remove(new_img, do_unlink=True)
+        except Exception:
+            pass
+
+
 def convert_image_to_dds(
     img: bpy.types.Image,
     output_filename: str,
     folder_path: str,
     dxt_format: str = "DXT5",
     extra_args: list[str] = None,
+    file_ending: str = None,
 ):
     # Create a temporary PNG file in the system temporary directory
     # temp_dir = tempfile.gettempdir()
     # We will use the addonbs temp directory instead
     temp_dir = os.path.join(resource_dir, "temp")
-    # Ensure no accidental quotes are present in the filename
     temp_filename = output_filename + ".png"
     temp_filename = temp_filename.strip('"').strip("'")
     temp_path = os.path.join(temp_dir, temp_filename)
-
-    # Save the image as PNG using Blender's save_render function
-    img.file_format = "PNG"
+    
     try:
-        img.save(filepath=temp_path)
-    except Exception as e: # pylint: disable=broad-except
+        save_image_copy_as_png(img, temp_path, file_ending)
+    except RuntimeError as e:
         logger.log(
             f"Failed to save image {output_filename} as PNG: {e}",
             "Error",
@@ -1171,9 +1250,9 @@ def get_converted_texture(
     cache = get_cache_for_type(file_ending)
     key = compute_texture_key(img)
 
-    print(f"Generating Key for {model_name} {file_ending}: {key}")
+    # print(f"Generating Key for {model_name} {file_ending}: {key}")
     if key in cache:
-        print(f"Found {model_name} {file_ending} in cache: {cache[key]}")
+        # print(f"Found {model_name} {file_ending} in cache: {cache[key]}")
         # Texture already converted, reuse the existing DDS file path.
         return cache[key]
 
@@ -1187,7 +1266,7 @@ def get_converted_texture(
     # Call your conversion function (make sure convert_image_to_dds is defined and available)
     try:
         ret_code, _, stderr = convert_image_to_dds(
-            img, texture_name, folder_path, dxt_format, extra_args
+            img, texture_name, folder_path, dxt_format, extra_args, file_ending
         )
         if ret_code != 0:
             logger.log(
@@ -1927,7 +2006,7 @@ def create_mesh_object(
 
     # Create and assign material.
     material = create_material(
-        dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name
+        dir_name, mesh_index, drs_file.cdsp_mesh_file.meshes[mesh_index], base_name, mesh_object
     )
     mesh_data.materials.append(material)
 
@@ -1941,7 +2020,6 @@ def create_mesh_object(
             # ensure bits reflect the value
             # (update callback in the PG expands bits from the raw int)
             # Also ensure the alpha connection in the shader graph matches the Enable Alpha Test flag
-            from .material_flow_editor import _update_alpha_connection
             _update_alpha_connection(mesh_object)
         # flow
         if hasattr(mesh_object, "drs_flow") and mesh_object.drs_flow:
@@ -1976,8 +2054,18 @@ def create_mesh_object(
                 )
         # wind
         if hasattr(mesh_object, "drs_wind") and mesh_object.drs_wind:
-            mesh_object.drs_wind.wind_response = float(bf_mesh.wind_response)
-            mesh_object.drs_wind.wind_height = float(bf_mesh.wind_height)
+            # get data from materials list
+            wind_response = 0.0
+            wind_height = 0.0
+            for mat in bf_mesh.materials.materials:
+                if mat.identifier == 1668510776: # wind_response
+                    wind_response = mat.wind_response
+                if mat.identifier == 1668510777: # wind_height
+                    wind_height = mat.wind_height
+            mesh_object.drs_wind.wind_response = wind_response
+            mesh_object.drs_wind.wind_height = wind_height
+            # Update geometry nodes with imported values
+            _update_wind_nodes(mesh_object.drs_wind)
     except Exception:
         # keep import robust if the PGs are not available for some reason
         pass
@@ -1996,7 +2084,7 @@ def setup_armature(source_collection, drs_file: DRS, locator_prefix: str = ""):
 
 
 def create_material(
-    dir_name: str, mesh_index: int, mesh_data: BattleforgeMesh, base_name: str
+    dir_name: str, mesh_index: int, mesh_data: BattleforgeMesh, base_name: str, mesh_object: bpy.types.Object = None
 ) -> bpy.types.Material:
     modules = []
 
@@ -2016,11 +2104,14 @@ def create_material(
         f"MaterialData_{base_name}_{mesh_index}", modules=modules
     )
 
+    # Set Alpha Test based on bool_parameter bit 0
+    use_alpha_test = mesh_data.bool_parameter & (1 << 0)
+
     for texture in mesh_data.textures.textures:
         if texture.length > 0:
             match texture.identifier:
                 case 1684432499:
-                    drs_material.set_color_map(texture.name, dir_name)
+                    drs_material.set_color_map(texture.name, dir_name, use_alpha_test)
                 case 1936745324:
                     drs_material.set_parameter_map(texture.name, dir_name)
                 case 1852992883:
@@ -2029,6 +2120,9 @@ def create_material(
                     drs_material.set_refraction_map(
                         texture.name, dir_name, mesh_data.refraction.rgb
                     )
+    
+    if mesh_object:
+        drs_material.create_wind_nodes(mesh_object)
 
     return drs_material.material
 
@@ -2681,7 +2775,7 @@ def import_state_based_mesh_set(
                     dir_name,
                     mesh_index,
                     drs_file.cdsp_mesh_file.meshes[mesh_index],
-                    base_name,
+                    base_name
                 )
                 # Assign the Material to the Mesh
                 mesh_data.materials.append(material_data)
@@ -3629,9 +3723,11 @@ def set_metallic_roughness_emission_map(
             ]
         )
 
-    new_img.pixels = new_pixels
+    new_img.pixels[:] = new_pixels
     new_img.file_format = "PNG"
+    new_img.alpha_mode = "CHANNEL_PACKED"
     new_img.update()
+    # new_img.colorspace_settings.name = "Non-Color"
 
     # Update mesh textures and flags
     new_mesh.textures.length += 1
@@ -3926,6 +4022,7 @@ def create_mesh(
 
     # Set the Bool Parameter by a bin -> dec conversion
     new_mesh.bool_parameter = int(str(bool_param_bit_flag), 2)
+    
     # --- SR override from UI: if the mesh has drs_material set, prefer that value
     try:
         mp = getattr(mesh, "drs_material", None)
@@ -3979,19 +4076,6 @@ def create_mesh(
             "WARNING",
         )
 
-    # --- SR override Wind from UI
-    try:
-        wp = getattr(mesh, "drs_wind", None)
-        if wp:
-            new_mesh.wind_response = float(wp.wind_response)
-            new_mesh.wind_height = float(wp.wind_height)
-    except Exception:
-        logger.log(
-            f"An error occurred while setting the Wind override for mesh {mesh.name}.",
-            "Warning",
-            "WARNING",
-        )
-
     # Refraction
     refraction = Refraction()
     refraction.length = 1
@@ -4003,6 +4087,23 @@ def create_mesh(
     # Materials
     # Almost no material data is used in the game, so we set it to defaults
     new_mesh.materials = Materials()
+
+    # --- SR override Wind from UI (FIXED)
+    try:
+        wp = getattr(mesh, "drs_wind", None)
+        if wp:
+            # Iterate through the default materials to find and set wind values
+            for mat in new_mesh.materials.materials:
+                if mat.identifier == 1668510776: # wind_response ID
+                    mat.wind_response = float(wp.wind_response)
+                elif mat.identifier == 1668510777: # wind_height ID
+                    mat.wind_height = float(wp.wind_height)
+    except Exception:
+        logger.log(
+            f"An error occurred while setting the Wind override for mesh {mesh.name}.",
+            "Warning",
+            "WARNING",
+        )
 
     return new_mesh, per_mesh_bone_data
 
@@ -5032,19 +5133,6 @@ def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLoc
     except Exception:
         return _empty()
 
-
-def create_effect_set(file_name: str) -> EffectSet:
-    new_effect_set = EffectSet()
-    new_effect_set.type = 11
-    # Calc CRC of the file
-    crc_file_name = zlib.crc32(file_name.encode("utf-8")) & 0xFFFFFFFF
-    new_effect_set.checksum = f"sr-{crc_file_name}-0"
-    new_effect_set.checksum_length = len(new_effect_set.checksum)
-    
-    # Check for existing blob to fill
-    # TODO
-    
-    return new_effect_set
 
 def create_effect_set(file_name: str, source_collection_copy: bpy.types.Collection) -> EffectSet:
     """

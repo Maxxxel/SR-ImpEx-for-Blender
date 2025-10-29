@@ -79,6 +79,57 @@ def _update_alpha_connection(obj):
             drs_node.inputs['IN-Color Map Alpha'].default_value = 1.0
 
 
+# In material_flow_editor.py
+
+def _update_wind_nodes_logic(drs_wind_pg):
+    """
+    Finds the GN modifier and updates the named nodes
+    with values from the property group.
+    """
+    if not drs_wind_pg:
+        return
+    
+    # id_data is the object (e.g., Mesh) that owns this PropertyGroup
+    obj = drs_wind_pg.id_data 
+    if not obj or obj.type != 'MESH':
+        return
+
+    # Get the values from the property group
+    wind_response = drs_wind_pg.wind_response
+    wind_height = drs_wind_pg.wind_height
+    
+    # Find the GN modifier
+    geo_mod = None
+    for mod in obj.modifiers:
+        # Check for name to be safe, in case of multiple GN mods
+        if mod.type == 'NODES' and "WindEffect" in mod.name: 
+            geo_mod = mod
+            break
+    
+    if not geo_mod or not geo_mod.node_group:
+        return
+    
+    node_tree = geo_mod.node_group
+    
+    # Find the named "Wind Response" node and set its value
+    response_node = node_tree.nodes.get("Wind Response")
+    if response_node:
+        response_node.inputs[1].default_value = wind_response
+    
+    # Find the named "Wind Height" node and set its value
+    height_node = node_tree.nodes.get("Wind Height")
+    if height_node and "From Min" in height_node.inputs:
+        # 'wind_height' from DRS is the minimum height for the effect
+        height_node.inputs["From Min"].default_value = wind_height
+
+def _update_wind_geometry_nodes(self, _ctx):
+    """This is the update callback for the UI properties."""
+    _update_wind_nodes_logic(self) # 'self' is the drs_wind_pg
+
+def _update_wind_nodes(drs_wind_pg):
+    """This is the function called by the importer in drs_utility.py."""
+    _update_wind_nodes_logic(drs_wind_pg)
+
 def _on_raw_changed(self, _ctx):
     global _updating_flags
     if _updating_flags:
@@ -139,18 +190,19 @@ class DRS_FlowPG(PropertyGroup):
     flow_scale: FloatVectorProperty(name="Flow Scale", size=4, default=(0, 0, 0, 0))  # type: ignore
 
 
-# --- Wind PG ------------------------------------------------------------------
 class DRS_WindPG(PropertyGroup):
     wind_response: FloatProperty(
         name="Wind Response",
         description="Wind response strength",
         default=0.0,
         min=0.0,
+        update=_update_wind_geometry_nodes,
     )  # type: ignore
     wind_height: FloatProperty(
         name="Wind Height",
         description="Wind height offset",
         default=0.0,
+        update=_update_wind_geometry_nodes,
     )  # type: ignore
 
 
@@ -158,13 +210,11 @@ class DRS_WindPG(PropertyGroup):
 def _in_meshes_collection(obj: bpy.types.Object) -> bool:
     return any(col.name == "Meshes_Collection" for col in obj.users_collection)
 
-
 def _highest_relevant_bit(value: int) -> int:
     if value <= 0:
         return 7  # show at least 0..7 when nothing is set
     h = value.bit_length() - 1
     return min(max(h, 7), 31)
-
 
 def _in_meshes_collection(obj: bpy.types.Object) -> bool:
     return any(col.name == "Meshes_Collection" for col in obj.users_collection)
