@@ -19,6 +19,56 @@ _MAX_BITS = 32
 # --- Material flags PG --------------------------------------------------------
 _updating_flags = False  # guard to avoid recursive updates
 
+# In material_flow_editor.py
+
+def _update_flow_nodes_logic(drs_flow_pg):
+    """
+    Finds the active material's node group and updates the named
+    flow nodes with values from the property group.
+    """
+    if not drs_flow_pg:
+        return
+    
+    # id_data is the object (e.g., Mesh) that owns this PropertyGroup
+    obj = drs_flow_pg.id_data 
+    if not obj or obj.type != 'MESH':
+        return
+
+    # Get the active material from the object
+    mat = obj.active_material
+    if not mat or not mat.use_nodes:
+        return
+    
+    node_tree = mat.node_tree
+    
+    # Find the DRS Material group node
+    drs_group_node = None
+    for node in node_tree.nodes:
+        # Check for label OR name
+        if node.type == 'GROUP' and (node.label == 'AIO DRS Engine' or node.name == 'AIO DRS Engine'):
+            drs_group_node = node
+            break
+    
+    if not drs_group_node or not drs_group_node.node_tree:
+        print("Could not find the DRS node group in this material")
+        return
+    
+    # Get the INNER node tree from the group
+    inner_tree = drs_group_node.node_tree
+    
+    # Get the values from the property group
+    # Note: We take the [0:3] (XYZ) components from the Vector4 properties
+    max_speed = drs_flow_pg.max_flow_speed
+    min_speed = drs_flow_pg.min_flow_speed
+    speed_change = drs_flow_pg.flow_speed_change
+    flow_scale = drs_flow_pg.flow_scale
+    
+    # The Group itself has MinSpeed, MaxSpeed, Frequency, Scale Attributes. Print them
+    # Set the values in the group node inputs
+    drs_group_node.inputs['MaxSpeed'].default_value = (max_speed[0], max_speed[1], max_speed[2])
+    drs_group_node.inputs['MinSpeed'].default_value = (min_speed[0], min_speed[1], min_speed[2])
+    drs_group_node.inputs['Frequency'].default_value = (speed_change[0], speed_change[1], speed_change[2])
+    drs_group_node.inputs['Scale'].default_value = (flow_scale[0], flow_scale[1], flow_scale[2])
 
 def _update_alpha_connection(obj):
     """Update the alpha connection in DRS Material based on Enable Alpha Test flag."""
@@ -30,28 +80,31 @@ def _update_alpha_connection(obj):
     mat = obj.active_material
     node_tree = mat.node_tree
     
-    # Find the DRS group node
-    drs_node = None
-    for node in node_tree.nodes:
-        if node.type == 'GROUP' and node.name == 'DRS':
-            drs_node = node
-            break
-    
-    if not drs_node:
-        return
-    
     # Find the color texture node (the one connected to IN-Color Map)
     color_tex_node = None
     for node in node_tree.nodes:
-        if node.type == 'TEX_IMAGE' and node.label == 'Color Map':
+        if node.type == 'TEX_IMAGE' and node.label == 'Color Map (_col)':
             color_tex_node = node
             break
     
     if not color_tex_node:
+        print("Color texture node not found.")
         return
     
     # Check if Enable Alpha Test is enabled (bit 0)
     enable_alpha = getattr(obj.drs_material, 'bit_0', False)
+    decal_mode = getattr(obj.drs_material, 'bit_1', False)
+    
+    # Get the Principled BSDF node (assumed to be named 'DRS Shader')
+    drs_node = None
+    for node in node_tree.nodes:
+        if node.type == 'BSDF_PRINCIPLED' and node.name == 'DRS Shader':
+            drs_node = node
+            break
+        
+    if not drs_node:
+        print("DRS Shader node not found.")
+        return
     
     # Find existing alpha link
     alpha_link = None
@@ -59,27 +112,24 @@ def _update_alpha_connection(obj):
         if (link.from_node == color_tex_node and 
             link.from_socket.name == 'Alpha' and
             link.to_node == drs_node and
-            link.to_socket.name == 'IN-Color Map Alpha'):
+            link.to_socket.name == 'Alpha'):
             alpha_link = link
             break
     
-    if enable_alpha:
+    if decal_mode or enable_alpha:
         # Enable Alpha Test: ensure alpha is connected
         if not alpha_link:
             node_tree.links.new(
                 color_tex_node.outputs['Alpha'],
-                drs_node.inputs['IN-Color Map Alpha']
+                drs_node.inputs[4]
             )
     else:
         # Disable Alpha Test: remove alpha connection and set default to 1.0
         if alpha_link:
             node_tree.links.remove(alpha_link)
         # Set default alpha to fully opaque when not using alpha test
-        if 'IN-Color Map Alpha' in drs_node.inputs:
-            drs_node.inputs['IN-Color Map Alpha'].default_value = 1.0
-
-
-# In material_flow_editor.py
+        if 'Alpha' in drs_node.inputs:
+            drs_node.inputs[4].default_value = 1.0
 
 def _update_wind_nodes_logic(drs_wind_pg):
     """
@@ -130,6 +180,16 @@ def _update_wind_nodes(drs_wind_pg):
     """This is the function called by the importer in drs_utility.py."""
     _update_wind_nodes_logic(drs_wind_pg)
 
+# In material_flow_editor.py (near the wind update functions)
+
+def _update_flow_props(self, _ctx):
+    """This is the update callback for the UI properties."""
+    _update_flow_nodes_logic(self) # 'self' is the drs_flow_pg
+
+def _update_flow_nodes(drs_flow_pg):
+    """This is the function called by the importer in drs_utility.py."""
+    _update_flow_nodes_logic(drs_flow_pg)
+
 def _on_raw_changed(self, _ctx):
     global _updating_flags
     if _updating_flags:
@@ -146,7 +206,6 @@ def _on_raw_changed(self, _ctx):
         obj = _ctx.object if hasattr(_ctx, 'object') else None
         _update_alpha_connection(obj)
 
-
 def _on_bit_changed(self, _ctx):
     global _updating_flags
     if _updating_flags:
@@ -159,13 +218,17 @@ def _on_bit_changed(self, _ctx):
     self.bool_parameter = v
     _updating_flags = False
 
-
 def _on_bit_0_changed(self, ctx):
     """Special handler for bit 0 (Enable Alpha Test) that updates shader graph."""
     _on_bit_changed(self, ctx)
     obj = ctx.object if hasattr(ctx, 'object') else None
     _update_alpha_connection(obj)
 
+def _on_bit_1_changed(self, ctx):
+    """Special handler for bit 1 (Enable Decal Mode) that updates shader graph."""
+    _on_bit_changed(self, ctx)
+    obj = ctx.object if hasattr(ctx, 'object') else None
+    _update_alpha_connection(obj)
 
 class DRS_MaterialFlagsPG(PropertyGroup):
     bool_parameter: IntProperty(
@@ -184,11 +247,10 @@ class DRS_FlowPG(PropertyGroup):
         description="Enable writing Flow to the mesh material block on export",
         default=False,
     )  # type: ignore
-    max_flow_speed: FloatVectorProperty(name="Max Flow Speed", size=4, default=(0, 0, 0, 0))  # type: ignore
-    min_flow_speed: FloatVectorProperty(name="Min Flow Speed", size=4, default=(0, 0, 0, 0))  # type: ignore
-    flow_speed_change: FloatVectorProperty(name="Flow Speed Change", size=4, default=(0, 0, 0, 0))  # type: ignore
-    flow_scale: FloatVectorProperty(name="Flow Scale", size=4, default=(0, 0, 0, 0))  # type: ignore
-
+    max_flow_speed: FloatVectorProperty(name="Max Flow Speed", size=4, default=(0, 0, 0, 0), update=_update_flow_props)  # type: ignore
+    min_flow_speed: FloatVectorProperty(name="Min Flow Speed", size=4, default=(0, 0, 0, 0), update=_update_flow_props)  # type: ignore
+    flow_speed_change: FloatVectorProperty(name="Flow Speed Change", size=4, default=(0, 0, 0, 0), update=_update_flow_props)  # type: ignore
+    flow_scale: FloatVectorProperty(name="Flow Scale", size=4, default=(0, 0, 0, 0), update=_update_flow_props)  # type: ignore
 
 class DRS_WindPG(PropertyGroup):
     wind_response: FloatProperty(
@@ -210,18 +272,18 @@ class DRS_WindPG(PropertyGroup):
 def _in_meshes_collection(obj: bpy.types.Object) -> bool:
     return any(col.name == "Meshes_Collection" for col in obj.users_collection)
 
+def _in_ground_decal_collection(obj: bpy.types.Object) -> bool:
+    return any(col.name == "GroundDecal_Collection" for col in obj.users_collection)
+
 def _highest_relevant_bit(value: int) -> int:
     if value <= 0:
         return 7  # show at least 0..7 when nothing is set
     h = value.bit_length() - 1
     return min(max(h, 7), 31)
 
-def _in_meshes_collection(obj: bpy.types.Object) -> bool:
-    return any(col.name == "Meshes_Collection" for col in obj.users_collection)
-
 def _active_mesh(ctx) -> bpy.types.Object | None:
     o = getattr(ctx, "object", None)
-    if o and o.type == "MESH" and _in_meshes_collection(o):
+    if o and o.type == "MESH" and _in_meshes_collection(o) or _in_ground_decal_collection(o):
         return o
     return None
 
@@ -242,7 +304,6 @@ class DRS_PT_Material(Panel):
         if not o:
             box = layout.box()
             box.label(text="Select a Mesh inside 'Meshes_Collection' to edit material properties.", icon="INFO")
-
 
 class DRS_PT_MaterialFlags(Panel):
     bl_label = "Flags (bool_parameter)"
@@ -305,7 +366,6 @@ class DRS_PT_Flow(Panel):
         grid.prop(f, "flow_speed_change")
         grid.prop(f, "flow_scale")
 
-
 class DRS_PT_Wind(Panel):
     bl_label = "Wind"
     bl_parent_id = "DRS_PT_Material"
@@ -351,7 +411,8 @@ def register():
     # Dynamically add bit_0..bit_31 BoolProperties
     for i in range(_MAX_BITS):
         # Use special update callback for bit_0 (Enable Alpha Test)
-        update_func = _on_bit_0_changed if i == 0 else _on_bit_changed
+        update_func = _on_bit_0_changed if i == 0 else (_on_bit_1_changed if i == 1 else _on_bit_changed)
+        
         setattr(
             DRS_MaterialFlagsPG,
             f"bit_{i}",

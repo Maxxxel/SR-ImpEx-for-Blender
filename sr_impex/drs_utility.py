@@ -100,7 +100,7 @@ from .effect_set_editor import (
     blob_to_effectset as _blob_to_effectset,
     EFFECT_BLOB_KEY,
 )
-from .material_flow_editor import _update_wind_geometry_nodes, _update_alpha_connection, _update_wind_nodes
+from .material_flow_editor import _update_wind_geometry_nodes, _update_alpha_connection, _update_wind_nodes, _update_flow_nodes
 
 try:
     # when installed as a Blender add-on package
@@ -808,6 +808,7 @@ def load_static_bms_module(
         mesh_object, _ = create_mesh_object(
             drs_file, 0, dir_name, f"State_{mesh_state.state_num}", None
         )
+        setup_material_parameters(mesh_object, drs_file, 0)
         mesh_state_collection.objects.link(mesh_object)
         return mesh_object
 
@@ -850,6 +851,7 @@ def load_animated_bms_module(
         mesh_object, _ = create_mesh_object(
             drs_file, 0, dir_name, f"State_{mesh_state.state_num}", armature_object
         )
+        setup_material_parameters(mesh_object, drs_file, 0)
         mesh_state_collection.objects.link(mesh_object)
 
         # We need to parent the Mesh_object under the ArmatureObject
@@ -1886,7 +1888,6 @@ def import_csk_skeleton(
     return armature_object, bone_list
         
 
-
 def create_bone_weights(
     mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mesh_data: CGeoMesh
 ) -> list[BoneWeight]:
@@ -2010,6 +2011,10 @@ def create_mesh_object(
     )
     mesh_data.materials.append(material)
 
+    return mesh_object, mesh_data
+
+
+def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh_index: int):
     # after you've created `mesh_object` for mesh index `mesh_index`…
     # Seed Material flags + Flow custom props on the object so users can edit them.
     try:
@@ -2052,6 +2057,8 @@ def create_mesh_object(
                     f.flow_scale.z,
                     f.flow_scale.w,
                 )
+            
+            _update_flow_nodes(mesh_object.drs_flow)
         # wind
         if hasattr(mesh_object, "drs_wind") and mesh_object.drs_wind:
             # get data from materials list
@@ -2069,8 +2076,6 @@ def create_mesh_object(
     except Exception:
         # keep import robust if the PGs are not available for some reason
         pass
-
-    return mesh_object, mesh_data
 
 
 def setup_armature(source_collection, drs_file: DRS, locator_prefix: str = ""):
@@ -2106,12 +2111,14 @@ def create_material(
 
     # Set Alpha Test based on bool_parameter bit 0
     use_alpha_test = mesh_data.bool_parameter & (1 << 0)
+    # Set Decal Mode based on bool_parameter bit 1.
+    use_decal_mode = mesh_data.bool_parameter & (1 << 1)
 
     for texture in mesh_data.textures.textures:
         if texture.length > 0:
             match texture.identifier:
                 case 1684432499:
-                    drs_material.set_color_map(texture.name, dir_name, use_alpha_test)
+                    drs_material.set_color_map(texture.name, dir_name, use_alpha_test, use_decal_mode)
                 case 1936745324:
                     drs_material.set_parameter_map(texture.name, dir_name)
                 case 1852992883:
@@ -2120,6 +2127,8 @@ def create_material(
                     drs_material.set_refraction_map(
                         texture.name, dir_name, mesh_data.refraction.rgb
                     )
+                case 1668510770:
+                    drs_material.set_flumap(texture.name, dir_name)
     
     if mesh_object:
         drs_material.create_wind_nodes(mesh_object)
@@ -2591,6 +2600,7 @@ def load_drs(
         mesh_object, _ = create_mesh_object(
             drs_file, mesh_index, dir_name, base_name, armature_object
         )
+        setup_material_parameters(mesh_object, drs_file, mesh_index)
         mesh_collection.objects.link(mesh_object)
 
     if drs_file.collision_shape is not None and import_collision_shape:
@@ -2876,6 +2886,7 @@ def import_mesh_set_grid(
                             base_name,
                             armature_object,
                         )
+                        setup_material_parameters(mesh_object, drs_file, mesh_index)
                         state_meshes_collection.objects.link(mesh_object)
 
                     if drs_file.collision_shape is not None and import_collision_shape:
@@ -2967,6 +2978,8 @@ def load_bmg(
             )
             # Assign the Material to the Mesh
             mesh_data.materials.append(material_data)
+            # Material Parameters
+            setup_material_parameters(mesh_object, ground_decal, mesh_index)
             # Link the Mesh Object to the Source Collection
             ground_decal_collection.objects.link(mesh_object)
 
