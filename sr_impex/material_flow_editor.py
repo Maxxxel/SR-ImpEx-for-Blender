@@ -131,6 +131,154 @@ def _update_alpha_connection(obj):
         if 'Alpha' in drs_node.inputs:
             drs_node.inputs[4].default_value = 1.0
 
+def _find_node_by_label_or_name(node_tree, node_type, label_or_name):
+    for n in node_tree.nodes:
+        if n.type == node_type and (n.label == label_or_name or n.name == label_or_name):
+            return n
+    return None
+
+def _update_parameter_connection(obj):
+    """Bit 16: toggles links from Parameter Map image to the group inputs."""
+    if not obj or obj.type != 'MESH' or not obj.active_material or not obj.active_material.use_nodes:
+        return
+    mat = obj.active_material
+    nt = mat.node_tree
+
+    # Texture node and Group node
+    param_tex = _find_node_by_label_or_name(nt, 'TEX_IMAGE', 'Parameter Map (_par)') or \
+                _find_node_by_label_or_name(nt, 'TEX_IMAGE', 'Parameter Map')
+    drs_group = None
+    for node in nt.nodes:
+        if node.type == 'GROUP' and (node.label == 'AIO DRS Engine' or node.name == 'DRS_Engine_Group'):
+            drs_group = node
+            break
+    if not drs_group:
+        return
+
+    use_param = getattr(obj.drs_material, 'bit_16', False)
+
+    # Find existing links
+    links_to_remove = []
+    for lk in list(nt.links):
+        if lk.to_node == drs_group and lk.to_socket.name in ("Parameter Map", "Parameter Map - Alpha"):
+            links_to_remove.append(lk)
+
+    # Disconnect everything first
+    for lk in links_to_remove:
+        nt.links.remove(lk)
+
+    if use_param and param_tex:
+        # Re-create links
+        if "Color" in param_tex.outputs and "Parameter Map" in drs_group.inputs:
+            nt.links.new(param_tex.outputs["Color"], drs_group.inputs["Parameter Map"])
+        if "Alpha" in param_tex.outputs and "Parameter Map - Alpha" in drs_group.inputs:
+            nt.links.new(param_tex.outputs["Alpha"], drs_group.inputs["Parameter Map - Alpha"])
+    else:
+        # Set sane defaults when disabled (match interface defaults in the group)
+        if "Parameter Map" in drs_group.inputs:
+            try:
+                drs_group.inputs["Parameter Map"].default_value = (0.0, 0.8, 0.0, 0.0)
+            except Exception:
+                pass
+        if "Parameter Map - Alpha" in drs_group.inputs:
+            drs_group.inputs["Parameter Map - Alpha"].default_value = 0.0
+
+def _update_normal_connection(obj):
+    """Bit 17: toggles links from Normal Map image to the group input and keeps Normal flat when off."""
+    if not obj or obj.type != 'MESH' or not obj.active_material or not obj.active_material.use_nodes:
+        return
+    mat = obj.active_material
+    nt = mat.node_tree
+
+    normal_tex = _find_node_by_label_or_name(nt, 'TEX_IMAGE', 'Normal Map (_nor)') or \
+                 _find_node_by_label_or_name(nt, 'TEX_IMAGE', 'Normal Map')
+    drs_group = None
+    for node in nt.nodes:
+        if node.type == 'GROUP' and (node.label == 'AIO DRS Engine' or node.name == 'DRS_Engine_Group'):
+            drs_group = node
+            break
+    if not drs_group:
+        return
+
+    use_normal = getattr(obj.drs_material, 'bit_17', False)
+
+    # Remove existing normal map input link
+    for lk in list(nt.links):
+        if lk.to_node == drs_group and lk.to_socket.name == "Normal Map":
+            nt.links.remove(lk)
+
+    if use_normal and normal_tex and "Color" in normal_tex.outputs and "Normal Map" in drs_group.inputs:
+        nt.links.new(normal_tex.outputs["Color"], drs_group.inputs["Normal Map"])
+    else:
+        # Flat normal (zero vector) when disabled
+        if "Normal Map" in drs_group.inputs:
+            try:
+                drs_group.inputs["Normal Map"].default_value = (0.0, 0.0, 0.0)
+            except Exception:
+                pass
+
+def _update_refraction_connection(obj):
+    """Bit 18: toggles the refraction branch back to Opaque BSDF when off, and reinstates it when on."""
+    if not obj or obj.type != 'MESH' or not obj.active_material or not obj.active_material.use_nodes:
+        return
+    mat = obj.active_material
+    nt = mat.node_tree
+
+    # Core nodes created by DRSMaterial when _ref is present:
+    drs_bsdf = None
+    mat_output = None
+    final_mix = None
+    mix_refraction = None
+
+    for node in nt.nodes:
+        if node.type == 'BSDF_PRINCIPLED' and node.name == 'DRS Shader':
+            drs_bsdf = node
+        elif node.type == 'OUTPUT_MATERIAL':
+            mat_output = node
+        elif node.type == 'MIX_SHADER' and node.label == '':  # label may be empty; we locate by inputs
+            # we'll identify by structure later
+            pass
+
+    # Find the exact nodes by structure
+    for node in nt.nodes:
+        if node.type == 'MIX_SHADER':
+            # final_mix: its inputs[1] is the main BSDF, inputs[2] is a MixShader (glass branch)
+            if node.inputs.get(1) and node.inputs.get(2):
+                src1 = node.inputs[1].links[0].from_node if node.inputs[1].is_linked else None
+                src2 = node.inputs[2].links[0].from_node if node.inputs[2].is_linked else None
+                if src1 and drs_bsdf and src1 == drs_bsdf and src2 and src2.type == 'MIX_SHADER':
+                    final_mix = node
+                    mix_refraction = src2
+                    break
+
+    if not drs_bsdf or not mat_output:
+        return
+
+    use_refraction = getattr(obj.drs_material, 'bit_18', False)
+
+    # Current output link
+    out_link = None
+    for lk in list(nt.links):
+        if lk.to_node == mat_output and lk.to_socket.name == "Surface":
+            out_link = lk
+            break
+
+    if use_refraction:
+        # Ensure the final_mix drives the output, if the chain exists
+        if final_mix:
+            # If output is not coming from final_mix, rewire it
+            if not (out_link and out_link.from_node == final_mix):
+                if out_link:
+                    nt.links.remove(out_link)
+                nt.links.new(final_mix.outputs[0], mat_output.inputs["Surface"])
+        # If refraction nodes were never built (e.g., modules didn’t include "_ref"), we do nothing.
+        return
+
+    # Disabled: route plain BSDF to output
+    if out_link:
+        nt.links.remove(out_link)
+    nt.links.new(drs_bsdf.outputs[0], mat_output.inputs["Surface"])
+
 def _update_wind_nodes_logic(drs_wind_pg):
     """
     Finds the GN modifier and updates the named nodes
@@ -230,6 +378,22 @@ def _on_bit_1_changed(self, ctx):
     obj = ctx.object if hasattr(ctx, 'object') else None
     _update_alpha_connection(obj)
 
+def _on_bit_16_changed(self, ctx):
+    _on_bit_changed(self, ctx)
+    obj = ctx.object if hasattr(ctx, 'object') else None
+    _update_parameter_connection(obj)
+
+def _on_bit_17_changed(self, ctx):
+    _on_bit_changed(self, ctx)
+    obj = ctx.object if hasattr(ctx, 'object') else None
+    _update_normal_connection(obj)
+
+def _on_bit_18_changed(self, ctx):
+    _on_bit_changed(self, ctx)
+    obj = ctx.object if hasattr(ctx, 'object') else None
+    _update_refraction_connection(obj)
+
+
 class DRS_MaterialFlagsPG(PropertyGroup):
     bool_parameter: IntProperty(
         name="Raw bool_parameter",
@@ -239,6 +403,19 @@ class DRS_MaterialFlagsPG(PropertyGroup):
         update=_on_raw_changed,
     )  # type: ignore
 
+def _bit_prop_factory(idx):
+    if idx == 0:
+        return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(0, f"Flag {idx}"), update=_on_bit_0_changed)
+    if idx == 1:
+        return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(1, f"Flag {idx}"), update=_on_bit_1_changed)
+    if idx == 16:
+        return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(16, f"Flag {idx}"), update=_on_bit_16_changed)
+    if idx == 17:
+        return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(17, f"Flag {idx}"), update=_on_bit_17_changed)
+    if idx == 18:
+        return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(18, f"Flag {idx}"), update=_on_bit_18_changed)
+    # default
+    return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(idx, f"Unknown Bitflag #{idx}"), update=_on_bit_changed)
 
 # --- Flow PG ------------------------------------------------------------------
 class DRS_FlowPG(PropertyGroup):
@@ -408,16 +585,8 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    # Dynamically add bit_0..bit_31 BoolProperties
     for i in range(_MAX_BITS):
-        # Use special update callback for bit_0 (Enable Alpha Test)
-        update_func = _on_bit_0_changed if i == 0 else (_on_bit_1_changed if i == 1 else _on_bit_changed)
-        
-        setattr(
-            DRS_MaterialFlagsPG,
-            f"bit_{i}",
-            BoolProperty(name=f"Bit {i}", default=False, update=update_func),
-        )
+        setattr(DRS_MaterialFlagsPG, f"bit_{i}", _bit_prop_factory(i))
 
     bpy.types.Object.drs_material = PointerProperty(type=DRS_MaterialFlagsPG)  # type: ignore
     bpy.types.Object.drs_flow = PointerProperty(type=DRS_FlowPG)  # type: ignore
