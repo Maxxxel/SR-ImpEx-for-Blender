@@ -241,6 +241,7 @@ def _update_refraction_connection(obj):
     if use_refraction:
         try:
             if mix_refraction:
+                mat.use_backface_culling  = True
                 mix_refraction.mute = False
         except Exception:
             pass
@@ -249,6 +250,7 @@ def _update_refraction_connection(obj):
     try:
         if mix_refraction:
             mix_refraction.mute = True
+            mat.use_backface_culling  = False
     except Exception:
         pass
 

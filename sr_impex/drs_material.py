@@ -137,13 +137,11 @@ class DRSMaterial:
         def_out(tree, "Refraction BSDF", SOCKET_SHADER)
 
         # Fluid Animation Outputs
-        # if "_par" in self.modules:
         def_out(tree, "Flu Offset (Layer 1)", SOCKET_VECTOR)
         def_out(tree, "Flu Offset (Layer 2)", SOCKET_VECTOR)
         def_out(tree, "Flu Crossfade", SOCKET_FLOAT)
 
         # --- 2. Build Fluid Animation Logic ("_par" module) ---
-        # if "_par" in self.modules:
         # This function is now self-contained and just links to inputs/outputs
         self._create_flu_animation_nodes(tree, inp, outp)
 
@@ -154,28 +152,6 @@ class DRSMaterial:
         sep_param.label = "Split Parameter Map"
         sep_param.location = (-2200, 200)
         links.new(inp.outputs["Parameter Map"], sep_param.inputs[0])
-        
-        # Refraction Map Range
-        map_range_ref = nodes.new("ShaderNodeMapRange")
-        map_range_ref.label = "Refraction Map Range"
-        map_range_ref.location = (-1700, 900)
-        # 0.0, 1.0, 1.0, 0.96
-        map_range_ref.inputs['From Min'].default_value = 0.0
-        map_range_ref.inputs['From Max'].default_value = 1.0
-        map_range_ref.inputs['To Min'].default_value = 1.0
-        map_range_ref.inputs['To Max'].default_value = 0.96
-        links.new(inp.outputs["Refraction Map"], map_range_ref.inputs['Value'])
-        
-        # Refraction BSDF
-        # We use Beckmann
-        refraction_bsdf = nodes.new("ShaderNodeBsdfGlass")
-        refraction_bsdf.label = "Refraction BSDF"
-        refraction_bsdf.location = (-1200, 900)
-        refraction_bsdf.distribution = 'BECKMANN'
-        refraction_bsdf.inputs["Roughness"].default_value = 1.0
-        links.new(inp.outputs["Refraction Color"], refraction_bsdf.inputs["Color"])
-        links.new(map_range_ref.outputs['Result'], refraction_bsdf.inputs["IOR"])
-        links.new(refraction_bsdf.outputs['BSDF'], outp.inputs["Refraction BSDF"])
 
         # Mix Metallic
         mix_met = nodes.new("ShaderNodeMix")
@@ -218,15 +194,56 @@ class DRSMaterial:
         links.new(mix_flu_mask.outputs['Result'], outp.inputs["Flu Mask"])    # Link to Group Output
 
         # --- 4. Normal Map Logic ---
-        # if "_nor" in self.modules:
         norm_map_node = nodes.new("ShaderNodeNormalMap")
         norm_map_node.label = "Normal Map"
         norm_map_node.location = (800, -300)
         links.new(inp.outputs["Normal Map"], norm_map_node.inputs["Color"])
         links.new(norm_map_node.outputs["Normal"], outp.inputs["Normal"])
-        # else:
-        #     # Pass through an empty vector if no normal map
-        #     links.new(inp.outputs["Normal Map"], outp.inputs["Normal"])
+
+        # --- 5. Refraction BSDF Logic ---
+        # Refraction BSDF by Selkie
+        # Refraction Map Range
+        # map_range_ref = nodes.new("ShaderNodeMapRange")
+        # map_range_ref.label = "Refraction Map Range"
+        # map_range_ref.location = (-1700, 900)
+        # # 0.0, 1.0, 1.0, 0.96
+        # map_range_ref.inputs['From Min'].default_value = 0.0
+        # map_range_ref.inputs['From Max'].default_value = 1.0
+        # map_range_ref.inputs['To Min'].default_value = 1.0
+        # map_range_ref.inputs['To Max'].default_value = 0.96
+        # links.new(inp.outputs["Refraction Map"], map_range_ref.inputs['Value'])
+        
+        # refraction_bsdf = nodes.new("ShaderNodeBsdfGlass")
+        # refraction_bsdf.label = "Refraction BSDF"
+        # refraction_bsdf.location = (-1200, 900)
+        # refraction_bsdf.distribution = 'BECKMANN'
+        # refraction_bsdf.inputs["Roughness"].default_value = 1.0
+        # links.new(inp.outputs["Refraction Color"], refraction_bsdf.inputs["Color"])
+        # links.new(map_range_ref.outputs['Result'], refraction_bsdf.inputs["IOR"])
+        # links.new(refraction_bsdf.outputs['BSDF'], outp.inputs["Refraction BSDF"])
+        
+        # Refraction BSDF by Maxxxel
+        refraction_bsdf = nodes.new("ShaderNodeBsdfGlass")
+        refraction_bsdf.location = (-1200, 900)
+        refraction_bsdf.distribution = 'BECKMANN'
+        transparent_bsdf = nodes.new("ShaderNodeBsdfTransparent")
+        transparent_bsdf.location = (-1200, 1200)
+        invert_refraction_map = nodes.new("ShaderNodeInvert")
+        invert_refraction_map.location = (-1200, 1400)
+        invert_refraction_map.label = "Invert Refraction Map"
+        invert_refraction_map.inputs["Fac"].default_value = 0.5 # Fine Tune it!
+        refraction_transparent_mix = nodes.new("ShaderNodeMixShader")
+        refraction_transparent_mix.location = (-800, 1050)
+        refraction_transparent_mix.label = "Refraction/Transparent Mix"
+        links.new(inp.outputs["Refraction Color"], refraction_bsdf.inputs["Color"])
+        links.new(inp.outputs["Refraction Color"], transparent_bsdf.inputs["Color"])
+        links.new(inp.outputs["Refraction Map"], invert_refraction_map.inputs["Color"])
+        links.new(invert_refraction_map.outputs["Color"], refraction_transparent_mix.inputs["Fac"])
+        links.new(refraction_bsdf.outputs['BSDF'], refraction_transparent_mix.inputs[1])
+        links.new(transparent_bsdf.outputs['BSDF'], refraction_transparent_mix.inputs[2])
+        links.new(refraction_transparent_mix.outputs['Shader'], outp.inputs["Refraction BSDF"])
+        links.new(norm_map_node.outputs["Normal"], refraction_bsdf.inputs["Normal"])
+        links.new(mix_rough.outputs['Result'], refraction_bsdf.inputs["Roughness"])
 
     def _create_flu_animation_nodes(self, tree, inp_node, outp_node):
         """Builds the 3D fluid animation graph inside the node group."""
@@ -433,7 +450,6 @@ class DRSMaterial:
         self.refraction_color_node.outputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
 
         # --- Create Fluid Nodes ---
-        # if "_par" in self.modules:
         self.flu_tex_node_L1 = nodes.new("ShaderNodeTexImage")
         self.flu_tex_node_L1.label = "Flu Map Layer 1"
         self.flu_tex_node_L1.location = (0, -300)
@@ -463,7 +479,7 @@ class DRSMaterial:
         links.new(self.group_node.outputs["Metallic"], self.bsdf_node.inputs["Metallic"])
         links.new(self.group_node.outputs["Roughness"], self.bsdf_node.inputs["Roughness"])
         links.new(self.group_node.outputs["Emission"], self.bsdf_node.inputs["Emission Strength"])
-        # if "_nor" in self.modules:
+
         links.new(self.group_node.outputs["Normal"], self.bsdf_node.inputs["Normal"])
 
         # --- Link Color Map -> BSDF ---
@@ -475,7 +491,6 @@ class DRSMaterial:
         # --- Final Color & Shader Linking ---
         last_shader_node = self.bsdf_node # Start with the BSDF
 
-        # if "_par" in self.modules:
         # --- Build Fluid Color Mixing Chain ---
         mix_flu_layers = self.material.node_tree.nodes.new("ShaderNodeMix")
         mix_flu_layers.label = "Crossfade Flu Layers"
@@ -504,11 +519,7 @@ class DRSMaterial:
 
         # Link Final Color -> BSDF
         links.new(mix_color_flu.outputs[2], self.bsdf_node.inputs["Base Color"])
-        # else:
-            # No fluid, just link Color Map directly
-            # links.new(self.color_tex_node.outputs["Color"], self.bsdf_node.inputs["Base Color"])
 
-        # if "_ref" in self.modules:
         # --- Build Refraction Mixing Chain ---
         links.new(self.refraction_color_node.outputs["Color"], self.group_node.inputs["Refraction Color"])
         links.new(self.refraction_tex_node.outputs["Color"], self.group_node.inputs["Refraction Map"])
