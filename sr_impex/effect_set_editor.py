@@ -487,13 +487,13 @@ def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
 def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
     eff = DRS_EffectSet()
     eff.type = int(blob.get("type", 12) or 12)
-    eff.checksum = str(blob.get("checksum", "") or "")
+    eff.checksum = str(blob.get("checksum", ""))
     eff.checksum_length = len(eff.checksum)
 
     eff.skel_effekts = []
     for ed in (blob.get("effects") or []):
         se = DRS_SkelEff()
-        ska = _norm_ska_name(ed.get("action", "") or "")
+        ska = _norm_ska_name(ed.get("action", ""))
         se.name = ska
         se.length = len(se.name)
 
@@ -501,15 +501,15 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
         for kd in (ed.get("keyframes") or []):
             kf = DRS_Keyframe()
             kf.time = float(kd.get("time", 0.0) or 0.0)
-            kf.keyframe_type = int(kd.get("keyframe_type", 1) or 1)
-            kf.min_falloff = float(kd.get("min_falloff", 0.0) or 0.0)
-            kf.max_falloff = float(kd.get("max_falloff", 0.0) or 0.0)
+            kf.keyframe_type = int(kd.get("keyframe_type", 1))
+            kf.min_falloff = float(kd.get("min_falloff", 0.0))
+            kf.max_falloff = float(kd.get("max_falloff", 0.0))
             kf.volume = float(kd.get("volume", 1.0) or 1.0)
-            kf.pitch_shift_min = float(kd.get("pitch_shift_min", 0.0) or 0.0)
-            kf.pitch_shift_max = float(kd.get("pitch_shift_max", 0.0) or 0.0)
-            off = kd.get("offset", [0.0, 0.0, 0.0]) or [0.0, 0.0, 0.0]
+            kf.pitch_shift_min = float(kd.get("pitch_shift_min", 0.0))
+            kf.pitch_shift_max = float(kd.get("pitch_shift_max", 0.0))
+            off = kd.get("offset", [0.0, 0.0, 0.0])
             kf.offset = [float(off[0]), float(off[1]), float(off[2])]
-            kf.interruptable = 1 if int(kd.get("interruptable", 0) or 0) else 0
+            kf.interruptable = 1 if int(kd.get("interruptable", 0)) else 0
             cond = kd.get("condition", kd.get("uk", -1))
             kf.uk = int(-1 if cond is None else cond)
 

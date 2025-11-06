@@ -26,7 +26,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 5, 0),
-    "version": (3, 5, 0),
+    "version": (3, 6, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -231,6 +231,11 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         description="Import additional axis-aligned bounding box data.",
         default=False,
     )  # type: ignore
+    use_control_rig: BoolProperty(
+        name="Use Control Rig for IK",
+        description="Use a separate Control Rig for IK handling",
+        default=False,
+    )  # type: ignore
 
     def draw(self, context):
         # Auto-Update Integration: Addon Updater by using addon_updater_ops.check_for_update_background(context) in the beginning of the function and addon_updater_ops.update_notice_box_ui(self, context) at the end of the function
@@ -246,6 +251,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         layout.prop(self, "import_animation")
         layout.prop(self, "smooth_animation")
         layout.prop(self, "import_ik_atlas")
+        layout.prop(self, "use_control_rig")
         # Add a separator
         layout.separator()
         # Create a Modules Section
@@ -279,6 +285,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         keywords["import_animation"] = self.import_animation
         keywords["smooth_animation"] = self.smooth_animation
         keywords["import_ik_atlas"] = self.import_ik_atlas
+        keywords["use_control_rig"] = self.use_control_rig
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction
         keywords["import_debris"] = self.import_debris
@@ -398,7 +405,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         layout.separator()
         layout.label(text="MISC Settings", icon="PREFERENCES")
         layout.prop(self, "keep_debug_collections")
-        
+
 
     def invoke(self, context, event):
         # Retrieve the active collection from the active layer collection
@@ -493,7 +500,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
                 armature = next(
                     (o for o in armature_coll.objects if o.type == "ARMATURE" and not o.name.startswith("Control_Rig")), None
                 )
-                
+
         if armature is None:
             self.report({"ERROR"}, "No armature found in the selected collection")
             return {"CANCELLED"}
@@ -509,7 +516,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
         if not actions:
             self.report({"ERROR"}, "No actions found in the selected armature")
             return {"CANCELLED"}
-        
+
         # Get the first valid action
         first_action = next((act for act in actions if act != "None"), None)
         if first_action is None:
@@ -528,7 +535,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
         export_ska(context, self.filepath, self.action)
-        
+
         return {"FINISHED"}
 
 

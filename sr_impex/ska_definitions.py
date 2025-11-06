@@ -181,5 +181,6 @@ class SKA:
                 if self.type == 7:
                     file.write(pack("i", self.unused1))
                 file.write(pack("i", self.frame_length))
+                file.write(pack("3i", *self.zeroes))
             else:
                 print(f"Unknown SKA type: {self.type}.")

@@ -331,8 +331,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
 
     # Create a new SKA file and write the action data to it
     ska_file = SKA()
-    # We will use type 6 for now
-    ska_file.type = 6
+    ska_file.type = 7
     ska_file.duration = duration
     ska_file.repeat = action["repeat"] if "repeat" in action else 0
     ska_file.stutter_mode = 2  # smooth animation
@@ -348,5 +347,4 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     if not filepath.endswith(".ska"):
         filepath += ".ska"
     ska_file.write(filepath)
-    logger.log(f"Exported SKA file to {filepath} with {fps} FPS", "info", "INFO")
     logger.display()

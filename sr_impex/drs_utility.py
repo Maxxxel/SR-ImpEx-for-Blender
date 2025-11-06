@@ -100,7 +100,7 @@ from .effect_set_editor import (
     blob_to_effectset as _blob_to_effectset,
     EFFECT_BLOB_KEY,
 )
-from .material_flow_editor import _update_wind_geometry_nodes, _update_alpha_connection, _update_wind_nodes
+from .material_flow_editor import _update_wind_geometry_nodes, _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
 
 try:
     # when installed as a Blender add-on package
@@ -114,6 +114,7 @@ resource_dir = dirname(realpath(__file__)) + "/resources"
 texture_cache_col = {}
 texture_cache_nor = {}
 texture_cache_par = {}
+texture_cache_flu = {}
 texture_cache_ref = {}
 
 with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
@@ -651,7 +652,7 @@ def get_image_and_pixels(map_node, map_name):
 
     if img is None or not img.pixels:
         logger.log(
-            f"The {map_name} is set, but the Image is None. Please disconnect the Image from the Node if you don't want to use it!",
+            f"The {map_name} is set, but the Image is None.",
             "Info",
             "INFO",
         )
@@ -808,6 +809,7 @@ def load_static_bms_module(
         mesh_object, _ = create_mesh_object(
             drs_file, 0, dir_name, f"State_{mesh_state.state_num}", None
         )
+        setup_material_parameters(mesh_object, drs_file, 0)
         mesh_state_collection.objects.link(mesh_object)
         return mesh_object
 
@@ -850,6 +852,7 @@ def load_animated_bms_module(
         mesh_object, _ = create_mesh_object(
             drs_file, 0, dir_name, f"State_{mesh_state.state_num}", armature_object
         )
+        setup_material_parameters(mesh_object, drs_file, 0)
         mesh_state_collection.objects.link(mesh_object)
 
         # We need to parent the Mesh_object under the ArmatureObject
@@ -1515,6 +1518,45 @@ def _rewrite_anim_blob_variant_files(
         col[ANIM_BLOB_KEY] = json.dumps(b, separators=(",", ":"), ensure_ascii=False)
 
 
+def _rewrite_effectset_skeleff_names(
+    eff: "EffectSet",
+    name_map: dict[str, str],
+) -> None:
+    """
+    Update EffectSet.SkelEff.name to the local duplicate action names created
+    in _ensure_local_actions_with_prefix(). Also fixes the length field.
+
+    name_map: original (bare) → duplicate (bare) action name
+              e.g. {"skel_human_2h_idle1": "MyPrefix_idle1"}
+    """
+    if not eff or not getattr(eff, "skel_effekts", None) or not name_map:
+        return
+
+    def _norm(s: str) -> str:
+        s = (s or "").strip()
+        return s[:-4] if s.lower().endswith(".ska") else s
+
+    # Build a tolerant LUT (accept full / basename)
+    lut = {}
+    for k, v in (name_map or {}).items():
+        kb = _norm(k)
+        lut[kb] = v
+        lut[os.path.basename(kb)] = v
+
+    changed = False
+    for se in eff.skel_effekts or []:
+        cur = (getattr(se, "name", "") or "").strip()
+        key = _norm(cur)
+        new_name = lut.get(key) or lut.get(os.path.basename(key))
+        if new_name and new_name != cur:
+            # SkelEff.name should link to a SKA action name (no extension)
+            se.name = new_name
+            se.length = len(se.name)
+            changed = True
+
+    # nothing to store back here; EffectSet is a struct that will be written out later
+    return
+
 def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str) -> str:
     """
     Map 'skel_human_2h_idle1(.ska)' -> actual Action name (e.g. 'idle1').
@@ -1560,6 +1602,45 @@ def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str)
 
     return ""
 
+def _find_drs_bsdf(mat: bpy.types.Material):
+    if not mat or not mat.use_nodes:
+        return None
+    for n in mat.node_tree.nodes:
+        if n.type == 'BSDF_PRINCIPLED' and n.name == 'DRS Shader':
+            return n
+    return None
+
+def _find_by_label(mat: bpy.types.Material, node_type: str, *labels: str):
+    if not mat or not mat.use_nodes:
+        return None
+    for n in mat.node_tree.nodes:
+        if n.type == node_type and n.label in labels:
+            return n
+    return None
+
+def _first_image_upstream(socket: bpy.types.NodeSocket, max_depth: int = 16, keyword: str = None):
+    """Walk upstream from a socket until we hit a TEX_IMAGE node, else None."""
+    seen = set()
+    stack = [socket]
+    while stack and max_depth > 0:
+        max_depth -= 1
+        s = stack.pop()
+        if not getattr(s, "is_linked", False):
+            continue
+        src = s.links[0].from_node
+        if src in seen:   # avoid cycles
+            continue
+        seen.add(src)
+        if src.type == 'TEX_IMAGE' and getattr(src, "image", None) and (keyword is None or (keyword in src.label)):
+            return src.image
+        # push all inputs of the upstream node (follow the graph)
+        for in_s in getattr(src, "inputs", []):
+            if in_s.name == "Factor":
+                continue
+            if in_s.name == "Vector":
+                continue
+            stack.append(in_s)
+    return None
 
 
 # class DRS_OT_debug_obb_tree(bpy.types.Operator):
@@ -1886,7 +1967,6 @@ def import_csk_skeleton(
     return armature_object, bone_list
         
 
-
 def create_bone_weights(
     mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mesh_data: CGeoMesh
 ) -> list[BoneWeight]:
@@ -2010,6 +2090,10 @@ def create_mesh_object(
     )
     mesh_data.materials.append(material)
 
+    return mesh_object, mesh_data
+
+
+def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh_index: int):
     # after you've created `mesh_object` for mesh index `mesh_index`…
     # Seed Material flags + Flow custom props on the object so users can edit them.
     try:
@@ -2017,10 +2101,10 @@ def create_mesh_object(
         # bool_parameter
         if hasattr(mesh_object, "drs_material") and mesh_object.drs_material:
             mesh_object.drs_material.bool_parameter = int(bf_mesh.bool_parameter)
-            # ensure bits reflect the value
-            # (update callback in the PG expands bits from the raw int)
-            # Also ensure the alpha connection in the shader graph matches the Enable Alpha Test flag
             _update_alpha_connection(mesh_object)
+            _update_parameter_connection(mesh_object)
+            _update_refraction_connection(mesh_object)
+            _update_flu_apply_mask_state(mesh_object)
         # flow
         if hasattr(mesh_object, "drs_flow") and mesh_object.drs_flow:
             f = bf_mesh.flow
@@ -2052,6 +2136,8 @@ def create_mesh_object(
                     f.flow_scale.z,
                     f.flow_scale.w,
                 )
+            
+            _update_flow_nodes(mesh_object.drs_flow)
         # wind
         if hasattr(mesh_object, "drs_wind") and mesh_object.drs_wind:
             # get data from materials list
@@ -2069,8 +2155,6 @@ def create_mesh_object(
     except Exception:
         # keep import robust if the PGs are not available for some reason
         pass
-
-    return mesh_object, mesh_data
 
 
 def setup_armature(source_collection, drs_file: DRS, locator_prefix: str = ""):
@@ -2106,12 +2190,14 @@ def create_material(
 
     # Set Alpha Test based on bool_parameter bit 0
     use_alpha_test = mesh_data.bool_parameter & (1 << 0)
+    # Set Decal Mode based on bool_parameter bit 1.
+    use_decal_mode = mesh_data.bool_parameter & (1 << 1)
 
     for texture in mesh_data.textures.textures:
         if texture.length > 0:
             match texture.identifier:
                 case 1684432499:
-                    drs_material.set_color_map(texture.name, dir_name, use_alpha_test)
+                    drs_material.set_color_map(texture.name, dir_name, use_alpha_test, use_decal_mode)
                 case 1936745324:
                     drs_material.set_parameter_map(texture.name, dir_name)
                 case 1852992883:
@@ -2120,6 +2206,8 @@ def create_material(
                     drs_material.set_refraction_map(
                         texture.name, dir_name, mesh_data.refraction.rgb
                     )
+                case 1668510770:
+                    drs_material.set_flumap(texture.name, dir_name)
     
     if mesh_object:
         drs_material.create_wind_nodes(mesh_object)
@@ -2560,6 +2648,7 @@ def load_drs(
     import_animation=True,
     smooth_animation=True,
     import_ik_atlas=False,
+    use_control_rig=False,
     import_modules=True,
     import_geomesh=False,
     import_obbtree=False,
@@ -2591,6 +2680,7 @@ def load_drs(
         mesh_object, _ = create_mesh_object(
             drs_file, mesh_index, dir_name, base_name, armature_object
         )
+        setup_material_parameters(mesh_object, drs_file, mesh_index)
         mesh_collection.objects.link(mesh_object)
 
     if drs_file.collision_shape is not None and import_collision_shape:
@@ -2605,6 +2695,7 @@ def load_drs(
             for animation_key in drs_file.animation_set.mode_animation_keys:
                 for variant in animation_key.animation_set_variants:
                     ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
+                    print(f"Importing Animation: {variant.file}")
                     # Create the Animation
                     import_ska_animation(
                         ska_file,
@@ -2660,7 +2751,7 @@ def load_drs(
     parent_under_game_axes(source_collection, apply_transform)
     
     # Create a duplicate of the armature and call it control_rig
-    if armature_object:
+    if use_control_rig and armature_object:
         # Select the armature object
         bpy.ops.object.select_all(action='DESELECT')
         armature_object.select_set(True)
@@ -2876,6 +2967,7 @@ def import_mesh_set_grid(
                             base_name,
                             armature_object,
                         )
+                        setup_material_parameters(mesh_object, drs_file, mesh_index)
                         state_meshes_collection.objects.link(mesh_object)
 
                     if drs_file.collision_shape is not None and import_collision_shape:
@@ -2967,6 +3059,8 @@ def load_bmg(
             )
             # Assign the Material to the Mesh
             mesh_data.materials.append(material_data)
+            # Material Parameters
+            setup_material_parameters(mesh_object, ground_decal, mesh_index)
             # Link the Mesh Object to the Source Collection
             ground_decal_collection.objects.link(mesh_object)
 
@@ -3593,199 +3687,158 @@ def create_cdsp_joint_map(
     return _joint_map
 
 
-def set_color_map(
-    color_map_node: bpy.types.Node,
-    new_mesh: BattleforgeMesh,
-    mesh_index: int,
-    model_name: str,
-    folder_path: str,
-) -> bool:
-    if color_map_node is None:
-        logger.log(
-            "The color_map is None. Please check the Material Node.", "Error", "ERROR"
-        )
+def set_color_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path) -> bool:
+    # resolve image
+    img = None
+    if hasattr(sock_or_node, "links"):         # socket
+        img = _first_image_upstream(sock_or_node, 16, "_col")
+    elif getattr(sock_or_node, "type", "") == 'TEX_IMAGE':
+        img = getattr(sock_or_node, "image", None)
+    if not img:
+        logger.log("Color map not found on the DRS Shader input chain.", "Error", "ERROR")
         return False
-
-    img = color_map_node.links[0].from_node.image
-    if img is None:
-        logger.log(
-            "The color_map Texture is not an Image or the Image is None!",
-            "Error",
-            "ERROR",
-        )
-        return False
-
-    # Update your new_mesh texture list as needed here
     new_mesh.textures.length += 1
-    color_map_texture = Texture()
-    color_map_texture.name = get_converted_texture(
-        img, model_name, mesh_index, folder_path, file_ending="_col", dxt_format="DXT5"
-    )
-    color_map_texture.length = len(color_map_texture.name)
-    color_map_texture.identifier = 1684432499
-    new_mesh.textures.textures.append(color_map_texture)
-
+    t = Texture()
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_col", dxt_format="DXT5")
+    t.length = len(t.name)
+    t.identifier = 1684432499
+    new_mesh.textures.textures.append(t)
     return True
 
 
-def set_normal_map(
-    normal_map_node: bpy.types.Node,
-    new_mesh: BattleforgeMesh,
-    mesh_index: int,
-    model_name: str,
-    folder_path: str,
-    bool_param_bit_flag: int,
-) -> int:
-    if normal_map_node is None:
-        logger.log(
-            "The normal_map is None. Please check the Material Node.", "Error", "ERROR"
-        )
-        return False
-
-    img = normal_map_node.links[0].from_node.image
-    if img is None:
-        logger.log(
-            "The normal_map Texture is not an Image or the Image is None!",
-            "Error",
-            "ERROR",
-        )
-        return False
-
+def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag: int) -> int:
+    img = None
+    if hasattr(sock_or_node, "links"):
+        img = _first_image_upstream(sock_or_node, 16, "_nor")
+    elif getattr(sock_or_node, "type", "") == 'TEX_IMAGE':
+        img = getattr(sock_or_node, "image", None)
+    if not img:
+        return bool_param_bit_flag
     new_mesh.textures.length += 1
-    normal_map_texture = Texture()
-    normal_map_texture.name = get_converted_texture(
-        img,
-        model_name,
-        mesh_index,
-        folder_path,
-        file_ending="_nor",
-        dxt_format="DXT1",
-        extra_args=["-at", "0.0"],
-    )
-    normal_map_texture.length = len(normal_map_texture.name)
-    normal_map_texture.identifier = 1852992883
-    new_mesh.textures.textures.append(normal_map_texture)
+    t = Texture()
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_nor", dxt_format="DXT1", extra_args=["-at","0.0"])
+    t.length = len(t.name)
+    t.identifier = 1852992883
+    new_mesh.textures.textures.append(t)
     bool_param_bit_flag += 100000000000000000
-
     return bool_param_bit_flag
 
 
 def set_metallic_roughness_emission_map(
-    metallic_map_node: bpy.types.Node,
-    roughness_map_node: bpy.types.Node,
-    emission_map_node: bpy.types.Node,
-    new_mesh: BattleforgeMesh,
-    mesh_index: int,
-    model_name: str,
-    folder_path: str,
-    bool_param_bit_flag: int,
+    metallic_src, roughness_src, emission_src, flu_mask_src,   # NEW: flu_mask_src
+    new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag: int
 ) -> int:
+    # resolve images from sockets/nodes
+    img_r = _first_image_upstream(metallic_src)  if hasattr(metallic_src, "links")  else (metallic_src.image  if metallic_src else None)
+    img_g = _first_image_upstream(roughness_src) if hasattr(roughness_src, "links") else (roughness_src.image if roughness_src else None)
+    img_b = _first_image_upstream(flu_mask_src)  if hasattr(flu_mask_src, "links")  else (flu_mask_src.image  if flu_mask_src else None)
+    img_a = _first_image_upstream(emission_src)  if hasattr(emission_src, "links")  else (emission_src.image  if emission_src else None)
 
-    # Check if any of the maps are linked
-    if not any(
-        map_node and map_node.is_linked
-        for map_node in [metallic_map_node, roughness_map_node, emission_map_node]
-    ):
+    # If nothing is present, bail
+    if not any([img_r, img_g, img_a, img_b]):
         return -1
 
-    # Retrieve images and pixels
-    img_r, pixels_r = get_image_and_pixels(metallic_map_node, "metallic_map")
-    img_g, pixels_g = get_image_and_pixels(roughness_map_node, "roughness_map")
-    img_a, pixels_a = get_image_and_pixels(emission_map_node, "emission_map")
+    # load pixels (you already have get_image_and_pixels)
+    _, px_r = get_image_and_pixels(metallic_src, "metallic_map")  if metallic_src else (None, None)
+    _, px_g = get_image_and_pixels(roughness_src,"roughness_map") if roughness_src else (None, None)
+    _, px_b = get_image_and_pixels(flu_mask_src, "flu_mask")      if flu_mask_src else (None, None)
+    _, px_a = get_image_and_pixels(emission_src, "emission_map")  if emission_src else (None, None)
 
-    # Determine image dimensions
-    for img in [img_r, img_g, img_a]:
-        if img:
-            width, height = img.size
-            break
-    else:
-        logger.log(
-            "No Image is set for the parameter map. Please set an Image!",
-            "Info",
-            "INFO",
-        )
-        return -1
+    # pick size from first available image
+    base_img = next(i for i in [img_r, img_g, img_b, img_a] if i)
+    width, height = base_img.size
 
-    # Combine the images into a new image
-    new_img = bpy.data.images.new(
-        name="temp_image", width=width, height=height, alpha=True, float_buffer=False
-    )
+    new_img = bpy.data.images.new(name="temp_image", width=width, height=height, alpha=True, float_buffer=False)
     new_pixels = []
-    total_pixels = width * height * 4
-
-    for i in range(0, total_pixels, 4):
-        new_pixels.extend(
-            [
-                pixels_r[i] if pixels_r else 0,  # Red channel
-                pixels_g[i + 1] if pixels_g else 0,  # Green channel
-                0,  # Blue channel (placeholder for Fluid Map)
-                pixels_a[i + 3] if pixels_a else 0,  # Alpha channel
-            ]
-        )
-
+    total = width*height*4
+    for i in range(0, total, 4):
+        new_pixels.extend([
+            px_r[i]     if px_r else 0,      # R = Metallic
+            px_g[i+1]   if px_g else 0,      # G = Roughness
+            px_b[i+2]   if px_b else 0,      # B = Flu Mask
+            px_a[i+3]   if px_a else 0,      # A = Emission
+        ])
     new_img.pixels[:] = new_pixels
     new_img.file_format = "PNG"
     new_img.alpha_mode = "CHANNEL_PACKED"
     new_img.update()
-    # new_img.colorspace_settings.name = "Non-Color"
 
-    # Update mesh textures and flags
     new_mesh.textures.length += 1
-    metallic_map_texture = Texture()
-    metallic_map_texture.name = get_converted_texture(
-        new_img,
-        model_name,
-        mesh_index,
-        folder_path,
-        file_ending="_par",
-        dxt_format="DXT5",
-        extra_args=["-bc", "d"],
-    )
-    metallic_map_texture.length = len(metallic_map_texture.name)
-    metallic_map_texture.identifier = 1936745324
-    new_mesh.textures.textures.append(metallic_map_texture)
+    t = Texture()
+    t.name = get_converted_texture(new_img, model_name, mesh_index, folder_path, file_ending="_par", dxt_format="DXT5", extra_args=["-bc","d"])
+    t.length = len(t.name)
+    t.identifier = 1936745324
+    new_mesh.textures.textures.append(t)
     bool_param_bit_flag += 10000000000000000
-
     return bool_param_bit_flag
 
 
-def set_refraction_color_and_map(
-    refraction_color_node: bpy.types.Node,
-    refraction_map_node: bpy.types.Node,
-    new_mesh: BattleforgeMesh,
-    mesh_index: int,
-    model_name: str,
-    folder_path: str,
-) -> List[float]:
-    # Check if the Refraction Color is set
-    if refraction_color_node is None:
-        return [0.0, 0.0, 0.0]
+def set_flu_map_from_material(mat: bpy.types.Material,
+                              new_mesh,
+                              mesh_index: int,
+                              model_name: str,
+                              folder_path: str) -> bool:
+    """
+    Export the Flu tile map (_flu) if present in the material.
+    Looks for 'Flu Map Layer 1' or 'Flu Map Layer 2' image nodes created by DRSMaterial.
+    """
+    if not mat or not mat.use_nodes:
+        return False
 
-    refraction_color_parent = refraction_color_node.links[0].from_node
-    rgb = list(refraction_color_parent.outputs[0].default_value)
-    # Delete the Alpha Channel
-    del rgb[3]
+    nt = mat.node_tree
+    flu_img = None
 
-    refraction_map_parent = refraction_map_node.links[0].from_node
-    img = refraction_map_parent.image
+    # Find either Flu L1 or L2; both point to the same image in DRSMaterial
+    for n in nt.nodes:
+        if n.type == 'TEX_IMAGE' and (n.label in {'Flu Map Layer 1', 'Flu Map Layer 2'}):
+            flu_img = n.image
+            if flu_img:
+                break
 
+    if not flu_img:
+        return False
+
+    # Write texture record
+    new_mesh.textures.length += 1
+    t = Texture()
+    t.name = get_converted_texture(
+        flu_img,
+        model_name,
+        mesh_index,
+        folder_path,
+        file_ending="_flu",
+        dxt_format="DXT5"
+    )
+    t.length = len(t.name)
+    t.identifier = 1668510770  # Flu identifier used by importer to call set_flumap(...)
+    new_mesh.textures.textures.append(t)
+    return True
+
+
+def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new_mesh, mesh_index, model_name, folder_path) -> List[float]:
+    # default color
+    rgb = [0.0, 0.0, 0.0]
+    if not refraction_color_node or not refraction_color_node.is_linked:
+        return rgb
+    ref_parent = refraction_color_node.links[0].from_node
+    col = list(getattr(ref_parent.outputs[0], "default_value", (0,0,0,1)))
+    if len(col) >= 3:
+        rgb = col[:3]
+
+    if not refraction_map_node or not refraction_map_node.is_linked:
+        return rgb
+
+    img = getattr(refraction_map_node.links[0].from_node, "image", None)
     if img is None:
-        logger.log(
-            "The refraction_map Texture is not an Image or the Image is None!",
-            "Error",
-            "ERROR",
-        )
-        return [0.0, 0.0, 0.0]
+        logger.log("The refraction_map Texture is not an Image or the Image is None!", "Info", "INFO")
+        return rgb
 
     new_mesh.textures.length += 1
-    refraction_map_texture = Texture()
-    refraction_map_texture.name = get_converted_texture(
-        img, model_name, mesh_index, folder_path, file_ending="_ref", dxt_format="DXT5"
-    )
-    refraction_map_texture.length = len(refraction_map_texture.name)
-    refraction_map_texture.identifier = 1919116143
-    new_mesh.textures.textures.append(refraction_map_texture)
-
+    t = Texture()
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_ref", dxt_format="DXT5")
+    t.length = len(t.name)
+    t.identifier = 1919116143
+    new_mesh.textures.textures.append(t)
     return rgb
 
 
@@ -3912,35 +3965,58 @@ def create_mesh(
     mesh_material = mesh.material_slots[0].material
     material_nodes = mesh_material.node_tree.nodes
     # Find the DRS Node
-    color_map = None
-    # alpha_map = None # Needed?
-    metallic_map = None
-    roughness_map = None
-    emission_map = None
-    normal_map = None
-    refraction_map = None
-    refraction_color = None
     flu_map = None
     skip_normal_map = True
     skip_param_map = True
 
-    for node in material_nodes:
-        if node.type == "GROUP":
-            if node.node_tree.name.find("DRS") != -1:
-                color_map = node.inputs[0]
-                # alpha_map = node.inputs[1] # Needed?
-                if len(node.inputs) >= 5:
-                    metallic_map = node.inputs[2]
-                    roughness_map = node.inputs[3]
-                    emission_map = node.inputs[4]
-                    skip_param_map = False
-                if len(node.inputs) >= 6:
-                    normal_map = node.inputs[5]
-                    skip_normal_map = False
-                if len(node.inputs) >= 8:
-                    refraction_color = node.inputs[6]
-                    refraction_map = node.inputs[7]
+    mat = mesh.active_material if hasattr(mesh, "active_material") else None
+    bsdf = _find_drs_bsdf(mat)  # Principled named "DRS Shader" (created in material builder) :contentReference[oaicite:1]{index=1}
+    group = None
+    if mat and mat.use_nodes:
+        for n in mat.node_tree.nodes:
+            if n.type == 'GROUP' and (n.label == 'AIO DRS Engine' or n.name == 'DRS_Engine_Group'):
+                group = n
                 break
+
+    # BSDF inputs we care about (these are stable names)
+    base_color_in = bsdf.inputs.get("Base Color")   if bsdf else None
+    metallic_in   = bsdf.inputs.get("Metallic")     if bsdf else None
+    roughness_in  = bsdf.inputs.get("Roughness")    if bsdf else None
+    alpha_in      = bsdf.inputs.get("Alpha")        if bsdf else None
+    normal_in     = bsdf.inputs.get("Normal")       if bsdf else None
+
+    # Flu map images live in labeled nodes created by the material builder
+    flu_tex_l1 = _find_by_label(mat, 'TEX_IMAGE', 'Flu Map Layer 1', 'Flu Map Layer 2')  # either one suffices :contentReference[oaicite:2]{index=2}
+
+    # For Flu Mask (B) prefer the engine output (semantic source). It’s a VALUE output, not an image,
+    # so for packing we fall back to the artist override image if present, otherwise we’ll use 0.
+    flu_mask_src = None
+    if group and "Flu Mask" in group.outputs:
+        flu_mask_src = group.outputs["Flu Mask"]  # tells us Flu Mask exists in the graph :contentReference[oaicite:3]{index=3}
+    # Provide an image when available (artist override)
+    flu_mask_img_node = _find_by_label(mat, 'TEX_IMAGE', 'Separate Flu Mask')
+
+    # Artist override maps (images) — used to assemble _par
+    metal_img_node     = _find_by_label(mat, 'TEX_IMAGE', 'Separate Metallic')
+    rough_img_node     = _find_by_label(mat, 'TEX_IMAGE', 'Separate Roughness')
+    emis_img_node      = _find_by_label(mat, 'TEX_IMAGE', 'Separate Emission')
+    param_img_node     = _find_by_label(mat, 'TEX_IMAGE', 'Parameter Map (_par)')  # optional fallback
+    color_img_node     = _find_by_label(mat, 'TEX_IMAGE', 'Color Map (_col)')
+    normal_img_node    = _find_by_label(mat, 'TEX_IMAGE', 'Normal Map (_nor)')
+    
+    # Assure we have .image not None
+    if metal_img_node and not getattr(metal_img_node, "image", None):
+        metal_img_node = None
+    if rough_img_node and not getattr(rough_img_node, "image", None):
+        rough_img_node = None
+    if emis_img_node and not getattr(emis_img_node, "image", None):
+        emis_img_node = None
+    if param_img_node and not getattr(param_img_node, "image", None):
+        param_img_node = None
+    if color_img_node and not getattr(color_img_node, "image", None):
+        color_img_node = None
+    if normal_img_node and not getattr(normal_img_node, "image", None):
+        normal_img_node = None
 
     # if flu_map is None or flu_map.is_linked is False:
     # new_mesh.material_parameters = -86061055
@@ -3966,76 +4042,59 @@ def create_mesh(
     # Textures
     new_mesh.textures = Textures()
 
-    # Check if the Color Map is set
-    try:
-        if not set_color_map(color_map, new_mesh, mesh_index, model_name, folder_path):
-            return None, per_mesh_bone_data
-    except Exception as e: # pylint: disable=broad-except
-        logger.log(
-            f"An error occurred while setting the Color Map for mesh {mesh.name}: {e}",
-            "Error",
-            "ERROR",
-        )
-        return None, per_mesh_bone_data
-
-    # Check if the Normal Map is set
-    if not skip_normal_map:
-        try:
-            bool_param_bit_flag = set_normal_map(
-                normal_map,
-                new_mesh,
-                mesh_index,
-                model_name,
-                folder_path,
-                bool_param_bit_flag,
-            )
-        except Exception as e: # pylint: disable=broad-except
-            logger.log(
-                f"An error occurred while setting the Normal Map for mesh {mesh.name}: {e}",
-                "Error",
-                "ERROR",
-            )
-            return None, per_mesh_bone_data
-
-    # Check if the Metallic, Roughness and Emission Map is set
-    if not skip_param_map:
-        try:
-            bool_param_bit_flag = set_metallic_roughness_emission_map(
-                metallic_map,
-                roughness_map,
-                emission_map,
-                new_mesh,
-                mesh_index,
-                model_name,
-                folder_path,
-                bool_param_bit_flag,
-            )
-            if bool_param_bit_flag == -1:
-                return None, per_mesh_bone_data
-        except Exception as e: # pylint: disable=broad-except
-            logger.log(
-                f"An error occurred while setting the Parameter Map for mesh {mesh.name}: {e}",
-                "Error",
-                "ERROR",
-            )
-            return None, per_mesh_bone_data
-
-    # Set the Bool Parameter by a bin -> dec conversion
-    new_mesh.bool_parameter = int(str(bool_param_bit_flag), 2)
-    
-    # --- SR override from UI: if the mesh has drs_material set, prefer that value
+    # Gather user flags
+    user_flags = 0
     try:
         mp = getattr(mesh, "drs_material", None)
-        if mp and int(mp.bool_parameter) >= 0:
-            new_mesh.bool_parameter = int(mp.bool_parameter) & 0xFFFFFFFF
+        if mp:
+            user_flags = int(mp.bool_parameter)
     except Exception:
-        logger.log(
-            f"An error occurred while setting the Bool Parameter override for mesh {mesh.name}.",
-            "Warning",
-            "WARNING",
+        user_flags = 0
+
+    def _bit(i: int) -> bool:
+        return (user_flags >> i) & 1
+
+    # --- COLOR / ALPHA from BSDF chain ---
+    # Color map is required → resolve from BSDF.Base Color chain (falls back to the labeled image)
+    color_src = base_color_in if (base_color_in and base_color_in.is_linked) else color_img_node
+    if not set_color_map(color_src, new_mesh, mesh_index, model_name, folder_path):
+        print(f"Failed to set color map for mesh {mesh.name}. Aborting mesh export.")
+        return None, per_mesh_bone_data
+
+    # --- NORMAL from BSDF chain (bit 17) ---
+    if _bit(17):
+        normal_src = normal_in if (normal_in and normal_in.is_linked) else normal_img_node
+        bool_param_bit_flag = set_normal_map(
+            normal_src, new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag
         )
-        pass
-    new_mesh.materials = Materials()
+
+    # --- PARAM (_par) from artist images (bit 16) ---
+    if _bit(16):
+        # Metallic / Roughness / Emission image sources
+        mr_src_r = metal_img_node or (param_img_node.outputs['Color'] if param_img_node else None)
+        mr_src_g = rough_img_node or (param_img_node.outputs['Color'] if param_img_node else None)
+        mr_src_a = emis_img_node  or (param_img_node.outputs['Alpha'] if param_img_node else None)
+        mr_src_b = flu_mask_src or (flu_mask_img_node if flu_mask_img_node else None)
+
+        bool_param_bit_flag = set_metallic_roughness_emission_map(
+            mr_src_r, mr_src_g, mr_src_a, mr_src_b,
+            new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag
+        )
+        if bool_param_bit_flag == -1:
+            return None, per_mesh_bone_data
+        
+    # --- FLU map image (behind bit 16, same enable as the par system) ---
+    if _bit(16) and flu_tex_l1 and getattr(flu_tex_l1, "image", None):
+        new_mesh.textures.length += 1
+        t = Texture()
+        t.name = get_converted_texture(flu_tex_l1.image, model_name, mesh_index, folder_path, file_ending="_flu", dxt_format="DXT5")
+        t.length = len(t.name)
+        t.identifier = 1668510770
+        new_mesh.textures.textures.append(t)
+
+    # Alpha Test bit 0
+    if _bit(0):
+        bool_param_bit_flag += 1
 
     # --- SR override Flow from UI (only when enabled)
     try:
@@ -4079,16 +4138,19 @@ def create_mesh(
     # Refraction
     refraction = Refraction()
     refraction.length = 1
-    refraction.rgb = set_refraction_color_and_map(
-        refraction_color, refraction_map, new_mesh, mesh_index, model_name, folder_path
-    )
+    # if refraction_color and refraction_map and _bit(18):
+    #     refraction.rgb = set_refraction_color_and_map(
+    #         refraction_color, refraction_map, new_mesh, mesh_index, model_name, folder_path
+    #     )
+    # else:
+    refraction.rgb = [0.0, 0.0, 0.0]
     new_mesh.refraction = refraction
 
     # Materials
     # Almost no material data is used in the game, so we set it to defaults
     new_mesh.materials = Materials()
 
-    # --- SR override Wind from UI (FIXED)
+    # --- SR override Wind from UI
     try:
         wp = getattr(mesh, "drs_wind", None)
         if wp:
@@ -4104,7 +4166,8 @@ def create_mesh(
             "Warning",
             "WARNING",
         )
-
+    
+    new_mesh.bool_parameter = int(str(bool_param_bit_flag), 2)
     return new_mesh, per_mesh_bone_data
 
 
@@ -5483,6 +5546,11 @@ def save_drs(
                     "Failed to create EffectSet.", "Effect Set Error", "ERROR"
                 )
                 return abort(keep_debug_collections, source_collection_copy)
+            # Rewrite only the copied collection's EffectSet blob to point to the local names
+            try:
+                _rewrite_effectset_skeleff_names(new_drs_file.effect_set, local_name_map)
+            except Exception as e:
+                logger.log(f"Warning: failed to rewrite EffectSet files on export copy: {e}", "Warning", "WARNING")
             new_drs_file.push_node_infos("EffectSet", new_drs_file.effect_set)
         elif node == "CGeoPrimitiveContainer":
             pass  # Nothing happens here
@@ -5508,7 +5576,11 @@ def save_drs(
 
     # === Export of SKA Actions ==============================================
     try:
-        if export_all_ska_actions:
+        if export_all_ska_actions and model_type in [
+            "AnimatedObjectNoCollision",
+            "AnimatedObjectCollision",
+            "AnimatedUnit",
+        ]:
             export_ska_actions_all(folder_path, source_collection_copy, context, only_names=list(local_name_map.values()))
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Error exporting SKA actions: {e}", "SKA Export Error", "ERROR")
