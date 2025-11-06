@@ -231,6 +231,11 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         description="Import additional axis-aligned bounding box data.",
         default=False,
     )  # type: ignore
+    use_control_rig: BoolProperty(
+        name="Use Control Rig for IK",
+        description="Use a separate Control Rig for IK handling",
+        default=False,
+    )  # type: ignore
 
     def draw(self, context):
         # Auto-Update Integration: Addon Updater by using addon_updater_ops.check_for_update_background(context) in the beginning of the function and addon_updater_ops.update_notice_box_ui(self, context) at the end of the function
@@ -246,6 +251,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         layout.prop(self, "import_animation")
         layout.prop(self, "smooth_animation")
         layout.prop(self, "import_ik_atlas")
+        layout.prop(self, "use_control_rig")
         # Add a separator
         layout.separator()
         # Create a Modules Section
@@ -279,6 +285,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         keywords["import_animation"] = self.import_animation
         keywords["smooth_animation"] = self.smooth_animation
         keywords["import_ik_atlas"] = self.import_ik_atlas
+        keywords["use_control_rig"] = self.use_control_rig
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction
         keywords["import_debris"] = self.import_debris

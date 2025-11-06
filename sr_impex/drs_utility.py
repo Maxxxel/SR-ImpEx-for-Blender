@@ -1518,6 +1518,45 @@ def _rewrite_anim_blob_variant_files(
         col[ANIM_BLOB_KEY] = json.dumps(b, separators=(",", ":"), ensure_ascii=False)
 
 
+def _rewrite_effectset_skeleff_names(
+    eff: "EffectSet",
+    name_map: dict[str, str],
+) -> None:
+    """
+    Update EffectSet.SkelEff.name to the local duplicate action names created
+    in _ensure_local_actions_with_prefix(). Also fixes the length field.
+
+    name_map: original (bare) → duplicate (bare) action name
+              e.g. {"skel_human_2h_idle1": "MyPrefix_idle1"}
+    """
+    if not eff or not getattr(eff, "skel_effekts", None) or not name_map:
+        return
+
+    def _norm(s: str) -> str:
+        s = (s or "").strip()
+        return s[:-4] if s.lower().endswith(".ska") else s
+
+    # Build a tolerant LUT (accept full / basename)
+    lut = {}
+    for k, v in (name_map or {}).items():
+        kb = _norm(k)
+        lut[kb] = v
+        lut[os.path.basename(kb)] = v
+
+    changed = False
+    for se in eff.skel_effekts or []:
+        cur = (getattr(se, "name", "") or "").strip()
+        key = _norm(cur)
+        new_name = lut.get(key) or lut.get(os.path.basename(key))
+        if new_name and new_name != cur:
+            # SkelEff.name should link to a SKA action name (no extension)
+            se.name = new_name
+            se.length = len(se.name)
+            changed = True
+
+    # nothing to store back here; EffectSet is a struct that will be written out later
+    return
+
 def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str) -> str:
     """
     Map 'skel_human_2h_idle1(.ska)' -> actual Action name (e.g. 'idle1').
@@ -1562,7 +1601,6 @@ def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str)
         return t
 
     return ""
-
 
 def _find_drs_bsdf(mat: bpy.types.Material):
     if not mat or not mat.use_nodes:
@@ -2610,6 +2648,7 @@ def load_drs(
     import_animation=True,
     smooth_animation=True,
     import_ik_atlas=False,
+    use_control_rig=False,
     import_modules=True,
     import_geomesh=False,
     import_obbtree=False,
@@ -2656,6 +2695,7 @@ def load_drs(
             for animation_key in drs_file.animation_set.mode_animation_keys:
                 for variant in animation_key.animation_set_variants:
                     ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
+                    print(f"Importing Animation: {variant.file}")
                     # Create the Animation
                     import_ska_animation(
                         ska_file,
@@ -2711,7 +2751,7 @@ def load_drs(
     parent_under_game_axes(source_collection, apply_transform)
     
     # Create a duplicate of the armature and call it control_rig
-    if armature_object:
+    if use_control_rig and armature_object:
         # Select the armature object
         bpy.ops.object.select_all(action='DESELECT')
         armature_object.select_set(True)
@@ -5506,6 +5546,11 @@ def save_drs(
                     "Failed to create EffectSet.", "Effect Set Error", "ERROR"
                 )
                 return abort(keep_debug_collections, source_collection_copy)
+            # Rewrite only the copied collection's EffectSet blob to point to the local names
+            try:
+                _rewrite_effectset_skeleff_names(new_drs_file.effect_set, local_name_map)
+            except Exception as e:
+                logger.log(f"Warning: failed to rewrite EffectSet files on export copy: {e}", "Warning", "WARNING")
             new_drs_file.push_node_infos("EffectSet", new_drs_file.effect_set)
         elif node == "CGeoPrimitiveContainer":
             pass  # Nothing happens here

@@ -1627,10 +1627,10 @@ class DRS_OT_PlayRange(bpy.types.Operator):
             original_frame_length = act.frame_range[1] - act.frame_range[0]
 
         try:
-            original_fps = act["ska_original_fps"]
+            original_fps = act["original_fps"]
         except Exception:
             original_fps = None
-            print(f"Warning: Action {act_name} missing 'ska_original_fps' property. Using current scene fps.")
+            print(f"Warning: Action {act_name} missing 'original_fps' property. Using current scene fps.")
 
         if original_fps:
             # Set the scene fps to the original fps of the animation
