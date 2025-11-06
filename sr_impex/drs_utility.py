@@ -3008,6 +3008,7 @@ def load_bmg(
     import_animation=True,
     smooth_animation=True,
     import_ik_atlas=False,
+    use_control_rig=False,
     import_debris=True,
     import_construction=True,
     import_geomesh=False,
