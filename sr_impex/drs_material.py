@@ -35,6 +35,7 @@ class DRSMaterial:
         self.flu_tex_node_L2 = None
         self.normal_tex_node = None
         self.refraction_tex_node = None
+        self.environment_tex_node = None
 
         # --- Artist-Specific Texture Nodes ---
         self.sep_metallic_tex_node = None
@@ -446,8 +447,12 @@ class DRSMaterial:
 
         self.refraction_color_node = nodes.new("ShaderNodeRGB")
         self.refraction_color_node.label = "Refraction Color"
-        self.refraction_color_node.location = (base_x, curr_y)
+        self.refraction_color_node.location = (base_x, curr_y); curr_y -= 300
         self.refraction_color_node.outputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
+
+        self.environment_tex_node = nodes.new("ShaderNodeTexImage")
+        self.environment_tex_node.label = "Environment Map (_env)"
+        self.environment_tex_node.location = (base_x, curr_y)
 
         # --- Create Fluid Nodes ---
         self.flu_tex_node_L1 = nodes.new("ShaderNodeTexImage")
@@ -558,6 +563,7 @@ class DRSMaterial:
         self.normal_tex_node.parent = frame_common
         self.refraction_tex_node.parent = frame_common
         self.refraction_color_node.parent = frame_common
+        self.environment_tex_node.parent = frame_common
 
         if "_par" in self.modules:
             frame_flu = nodes.new("NodeFrame")
@@ -651,6 +657,13 @@ class DRSMaterial:
 
         if rgb and len(rgb) == 3:
             self.refraction_color_node.outputs[0].default_value = tuple(rgb) + (1.0,)
+
+    def set_environment_map(self, texture_name: str, dir_path: str) -> None:
+        """Assigns the Environment map (_env) for reflections."""
+        img = self.load_image(texture_name, dir_path)
+        if img:
+            self.environment_tex_node.image = img
+            img.colorspace_settings.name = "sRGB"
 
     def set_flumap(self, texture_name: str, dir_path: str) -> None:
         """Assigns the tileable Fluid map (_flu)."""

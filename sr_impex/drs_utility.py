@@ -116,6 +116,7 @@ texture_cache_nor = {}
 texture_cache_par = {}
 texture_cache_flu = {}
 texture_cache_ref = {}
+texture_cache_env = {}
 
 with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
@@ -1230,6 +1231,8 @@ def get_cache_for_type(file_ending: str) -> dict:
         return texture_cache_par
     elif file_ending == "_ref":
         return texture_cache_ref
+    elif file_ending == "_env":
+        return texture_cache_env
     else:
         # Fallback to a general cache if needed.
         logger.log(
@@ -2183,6 +2186,8 @@ def create_material(
                     modules.append("_nor")
                 case 1919116143:
                     modules.append("_ref")
+                case 1986946419:
+                    modules.append("_env")
 
     drs_material: "DRSMaterial" = DRSMaterial(
         f"MaterialData_{base_name}_{mesh_index}", modules=modules
@@ -2206,6 +2211,8 @@ def create_material(
                     drs_material.set_refraction_map(
                         texture.name, dir_name, mesh_data.refraction.rgb
                     )
+                case 1986946419:
+                    drs_material.set_environment_map(texture.name, dir_name)
                 case 1668510770:
                     drs_material.set_flumap(texture.name, dir_name)
     
@@ -3843,6 +3850,25 @@ def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new
     return rgb
 
 
+def set_environment_map(environment_map_node, new_mesh, mesh_index, model_name, folder_path) -> bool:
+    """Export the Environment map (_env) if present in the material."""
+    if not environment_map_node or not environment_map_node.is_linked:
+        return False
+
+    img = getattr(environment_map_node.links[0].from_node, "image", None)
+    if img is None:
+        logger.log("The environment_map Texture is not an Image or the Image is None!", "Info", "INFO")
+        return False
+
+    new_mesh.textures.length += 1
+    t = Texture()
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_env", dxt_format="DXT5")
+    t.length = len(t.name)
+    t.identifier = 1986946419
+    new_mesh.textures.textures.append(t)
+    return True
+
+
 def create_mesh(
     mesh: bpy.types.Object,
     mesh_index: int,
@@ -4004,6 +4030,9 @@ def create_mesh(
     param_img_node     = _find_by_label(mat, 'TEX_IMAGE', 'Parameter Map (_par)')  # optional fallback
     color_img_node     = _find_by_label(mat, 'TEX_IMAGE', 'Color Map (_col)')
     normal_img_node    = _find_by_label(mat, 'TEX_IMAGE', 'Normal Map (_nor)')
+    refraction_img_node = _find_by_label(mat, 'TEX_IMAGE', 'Refraction Map (_ref)')
+    refraction_color_node = _find_by_label(mat, 'RGB', 'Refraction Color')
+    environment_img_node = _find_by_label(mat, 'TEX_IMAGE', 'Environment Map (_env)')
     
     # Assure we have .image not None
     if metal_img_node and not getattr(metal_img_node, "image", None):
@@ -4018,6 +4047,10 @@ def create_mesh(
         color_img_node = None
     if normal_img_node and not getattr(normal_img_node, "image", None):
         normal_img_node = None
+    if refraction_img_node and not getattr(refraction_img_node, "image", None):
+        refraction_img_node = None
+    if environment_img_node and not getattr(environment_img_node, "image", None):
+        environment_img_node = None
 
     # if flu_map is None or flu_map.is_linked is False:
     # new_mesh.material_parameters = -86061055
@@ -4136,16 +4169,20 @@ def create_mesh(
             "WARNING",
         )
 
-    # Refraction
+    # --- REFRACTION from artist images (bit 18) ---
     refraction = Refraction()
     refraction.length = 1
-    # if refraction_color and refraction_map and _bit(18):
-    #     refraction.rgb = set_refraction_color_and_map(
-    #         refraction_color, refraction_map, new_mesh, mesh_index, model_name, folder_path
-    #     )
-    # else:
-    refraction.rgb = [0.0, 0.0, 0.0]
+    if _bit(18) and refraction_color_node and refraction_img_node:
+        refraction.rgb = set_refraction_color_and_map(
+            refraction_color_node, refraction_img_node, new_mesh, mesh_index, model_name, folder_path
+        )
+    else:
+        refraction.rgb = [0.0, 0.0, 0.0]
     new_mesh.refraction = refraction
+
+    # --- ENVIRONMENT MAP from artist images (bit 19) ---
+    if _bit(19) and environment_img_node:
+        set_environment_map(environment_img_node, new_mesh, mesh_index, model_name, folder_path)
 
     # Materials
     # Almost no material data is used in the game, so we set it to defaults
@@ -5281,7 +5318,7 @@ def save_drs(
     auto_fix_quad_faces: bool,
 ):
     """Save the DRS file."""
-    global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref  # pylint: disable=global-statement
+    global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref, texture_cache_env  # pylint: disable=global-statement
     # === PRE-VALIDITY CHECKS =================================================
     # Ensure active collection is valid
     source_collection = bpy.context.view_layer.active_layer_collection.collection
@@ -5598,6 +5635,7 @@ def save_drs(
     texture_cache_nor = {}
     texture_cache_par = {}
     texture_cache_ref = {}
+    texture_cache_env = {}
     new_drs_file = None
     unified_mesh = None
     meshes_collection = None
