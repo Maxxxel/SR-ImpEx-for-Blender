@@ -447,7 +447,8 @@ class DRSMaterial:
 
         self.refraction_color_node = nodes.new("ShaderNodeRGB")
         self.refraction_color_node.label = "Refraction Color"
-        self.refraction_color_node.location = (base_x, curr_y); curr_y -= 300
+        self.refraction_color_node.location = (base_x, curr_y)
+        curr_y -= 300
         self.refraction_color_node.outputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
 
         self.environment_tex_node = nodes.new("ShaderNodeTexImage")

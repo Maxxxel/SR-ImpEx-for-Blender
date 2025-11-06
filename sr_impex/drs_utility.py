@@ -3826,14 +3826,14 @@ def set_flu_map_from_material(mat: bpy.types.Material,
 def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new_mesh, mesh_index, model_name, folder_path) -> List[float]:
     # default color
     rgb = [0.0, 0.0, 0.0]
-    if not refraction_color_node or not refraction_color_node.is_linked:
+    if not refraction_color_node or not refraction_color_node.is_linked or len(refraction_color_node.links) == 0:
         return rgb
     ref_parent = refraction_color_node.links[0].from_node
     col = list(getattr(ref_parent.outputs[0], "default_value", (0,0,0,1)))
     if len(col) >= 3:
         rgb = col[:3]
 
-    if not refraction_map_node or not refraction_map_node.is_linked:
+    if not refraction_map_node or not refraction_map_node.is_linked or len(refraction_map_node.links) == 0:
         return rgb
 
     img = getattr(refraction_map_node.links[0].from_node, "image", None)
@@ -3852,7 +3852,7 @@ def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new
 
 def set_environment_map(environment_map_node, new_mesh, mesh_index, model_name, folder_path) -> bool:
     """Export the Environment map (_env) if present in the material."""
-    if not environment_map_node or not environment_map_node.is_linked:
+    if not environment_map_node or not environment_map_node.is_linked or len(environment_map_node.links) == 0:
         return False
 
     img = getattr(environment_map_node.links[0].from_node, "image", None)
