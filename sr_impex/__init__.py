@@ -398,7 +398,7 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
         layout.separator()
         layout.label(text="MISC Settings", icon="PREFERENCES")
         layout.prop(self, "keep_debug_collections")
-        
+
 
     def invoke(self, context, event):
         # Retrieve the active collection from the active layer collection
@@ -493,7 +493,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
                 armature = next(
                     (o for o in armature_coll.objects if o.type == "ARMATURE" and not o.name.startswith("Control_Rig")), None
                 )
-                
+
         if armature is None:
             self.report({"ERROR"}, "No armature found in the selected collection")
             return {"CANCELLED"}
@@ -509,7 +509,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
         if not actions:
             self.report({"ERROR"}, "No actions found in the selected armature")
             return {"CANCELLED"}
-        
+
         # Get the first valid action
         first_action = next((act for act in actions if act != "None"), None)
         if first_action is None:
@@ -528,7 +528,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
         export_ska(context, self.filepath, self.action)
-        
+
         return {"FINISHED"}
 
 

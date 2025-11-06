@@ -28,9 +28,9 @@ def _update_flow_nodes_logic(drs_flow_pg):
     """
     if not drs_flow_pg:
         return
-    
+
     # id_data is the object (e.g., Mesh) that owns this PropertyGroup
-    obj = drs_flow_pg.id_data 
+    obj = drs_flow_pg.id_data
     if not obj or obj.type != 'MESH':
         return
 
@@ -38,9 +38,9 @@ def _update_flow_nodes_logic(drs_flow_pg):
     mat = obj.active_material
     if not mat or not mat.use_nodes:
         return
-    
+
     node_tree = mat.node_tree
-    
+
     # Find the DRS Material group node
     drs_group_node = None
     for node in node_tree.nodes:
@@ -48,21 +48,21 @@ def _update_flow_nodes_logic(drs_flow_pg):
         if node.type == 'GROUP' and (node.label == 'AIO DRS Engine' or node.name == 'AIO DRS Engine'):
             drs_group_node = node
             break
-    
+
     if not drs_group_node or not drs_group_node.node_tree:
         print("Could not find the DRS node group in this material")
         return
-    
+
     # Get the INNER node tree from the group
     inner_tree = drs_group_node.node_tree
-    
+
     # Get the values from the property group
     # Note: We take the [0:3] (XYZ) components from the Vector4 properties
     max_speed = drs_flow_pg.max_flow_speed
     min_speed = drs_flow_pg.min_flow_speed
     speed_change = drs_flow_pg.flow_speed_change
     flow_scale = drs_flow_pg.flow_scale
-    
+
     # The Group itself has MinSpeed, MaxSpeed, Frequency, Scale Attributes. Print them
     # Set the values in the group node inputs
     drs_group_node.inputs['MaxSpeed'].default_value = (max_speed[0], max_speed[1], max_speed[2])
@@ -76,46 +76,46 @@ def _update_alpha_connection(obj):
         return
     if not obj.active_material or not obj.active_material.use_nodes:
         return
-    
+
     mat = obj.active_material
     node_tree = mat.node_tree
-    
+
     # Find the color texture node (the one connected to IN-Color Map)
     color_tex_node = None
     for node in node_tree.nodes:
         if node.type == 'TEX_IMAGE' and node.label == 'Color Map (_col)':
             color_tex_node = node
             break
-    
+
     if not color_tex_node:
         print("Color texture node not found.")
         return
-    
+
     # Check if Enable Alpha Test is enabled (bit 0)
     enable_alpha = getattr(obj.drs_material, 'bit_0', False)
     decal_mode = getattr(obj.drs_material, 'bit_1', False)
-    
+
     # Get the Principled BSDF node (assumed to be named 'DRS Shader')
     drs_node = None
     for node in node_tree.nodes:
         if node.type == 'BSDF_PRINCIPLED' and node.name == 'DRS Shader':
             drs_node = node
             break
-        
+
     if not drs_node:
         print("DRS Shader node not found.")
         return
-    
+
     # Find existing alpha link
     alpha_link = None
     for link in node_tree.links:
-        if (link.from_node == color_tex_node and 
+        if (link.from_node == color_tex_node and
             link.from_socket.name == 'Alpha' and
             link.to_node == drs_node and
             link.to_socket.name == 'Alpha'):
             alpha_link = link
             break
-    
+
     if decal_mode or enable_alpha:
         # Enable Alpha Test: ensure alpha is connected
         if not alpha_link:
@@ -225,59 +225,66 @@ def _update_refraction_connection(obj):
     nt = mat.node_tree
 
     # Core nodes created by DRSMaterial when _ref is present:
-    drs_bsdf = None
-    mat_output = None
-    final_mix = None
     mix_refraction = None
 
+    # Find Node: Mix Shader Type: MIX_SHADER Label: Mix Refraction Shader
     for node in nt.nodes:
-        if node.type == 'BSDF_PRINCIPLED' and node.name == 'DRS Shader':
-            drs_bsdf = node
-        elif node.type == 'OUTPUT_MATERIAL':
-            mat_output = node
-        elif node.type == 'MIX_SHADER' and node.label == '':  # label may be empty; we locate by inputs
-            # we'll identify by structure later
-            pass
-
-    # Find the exact nodes by structure
-    for node in nt.nodes:
-        if node.type == 'MIX_SHADER':
-            # final_mix: its inputs[1] is the main BSDF, inputs[2] is a MixShader (glass branch)
-            if node.inputs.get(1) and node.inputs.get(2):
-                src1 = node.inputs[1].links[0].from_node if node.inputs[1].is_linked else None
-                src2 = node.inputs[2].links[0].from_node if node.inputs[2].is_linked else None
-                if src1 and drs_bsdf and src1 == drs_bsdf and src2 and src2.type == 'MIX_SHADER':
-                    final_mix = node
-                    mix_refraction = src2
-                    break
-
-    if not drs_bsdf or not mat_output:
+        if node.type == "MIX_SHADER" and node.label == "Mix Refraction Shader":
+            mix_refraction = node
+    
+    if not mix_refraction:
+        print("Mix Refraction Shader node not found.")
         return
 
     use_refraction = getattr(obj.drs_material, 'bit_18', False)
 
-    # Current output link
-    out_link = None
-    for lk in list(nt.links):
-        if lk.to_node == mat_output and lk.to_socket.name == "Surface":
-            out_link = lk
-            break
-
     if use_refraction:
-        # Ensure the final_mix drives the output, if the chain exists
-        if final_mix:
-            # If output is not coming from final_mix, rewire it
-            if not (out_link and out_link.from_node == final_mix):
-                if out_link:
-                    nt.links.remove(out_link)
-                nt.links.new(final_mix.outputs[0], mat_output.inputs["Surface"])
-        # If refraction nodes were never built (e.g., modules didn’t include "_ref"), we do nothing.
+        try:
+            if mix_refraction:
+                mix_refraction.mute = False
+        except Exception:
+            pass
         return
 
-    # Disabled: route plain BSDF to output
-    if out_link:
-        nt.links.remove(out_link)
-    nt.links.new(drs_bsdf.outputs[0], mat_output.inputs["Surface"])
+    try:
+        if mix_refraction:
+            mix_refraction.mute = True
+    except Exception:
+        pass
+
+def _update_flu_apply_mask_state(obj):
+    """Mute/unmute the 'Apply Flu Mask' mix based on bit 16 and presence of Flu images.
+    Conditions to ENABLE (unmute) the node:
+      - bit_16 (Use Parameter Map) is True, AND
+      - At least one Flu Map Layer (1 or 2) has an image.
+    Otherwise the node is muted (acts as passthrough of Color Map).
+    """
+    try:
+        if not obj or obj.type != 'MESH' or not obj.active_material or not obj.active_material.use_nodes:
+            return
+        mat = obj.active_material
+        nt = mat.node_tree
+
+        mix_color_flu = None
+        flu_l1 = None
+        flu_l2 = None
+        for n in nt.nodes:
+            if n.type == 'MIX' and n.label == 'Apply Flu Mask':
+                mix_color_flu = n
+            elif n.type == 'TEX_IMAGE' and n.label == 'Flu Map Layer 1':
+                flu_l1 = n
+            elif n.type == 'TEX_IMAGE' and n.label == 'Flu Map Layer 2':
+                flu_l2 = n
+        if mix_color_flu is None:
+            return
+
+        use_param = bool(getattr(obj.drs_material, 'bit_16', False))
+        has_flu_img = bool((flu_l1 and getattr(flu_l1, 'image', None)) or (flu_l2 and getattr(flu_l2, 'image', None)))
+
+        # Mute when either flag is off OR no images; unmute only when both are true.
+        mix_color_flu.mute = not (use_param and has_flu_img)
+    except Exception:
+        pass
 
 def _update_wind_nodes_logic(drs_wind_pg):
     """
@@ -286,34 +293,34 @@ def _update_wind_nodes_logic(drs_wind_pg):
     """
     if not drs_wind_pg:
         return
-    
+
     # id_data is the object (e.g., Mesh) that owns this PropertyGroup
-    obj = drs_wind_pg.id_data 
+    obj = drs_wind_pg.id_data
     if not obj or obj.type != 'MESH':
         return
 
     # Get the values from the property group
     wind_response = drs_wind_pg.wind_response
     wind_height = drs_wind_pg.wind_height
-    
+
     # Find the GN modifier
     geo_mod = None
     for mod in obj.modifiers:
         # Check for name to be safe, in case of multiple GN mods
-        if mod.type == 'NODES' and "WindEffect" in mod.name: 
+        if mod.type == 'NODES' and "WindEffect" in mod.name:
             geo_mod = mod
             break
-    
+
     if not geo_mod or not geo_mod.node_group:
         return
-    
+
     node_tree = geo_mod.node_group
-    
+
     # Find the named "Wind Response" node and set its value
     response_node = node_tree.nodes.get("Wind Response")
     if response_node:
         response_node.inputs[1].default_value = wind_response
-    
+
     # Find the named "Wind Height" node and set its value
     height_node = node_tree.nodes.get("Wind Height")
     if height_node and "From Min" in height_node.inputs:
@@ -382,6 +389,7 @@ def _on_bit_16_changed(self, ctx):
     _on_bit_changed(self, ctx)
     obj = ctx.object if hasattr(ctx, 'object') else None
     _update_parameter_connection(obj)
+    _update_flu_apply_mask_state(obj)
 
 def _on_bit_17_changed(self, ctx):
     _on_bit_changed(self, ctx)
@@ -460,7 +468,7 @@ def _highest_relevant_bit(value: int) -> int:
 
 def _active_mesh(ctx) -> bpy.types.Object | None:
     o = getattr(ctx, "object", None)
-    if o and o.type == "MESH" and _in_meshes_collection(o) or _in_ground_decal_collection(o):
+    if o and o.type == "MESH" and (_in_meshes_collection(o) or _in_ground_decal_collection(o)):
         return o
     return None
 

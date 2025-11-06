@@ -691,10 +691,9 @@ class BoneMatrix:
         self.bone_vertices = [BoneVertex().read(file) for _ in range(4)]
         return self
 
-    def write(self, file: BinaryIO) -> "BoneMatrix":
+    def write(self, file: BinaryIO):
         for bone_vertex in self.bone_vertices:
             bone_vertex.write(file)
-        return self
 
     def size(self) -> int:
         return sum(bv.size() for bv in self.bone_vertices)
@@ -1173,37 +1172,37 @@ class BattleforgeMesh:
     def write(self, file: BinaryIO) -> None:
         try:
             file.write(pack("ii", self.vertex_count, self.face_count))
-        except Exception:
+        except Exception as e:
             raise TypeError(
                 f"Error writing BattleforgeMesh vertex_count {self.vertex_count} or face_count {self.face_count}"
-            )
-        
+            ) from e
+
         for face in self.faces:
             face.write(file)
-        
+
         try:
             file.write(pack("B", self.mesh_count))
-        except Exception:
-            raise TypeError(f"Error writing BattleforgeMesh mesh_count {self.mesh_count}")
-        
+        except Exception as e:
+            raise TypeError(f"Error writing BattleforgeMesh mesh_count {self.mesh_count}") from e
+
         try:
             for mesh_data in self.mesh_data:
                 mesh_data.write(file)
-        except Exception:
-            raise TypeError("Error writing BattleforgeMesh mesh data")
-        
+        except Exception as e:
+            raise TypeError("Error writing BattleforgeMesh mesh data") from e
+
         try:
             self.bounding_box_lower_left_corner.write(file)
             self.bounding_box_upper_right_corner.write(file)
-        except Exception:
-            raise TypeError("Error writing BattleforgeMesh bounding boxes")
-        
+        except Exception as e:
+            raise TypeError("Error writing BattleforgeMesh bounding boxes") from e
+
         try:
             file.write(pack("=hi", self.material_id, self.material_parameters))
-        except Exception:
+        except Exception as e:
             raise TypeError(
                 f"Error writing BattleforgeMesh material_id {self.material_id} or material_parameters {self.material_parameters}"
-            )
+            ) from e
 
         try:
             if self.material_parameters == -86061050:
@@ -1301,7 +1300,7 @@ class CDspMeshFile:
             file.write(pack("i", self.magic))
         except Exception:
             raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
-        
+
         if self.magic == 1314189598:
             try:
                 file.write(pack("ii", self.zero, self.mesh_count))
@@ -1311,7 +1310,7 @@ class CDspMeshFile:
                 self.bounding_box_lower_left_corner.write(file)
             except Exception:
                 raise TypeError("Error writing bounding_box_lower_left_corner")
-            
+
             try:
                 self.bounding_box_upper_right_corner.write(file)
             except Exception:
@@ -1760,7 +1759,7 @@ class Constraint:
             ) = unpack("5f", file.read(20))
         return self
 
-    def write(self, file: BinaryIO) -> "Constraint":
+    def write(self, file: BinaryIO):
         """Writes the Constraint to the buffer"""
         file.write(pack("h", self.revision))
         if self.revision == 1:
@@ -1774,7 +1773,6 @@ class Constraint:
                     self.damp_ratio,
                 )
             )
-        return self
 
     def size(self) -> int:
         """Returns the size of the Constraint"""
@@ -1806,7 +1804,7 @@ class IKAtlas:
                 self.purpose_flags = unpack("h", file.read(2))[0]
         return self
 
-    def write(self, file: BinaryIO) -> "IKAtlas":
+    def write(self, file: BinaryIO):
         """Writes the IKAtlas to the buffer"""
         file.write(pack("i", self.identifier))
         file.write(pack("h", self.version))
@@ -1816,7 +1814,6 @@ class IKAtlas:
                 constraint.write(file)
             if self.version >= 2:
                 file.write(pack("h", self.purpose_flags))
-        return self
 
     def size(self) -> int:
         """Returns the size of the IKAtlas"""
@@ -1860,7 +1857,7 @@ class AnimationSetVariant:
 
         return self
 
-    def write(self, file: BinaryIO) -> "AnimationSetVariant":
+    def write(self, file: BinaryIO):
         """Writes the AnimationSetVariant to the buffer"""
         file.write(pack("i", self.version))
         file.write(pack("i", self.weight))
@@ -1872,7 +1869,6 @@ class AnimationSetVariant:
             file.write(pack("B", self.allows_ik))
         if self.version >= 7:
             file.write(pack("B", self.force_no_blend))
-        return self
 
     def size(self) -> int:
         """Returns the size of the AnimationSetVariant"""
@@ -1930,7 +1926,7 @@ class ModeAnimationKey:
         ]
         return self
 
-    def write(self, file: BinaryIO) -> "ModeAnimationKey":
+    def write(self, file: BinaryIO):
         """Writes the ModeAnimationKey to the buffer"""
         file.write(pack("i", self.type))
         file.write(pack("i", self.length))
@@ -1949,7 +1945,6 @@ class ModeAnimationKey:
         file.write(pack("i", self.variant_count))
         for animation_set_variant in self.animation_set_variants:
             animation_set_variant.write(file)
-        return self
 
     def size(self) -> int:
         """Returns the size of the ModeAnimationKey"""
@@ -1983,12 +1978,11 @@ class AnimationMarker:
         self.position = Vector3().read(file)  # 12 bytes
         return self
 
-    def write(self, file: BinaryIO) -> "AnimationMarker":
+    def write(self, file: BinaryIO) :
         """Writes the AnimationMarker to the buffer"""
         file.write(pack("if", self.is_spawn_animation, self.time))
         self.direction.write(file)
         self.position.write(file)
-        return self
 
     def size(self) -> int:
         """Returns the size of the AnimationMarker"""
@@ -2022,14 +2016,13 @@ class AnimationMarkerSet:
         ]
         return self
 
-    def write(self, file: BinaryIO) -> "AnimationMarkerSet":
+    def write(self, file: BinaryIO):
         """Writes the AnimationMarkerSet to the buffer"""
         file.write(pack("ii", self.anim_id, self.length))
         file.write(pack(f"{self.length}s", self.name.encode("utf-8")))
         file.write(pack("Ii", self.animation_marker_id, self.marker_count))
         for animation_marker in self.animation_markers:
             animation_marker.write(file)
-        return self
 
     def size(self) -> int:
         """Returns the size of the AnimationMarkerSet"""
@@ -2053,11 +2046,10 @@ class UnknownStruct2:
         self.unknown_ints = [unpack("i", file.read(4))[0] for _ in range(5)]
         return self
 
-    def write(self, file: BinaryIO) -> "UnknownStruct2":
+    def write(self, file: BinaryIO):
         """Writes the UnknownStruct2 to the buffer"""
         for unknown_int in self.unknown_ints:
             file.write(pack("i", unknown_int))
-        return self
 
     def size(self) -> int:
         """Returns the size of the UnknownStruct2"""
@@ -2091,14 +2083,13 @@ class UnknownStruct:
         ]
         return self
 
-    def write(self, file: BinaryIO) -> "UnknownStruct":
+    def write(self, file: BinaryIO):
         """Writes the UnknownStruct to the buffer"""
         file.write(pack("ii", self.unknown, self.length))
         file.write(pack(f"{self.length}s", self.name.encode("utf-8")))
         file.write(pack("ii", self.unknown2, self.unknown3))
         for unknown_struct2 in self.unknown_structs:
             unknown_struct2.write(file)
-        return self
 
     def size(self) -> int:
         """Returns the size of the UnknownStruct"""
@@ -2213,7 +2204,7 @@ class AnimationSet:
 
         return self
 
-    def write(self, file: BinaryIO) -> "AnimationSet":
+    def write(self, file: BinaryIO):
         """Writes the AnimationSet to the buffer"""
         file.write(pack("i", self.length))
         file.write(pack("11s", self.magic.encode("utf-8")))
@@ -2273,7 +2264,6 @@ class AnimationSet:
                 for unknown_struct in self.unknown_structs:
                     unknown_struct.write(file)
 
-        return self
 
     def size(self) -> int:
         """Returns the size of the AnimationSet"""
@@ -2327,13 +2317,12 @@ class Timing:
         self.animation_marker_id = unpack("I", file.read(4))[0]
         return self
 
-    def write(self, file: BinaryIO) -> "Timing":
+    def write(self, file: BinaryIO):
         """Writes the Timing to the buffer"""
         file.write(pack("i", self.cast_ms))
         file.write(pack("i", self.resolve_ms))
         file.write(pack("fff", *self.direction))
         file.write(pack("I", self.animation_marker_id))
-        return self
 
     def size(self) -> int:
         """Returns the size of the Timing"""
@@ -2431,7 +2420,7 @@ class StructV3:
         self.unknown = [unpack("i", file.read(4))[0] for _ in range(2)]
         return self
 
-    def write(self, file: BinaryIO) -> "StructV3":
+    def write(self, file: BinaryIO):
         """Writes the StructV3 to the buffer"""
         file.write(pack("i", self.length))
         file.write(pack(f"{2}i", *self.unknown))
@@ -2461,7 +2450,7 @@ class AnimationTimings:
         self.struct_v3 = StructV3().read(file)
         return self
 
-    def write(self, file: BinaryIO) -> "AnimationTimings":
+    def write(self, file: BinaryIO):
         """Writes the AnimationTimings to the buffer"""
         file.write(pack("i", self.magic))
         file.write(pack("h", self.version))
@@ -2469,7 +2458,6 @@ class AnimationTimings:
         for animation_timing in self.animation_timings:
             animation_timing.write(file, self.version)
         self.struct_v3.write(file)
-        return self
 
     def size(self) -> int:
         """Returns the size of the AnimationTimings"""
@@ -2508,7 +2496,7 @@ class Variant:
 class Keyframe:
     time: float = 0.0 # when to play [0 - 1]
     keyframe_type: int = 0 # [0: audio (snr/wav), 1: effect (fxb), 2: effect (fxb), 3: permanent effect (fxb), 4: permanent effect (fxb)]
-    min_falloff: float = 0.0 # 
+    min_falloff: float = 0.0 #
     max_falloff: float = 0.0
     volume: float = 0.0
     pitch_shift_min: float = 0.0
@@ -2727,7 +2715,7 @@ class UKS3:
 class EffectSet:
     type: int = 12  # Short
     checksum_length: int = 0  # Int
-    checksum: str = "" 
+    checksum: str = ""
     length: int = 0
     skel_effekts: List[SkelEff] = field(default_factory=list)
     unknown: List[float] = field(
@@ -2825,7 +2813,7 @@ class SMeshState:
             )
         return self
 
-    def write(self, file: BinaryIO) -> "SMeshState":
+    def write(self, file: BinaryIO):
         pass
 
 
@@ -2873,7 +2861,7 @@ class StateBasedMeshSet:
         ]
         return self
 
-    def write(self, file: BinaryIO) -> "StateBasedMeshSet":
+    def write(self, file: BinaryIO):
         pass
 
 
@@ -2891,7 +2879,7 @@ class MeshGridModule:
             self.state_based_mesh_set = StateBasedMeshSet().read(file)
         return self
 
-    def write(self, file: BinaryIO) -> "MeshGridModule":
+    def write(self, file: BinaryIO):
         pass
 
 
@@ -2974,7 +2962,7 @@ class MeshSetGrid:
         self.cdrw_locator_list = CDrwLocatorList().read(file)
         return self
 
-    def write(self, file: BinaryIO) -> "MeshSetGrid":
+    def write(self, file: BinaryIO):
         pass
 
 

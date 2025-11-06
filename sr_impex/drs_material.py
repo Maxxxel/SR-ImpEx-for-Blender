@@ -14,20 +14,20 @@ SOCKET_BOOL = "NodeSocketBool"
 class DRSMaterial:
     """
     Creates and manages a single, unified DRS Shader Node Group.
-    
+
     This class builds a material by linking texture nodes to a central
     "AIO_DRS_Engine" node group.
-    
+
     The node group is a pure data-processing engine. It takes in map data
     and outputs the final PBR values and fluid animation vectors.
-    
+
     All texture nodes, the Principled BSDF, and final mixing are
     handled *outside* the group, in the main material tree.
     """
 
     def __init__(self, material_name: str, modules: list = None) -> None:
         self.modules = modules if modules is not None else []
-        
+
         # --- Exposed Texture Nodes for Importer ---
         self.color_tex_node = None
         self.param_tex_node = None
@@ -35,19 +35,19 @@ class DRSMaterial:
         self.flu_tex_node_L2 = None
         self.normal_tex_node = None
         self.refraction_tex_node = None
-        
+
         # --- Artist-Specific Texture Nodes ---
         self.sep_metallic_tex_node = None
         self.sep_roughness_tex_node = None
         self.sep_emission_tex_node = None
         self.sep_flu_mask_tex_node = None
-        
+
         # --- Internal Node References ---
         self.material = None
         self.group_tree = None           # The NodeTree (template)
         self.group_node = None           # The ShaderNodeGroup in the material
         self.bsdf_node = None            # The main Principled BSDF
-        
+
         self._create_material(material_name)
         self._get_or_create_aio_engine_group()
         self._create_material_nodes()
@@ -59,7 +59,7 @@ class DRSMaterial:
         mat = bpy.data.materials.get(material_name)
         if mat is None:
             mat = bpy.data.materials.new(material_name)
-        
+
         mat.use_nodes = True
         mat.node_tree.nodes.clear()
         mat.blend_method = "CLIP"
@@ -81,14 +81,14 @@ class DRSMaterial:
             uses_shader = base_tree.get_output_node('ALL')
             if uses_shader:
                 rebuild = True
-        
+
         if base_tree is None or rebuild:
             if base_tree:
                 bpy.data.node_groups.remove(base_tree)
-                
+
             base_tree = bpy.data.node_groups.new(group_name, type="ShaderNodeTree")
             self._build_aio_engine_group_internals(base_tree)
-        
+
         self.group_tree = base_tree
 
     def _build_aio_engine_group_internals(self, tree: bpy.types.NodeTree) -> None:
@@ -111,14 +111,17 @@ class DRSMaterial:
 
         # Inputs
         def_in(tree, "Use Separate Maps", SOCKET_BOOL, 0)
-        def_in(tree, "Parameter Map", SOCKET_COLOR, (0.0, 0.8, 0.0, 0.0))
+        def_in(tree, "Parameter Map", SOCKET_COLOR, (0.0, 0.0, 0.0, 0.0))
         def_in(tree, "Parameter Map - Alpha", SOCKET_FLOAT, 0.0)
         def_in(tree, "Sep. Metallic", SOCKET_FLOAT, 0.0)
         def_in(tree, "Sep. Roughness", SOCKET_FLOAT, 0.8)
         def_in(tree, "Sep. Emission", SOCKET_FLOAT, 0.0)
         def_in(tree, "Sep. Flu Mask", SOCKET_FLOAT, 0.0)
         def_in(tree, "Normal Map", SOCKET_VECTOR)
+        def_in(tree, "Refraction Map", SOCKET_COLOR, (0.0, 0.0, 0.0, 0.0))
+        def_in(tree, "Refraction Color", SOCKET_COLOR, (1.0, 1.0, 1.0, 1.0))
         
+
         # Flow Parameters
         def_in(tree, "MinSpeed", SOCKET_VECTOR)
         def_in(tree, "MaxSpeed", SOCKET_VECTOR)
@@ -131,25 +134,48 @@ class DRSMaterial:
         def_out(tree, "Emission", SOCKET_FLOAT)
         def_out(tree, "Flu Mask", SOCKET_FLOAT)
         def_out(tree, "Normal", SOCKET_VECTOR)
-        
+        def_out(tree, "Refraction BSDF", SOCKET_SHADER)
+
         # Fluid Animation Outputs
-        if "_par" in self.modules:
-            def_out(tree, "Flu Offset (Layer 1)", SOCKET_VECTOR)
-            def_out(tree, "Flu Offset (Layer 2)", SOCKET_VECTOR)
-            def_out(tree, "Flu Crossfade", SOCKET_FLOAT)
-        
+        # if "_par" in self.modules:
+        def_out(tree, "Flu Offset (Layer 1)", SOCKET_VECTOR)
+        def_out(tree, "Flu Offset (Layer 2)", SOCKET_VECTOR)
+        def_out(tree, "Flu Crossfade", SOCKET_FLOAT)
+
         # --- 2. Build Fluid Animation Logic ("_par" module) ---
-        if "_par" in self.modules:
-            # This function is now self-contained and just links to inputs/outputs
-            self._create_flu_animation_nodes(tree, inp, outp)
+        # if "_par" in self.modules:
+        # This function is now self-contained and just links to inputs/outputs
+        self._create_flu_animation_nodes(tree, inp, outp)
 
         # --- 3. Build PBR Parameter Switching Logic ---
-        
+
         # Separate the Parameter Map
         sep_param = nodes.new("ShaderNodeSeparateColor")
         sep_param.label = "Split Parameter Map"
         sep_param.location = (-2200, 200)
         links.new(inp.outputs["Parameter Map"], sep_param.inputs[0])
+        
+        # Refraction Map Range
+        map_range_ref = nodes.new("ShaderNodeMapRange")
+        map_range_ref.label = "Refraction Map Range"
+        map_range_ref.location = (-1700, 900)
+        # 0.0, 1.0, 1.0, 0.96
+        map_range_ref.inputs['From Min'].default_value = 0.0
+        map_range_ref.inputs['From Max'].default_value = 1.0
+        map_range_ref.inputs['To Min'].default_value = 1.0
+        map_range_ref.inputs['To Max'].default_value = 0.96
+        links.new(inp.outputs["Refraction Map"], map_range_ref.inputs['Value'])
+        
+        # Refraction BSDF
+        # We use Beckmann
+        refraction_bsdf = nodes.new("ShaderNodeBsdfGlass")
+        refraction_bsdf.label = "Refraction BSDF"
+        refraction_bsdf.location = (-1200, 900)
+        refraction_bsdf.distribution = 'BECKMANN'
+        refraction_bsdf.inputs["Roughness"].default_value = 1.0
+        links.new(inp.outputs["Refraction Color"], refraction_bsdf.inputs["Color"])
+        links.new(map_range_ref.outputs['Result'], refraction_bsdf.inputs["IOR"])
+        links.new(refraction_bsdf.outputs['BSDF'], outp.inputs["Refraction BSDF"])
 
         # Mix Metallic
         mix_met = nodes.new("ShaderNodeMix")
@@ -190,17 +216,17 @@ class DRSMaterial:
         links.new(sep_param.outputs["Blue"], mix_flu_mask.inputs['A'])
         links.new(inp.outputs["Sep. Flu Mask"], mix_flu_mask.inputs['B'])
         links.new(mix_flu_mask.outputs['Result'], outp.inputs["Flu Mask"])    # Link to Group Output
-            
+
         # --- 4. Normal Map Logic ---
-        if "_nor" in self.modules:
-            norm_map_node = nodes.new("ShaderNodeNormalMap")
-            norm_map_node.label = "Normal Map"
-            norm_map_node.location = (800, -300)
-            links.new(inp.outputs["Normal Map"], norm_map_node.inputs["Color"])
-            links.new(norm_map_node.outputs["Normal"], outp.inputs["Normal"])
-        else:
-            # Pass through an empty vector if no normal map
-            links.new(inp.outputs["Normal Map"], outp.inputs["Normal"])
+        # if "_nor" in self.modules:
+        norm_map_node = nodes.new("ShaderNodeNormalMap")
+        norm_map_node.label = "Normal Map"
+        norm_map_node.location = (800, -300)
+        links.new(inp.outputs["Normal Map"], norm_map_node.inputs["Color"])
+        links.new(norm_map_node.outputs["Normal"], outp.inputs["Normal"])
+        # else:
+        #     # Pass through an empty vector if no normal map
+        #     links.new(inp.outputs["Normal Map"], outp.inputs["Normal"])
 
     def _create_flu_animation_nodes(self, tree, inp_node, outp_node):
         """Builds the 3D fluid animation graph inside the node group."""
@@ -208,9 +234,9 @@ class DRSMaterial:
         # as its internal logic was correct.
         nodes = tree.nodes
         links = tree.links
-        
+
         loc = (-1500, -500)
-        
+
         time_node = nodes.new("ShaderNodeValue")
         time_node.label = "Time"
         time_node.location = (loc[0] - 1500, loc[1] + 300)
@@ -279,14 +305,14 @@ class DRSMaterial:
         offset_l1.location = (loc[0] + 300, loc[1])
         links.new(pulsing_speed.outputs[0], offset_l1.inputs[0])
         links.new(time_node.outputs[0], offset_l1.inputs[1])
-        
+
         final_vec_l1 = nodes.new("ShaderNodeVectorMath")
         final_vec_l1.label = "Final Vector L1"
         final_vec_l1.operation = 'ADD'
         final_vec_l1.location = (loc[0] + 600, loc[1])
         links.new(scaled_coords.outputs[0], final_vec_l1.inputs[0])
         links.new(offset_l1.outputs[0], final_vec_l1.inputs[1])
-        
+
         links.new(final_vec_l1.outputs[0], outp_node.inputs["Flu Offset (Layer 1)"])
 
         time_offset = nodes.new("ShaderNodeMath")
@@ -295,7 +321,7 @@ class DRSMaterial:
         time_offset.location = (loc[0], loc[1] - 200)
         time_offset.inputs[1].default_value = 0.5
         links.new(time_node.outputs[0], time_offset.inputs[0])
-        
+
         offset_l2 = nodes.new("ShaderNodeVectorMath")
         offset_l2.label = "Offset L2"
         offset_l2.operation = 'MULTIPLY'
@@ -309,7 +335,7 @@ class DRSMaterial:
         final_vec_l2.location = (loc[0] + 600, loc[1] - 200)
         links.new(scaled_coords.outputs[0], final_vec_l2.inputs[0])
         links.new(offset_l2.outputs[0], final_vec_l2.inputs[1])
-        
+
         links.new(final_vec_l2.outputs[0], outp_node.inputs["Flu Offset (Layer 2)"])
 
         fade_speed = nodes.new("ShaderNodeMath")
@@ -318,13 +344,13 @@ class DRSMaterial:
         fade_speed.location = (loc[0] + 300, loc[1] - 400)
         fade_speed.inputs[1].default_value = 1.0
         links.new(time_node.outputs[0], fade_speed.inputs[0])
-        
+
         fade_sine = nodes.new("ShaderNodeMath")
         fade_sine.label = "Sine(FadeSpeed)"
         fade_sine.operation = 'SINE'
         fade_sine.location = (loc[0] + 600, loc[1] - 400)
         links.new(fade_speed.outputs[0], fade_sine.inputs[0])
-        
+
         crossfade = nodes.new("ShaderNodeMapRange")
         crossfade.label = "CrossFade [0,1]"
         crossfade.name = "CrossFade [0,1]"
@@ -332,19 +358,20 @@ class DRSMaterial:
         crossfade.inputs[1].default_value = -1.0
         crossfade.inputs[2].default_value =  1.0
         links.new(fade_sine.outputs[0], crossfade.inputs[0])
-        
-        links.new(crossfade.outputs[0], outp_node.inputs["Flu Crossfade"])
 
+        links.new(crossfade.outputs[0], outp_node.inputs["Flu Crossfade"])
 
     def _create_material_nodes(self) -> None:
         """
         Creates all nodes *outside* the group in the material tree.
         """
         nodes = self.material.node_tree.nodes
-        
+
         # --- Create Core Shader Nodes ---
         output_node = nodes.new("ShaderNodeOutputMaterial")
+        output_node.label = "Material Output"
         output_node.location = (1200, 0)
+        output_node.hide = True
 
         self.bsdf_node = nodes.new("ShaderNodeBsdfPrincipled")
         self.bsdf_node.label = "DRS Shader"
@@ -354,6 +381,7 @@ class DRSMaterial:
         self.bsdf_node.inputs["IOR"].default_value = 1.0
         if bpy.app.version[0] == 3:
             self.bsdf_node.inputs["Specular"].default_value = 0.0
+        self.bsdf_node.hide = True
 
         # AIO Engine Group Node
         self.group_node = nodes.new("ShaderNodeGroup")
@@ -370,23 +398,23 @@ class DRSMaterial:
         self.color_tex_node = nodes.new("ShaderNodeTexImage")
         self.color_tex_node.label = "Color Map (_col)"
         self.color_tex_node.location = (base_x, curr_y); curr_y -= 350
-        
+
         self.param_tex_node = nodes.new("ShaderNodeTexImage")
         self.param_tex_node.label = "Parameter Map (_par)"
         self.param_tex_node.location = (base_x, curr_y); curr_y -= 350
-        
+
         self.sep_metallic_tex_node = nodes.new("ShaderNodeTexImage")
         self.sep_metallic_tex_node.label = "Separate Metallic"
         self.sep_metallic_tex_node.location = (base_x, curr_y); curr_y -= 300
-        
+
         self.sep_roughness_tex_node = nodes.new("ShaderNodeTexImage")
         self.sep_roughness_tex_node.label = "Separate Roughness"
         self.sep_roughness_tex_node.location = (base_x, curr_y); curr_y -= 300
-        
+
         self.sep_emission_tex_node = nodes.new("ShaderNodeTexImage")
         self.sep_emission_tex_node.label = "Separate Emission"
         self.sep_emission_tex_node.location = (base_x, curr_y); curr_y -= 300
-        
+
         self.sep_flu_mask_tex_node = nodes.new("ShaderNodeTexImage")
         self.sep_flu_mask_tex_node.label = "Separate Flu Mask"
         self.sep_flu_mask_tex_node.location = (base_x, curr_y); curr_y -= 350
@@ -394,34 +422,34 @@ class DRSMaterial:
         self.normal_tex_node = nodes.new("ShaderNodeTexImage")
         self.normal_tex_node.label = "Normal Map (_nor)"
         self.normal_tex_node.location = (base_x, curr_y); curr_y -= 350
-        
+
         self.refraction_tex_node = nodes.new("ShaderNodeTexImage")
         self.refraction_tex_node.label = "Refraction Map (_ref)"
         self.refraction_tex_node.location = (base_x, curr_y); curr_y -= 300
-        
+
         self.refraction_color_node = nodes.new("ShaderNodeRGB")
         self.refraction_color_node.label = "Refraction Color"
         self.refraction_color_node.location = (base_x, curr_y)
         self.refraction_color_node.outputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
-        
+
         # --- Create Fluid Nodes ---
-        if "_par" in self.modules:
-            self.flu_tex_node_L1 = nodes.new("ShaderNodeTexImage")
-            self.flu_tex_node_L1.label = "Flu Map Layer 1"
-            self.flu_tex_node_L1.location = (0, -300)
-            self.flu_tex_node_L1.extension = 'REPEAT'
-            self.flu_tex_node_L1.projection = 'SPHERE'
-            
-            self.flu_tex_node_L2 = nodes.new("ShaderNodeTexImage")
-            self.flu_tex_node_L2.label = "Flu Map Layer 2"
-            self.flu_tex_node_L2.location = (0, -500)
-            self.flu_tex_node_L2.extension = 'REPEAT'
-            self.flu_tex_node_L2.projection = 'SPHERE'
+        # if "_par" in self.modules:
+        self.flu_tex_node_L1 = nodes.new("ShaderNodeTexImage")
+        self.flu_tex_node_L1.label = "Flu Map Layer 1"
+        self.flu_tex_node_L1.location = (0, -300)
+        self.flu_tex_node_L1.extension = 'REPEAT'
+        self.flu_tex_node_L1.projection = 'SPHERE'
+
+        self.flu_tex_node_L2 = nodes.new("ShaderNodeTexImage")
+        self.flu_tex_node_L2.label = "Flu Map Layer 2"
+        self.flu_tex_node_L2.location = (0, -500)
+        self.flu_tex_node_L2.extension = 'REPEAT'
+        self.flu_tex_node_L2.projection = 'SPHERE'
 
     def _link_material_nodes(self) -> None:
         """Links all the external nodes to the Engine group and BSDF."""
         links = self.material.node_tree.links
-        
+
         # --- Link Textures -> Engine Group ---
         links.new(self.param_tex_node.outputs["Color"], self.group_node.inputs["Parameter Map"])
         links.new(self.param_tex_node.outputs["Alpha"], self.group_node.inputs["Parameter Map - Alpha"])
@@ -430,94 +458,78 @@ class DRSMaterial:
         links.new(self.sep_emission_tex_node.outputs["Color"], self.group_node.inputs["Sep. Emission"])
         links.new(self.sep_flu_mask_tex_node.outputs["Color"], self.group_node.inputs["Sep. Flu Mask"])
         links.new(self.normal_tex_node.outputs["Color"], self.group_node.inputs["Normal Map"])
-        
+
         # --- Link Engine Group -> BSDF ---
         links.new(self.group_node.outputs["Metallic"], self.bsdf_node.inputs["Metallic"])
         links.new(self.group_node.outputs["Roughness"], self.bsdf_node.inputs["Roughness"])
         links.new(self.group_node.outputs["Emission"], self.bsdf_node.inputs["Emission Strength"])
-        if "_nor" in self.modules:
-            links.new(self.group_node.outputs["Normal"], self.bsdf_node.inputs["Normal"])
-            
+        # if "_nor" in self.modules:
+        links.new(self.group_node.outputs["Normal"], self.bsdf_node.inputs["Normal"])
+
         # --- Link Color Map -> BSDF ---
         # FIX 1: Link Color Alpha to BSDF Alpha
         links.new(self.color_tex_node.outputs["Alpha"], self.bsdf_node.inputs["Alpha"])
         # Link Color to Emission Color
         links.new(self.color_tex_node.outputs["Color"], self.bsdf_node.inputs["Emission Color"])
-        
+
         # --- Final Color & Shader Linking ---
         last_shader_node = self.bsdf_node # Start with the BSDF
 
-        if "_par" in self.modules:
-            # --- Build Fluid Color Mixing Chain ---
-            mix_flu_layers = self.material.node_tree.nodes.new("ShaderNodeMix")
-            mix_flu_layers.label = "Crossfade Flu Layers"
-            mix_flu_layers.data_type = 'RGBA'
-            mix_flu_layers.location = (400, -400)
-            
-            mix_color_flu = self.material.node_tree.nodes.new("ShaderNodeMix")
-            mix_color_flu.label = "Apply Flu Mask"
-            mix_color_flu.data_type = 'RGBA'
-            mix_color_flu.location = (600, -200)
+        # if "_par" in self.modules:
+        # --- Build Fluid Color Mixing Chain ---
+        mix_flu_layers = self.material.node_tree.nodes.new("ShaderNodeMix")
+        mix_flu_layers.label = "Crossfade Flu Layers"
+        mix_flu_layers.data_type = 'RGBA'
+        mix_flu_layers.location = (400, -400)
+        mix_flu_layers.hide = True
 
-            # Link Engine -> Fluid Textures
-            links.new(self.group_node.outputs["Flu Offset (Layer 1)"], self.flu_tex_node_L1.inputs["Vector"])
-            links.new(self.group_node.outputs["Flu Offset (Layer 2)"], self.flu_tex_node_L2.inputs["Vector"])
-            
-            # Link Engine & Textures -> Mixers
-            links.new(self.group_node.outputs["Flu Crossfade"], mix_flu_layers.inputs[0]) # Fac
-            links.new(self.flu_tex_node_L1.outputs["Color"], mix_flu_layers.inputs[6]) # A
-            links.new(self.flu_tex_node_L2.outputs["Color"], mix_flu_layers.inputs[7]) # B
-            
-            links.new(self.group_node.outputs["Flu Mask"], mix_color_flu.inputs[0]) # Fac
-            links.new(self.color_tex_node.outputs["Color"], mix_color_flu.inputs[6]) # A
-            links.new(mix_flu_layers.outputs[2], mix_color_flu.inputs[7]) # B
-            
-            # Link Final Color -> BSDF
-            links.new(mix_color_flu.outputs[2], self.bsdf_node.inputs["Base Color"])
-        else:
+        mix_color_flu = self.material.node_tree.nodes.new("ShaderNodeMix")
+        mix_color_flu.label = "Apply Flu Mask"
+        mix_color_flu.data_type = 'RGBA'
+        mix_color_flu.location = (600, -200)
+        mix_color_flu.hide = True
+
+        # Link Engine -> Fluid Textures
+        links.new(self.group_node.outputs["Flu Offset (Layer 1)"], self.flu_tex_node_L1.inputs["Vector"])
+        links.new(self.group_node.outputs["Flu Offset (Layer 2)"], self.flu_tex_node_L2.inputs["Vector"])
+
+        # Link Engine & Textures -> Mixers
+        links.new(self.group_node.outputs["Flu Crossfade"], mix_flu_layers.inputs[0]) # Fac
+        links.new(self.flu_tex_node_L1.outputs["Color"], mix_flu_layers.inputs[6]) # A
+        links.new(self.flu_tex_node_L2.outputs["Color"], mix_flu_layers.inputs[7]) # B
+
+        links.new(self.group_node.outputs["Flu Mask"], mix_color_flu.inputs[0]) # Fac
+        links.new(self.color_tex_node.outputs["Color"], mix_color_flu.inputs[6]) # A
+        links.new(mix_flu_layers.outputs[2], mix_color_flu.inputs[7]) # B
+
+        # Link Final Color -> BSDF
+        links.new(mix_color_flu.outputs[2], self.bsdf_node.inputs["Base Color"])
+        # else:
             # No fluid, just link Color Map directly
-            links.new(self.color_tex_node.outputs["Color"], self.bsdf_node.inputs["Base Color"])
-            
-        if "_ref" in self.modules:
-            # --- Build Refraction Mixing Chain ---
-            invert_ref = self.material.node_tree.nodes.new("ShaderNodeInvert")
-            invert_ref.location = (800, 600)
-            links.new(self.refraction_tex_node.outputs["Alpha"], invert_ref.inputs[1])
+            # links.new(self.color_tex_node.outputs["Color"], self.bsdf_node.inputs["Base Color"])
 
-            trans_bsdf = self.material.node_tree.nodes.new("ShaderNodeBsdfTransparent")
-            trans_bsdf.location = (800, 450)
-            links.new(self.refraction_color_node.outputs["Color"], trans_bsdf.inputs[0])
+        # if "_ref" in self.modules:
+        # --- Build Refraction Mixing Chain ---
+        links.new(self.refraction_color_node.outputs["Color"], self.group_node.inputs["Refraction Color"])
+        links.new(self.refraction_tex_node.outputs["Color"], self.group_node.inputs["Refraction Map"])
+        final_mix = self.material.node_tree.nodes.new("ShaderNodeMixShader")
+        final_mix.label = "Mix Refraction Shader"
+        final_mix.location = (1050, 0)
+        final_mix.hide = True
+        links.new(self.refraction_tex_node.outputs['Alpha'], final_mix.inputs[0])
+        links.new(self.bsdf_node.outputs[0], final_mix.inputs[1]) # Opaque shader
+        links.new(self.group_node.outputs["Refraction BSDF"], final_mix.inputs[2]) # Glass shader
 
-            glass_bsdf = self.material.node_tree.nodes.new("ShaderNodeBsdfGlass")
-            glass_bsdf.location = (800, 300)
-            glass_bsdf.inputs["IOR"].default_value = 1.450
-            links.new(self.refraction_color_node.outputs["Color"], glass_bsdf.inputs[0])
-            if "_nor" in self.modules:
-                links.new(self.group_node.outputs["Normal"], glass_bsdf.inputs["Normal"])
-            
-            mix_refraction = self.material.node_tree.nodes.new("ShaderNodeMixShader")
-            mix_refraction.location = (1000, 400)
-            links.new(self.refraction_tex_node.outputs["Alpha"], mix_refraction.inputs[0]) 
-            links.new(trans_bsdf.outputs[0], mix_refraction.inputs[1])
-            links.new(glass_bsdf.outputs[0], mix_refraction.inputs[2])
-            
-            final_mix = self.material.node_tree.nodes.new("ShaderNodeMixShader")
-            final_mix.location = (1000, 100)
-            links.new(invert_ref.outputs[0], final_mix.inputs[0])
-            links.new(self.bsdf_node.outputs[0], final_mix.inputs[1]) # Opaque shader
-            links.new(mix_refraction.outputs[0], final_mix.inputs[2]) # Glass shader
-            
-            last_shader_node = final_mix # Update the last node in the chain
-            self.material.use_backface_culling = True
-        
+        last_shader_node = final_mix # Update the last node in the chain
+        self.material.use_backface_culling = True
+
         # --- Link Final Shader -> Output ---
         links.new(last_shader_node.outputs[0], self.material.node_tree.nodes["Material Output"].inputs["Surface"])
 
-        
     def _layout_outer_nodes(self) -> None:
         """Creates frames to organize the external texture nodes."""
         nodes = self.material.node_tree.nodes
-        
+
         frame_combined = nodes.new("NodeFrame")
         frame_combined.label = "Combined Maps (Importer Default)"
         self.color_tex_node.parent = frame_combined
@@ -529,23 +541,23 @@ class DRSMaterial:
         self.sep_roughness_tex_node.parent = frame_sep
         self.sep_emission_tex_node.parent = frame_sep
         self.sep_flu_mask_tex_node.parent = frame_sep
-        
+
         frame_common = nodes.new("NodeFrame")
         frame_common.label = "Common Maps"
         self.normal_tex_node.parent = frame_common
         self.refraction_tex_node.parent = frame_common
         self.refraction_color_node.parent = frame_common
-        
+
         if "_par" in self.modules:
             frame_flu = nodes.new("NodeFrame")
             frame_flu.label = "Flu Animation Textures"
             self.flu_tex_node_L1.parent = frame_flu
             self.flu_tex_node_L2.parent = frame_flu
-        
+
         for node in nodes:
             if node.type == 'FRAME':
                 node.shrink = True
-                
+
     def _def_socket_in(self, tree, name, type, default=None):
         """Helper to create an input socket (BlB 3.x / 4.x compatible)."""
         if bpy.app.version[0] >= 4:
@@ -578,7 +590,7 @@ class DRSMaterial:
             return None
         if not image_name.endswith(".dds"):
             image_name += ".dds"
-        
+
         try:
             img = load_image(
                 os.path.basename(image_name),
@@ -625,7 +637,7 @@ class DRSMaterial:
             self.refraction_tex_node.image = img
             img.colorspace_settings.name = "Non-Color"
             # Refraction implies transparency
-            
+
         if rgb and len(rgb) == 3:
             self.refraction_color_node.outputs[0].default_value = tuple(rgb) + (1.0,)
 
@@ -633,7 +645,7 @@ class DRSMaterial:
         """Assigns the tileable Fluid map (_flu)."""
         if "_par" not in self.modules:
             return # Don't load if flu isn't enabled
-            
+
         img = self.load_image(texture_name, dir_path)
         if img:
             img.colorspace_settings.name = "sRGB"
@@ -647,13 +659,13 @@ class DRSMaterial:
         if mesh_object is None or mesh_object.type != 'MESH':
             print("Warning: A valid mesh object must be provided for wind effect.")
             return
-            
+
         if "WindEffect" in mesh_object.modifiers:
             return # Already exists
 
         modifier = mesh_object.modifiers.new(name="WindEffect", type="NODES")
         node_group = bpy.data.node_groups.new("WindEffectTree", "GeometryNodeTree")
-        
+
         if bpy.app.version[0] >= 4:
             node_group.interface.new_socket(name="Geometry", in_out ="INPUT", socket_type="NodeSocketGeometry")
             node_group.interface.new_socket(name="Geometry", in_out ="OUTPUT", socket_type="NodeSocketGeometry")
@@ -663,10 +675,10 @@ class DRSMaterial:
 
         modifier.node_group = node_group
         links = node_group.links
-        
+
         inp = node_group.nodes.new("NodeGroupInput")
         inp.location = (0, 0)
-        
+
         outp = node_group.nodes.new("NodeGroupOutput")
         outp.location = (1350, -300)
 
@@ -713,7 +725,7 @@ class DRSMaterial:
         map_range.location = (750, 0)
         map_range.data_type = 'FLOAT'
         map_range.clamp = True
-        
+
         min_y, max_y = 0.0, 1.0
         if mesh_object.bound_box:
             y_values = [corner[1] for corner in mesh_object.bound_box]
