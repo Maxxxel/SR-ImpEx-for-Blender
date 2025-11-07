@@ -5179,7 +5179,7 @@ def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLoc
         TARGET = "GameOrientation"
         def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
             for o in c.objects:
-                if o.name == TARGET:
+                if TARGET in o.name:
                     return o
             for ch in c.children:
                 got = visit(ch)
