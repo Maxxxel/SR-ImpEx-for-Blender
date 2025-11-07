@@ -2666,8 +2666,15 @@ def load_drs(
         with ensure_mode("POSE"):
             for animation_key in drs_file.animation_set.mode_animation_keys:
                 for variant in animation_key.animation_set_variants:
+                    # Ensure file exists
+                    if not os.path.exists(os.path.join(dir_name, variant.file)):
+                        logger.log(
+                            f"Animation file {variant.file} not found in {dir_name}.",
+                            "Warning",
+                            "WARNING",
+                        )
+                        continue
                     ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
-                    print(f"Importing Animation: {variant.file}")
                     # Create the Animation
                     import_ska_animation(
                         ska_file,
