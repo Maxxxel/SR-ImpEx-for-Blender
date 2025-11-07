@@ -123,6 +123,9 @@ def _update_alpha_connection(obj):
                 color_tex_node.outputs['Alpha'],
                 drs_node.inputs[4]
             )
+        # Set Alpha Mode of Color Map to 'Straight' (if applicable)
+        if hasattr(color_tex_node, 'image') and color_tex_node.image:
+            color_tex_node.image.alpha_mode = 'STRAIGHT'
     else:
         # Disable Alpha Test: remove alpha connection and set default to 1.0
         if alpha_link:
@@ -130,6 +133,9 @@ def _update_alpha_connection(obj):
         # Set default alpha to fully opaque when not using alpha test
         if 'Alpha' in drs_node.inputs:
             drs_node.inputs[4].default_value = 1.0
+        # Reset Alpha Mode of Color Map to 'None' (if applicable)
+        if hasattr(color_tex_node, 'image') and color_tex_node.image:
+            color_tex_node.image.alpha_mode = 'NONE'
 
 def _find_node_by_label_or_name(node_tree, node_type, label_or_name):
     for n in node_tree.nodes:
