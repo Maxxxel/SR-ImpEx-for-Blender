@@ -632,35 +632,6 @@ def get_bb(obj) -> Tuple[Vector3, Vector3]:
     return bb_min, bb_max
 
 
-def get_image_and_pixels(map_node, map_name):
-    if map_node is None or not map_node.is_linked:
-        return None, None
-
-    from_node = map_node.links[0].from_node
-    if from_node.type in {"SEPRGB", "SEPARATE_COLOR"}:
-        if not from_node.inputs[0].is_linked:
-            logger.log(
-                f"The {map_name} input is not linked. Please connect an Image Node!",
-                "Info",
-                "INFO",
-            )
-            return None, None
-        input_node = from_node.inputs[0].links[0].from_node
-        img = getattr(input_node, "image", None)
-    else:
-        img = getattr(from_node, "image", None)
-
-    if img is None or not img.pixels:
-        logger.log(
-            f"The {map_name} is set, but the Image is None.",
-            "Info",
-            "INFO",
-        )
-        return None, None
-
-    return img, img.pixels[:]
-
-
 def create_new_bf_scene(scene_type: str, collision_support: bool):
     # Create the main collection with a name based on the scene type.
     main_collection_name = f"DRSModel_{scene_type}_CHANGENAME"
@@ -3728,36 +3699,133 @@ def set_metallic_roughness_emission_map(
     metallic_src, roughness_src, emission_src, flu_mask_src,   # NEW: flu_mask_src
     new_mesh, mesh_index, model_name, folder_path):
     # resolve images from sockets/nodes
-    img_r = _first_image_upstream(metallic_src)  if hasattr(metallic_src, "links")  else (metallic_src.image  if metallic_src else None)
-    img_g = _first_image_upstream(roughness_src) if hasattr(roughness_src, "links") else (roughness_src.image if roughness_src else None)
-    img_b = _first_image_upstream(flu_mask_src)  if hasattr(flu_mask_src, "links")  else (flu_mask_src.image  if flu_mask_src else None)
-    img_a = _first_image_upstream(emission_src)  if hasattr(emission_src, "links")  else (emission_src.image  if emission_src else None)
+    img_r = _first_image_upstream(metallic_src, 16, "_par")  if hasattr(metallic_src, "links")  else (metallic_src.image  if metallic_src else None)
+    img_g = _first_image_upstream(roughness_src, 16, "_par") if hasattr(roughness_src, "links") else (roughness_src.image if roughness_src else None)
+    img_b = _first_image_upstream(flu_mask_src, 16, "_par")  if hasattr(flu_mask_src, "links")  else (flu_mask_src.image  if flu_mask_src else None)
+    img_a = _first_image_upstream(emission_src, 16, "_par")  if hasattr(emission_src, "links")  else (emission_src.image  if emission_src else None)
+
+    imgs = [img_r, img_g, img_b, img_a]
+    provided = [i for i in imgs if i]
 
     # If nothing is present, bail
-    if not any([img_r, img_g, img_a, img_b]):
+    if not provided:
         logger.log("No Metallic/Roughness/Emission/Flu Mask maps found on the DRS Shader input chain.", "Warning", "WARNING")
         return
 
-    # load pixels (you already have get_image_and_pixels)
-    _, px_r = get_image_and_pixels(metallic_src, "metallic_map")  if metallic_src else (None, None)
-    _, px_g = get_image_and_pixels(roughness_src,"roughness_map") if roughness_src else (None, None)
-    _, px_b = get_image_and_pixels(flu_mask_src, "flu_mask")      if flu_mask_src else (None, None)
-    _, px_a = get_image_and_pixels(emission_src, "emission_map")  if emission_src else (None, None)
+    # Two allowed patterns:
+    # 1) Single-image packing: all non-None entries point to the same Image instance -> copy channels from that image
+    # 2) Multi-image packing: every non-None entry is a distinct Image instance (artist provided separate images per semantic) -> pull channels separately
+    # Any other combination (e.g. some duplicates but not all equal) is considered a mixed case and is rejected.
+    unique_ids = {id(i) for i in provided}
+    if len(unique_ids) not in (1, len(provided)):
+        # Mixed case detected
+        names = [f"R:{getattr(img_r,'name',None)} G:{getattr(img_g,'name',None)} B:{getattr(img_b,'name',None)} A:{getattr(img_a,'name',None)}"]
+        logger.log(
+            "Inconsistent parameter map sources: some channels reference the same image while others reference different images.\n"
+            f"Found sources -> R: {getattr(img_r,'name',None)}, G: {getattr(img_g,'name',None)}, B: {getattr(img_b,'name',None)}, A: {getattr(img_a,'name',None)}\n"
+            "Accepted patterns: either a single image providing all channels OR separate image per channel. Mixed usage is unsupported — please use one of the two patterns.",
+            "Error",
+            "ERROR",
+        )
+        return
 
-    # pick size from first available image
-    base_img = next(i for i in [img_r, img_g, img_b, img_a] if i)
-    width, height = base_img.size
+    # pick size from first available image and validate sizes for multi-image case
+    base_img = provided[0]
+    try:
+        width, height = base_img.size
+    except Exception:
+        logger.log(f"Unable to read size from image '{getattr(base_img,'name',str(base_img))}'.", "Error", "ERROR")
+        return
 
-    new_img = bpy.data.images.new(name="temp_image", width=width, height=height, alpha=True, float_buffer=False)
-    new_pixels = []
-    total = width*height*4
-    for i in range(0, total, 4):
-        new_pixels.extend([
-            px_r[i]     if px_r else 0,      # R = Metallic
-            px_g[i+1]   if px_g else 0,      # G = Roughness
-            px_b[i+2]   if px_b else 0,      # B = Flu Mask
-            px_a[i+3]   if px_a else 0,      # A = Emission
-        ])
+    if len(unique_ids) > 1:
+        # ensure all images have identical dimensions
+        for im in provided[1:]:
+            if getattr(im, 'size', (None, None)) != (width, height):
+                logger.log(
+                    "Parameter map source size mismatch: all source images must have identical width/height.\n"
+                    f"Sizes -> base ({base_img.name}): {width}x{height}, {im.name}: {getattr(im,'size',(None,None))}",
+                    "Error",
+                    "ERROR",
+                )
+                return
+
+    # helper to read raw pixels and channel count
+    def read_pixels(img):
+        # ensure image has pixel data loaded
+        try:
+            px = list(img.pixels[:])
+        except Exception:
+            # try to load/reload image then read again
+            try:
+                img.reload()
+                px = list(img.pixels[:])
+            except Exception:
+                logger.log(f"Failed to read pixel data from image '{getattr(img,'name',str(img))}'.", "Error", "ERROR")
+                return None, None
+        channels = getattr(img, 'channels', 4)
+        return px, channels
+
+    px_r, ch_r = (None, 0)
+    px_g, ch_g = (None, 0)
+    px_b, ch_b = (None, 0)
+    px_a, ch_a = (None, 0)
+    if img_r:
+        px_r, ch_r = read_pixels(img_r)
+        if px_r is None:
+            return
+    if img_g:
+        px_g, ch_g = read_pixels(img_g)
+        if px_g is None:
+            return
+    if img_b:
+        px_b, ch_b = read_pixels(img_b)
+        if px_b is None:
+            return
+    if img_a:
+        px_a, ch_a = read_pixels(img_a)
+        if px_a is None:
+            return
+
+    # accessor for arbitrary channel counts
+    def get_chan(px, channels, pix_idx, chan_idx):
+        if px is None:
+            return 0.0
+        if channels == 4:
+            return px[4 * pix_idx + chan_idx]
+        if channels == 3:
+            if chan_idx < 3:
+                return px[3 * pix_idx + chan_idx]
+            return 1.0
+        if channels == 2:
+            # assume [R, A] or [G, A] style — map R->R, else provide 0/1 defaults
+            if chan_idx == 0:
+                return px[2 * pix_idx]
+            if chan_idx == 3:
+                return px[2 * pix_idx + 1]
+            return 0.0
+        if channels == 1:
+            return px[pix_idx]
+        # unknown channel count
+        return 0.0
+
+    # create new image and fill pixels
+    new_img = bpy.data.images.new(name="temp_param_map", width=width, height=height, alpha=True, float_buffer=False)
+    new_pixels = [0.0] * (width * height * 4)
+    for pix in range(width * height):
+        # R = Metallic -> take channel 0 from img_r if present
+        r = get_chan(px_r, ch_r, pix, 0) if img_r else 0.0
+        # G = Roughness -> take channel 1 from img_g if present
+        g = get_chan(px_g, ch_g, pix, 1) if img_g else 0.0
+        # B = Flu Mask -> take channel 2 from img_b if present
+        b = get_chan(px_b, ch_b, pix, 2) if img_b else 0.0
+        # A = Emission -> take channel 3 from img_a if present
+        a = get_chan(px_a, ch_a, pix, 3) if img_a else 0.0
+        base = 4 * pix
+        new_pixels[base + 0] = r
+        new_pixels[base + 1] = g
+        new_pixels[base + 2] = b
+        new_pixels[base + 3] = a
+
     new_img.pixels[:] = new_pixels
     new_img.file_format = "PNG"
     new_img.alpha_mode = "CHANNEL_PACKED"
@@ -3816,19 +3884,19 @@ def set_flu_map_from_material(mat: bpy.types.Material,
 def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new_mesh, mesh_index, model_name, folder_path) -> List[float]:
     # default color
     rgb = [0.0, 0.0, 0.0]
-    if not refraction_color_node or not refraction_color_node.is_linked:
-        return rgb
-    ref_parent = refraction_color_node.links[0].from_node
-    col = list(getattr(ref_parent.outputs[0], "default_value", (0,0,0,1)))
-    if len(col) >= 3:
-        rgb = col[:3]
+    # get color
+    if hasattr(refraction_color_node, "outputs") and len(refraction_color_node.outputs) > 0:
+        color = refraction_color_node.outputs[0].default_value
+        rgb = [color[0], color[1], color[2]]
+    else:
+        logger.log("Refraction color node has no outputs. Using default color [0.0, 0.0, 0.0].", "Warning", "WARNING")
 
-    if not refraction_map_node or not refraction_map_node.is_linked:
-        return rgb
-
-    img = getattr(refraction_map_node.links[0].from_node, "image", None)
-    if img is None:
-        logger.log("The refraction_map Texture is not an Image or the Image is None!", "Info", "INFO")
+    # get image from refraction map node (TEX_IMAGE)
+    img = None
+    if hasattr(refraction_map_node, "image"):
+        img = refraction_map_node.image
+    if not img:
+        logger.log("Refraction map image not found on the DRS Shader input chain. Just using default color and no Map.", "Warning", "WARNING")
         return rgb
 
     new_mesh.textures.length += 1
@@ -4002,7 +4070,9 @@ def create_mesh(
     # so for packing we fall back to the artist override image if present, otherwise we’ll use 0.
     flu_mask_src = None
     if group and "Flu Mask" in group.outputs:
-        flu_mask_src = group.outputs["Flu Mask"]  # tells us Flu Mask exists in the graph :contentReference[oaicite:3]{index=3}
+        flu_mask_src = group.outputs["Flu Mask"]  # tells us Flu Mask exists in the graph
+    if flu_mask_src is None:
+        logger.log(f"Flu Mask output not found in DRS Engine group for mesh {mesh.name}.", "Info", "INFO")
     # Provide an image when available (artist override)
     flu_mask_img_node = _find_by_label(mat, 'TEX_IMAGE', 'Separate Flu Mask')
 
@@ -4013,6 +4083,8 @@ def create_mesh(
     param_img_node     = _find_by_label(mat, 'TEX_IMAGE', 'Parameter Map (_par)')  # optional fallback
     color_img_node     = _find_by_label(mat, 'TEX_IMAGE', 'Color Map (_col)')
     normal_img_node    = _find_by_label(mat, 'TEX_IMAGE', 'Normal Map (_nor)')
+    ref_img_node       = _find_by_label(mat, 'TEX_IMAGE', 'Refraction Map (_ref)')
+    ref_col_node       = _find_by_label(mat, 'RGB', 'Refraction Color')
     
     # Assure we have .image not None
     if metal_img_node and not getattr(metal_img_node, "image", None):
@@ -4027,6 +4099,8 @@ def create_mesh(
         color_img_node = None
     if normal_img_node and not getattr(normal_img_node, "image", None):
         normal_img_node = None
+    if ref_img_node and not getattr(ref_img_node, "image", None):
+        ref_img_node = None
 
     # -86061055: Bool, Textures, Refraction, Materials
     # -86061054: Bool, Textures, Refraction, Materials, LOD
@@ -4129,12 +4203,14 @@ def create_mesh(
     # Refraction
     refraction = Refraction()
     refraction.length = 1
-    # if refraction_color and refraction_map and _bit(18):
-    #     refraction.rgb = set_refraction_color_and_map(
-    #         refraction_color, refraction_map, new_mesh, mesh_index, model_name, folder_path
-    #     )
-    # else:
-    refraction.rgb = [0.0, 0.0, 0.0]
+    if _bit(18):
+        refraction_src = ref_img_node if ref_img_node else None
+        refraction_color = ref_col_node if ref_col_node else None
+        refraction.rgb = set_refraction_color_and_map(
+            refraction_color, refraction_src, new_mesh, mesh_index, model_name, folder_path
+        )
+    else:
+        refraction.rgb = [0.0, 0.0, 0.0]
     new_mesh.refraction = refraction
 
     # Materials
