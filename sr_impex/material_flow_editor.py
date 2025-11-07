@@ -403,16 +403,6 @@ def _on_bit_18_changed(self, ctx):
     obj = ctx.object if hasattr(ctx, 'object') else None
     _update_refraction_connection(obj)
 
-
-class DRS_MaterialFlagsPG(PropertyGroup):
-    bool_parameter: IntProperty(
-        name="Raw bool_parameter",
-        description="32-bit integer of material flags",
-        default=0,
-        min=0,
-        update=_on_raw_changed,
-    )  # type: ignore
-
 def _bit_prop_factory(idx):
     if idx == 0:
         return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(0, f"Flag {idx}"), update=_on_bit_0_changed)
@@ -426,6 +416,15 @@ def _bit_prop_factory(idx):
         return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(18, f"Flag {idx}"), update=_on_bit_18_changed)
     # default
     return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(idx, f"Unknown Bitflag #{idx}"), update=_on_bit_changed)
+
+class DRS_MaterialFlagsPG(PropertyGroup):
+    bool_parameter: IntProperty(
+        name="Raw bool_parameter",
+        description="32-bit integer of material flags",
+        default=0,
+        min=0,
+        update=_on_raw_changed,
+    )  # type: ignore
 
 # --- Flow PG ------------------------------------------------------------------
 class DRS_FlowPG(PropertyGroup):
@@ -516,10 +515,9 @@ class DRS_PT_MaterialFlags(Panel):
         layout.prop(flags, "bool_parameter")
 
         max_known = max(KNOWN_MATERIAL_FLAGS.keys()) if KNOWN_MATERIAL_FLAGS else 0
-        max_bit = max(_highest_relevant_bit(flags.bool_parameter), max_known, 7)
 
         col = layout.column(align=True)
-        for i in range(max_bit + 1):
+        for i in range(_MAX_BITS):
             label = KNOWN_MATERIAL_FLAGS.get(i, f"Unknown Bitflag #{i+1}")
             col.prop(flags, f"bit_{i}", text=f"{label} (Bit {i})")
 
