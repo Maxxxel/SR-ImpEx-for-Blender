@@ -589,9 +589,11 @@ def _show_marker(parent: bpy.types.Collection, vis_job: int, ska: str, pos, dire
 
 
 # Build/refresh all marker objects from current state (hidden by default)
-def _sync_marker_objects_from_state():
+def _sync_marker_objects_from_state(used_actions: set[str] = None):
     col = _active_top_drsmodel()
     if not col:
+        return
+    if used_actions is None or not used_actions or len(used_actions) == 0:
         return
     st = _state()
     _hide_all_markers(col)
@@ -606,6 +608,11 @@ def _sync_marker_objects_from_state():
             ).strip()
             if not ska:
                 continue
+            # Check if this variant's ska is used in the current model action set
+            for trimmed_action_name in used_actions:
+                if not trimmed_action_name in ska:
+                    continue
+            
             _ensure_marker_object(col, vj, ska)
 
 
@@ -1256,8 +1263,18 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
     except Exception:
         pass
 
+    # Print all actions used by the model's armature for debugging
+    arm = _find_armature(col)
+    used_actions = set()
+    if arm:
+        for mk, vlist in tmp:
+            for item in vlist:
+                v = _v_of(item)
+                if v.file and v.file != "NONE":
+                    used_actions.add(v.file)
+
     # Build/update hidden marker objects for all present markers
-    _sync_marker_objects_from_state()
+    _sync_marker_objects_from_state(used_actions)
 
 
 def _write_state_to_blob(col: bpy.types.Collection):

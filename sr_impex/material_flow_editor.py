@@ -123,6 +123,9 @@ def _update_alpha_connection(obj):
                 color_tex_node.outputs['Alpha'],
                 drs_node.inputs[4]
             )
+        # Set Alpha Mode of Color Map to 'Straight' (if applicable)
+        if hasattr(color_tex_node, 'image') and color_tex_node.image:
+            color_tex_node.image.alpha_mode = 'STRAIGHT'
     else:
         # Disable Alpha Test: remove alpha connection and set default to 1.0
         if alpha_link:
@@ -130,6 +133,9 @@ def _update_alpha_connection(obj):
         # Set default alpha to fully opaque when not using alpha test
         if 'Alpha' in drs_node.inputs:
             drs_node.inputs[4].default_value = 1.0
+        # Reset Alpha Mode of Color Map to 'None' (if applicable)
+        if hasattr(color_tex_node, 'image') and color_tex_node.image:
+            color_tex_node.image.alpha_mode = 'NONE'
 
 def _find_node_by_label_or_name(node_tree, node_type, label_or_name):
     for n in node_tree.nodes:
@@ -403,16 +409,6 @@ def _on_bit_18_changed(self, ctx):
     obj = ctx.object if hasattr(ctx, 'object') else None
     _update_refraction_connection(obj)
 
-
-class DRS_MaterialFlagsPG(PropertyGroup):
-    bool_parameter: IntProperty(
-        name="Raw bool_parameter",
-        description="32-bit integer of material flags",
-        default=0,
-        min=0,
-        update=_on_raw_changed,
-    )  # type: ignore
-
 def _bit_prop_factory(idx):
     if idx == 0:
         return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(0, f"Flag {idx}"), update=_on_bit_0_changed)
@@ -426,6 +422,15 @@ def _bit_prop_factory(idx):
         return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(18, f"Flag {idx}"), update=_on_bit_18_changed)
     # default
     return BoolProperty(name=KNOWN_MATERIAL_FLAGS.get(idx, f"Unknown Bitflag #{idx}"), update=_on_bit_changed)
+
+class DRS_MaterialFlagsPG(PropertyGroup):
+    bool_parameter: IntProperty(
+        name="Raw bool_parameter",
+        description="32-bit integer of material flags",
+        default=0,
+        min=0,
+        update=_on_raw_changed,
+    )  # type: ignore
 
 # --- Flow PG ------------------------------------------------------------------
 class DRS_FlowPG(PropertyGroup):
@@ -457,7 +462,7 @@ class DRS_WindPG(PropertyGroup):
 
 # --- Helpers ------------------------------------------------------------------
 def _in_meshes_collection(obj: bpy.types.Object) -> bool:
-    return any(col.name == "Meshes_Collection" for col in obj.users_collection)
+    return any("Meshes_Collection" in col.name for col in obj.users_collection)
 
 def _in_ground_decal_collection(obj: bpy.types.Object) -> bool:
     return any(col.name == "GroundDecal_Collection" for col in obj.users_collection)
@@ -516,10 +521,9 @@ class DRS_PT_MaterialFlags(Panel):
         layout.prop(flags, "bool_parameter")
 
         max_known = max(KNOWN_MATERIAL_FLAGS.keys()) if KNOWN_MATERIAL_FLAGS else 0
-        max_bit = max(_highest_relevant_bit(flags.bool_parameter), max_known, 7)
 
         col = layout.column(align=True)
-        for i in range(max_bit + 1):
+        for i in range(_MAX_BITS):
             label = KNOWN_MATERIAL_FLAGS.get(i, f"Unknown Bitflag #{i+1}")
             col.prop(flags, f"bit_{i}", text=f"{label} (Bit {i})")
 
