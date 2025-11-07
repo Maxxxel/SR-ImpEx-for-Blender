@@ -1897,6 +1897,7 @@ def _find_layer_collection(root: bpy.types.LayerCollection, col: bpy.types.Colle
             return f
     return None
 
+
 def ensure_in_view_layer(col: bpy.types.Collection):
     """Guarantee `col` is present (and not excluded) in the current ViewLayer."""
     scene = bpy.context.scene
@@ -3707,7 +3708,7 @@ def set_color_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path) -
     return True
 
 
-def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag: int) -> int:
+def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path) -> int:
     img = None
     if hasattr(sock_or_node, "links"):
         img = _first_image_upstream(sock_or_node, 16, "_nor")
@@ -3721,14 +3722,11 @@ def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path, 
     t.length = len(t.name)
     t.identifier = 1852992883
     new_mesh.textures.textures.append(t)
-    bool_param_bit_flag += 100000000000000000
-    return bool_param_bit_flag
 
 
 def set_metallic_roughness_emission_map(
     metallic_src, roughness_src, emission_src, flu_mask_src,   # NEW: flu_mask_src
-    new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag: int
-) -> int:
+    new_mesh, mesh_index, model_name, folder_path):
     # resolve images from sockets/nodes
     img_r = _first_image_upstream(metallic_src)  if hasattr(metallic_src, "links")  else (metallic_src.image  if metallic_src else None)
     img_g = _first_image_upstream(roughness_src) if hasattr(roughness_src, "links") else (roughness_src.image if roughness_src else None)
@@ -3737,7 +3735,8 @@ def set_metallic_roughness_emission_map(
 
     # If nothing is present, bail
     if not any([img_r, img_g, img_a, img_b]):
-        return -1
+        logger.log("No Metallic/Roughness/Emission/Flu Mask maps found on the DRS Shader input chain.", "Warning", "WARNING")
+        return
 
     # load pixels (you already have get_image_and_pixels)
     _, px_r = get_image_and_pixels(metallic_src, "metallic_map")  if metallic_src else (None, None)
@@ -3770,8 +3769,6 @@ def set_metallic_roughness_emission_map(
     t.length = len(t.name)
     t.identifier = 1936745324
     new_mesh.textures.textures.append(t)
-    bool_param_bit_flag += 10000000000000000
-    return bool_param_bit_flag
 
 
 def set_flu_map_from_material(mat: bpy.types.Material,
@@ -3969,6 +3966,18 @@ def create_mesh(
     flu_map = None
     skip_normal_map = True
     skip_param_map = True
+    
+    # Gather user flags
+    user_flags = 0
+    try:
+        mp = getattr(mesh, "drs_material", None)
+        if mp:
+            user_flags = int(mp.bool_parameter)
+    except Exception:
+        user_flags = 0
+    
+    def _bit(i: int) -> bool:
+        return (user_flags >> i) & 1
 
     mat = mesh.active_material if hasattr(mesh, "active_material") else None
     bsdf = _find_drs_bsdf(mat)  # Principled named "DRS Shader" (created in material builder) :contentReference[oaicite:1]{index=1}
@@ -4019,41 +4028,26 @@ def create_mesh(
     if normal_img_node and not getattr(normal_img_node, "image", None):
         normal_img_node = None
 
-    # if flu_map is None or flu_map.is_linked is False:
-    # new_mesh.material_parameters = -86061055
     # -86061055: Bool, Textures, Refraction, Materials
     # -86061054: Bool, Textures, Refraction, Materials, LOD
     # -86061053: Bool, Textures, Refraction, Materials, LOD, Empty String
     # -86061052: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff
     # -86061051: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff
-    # else:
     # -86061050: Bool, Textures, Refraction, Materials, LOD, Empty String, Material Stuff, Flow
+
     new_mesh.material_parameters = -86061050  # Hex: 0xFADED006
-    new_mesh.material_stuff = 0  # Added for Hex 0xFADED004+
+    new_mesh.material_stuff = 0  # Added for Hex 0xFADED004 onwards
     # Level of Detail
-    new_mesh.level_of_detail = LevelOfDetail()  # Added for Hex 0xFADED002+
+    new_mesh.level_of_detail = LevelOfDetail()  # Added for Hex 0xFADED002 onwards
     # Empty String
-    new_mesh.empty_string = EmptyString()  # Added for Hex 0xFADED003+
+    new_mesh.empty_string = EmptyString()  # Added for Hex 0xFADED003 onwards
     # Flow
-    new_mesh.flow = Flow()
+    new_mesh.flow = Flow() # Added for Hex 0xFADED006 onwards
 
     # Individual Material Parameters depending on the MaterialID:
-    new_mesh.bool_parameter = 0
-    bool_param_bit_flag = 0
+    new_mesh.bool_parameter = user_flags  # from UI
     # Textures
     new_mesh.textures = Textures()
-
-    # Gather user flags
-    user_flags = 0
-    try:
-        mp = getattr(mesh, "drs_material", None)
-        if mp:
-            user_flags = int(mp.bool_parameter)
-    except Exception:
-        user_flags = 0
-
-    def _bit(i: int) -> bool:
-        return (user_flags >> i) & 1
 
     # --- COLOR / ALPHA from BSDF chain ---
     # Color map is required → resolve from BSDF.Base Color chain (falls back to the labeled image)
@@ -4065,8 +4059,10 @@ def create_mesh(
     # --- NORMAL from BSDF chain (bit 17) ---
     if _bit(17):
         normal_src = normal_in if (normal_in and normal_in.is_linked) else normal_img_node
-        bool_param_bit_flag = set_normal_map(
-            normal_src, new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag
+        if normal_src is None:
+            logger.log(f"Normal map is enabled in bit 17, but no normal map found for mesh {mesh.name}.", "Warning", "WARNING")
+        set_normal_map(
+            normal_src, new_mesh, mesh_index, model_name, folder_path
         )
 
     # --- PARAM (_par) from artist images (bit 16) ---
@@ -4077,25 +4073,19 @@ def create_mesh(
         mr_src_a = emis_img_node  or (param_img_node.outputs['Alpha'] if param_img_node else None)
         mr_src_b = flu_mask_src or (flu_mask_img_node if flu_mask_img_node else None)
 
-        bool_param_bit_flag = set_metallic_roughness_emission_map(
+        set_metallic_roughness_emission_map(
             mr_src_r, mr_src_g, mr_src_a, mr_src_b,
-            new_mesh, mesh_index, model_name, folder_path, bool_param_bit_flag
+            new_mesh, mesh_index, model_name, folder_path
         )
-        if bool_param_bit_flag == -1:
-            return None, per_mesh_bone_data
         
-    # --- FLU map image (behind bit 16, same enable as the par system) ---
-    if _bit(16) and flu_tex_l1 and getattr(flu_tex_l1, "image", None):
-        new_mesh.textures.length += 1
-        t = Texture()
-        t.name = get_converted_texture(flu_tex_l1.image, model_name, mesh_index, folder_path, file_ending="_flu", dxt_format="DXT5")
-        t.length = len(t.name)
-        t.identifier = 1668510770
-        new_mesh.textures.textures.append(t)
-
-    # Alpha Test bit 0
-    if _bit(0):
-        bool_param_bit_flag += 1
+        # --- FLU map image (behind bit 16, same enable as the par system) ---
+        if flu_tex_l1 and getattr(flu_tex_l1, "image", None):
+            new_mesh.textures.length += 1
+            t = Texture()
+            t.name = get_converted_texture(flu_tex_l1.image, model_name, mesh_index, folder_path, file_ending="_flu", dxt_format="DXT5")
+            t.length = len(t.name)
+            t.identifier = 1668510770
+            new_mesh.textures.textures.append(t)
 
     # --- SR override Flow from UI (only when enabled)
     try:
@@ -4168,7 +4158,6 @@ def create_mesh(
             "WARNING",
         )
     
-    new_mesh.bool_parameter = int(str(bool_param_bit_flag), 2)
     return new_mesh, per_mesh_bone_data
 
 

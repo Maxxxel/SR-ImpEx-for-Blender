@@ -456,7 +456,7 @@ class DRS_WindPG(PropertyGroup):
 
 # --- Helpers ------------------------------------------------------------------
 def _in_meshes_collection(obj: bpy.types.Object) -> bool:
-    return any(col.name == "Meshes_Collection" for col in obj.users_collection)
+    return any("Meshes_Collection" in col.name for col in obj.users_collection)
 
 def _in_ground_decal_collection(obj: bpy.types.Object) -> bool:
     return any(col.name == "GroundDecal_Collection" for col in obj.users_collection)
