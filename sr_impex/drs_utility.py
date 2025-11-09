@@ -1201,6 +1201,8 @@ def get_cache_for_type(file_ending: str) -> dict:
         return texture_cache_par
     elif file_ending == "_ref":
         return texture_cache_ref
+    elif file_ending == "_flu":
+        return texture_cache_flu
     else:
         # Fallback to a general cache if needed.
         logger.log(
