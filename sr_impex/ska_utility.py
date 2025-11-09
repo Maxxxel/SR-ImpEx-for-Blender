@@ -89,6 +89,7 @@ def get_actions(current_collection: bpy.types.Collection = None) -> List[str]:
     # Return sorted list for consistent ordering
     return sorted(relevant_actions)
 
+
 def generate_bone_id(bone_name: str) -> int:
     """Generate a unique bone ID based on the bone name."""
     # Generate a unique ID for the bone based on its name
@@ -149,66 +150,72 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     bone_lib = {}
 
     # Iterate over all location_fcurves and extract the location
-    for data_path, fcurves in location_fcurves.items():
-        # Get the bone name from the data path
-        bone_name = data_path.split('"')[1]
-        bone_lib[bone_name] = (
-            {
-                "loc_per_time": {"vec": [], "times": []},
-                "rot_per_time": {"quat": [], "times": []},
-            }
-            if bone_name not in bone_lib
-            else bone_lib[bone_name]
-        )
+    try:
+        for data_path, fcurves in location_fcurves.items():
+            # Get the bone name from the data path
+            bone_name = data_path.split('"')[1]
+            bone_lib[bone_name] = (
+                {
+                    "loc_per_time": {"vec": [], "times": []},
+                    "rot_per_time": {"quat": [], "times": []},
+                }
+                if bone_name not in bone_lib
+                else bone_lib[bone_name]
+            )
 
-        coords = [[], [], []]
+            coords = [[], [], []]
 
-        for fcurve in fcurves:
-            axis_index = fcurve.array_index
+            for fcurve in fcurves:
+                axis_index = fcurve.array_index
 
-            assert axis_index < 3, f"Invalid axis {axis_index}"
+                assert axis_index < 3, f"Invalid axis {axis_index}"
 
-            # We can have multiple values for X | Y | Z over time
-            for kp in fcurve.keyframe_points:
-                coords[axis_index].append(kp.co[1])  # X | Y | Z value over time
-                if axis_index == 0:
-                    assert duration > 0, f"Duration is zero: {action.frame_range[1]} / {fps}"
-                    assert fps > 0, "FPS is zero"
-                    t = (kp.co[0] / fps) / duration
-                    bone_lib[bone_name]["loc_per_time"]["times"].append(t)
+                # We can have multiple values for X | Y | Z over time
+                for kp in fcurve.keyframe_points:
+                    coords[axis_index].append(kp.co[1])  # X | Y | Z value over time
+                    if axis_index == 0:
+                        assert duration > 0, f"Duration is zero: {action.frame_range[1]} / {fps}"
+                        assert fps > 0, "FPS is zero"
+                        t = (kp.co[0] / fps) / duration
+                        bone_lib[bone_name]["loc_per_time"]["times"].append(t)
 
-        assert (
-            len(coords[0]) == len(coords[1]) == len(coords[2])
-        ), "Uneven loc keycounts"
+            assert (
+                len(coords[0]) == len(coords[1]) == len(coords[2])
+            ), "Uneven loc keycounts"
 
-        # Generate XYZ pairs
-        bone_lib[bone_name]["loc_per_time"]["vec"].extend(zip(*coords))
+            # Generate XYZ pairs
+            bone_lib[bone_name]["loc_per_time"]["vec"].extend(zip(*coords))
+    except Exception as e:
+        raise RuntimeError(f"Error processing location F-curves: {e}") from e
 
     # Iterate over all rotation_fcurves and extract the rotation
-    for data_path, fcurves in rotation_fcurves.items():
-        bone_name = data_path.split('"')[1]
-        # We should have the bone in the bone_lib
-        assert bone_name in bone_lib, f"Bone {bone_name} not found in the bone_lib"
+    try:
+        for data_path, fcurves in rotation_fcurves.items():
+            bone_name = data_path.split('"')[1]
+            # We should have the bone in the bone_lib
+            assert bone_name in bone_lib, f"Bone {bone_name} not found in the bone_lib"
 
-        coords = [[], [], [], []]
+            coords = [[], [], [], []]
 
-        for fcurve in fcurves:
-            axis_index = fcurve.array_index
+            for fcurve in fcurves:
+                axis_index = fcurve.array_index
 
-            assert axis_index < 4, f"Invalid axis {axis_index}"
+                assert axis_index < 4, f"Invalid axis {axis_index}"
 
-            for kp in fcurve.keyframe_points:
-                coords[axis_index].append(kp.co[1])  # W | X | Y | Z value over time
-                if axis_index == 0:
-                    t = (kp.co[0] / fps) / duration
-                    bone_lib[bone_name]["rot_per_time"]["times"].append(t)
+                for kp in fcurve.keyframe_points:
+                    coords[axis_index].append(kp.co[1])  # W | X | Y | Z value over time
+                    if axis_index == 0:
+                        t = (kp.co[0] / fps) / duration
+                        bone_lib[bone_name]["rot_per_time"]["times"].append(t)
 
-        assert all(
-            len(coords[i]) == len(coords[0]) for i in range(4)
-        ), "Uneven rot keycounts"
+            assert all(
+                len(coords[i]) == len(coords[0]) for i in range(4)
+            ), "Uneven rot keycounts"
 
-        # Generate WXYZ pairs
-        bone_lib[bone_name]["rot_per_time"]["quat"].extend(zip(*coords))
+            # Generate WXYZ pairs
+            bone_lib[bone_name]["rot_per_time"]["quat"].extend(zip(*coords))
+    except Exception as e:
+        raise RuntimeError(f"Error processing rotation F-curves: {e}") from e
 
     # Create Header, Time and Keyframes
     headers: list[SKAHeader] = []
@@ -229,105 +236,123 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
 
     total_frames = duration * fps
 
-    for bone_name, data in bone_lib.items():
-        bone_id = bones_list.get(bone_name, generate_bone_id(bone_name))
+    try:
+        for bone_name, data in bone_lib.items():
+            bone_id = bones_list.get(bone_name, generate_bone_id(bone_name))
 
-        # Retrieve the bone from the armature's rest data
-        armature_bone: bpy.types.Bone = armature.data.bones[bone_name]
-        if armature_bone.parent:
-            bind_matrix = (
-                armature_bone.parent.matrix_local.inverted_safe()
-                @ armature_bone.matrix_local
-            )
-        else:
-            bind_matrix = armature_bone.matrix_local
-
-        bind_loc = bind_matrix.to_translation()
-        bind_rot = bind_matrix.to_quaternion()
-
-        loc_header = SKAHeader()
-        loc_header.type = 0
-        loc_header.tick = last_tick
-        loc_header.interval = len(data["loc_per_time"]["vec"])
-        loc_header.bone_id = bone_id
-        last_tick += loc_header.interval
-        times.extend(data["loc_per_time"]["times"])
-        headers.append(loc_header)
-
-        loc_fcs = loc_fcc_map[bone_name]
-        for i, loc in enumerate(data["loc_per_time"]["vec"]):
-            original_loc = bind_rot @ Vector(loc) + bind_loc
-            loc_keyframe = SKAKeyframe()
-            loc_keyframe.w = 1.0
-            loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
-            time = data["loc_per_time"]["times"][i]
-            # TODO: Maybe also zero values have a smoothing?
-            if i == len(data["loc_per_time"]["vec"]) - 1 or time == 0.0:
-                loc_keyframe.tan_x = 0.0
-                loc_keyframe.tan_y = 0.0
-                loc_keyframe.tan_z = 0.0
-                loc_keyframe.tan_w = 0.0
-            else:
-                # invert Bézier→Hermite for each axis
-                def M(fc: bpy.types.FCurve) -> float:
-                    p = fc.keyframe_points[i]
-                    n = fc.keyframe_points[i + 1]
-                    df = n.co[0] - p.co[0]
-                    return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
-
-                M_local = Vector((M(loc_fcs[0]), M(loc_fcs[1]), M(loc_fcs[2])))
-                M_file = bind_rot @ M_local
-                loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = M_file[:]
-            loc_keyframe.tan_w = 0.0  # No tangents for W in location keyframes
-            keyframes.append(loc_keyframe)
-
-        rot_header = SKAHeader()
-        rot_header.type = 1
-        rot_header.tick = last_tick
-        rot_header.interval = len(data["rot_per_time"]["quat"])
-        rot_header.bone_id = bone_id
-        last_tick += rot_header.interval
-        times.extend(data["rot_per_time"]["times"])
-        headers.append(rot_header)
-
-        rot_fcs = rot_fcc_map[bone_name]
-        for i, quat in enumerate(data["rot_per_time"]["quat"]):
-            stored_quat = Quaternion(quat)  # Assuming quat is in (w, x, y, z) order
-            original_quat = bind_rot @ stored_quat
-            rot_keyframe = SKAKeyframe()
-            rot_keyframe.w, rot_keyframe.x, rot_keyframe.y, rot_keyframe.z = (
-                -original_quat.w,
-                original_quat.x,
-                original_quat.y,
-                original_quat.z,
-            )
-
-            time = data["rot_per_time"]["times"][i]
-            if i == len(data["rot_per_time"]["quat"]) - 1 or time == 0.0:
-                # TODO: Maybe also zero values have a smoothing?
-                rot_keyframe.tan_x = 0.0
-                rot_keyframe.tan_y = 0.0
-                rot_keyframe.tan_z = 0.0
-                rot_keyframe.tan_w = 0.0
-            else:
-                # invert Bézier→Hermite for each axis
-                def Mq(fc: bpy.types.FCurve) -> float:
-                    p = fc.keyframe_points[i]
-                    n = fc.keyframe_points[i + 1]
-                    df = n.co[0] - p.co[0]
-                    return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
-
-                local_q = Quaternion(
-                    (Mq(rot_fcs[0]), Mq(rot_fcs[1]), Mq(rot_fcs[2]), Mq(rot_fcs[3]))
+            # Retrieve the bone from the armature's rest data
+            try:
+                armature_bone: bpy.types.Bone = armature.data.bones[bone_name]
+                if armature_bone.parent:
+                    bind_matrix = (
+                        armature_bone.parent.matrix_local.inverted_safe()
+                        @ armature_bone.matrix_local
+                    )
+                else:
+                    bind_matrix = armature_bone.matrix_local
+            except KeyError as e:
+                # We maybe deleted a bone in edit we dont use anymore in the original animation, skip it.
+                logger.log(
+                    f"Bone '{bone_name}' not found in armature '{armature.name}'. Skipping.",
+                    "warning",
+                    "WARNING",
                 )
-                file_q = bind_rot @ local_q
-                rot_keyframe.tan_w = -file_q.w
-                rot_keyframe.tan_x, rot_keyframe.tan_y, rot_keyframe.tan_z = (
-                    file_q.x,
-                    file_q.y,
-                    file_q.z,
-                )
-            keyframes.append(rot_keyframe)
+                continue
+
+            bind_loc = bind_matrix.to_translation()
+            bind_rot = bind_matrix.to_quaternion()
+
+            loc_header = SKAHeader()
+            loc_header.type = 0
+            loc_header.tick = last_tick
+            loc_header.interval = len(data["loc_per_time"]["vec"])
+            loc_header.bone_id = bone_id
+            last_tick += loc_header.interval
+            times.extend(data["loc_per_time"]["times"])
+            headers.append(loc_header)
+
+            try:
+                loc_fcs = loc_fcc_map[bone_name]
+                for i, loc in enumerate(data["loc_per_time"]["vec"]):
+                    original_loc = bind_rot @ Vector(loc) + bind_loc
+                    loc_keyframe = SKAKeyframe()
+                    loc_keyframe.w = 1.0
+                    loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
+                    time = data["loc_per_time"]["times"][i]
+                    # TODO: Maybe also zero values have a smoothing?
+                    if i == len(data["loc_per_time"]["vec"]) - 1 or time == 0.0:
+                        loc_keyframe.tan_x = 0.0
+                        loc_keyframe.tan_y = 0.0
+                        loc_keyframe.tan_z = 0.0
+                        loc_keyframe.tan_w = 0.0
+                    else:
+                        # invert Bézier→Hermite for each axis
+                        def M(fc: bpy.types.FCurve) -> float:
+                            p = fc.keyframe_points[i]
+                            n = fc.keyframe_points[i + 1]
+                            df = n.co[0] - p.co[0]
+                            return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
+
+                        M_local = Vector((M(loc_fcs[0]), M(loc_fcs[1]), M(loc_fcs[2])))
+                        M_file = bind_rot @ M_local
+                        loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = M_file[:]
+                    loc_keyframe.tan_w = 0.0  # No tangents for W in location keyframes
+                    keyframes.append(loc_keyframe)
+            except Exception as e:
+                raise RuntimeError(f"Error generating location keyframes for bone '{bone_name}': {e}") from e
+            
+            rot_header = SKAHeader()
+            rot_header.type = 1
+            rot_header.tick = last_tick
+            rot_header.interval = len(data["rot_per_time"]["quat"])
+            rot_header.bone_id = bone_id
+            last_tick += rot_header.interval
+            times.extend(data["rot_per_time"]["times"])
+            headers.append(rot_header)
+
+            try:
+                rot_fcs = rot_fcc_map[bone_name]
+                for i, quat in enumerate(data["rot_per_time"]["quat"]):
+                    stored_quat = Quaternion(quat)  # Assuming quat is in (w, x, y, z) order
+                    original_quat = bind_rot @ stored_quat
+                    rot_keyframe = SKAKeyframe()
+                    rot_keyframe.w, rot_keyframe.x, rot_keyframe.y, rot_keyframe.z = (
+                        -original_quat.w,
+                        original_quat.x,
+                        original_quat.y,
+                        original_quat.z,
+                    )
+
+                    time = data["rot_per_time"]["times"][i]
+                    if i == len(data["rot_per_time"]["quat"]) - 1 or time == 0.0:
+                        # TODO: Maybe also zero values have a smoothing?
+                        rot_keyframe.tan_x = 0.0
+                        rot_keyframe.tan_y = 0.0
+                        rot_keyframe.tan_z = 0.0
+                        rot_keyframe.tan_w = 0.0
+                    else:
+                        # invert Bézier→Hermite for each axis
+                        def Mq(fc: bpy.types.FCurve) -> float:
+                            p = fc.keyframe_points[i]
+                            n = fc.keyframe_points[i + 1]
+                            df = n.co[0] - p.co[0]
+                            return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
+
+                        local_q = Quaternion(
+                            (Mq(rot_fcs[0]), Mq(rot_fcs[1]), Mq(rot_fcs[2]), Mq(rot_fcs[3]))
+                        )
+                        file_q = bind_rot @ local_q
+                        rot_keyframe.tan_w = -file_q.w
+                        rot_keyframe.tan_x, rot_keyframe.tan_y, rot_keyframe.tan_z = (
+                            file_q.x,
+                            file_q.y,
+                            file_q.z,
+                        )
+                    keyframes.append(rot_keyframe)
+            except Exception as e:
+                raise RuntimeError(f"Error generating rotation keyframes for bone '{bone_name}': {e}") from e
+    except Exception as e:
+        raise RuntimeError(f"Error generating SKA headers and keyframes: {e}") from e
 
     # Create a new SKA file and write the action data to it
     ska_file = SKA()
