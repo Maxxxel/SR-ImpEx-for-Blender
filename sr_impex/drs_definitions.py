@@ -1174,7 +1174,7 @@ class BattleforgeMesh:
             file.write(pack("ii", self.vertex_count, self.face_count))
         except Exception as e:
             raise TypeError(
-                f"Error writing BattleforgeMesh vertex_count {self.vertex_count} or face_count {self.face_count}"
+                f"Error writing BattleforgeMesh vertex_count {self.vertex_count} or face_count {self.face_count}: {e}"
             ) from e
 
         for face in self.faces:
@@ -1183,19 +1183,19 @@ class BattleforgeMesh:
         try:
             file.write(pack("B", self.mesh_count))
         except Exception as e:
-            raise TypeError(f"Error writing BattleforgeMesh mesh_count {self.mesh_count}") from e
+            raise TypeError(f"Error writing BattleforgeMesh mesh_count {self.mesh_count}: {e}") from e
 
         try:
             for mesh_data in self.mesh_data:
                 mesh_data.write(file)
         except Exception as e:
-            raise TypeError("Error writing BattleforgeMesh mesh data") from e
+            raise TypeError(f"Error writing BattleforgeMesh mesh data: {e}") from e
 
         try:
             self.bounding_box_lower_left_corner.write(file)
             self.bounding_box_upper_right_corner.write(file)
         except Exception as e:
-            raise TypeError("Error writing BattleforgeMesh bounding boxes") from e
+            raise TypeError(f"Error writing BattleforgeMesh bounding boxes: {e}") from e
 
         try:
             file.write(pack("=hi", self.material_id, self.material_parameters))
@@ -1227,8 +1227,8 @@ class BattleforgeMesh:
                 self.materials.write(file)
             else:
                 raise TypeError(f"Unknown MaterialParameters {self.material_parameters}")
-        except Exception:
-            raise TypeError("Error writing BattleforgeMesh material data")
+        except Exception as e:
+            raise TypeError(f"Error writing BattleforgeMesh material data: {e}") from e
 
     def size(self) -> int:
         size = 8  # VertexCount + FaceCount
