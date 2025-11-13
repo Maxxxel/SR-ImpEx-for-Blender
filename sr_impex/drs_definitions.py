@@ -109,6 +109,14 @@ LocatorClass = {
     29: "Projectile_Spawn",  # Point to use attacks/spells from -> sometimes FXB
 }
 
+SoundType = {
+    "Impact": 0,
+    "Step": 1,
+    "Spawn": 3,
+    "Cheer": 5,
+    "Fight": 8,
+}
+
 # Also Node Order
 InformationIndices = {
     "AnimatedUnit": {  # AnimatedInteractableObjectNoCollisionWithEffects
@@ -2590,125 +2598,106 @@ class SkelEff:
         return base
 
 
-@dataclass
-class SthSound:
-    sth_sound_file: int = 0  # byte
-    unknown: int = 0  # short
-    unknown_list: List[int] = field(
-        default_factory=list, metadata={"size": 5}
-    )  # 5 ints
-    lenght: int = 0  # int
-    file_name: str = ""  # CString split into length and name
-
-    def read(self, file: BinaryIO) -> "SthSound":
-        self.sth_sound_file = unpack("B", file.read(1))[0]
-        self.unknown = unpack("h", file.read(2))[0]
-        self.unknown_list = list(unpack("5i", file.read(20)))
-        self.lenght = unpack("i", file.read(4))[0]
-        self.file_name = file.read(self.lenght).decode("utf-8").strip("\x00")
+@dataclass(eq=False, repr=False)
+class SoundHeader:
+    is_one: int = 0  # short
+    uk_floats: List[float] = field(default_factory=lambda: [1.0] * 5)  # float[5]
+    
+    def read(self, file: BinaryIO) -> "SoundHeader":
+        self.is_one = unpack("h", file.read(2))[0]
+        self.uk_floats = list(unpack("5f", file.read(20)))
         return self
-
+    
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("B", self.sth_sound_file))
-        file.write(pack("h", self.unknown))
-        file.write(pack("5i", *self.unknown_list))
-        file.write(pack("i", self.lenght))
-        file.write(self.file_name.encode("utf-8"))
-
+        file.write(pack("h", self.is_one))
+        file.write(pack("5f", *self.uk_floats))
+    
     def size(self) -> int:
-        return 23 + self.lenght
+        return 2 + 20
+        
+
+@dataclass(eq=False, repr=False)
+class SoundFile:
+    weight: int = 0  # byte
+    sound_header: SoundHeader =  SoundHeader()
+    sound_file_name_length: int = 0  # Int
+    sound_file_name: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "SoundFile":
+        self.weight = unpack("B", file.read(1))[0]
+        self.sound_header = SoundHeader().read(file)
+        self.sound_file_name_length = unpack("i", file.read(4))[0]
+        self.sound_file_name = file.read(self.sound_file_name_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("B", self.weight))
+        self.sound_header.write(file)
+        file.write(pack("i", self.sound_file_name_length))
+        file.write(self.sound_file_name.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 1 + self.sound_header.size() + 4 + self.sound_file_name_length
 
 
 @dataclass(eq=False, repr=False)
-class UKS2:
-    unknown: int = 0  # short
-    unknown_list: List[int] = field(
-        default_factory=list, metadata={"size": 5}
-    )  # 5 ints
-    unknown_2: int = 0  # short
-    lenght: int = 0  # short
-    sth_sound: List[SthSound] = field(default_factory=list)
-
-    def read(self, file: BinaryIO) -> "UKS2":
-        self.unknown = unpack("h", file.read(2))[0]
-        self.unknown_list = list(unpack("5i", file.read(20)))
-        self.unknown_2 = unpack("h", file.read(2))[0]
-        self.lenght = unpack("h", file.read(2))[0]
-        self.sth_sound = [SthSound().read(file) for _ in range(self.lenght)]
+class SoundContainer:
+    sound_header: SoundHeader = SoundHeader()
+    uk_index: int = 0  # short
+    nbr_sound_variations: int = 0  # short
+    sound_files: List[SoundFile] = field(default_factory=list)
+    
+    def read(self, file: BinaryIO) -> "SoundContainer":
+        self.sound_header = SoundHeader().read(file)
+        self.uk_index = unpack("h", file.read(2))[0]
+        self.nbr_sound_variations = unpack("h", file.read(2))[0]
+        self.sound_files = [
+            SoundFile().read(file) for _ in range(self.nbr_sound_variations)
+        ]
         return self
-
+    
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("h", self.unknown))
-        file.write(pack("5i", *self.unknown_list))
-        file.write(pack("h", self.unknown_2))
-        file.write(pack("h", self.lenght))
-        for sth_sound in self.sth_sound:
-            sth_sound.write(file)
-
+        self.sound_header.write(file)
+        file.write(pack("h", self.uk_index))
+        file.write(pack("h", self.nbr_sound_variations))
+        for sound_file in self.sound_files:
+            sound_file.write(file)
+            
     def size(self) -> int:
-        return 26 + sum(sth_sound.size() for sth_sound in self.sth_sound)
+        base = self.sound_header.size() + 2 + 2
+        for sound_file in self.sound_files:
+            base += sound_file.size()
+        return base
 
 
 @dataclass(eq=False, repr=False)
-class UKS1:
-    unknown: int = 0  # short
-    unknown_list: List[int] = field(
-        default_factory=list, metadata={"size": 5}
-    )  # 5 ints
-    unknown_2: int = 0  # short
-    length: int = 0  # short
-    unknown_structs: List[UKS2] = field(default_factory=list)
-
-    def read(self, file: BinaryIO) -> "UKS1":
-        self.unknown = unpack("h", file.read(2))[0]
-        self.unknown_list = list(unpack("5i", file.read(20)))
-        self.unknown_2 = unpack("h", file.read(2))[0]
-        self.length = unpack("h", file.read(2))[0]
-        self.unknown_structs = [UKS2().read(file) for _ in range(self.length)]
+class AdditionalSoundContainer:
+    sound_header: SoundHeader = SoundHeader()
+    sound_type: int = 0  # short
+    nbr_sound_variations: int = 0  # short
+    sound_containers: List[SoundContainer] = field(default_factory=list)
+    
+    def read(self, file: BinaryIO) -> "AdditionalSoundContainer":
+        self.sound_header = SoundHeader().read(file)
+        self.sound_type = unpack("h", file.read(2))[0]
+        self.nbr_sound_variations = unpack("h", file.read(2))[0]
+        self.sound_containers = [
+            SoundContainer().read(file) for _ in range(self.nbr_sound_variations)
+        ]
         return self
-
+    
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("h", self.unknown))
-        file.write(pack("5i", *self.unknown_list))
-        file.write(pack("h", self.unknown_2))
-        file.write(pack("h", self.length))
-        for unknown_struct in self.unknown_structs:
-            unknown_struct.write(file)
-
+        self.sound_header.write(file)
+        file.write(pack("h", self.sound_type))
+        file.write(pack("h", self.nbr_sound_variations))
+        for sound_container in self.sound_containers:
+            sound_container.write(file)
+            
     def size(self) -> int:
-        return 26 + sum(
-            unknown_struct.size() for unknown_struct in self.unknown_structs
-        )
-
-
-@dataclass(eq=False, repr=False)
-class UKS3:
-    unknown: int = 0  # short
-    unknown_list: List[int] = field(
-        default_factory=list, metadata={"size": 5}
-    )  # 5 ints
-    unknown_2: int = 0  # short
-    lenght: int = 0  # short
-    sth_sound: List[SthSound] = field(default_factory=list)
-
-    def read(self, file: BinaryIO) -> "UKS3":
-        self.unknown = unpack("h", file.read(2))[0]
-        self.unknown_list = list(unpack("5i", file.read(20)))
-        self.unknown_2 = unpack("h", file.read(2))[0]
-        self.lenght = unpack("h", file.read(2))[0]
-        self.sth_sound = [SthSound().read(file) for _ in range(self.lenght)]
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        file.write(pack("h", self.unknown))
-        file.write(pack("5i", *self.unknown_list))
-        file.write(pack("h", self.unknown_2))
-        file.write(pack("h", self.lenght))
-        for sth_sound in self.sth_sound:
-            sth_sound.write(file)
-
-    def size(self) -> int:
-        return 26 + sum(sth_sound.size() for sth_sound in self.sth_sound)
+        base = self.sound_header.size() + 2 + 2
+        for sound_container in self.sound_containers:
+            base += sound_container.size()
+        return base
 
 
 @dataclass(eq=False, repr=False)
@@ -2721,10 +2710,10 @@ class EffectSet:
     unknown: List[float] = field(
         default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0]
     )  # Vector3
-    length4: int = 0  # short
-    unknown4: List[UKS3] = field(default_factory=list)
-    lenght3: int = 0  # short
-    unknown3: List[UKS1] = field(default_factory=list)
+    number_impact_sounds: int = 0  # short
+    impact_sounds: List[SoundContainer] = field(default_factory=list)
+    number_additional_Sounds: int = 0  # short
+    additional_sounds: List[AdditionalSoundContainer] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "EffectSet":
         self.type = unpack("h", file.read(2))[0]
@@ -2739,10 +2728,15 @@ class EffectSet:
             self.skel_effekts = [
                 SkelEff().read(file, self.type) for _ in range(self.length)
             ]
-            self.length4 = unpack("h", file.read(2))[0]
-            self.unknown4 = [UKS3().read(file) for _ in range(self.length4)]
-            self.lenght3 = unpack("h", file.read(2))[0]
-            self.unknown3 = [UKS1().read(file) for _ in range(self.lenght3)]
+            self.number_impact_sounds = unpack("h", file.read(2))[0]
+            self.impact_sounds = [
+                SoundContainer().read(file) for _ in range(self.number_impact_sounds)
+            ]
+            self.number_additional_Sounds = unpack("h", file.read(2))[0]
+            self.additional_sounds = [
+                AdditionalSoundContainer().read(file)
+                for _ in range(self.number_additional_Sounds)
+            ]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -2755,12 +2749,13 @@ class EffectSet:
             file.write(pack("i", self.length))
             for skel_eff in self.skel_effekts:
                 skel_eff.write(file)
-            file.write(pack("h", self.length4))
-            for unknown in self.unknown4:
-                unknown.write(file)
-            file.write(pack("h", self.lenght3))
-            for unknown in self.unknown3:
-                unknown.write(file)
+            file.write(pack("h", self.number_impact_sounds))
+            for impact_sound in self.impact_sounds:
+                impact_sound.write(file)
+            file.write(pack("h", self.number_additional_Sounds))
+            for additional_sound in self.additional_sounds:
+                additional_sound.write(file)
+
 
     def size(self) -> int:
         base = 6 + self.checksum_length
@@ -2771,11 +2766,11 @@ class EffectSet:
             for skel_eff in self.skel_effekts:
                 base += skel_eff.size()
             base += 2
-            for unknown in self.unknown4:
-                base += unknown.size()
+            for impact_sound in self.impact_sounds:
+                base += impact_sound.size()
             base += 2
-            for unknown in self.unknown3:
-                base += unknown.size()
+            for additional_sound in self.additional_sounds:
+                base += additional_sound.size()
         return base
 
 
