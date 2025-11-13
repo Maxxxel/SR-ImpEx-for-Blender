@@ -279,7 +279,7 @@ class EffVariantPG(bpy.types.PropertyGroup):
         return {"weight": int(self.weight), "name": self.file or ""}
 
     def from_dict(self, d: Dict):
-        self.weight = int(d.get("weight", 100) or 0)
+        self.weight = int(d.get("weight", 100))
         self.file = (d.get("name") or "").strip()
 
 
@@ -374,16 +374,16 @@ class EffKeyframePG(bpy.types.PropertyGroup):
         }
 
     def from_dict(self, d: Dict):
-        self.time = float(d.get("time", 0.0) or 0.0)
+        self.time = float(d.get("time", 0.0))
         self.key_type = str(int(1 if d.get("keyframe_type") is None else d["keyframe_type"]))
-        self.min_falloff = float(d.get("min_falloff", 0.0) or 0.0)
-        self.max_falloff = float(d.get("max_falloff", 0.0) or 0.0)
-        self.volume = float(d.get("volume", 1.0) or 1.0)
-        self.pitch_min = float(d.get("pitch_shift_min", 0.0) or 0.0)
-        self.pitch_max = float(d.get("pitch_shift_max", 0.0) or 0.0)
+        self.min_falloff = float(d.get("min_falloff", 0.0))
+        self.max_falloff = float(d.get("max_falloff", 0.0))
+        self.volume = float(d.get("volume", 1.0))
+        self.pitch_min = float(d.get("pitch_shift_min", 0.0))
+        self.pitch_max = float(d.get("pitch_shift_max", 0.0))
         off = d.get("offset", [0.0, 0.0, 0.0]) or [0.0, 0.0, 0.0]
         self.offset = (float(off[0]), float(off[1]), float(off[2]))
-        self.interruptable = bool(int(d.get("interruptable", 0) or 0))
+        self.interruptable = bool(int(d.get("interruptable", 0)))
         # prefer 'condition', fallback to 'uk'
         cond = d.get("condition", d.get("uk", -1))
         self.condition = int(-1 if cond is None else cond)
@@ -452,7 +452,7 @@ def _state_to_blob(st: EffState) -> Dict:
 def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
     blob = {
         "type": int(getattr(eff, "type", 12) or 12),
-        "checksum_length": int(getattr(eff, "checksum_length", 0) or 0),
+        "checksum_length": int(getattr(eff, "checksum_length", 0)),
         "checksum": getattr(eff, "checksum", "") or "",
         "effects": [],
         "impact_sounds": [],
@@ -485,18 +485,26 @@ def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
         sc = {
             "sound_header": {
                 "is_one": int(sound_container.sound_header.is_one),
-                "uk_floats": list(getattr(sound_container.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+                "min_falloff": float(getattr(sound_container.sound_header, "min_falloff", 1.0)),
+                "max_falloff": float(getattr(sound_container.sound_header, "max_falloff", 1.0)),
+                "volume": float(getattr(sound_container.sound_header, "volume", 1.0)),
+                "pitch_shift_min": float(getattr(sound_container.sound_header, "pitch_shift_min", 1.0)),
+                "pitch_shift_max": float(getattr(sound_container.sound_header, "pitch_shift_max", 1.0)),
             },
-            "uk_index": int(getattr(sound_container, "uk_index", 0) or 0),
-            "nbr_sound_variations": int(getattr(sound_container, "nbr_sound_variations", 0) or 0),
+            "uk_index": int(getattr(sound_container, "uk_index", 0)),
+            "nbr_sound_variations": int(getattr(sound_container, "nbr_sound_variations", 0)),
             "sound_files": [
                 {
                     "weight": int(sound_file.weight),
                     "sound_header": {
                         "is_one": int(sound_file.sound_header.is_one),
-                        "uk_floats": list(getattr(sound_file.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+                        "min_falloff": float(getattr(sound_file.sound_header, "min_falloff", 1.0)),
+                        "max_falloff": float(getattr(sound_file.sound_header, "max_falloff", 1.0)),
+                        "volume": float(getattr(sound_file.sound_header, "volume", 1.0)),
+                        "pitch_shift_min": float(getattr(sound_file.sound_header, "pitch_shift_min", 1.0)),
+                        "pitch_shift_max": float(getattr(sound_file.sound_header, "pitch_shift_max", 1.0)),
                     },
-                    "sound_file_name_length": int(getattr(sound_file, "sound_file_name_length", 0) or 0),
+                    "sound_file_name_length": int(getattr(sound_file, "sound_file_name_length", 0)),
                     "sound_file_name": getattr(sound_file, "sound_file_name", "") or "",
                 }
                 for sound_file in (getattr(sound_container, "sound_files", []) or [])
@@ -508,28 +516,40 @@ def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
         asc = {
             "sound_header": {
                 "is_one": int(add_sound_container.sound_header.is_one),
-                "uk_floats": list(getattr(add_sound_container.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+                "min_falloff": float(getattr(add_sound_container.sound_header, "min_falloff", 1.0)),
+                "max_falloff": float(getattr(add_sound_container.sound_header, "max_falloff", 1.0)),
+                "volume": float(getattr(add_sound_container.sound_header, "volume", 1.0)),
+                "pitch_shift_min": float(getattr(add_sound_container.sound_header, "pitch_shift_min", 1.0)),
+                "pitch_shift_max": float(getattr(add_sound_container.sound_header, "pitch_shift_max", 1.0)),
             },
-            "sound_type": int(getattr(add_sound_container, "sound_type", 0) or 0),
-            "nbr_sound_variations": int(getattr(add_sound_container, "nbr_sound_variations", 0) or 0),
+            "sound_type": int(getattr(add_sound_container, "sound_type", 0)),
+            "nbr_sound_variations": int(getattr(add_sound_container, "nbr_sound_variations", 0)),
             "sound_containers": []
         }
         for sound_container in getattr(add_sound_container, "sound_containers", []) or []:
             sc = {
                 "sound_header": {
                     "is_one": int(sound_container.sound_header.is_one),
-                    "uk_floats": list(getattr(sound_container.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+                    "min_falloff": float(getattr(sound_container.sound_header, "min_falloff", 1.0)),
+                    "max_falloff": float(getattr(sound_container.sound_header, "max_falloff", 1.0)),
+                    "volume": float(getattr(sound_container.sound_header, "volume", 1.0)),
+                    "pitch_shift_min": float(getattr(sound_container.sound_header, "pitch_shift_min", 1.0)),
+                    "pitch_shift_max": float(getattr(sound_container.sound_header, "pitch_shift_max", 1.0)),
                 },
-                "uk_index": int(getattr(sound_container, "uk_index", 0) or 0),
-                "nbr_sound_variations": int(getattr(sound_container, "nbr_sound_variations", 0) or 0),
+                "uk_index": int(getattr(sound_container, "uk_index", 0)),
+                "nbr_sound_variations": int(getattr(sound_container, "nbr_sound_variations", 0)),
                 "sound_files": [
                     {
                         "weight": int(sound_file.weight),
                         "sound_header": {
                             "is_one": int(sound_file.sound_header.is_one),
-                            "uk_floats": list(getattr(sound_file.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+                            "min_falloff": float(getattr(sound_file.sound_header, "min_falloff", 1.0)),
+                            "max_falloff": float(getattr(sound_file.sound_header, "max_falloff", 1.0)),
+                            "volume": float(getattr(sound_file.sound_header, "volume", 1.0)),
+                            "pitch_shift_min": float(getattr(sound_file.sound_header, "pitch_shift_min", 1.0)),
+                            "pitch_shift_max": float(getattr(sound_file.sound_header, "pitch_shift_max", 1.0)),
                         },
-                        "sound_file_name_length": int(getattr(sound_file, "sound_file_name_length", 0) or 0),
+                        "sound_file_name_length": int(getattr(sound_file, "sound_file_name_length", 0)),
                         "sound_file_name": getattr(sound_file, "sound_file_name", "") or "",
                     }
                     for sound_file in (getattr(sound_container, "sound_files", []) or [])
@@ -557,11 +577,11 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
         se.keyframes = []
         for kd in (ed.get("keyframes") or []):
             kf = DRS_Keyframe()
-            kf.time = float(kd.get("time", 0.0) or 0.0)
+            kf.time = float(kd.get("time", 0.0))
             kf.keyframe_type = int(kd.get("keyframe_type", 1))
             kf.min_falloff = float(kd.get("min_falloff", 0.0))
             kf.max_falloff = float(kd.get("max_falloff", 0.0))
-            kf.volume = float(kd.get("volume", 1.0) or 1.0)
+            kf.volume = float(kd.get("volume", 1.0))
             kf.pitch_shift_min = float(kd.get("pitch_shift_min", 0.0))
             kf.pitch_shift_max = float(kd.get("pitch_shift_max", 0.0))
             off = kd.get("offset", [0.0, 0.0, 0.0])
@@ -576,7 +596,7 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
                 if not name:
                     continue
                 v = DRS_Variant()
-                v.weight = int(vd.get("weight", 100) or 0) & 0xFF
+                v.weight = int(vd.get("weight", 100))
                 v.name = name
                 v.length = len(v.name)
                 kf.variants.append(v)
@@ -595,22 +615,30 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
         sc = SoundContainer()
         shd = scd.get("sound_header", {})
         sh = SoundHeader()
-        sh.is_one = int(shd.get("is_one", 0) or 0)
-        sh.uk_floats = list(shd.get("uk_floats", [1, 1, 1, 1, 1]))
+        sh.is_one = int(shd.get("is_one", 0))
+        sh.max_falloff = float(shd.get("max_falloff", 1.0))
+        sh.min_falloff = float(shd.get("min_falloff", 1.0))
+        sh.volume = float(shd.get("volume", 1.0))
+        sh.pitch_shift_min = float(shd.get("pitch_shift_min", 1.0))
+        sh.pitch_shift_max = float(shd.get("pitch_shift_max", 1.0))
         sc.sound_header = sh
-        sc.uk_index = int(scd.get("uk_index", 0) or 0)
-        sc.nbr_sound_variations = int(scd.get("nbr_sound_variations", 0) or 0)
+        sc.uk_index = int(scd.get("uk_index", 0))
+        sc.nbr_sound_variations = int(scd.get("nbr_sound_variations", 0))
 
         sc.sound_files = []
         for sfd in (scd.get("sound_files") or []):
             sf = SoundFile()
-            sf.weight = int(sfd.get("weight", 100) or 0) & 0xFF
+            sf.weight = int(sfd.get("weight", 100))
             sfd_shd = sfd.get("sound_header", {})
             sfd_sh = SoundHeader()
-            sfd_sh.is_one = int(sfd_shd.get("is_one", 0) or 0)
-            sfd_sh.uk_floats = list(sfd_shd.get("uk_floats", [1, 1, 1, 1, 1]))
+            sfd_sh.is_one = int(sfd_shd.get("is_one", 0))
+            sfd_sh.max_falloff = float(sfd_shd.get("max_falloff", 1.0))
+            sfd_sh.min_falloff = float(sfd_shd.get("min_falloff", 1.0))
+            sfd_sh.volume = float(sfd_shd.get("volume", 1.0))
+            sfd_sh.pitch_shift_min = float(sfd_shd.get("pitch_shift_min", 1.0))
+            sfd_sh.pitch_shift_max = float(sfd_shd.get("pitch_shift_max", 1.0))
             sf.sound_header = sfd_sh
-            sf.sound_file_name_length = int(sfd.get("sound_file_name_length", 0) or 0)
+            sf.sound_file_name_length = int(sfd.get("sound_file_name_length", 0))
             sf.sound_file_name = str(sfd.get("sound_file_name", "") or "")
             sc.sound_files.append(sf)
         
@@ -624,33 +652,45 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
         asc = AdditionalSoundContainer()
         ashd = ascd.get("sound_header", {})
         ash = SoundHeader()
-        ash.is_one = int(ashd.get("is_one", 0) or 0)
-        ash.uk_floats = list(ashd.get("uk_floats", [1, 1, 1, 1, 1]))
+        ash.is_one = int(ashd.get("is_one", 0))
+        ash.max_falloff = float(ashd.get("max_falloff", 1.0))
+        ash.min_falloff = float(ashd.get("min_falloff", 1.0))
+        ash.volume = float(ashd.get("volume", 1.0))
+        ash.pitch_shift_min = float(ashd.get("pitch_shift_min", 1.0))
+        ash.pitch_shift_max = float(ashd.get("pitch_shift_max", 1.0))
         asc.sound_header = ash
-        asc.sound_type = SoundType(int(ascd.get("sound_type", 0) or 0))
-        asc.nbr_sound_variations = int(ascd.get("nbr_sound_variations", 0) or 0)
+        asc.sound_type = SoundType(int(ascd.get("sound_type", 0)))
+        asc.nbr_sound_variations = int(ascd.get("nbr_sound_variations", 0))
 
         asc.sound_containers = []
         for scd in (ascd.get("sound_containers") or []):
             sc = SoundContainer()
             shd = scd.get("sound_header", {})
             sh = SoundHeader()
-            sh.is_one = int(shd.get("is_one", 0) or 0)
-            sh.uk_floats = list(shd.get("uk_floats", [1, 1, 1, 1, 1]))
+            sh.is_one = int(shd.get("is_one", 0))
+            sh.max_falloff = float(shd.get("max_falloff", 1.0))
+            sh.min_falloff = float(shd.get("min_falloff", 1.0))
+            sh.volume = float(shd.get("volume", 1.0))
+            sh.pitch_shift_min = float(shd.get("pitch_shift_min", 1.0))
+            sh.pitch_shift_max = float(shd.get("pitch_shift_max", 1.0))
             sc.sound_header = sh
-            sc.uk_index = int(scd.get("uk_index", 0) or 0)
-            sc.nbr_sound_variations = int(scd.get("nbr_sound_variations", 0) or 0)
+            sc.uk_index = int(scd.get("uk_index", 0))
+            sc.nbr_sound_variations = int(scd.get("nbr_sound_variations", 0))
 
             sc.sound_files = []
             for sfd in (scd.get("sound_files") or []):
                 sf = SoundFile()
-                sf.weight = int(sfd.get("weight", 100) or 0) & 0xFF
+                sf.weight = int(sfd.get("weight", 100))
                 sfd_shd = sfd.get("sound_header", {})
                 sfd_sh = SoundHeader()
-                sfd_sh.is_one = int(sfd_shd.get("is_one", 0) or 0)
-                sfd_sh.uk_floats = list(sfd_shd.get("uk_floats", [1, 1, 1, 1, 1]))
+                sfd_sh.is_one = int(sfd_shd.get("is_one", 0))
+                sfd_sh.max_falloff = float(sfd_shd.get("max_falloff", 1.0))
+                sfd_sh.min_falloff = float(sfd_shd.get("min_falloff", 1.0))
+                sfd_sh.volume = float(sfd_shd.get("volume", 1.0))
+                sfd_sh.pitch_shift_min = float(sfd_shd.get("pitch_shift_min", 1.0))
+                sfd_sh.pitch_shift_max = float(sfd_shd.get("pitch_shift_max", 1.0))
                 sf.sound_header = sfd_sh
-                sf.sound_file_name_length = int(sfd.get("sound_file_name_length", 0) or 0)
+                sf.sound_file_name_length = int(sfd.get("sound_file_name_length", 0))
                 sf.sound_file_name = str(sfd.get("sound_file_name", "") or "")
                 sc.sound_files.append(sf)
             

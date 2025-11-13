@@ -2600,17 +2600,27 @@ class SkelEff:
 
 @dataclass(eq=False, repr=False)
 class SoundHeader:
-    is_one: int = 0  # short
-    uk_floats: List[float] = field(default_factory=lambda: [1.0] * 5)  # float[5]
+    is_one: int = 0  # short ALWAYS 1
+    min_falloff: float = 1.0
+    max_falloff: float = 1.0
+    volume: float = 1.0
+    pitch_shift_min: float = 1.0
+    pitch_shift_max: float = 1.0
     
     def read(self, file: BinaryIO) -> "SoundHeader":
         self.is_one = unpack("h", file.read(2))[0]
-        self.uk_floats = list(unpack("5f", file.read(20)))
+        (
+            self.min_falloff,
+            self.max_falloff,
+            self.volume,
+            self.pitch_shift_min,
+            self.pitch_shift_max,
+        ) = unpack("fffff", file.read(20))
         return self
     
     def write(self, file: BinaryIO) -> None:
         file.write(pack("h", self.is_one))
-        file.write(pack("5f", *self.uk_floats))
+        file.write(pack("fffff", self.min_falloff, self.max_falloff, self.volume, self.pitch_shift_min, self.pitch_shift_max))
     
     def size(self) -> int:
         return 2 + 20
@@ -2643,7 +2653,7 @@ class SoundFile:
 @dataclass(eq=False, repr=False)
 class SoundContainer:
     sound_header: SoundHeader = SoundHeader()
-    uk_index: int = 0  # short
+    uk_index: int = 0  # short // [0, 1, 2, 3, 13, 15, 18, 25, 30, 33, 35, 38]; 0 only used by ImpactSounds
     nbr_sound_variations: int = 0  # short
     sound_files: List[SoundFile] = field(default_factory=list)
     
@@ -2673,7 +2683,7 @@ class SoundContainer:
 @dataclass(eq=False, repr=False)
 class AdditionalSoundContainer:
     sound_header: SoundHeader = SoundHeader()
-    sound_type: int = 0  # short
+    sound_type: int = 0  # short use ENUM SoundType
     nbr_sound_variations: int = 0  # short
     sound_containers: List[SoundContainer] = field(default_factory=list)
     
