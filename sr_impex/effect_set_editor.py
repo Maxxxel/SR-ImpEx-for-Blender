@@ -24,7 +24,11 @@ from .drs_definitions import (
     SkelEff as DRS_SkelEff,
     Keyframe as DRS_Keyframe,
     Variant as DRS_Variant,
-    UKS1, UKS3
+    SoundHeader,
+    SoundFile,
+    SoundContainer,
+    AdditionalSoundContainer,
+    SoundType,
 )
 
 from .drs_resolvers import resolve_action_from_blob_name
@@ -448,16 +452,12 @@ def _state_to_blob(st: EffState) -> Dict:
 def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
     blob = {
         "type": int(getattr(eff, "type", 12) or 12),
-        "checksum": getattr(eff, "checksum", "") or "",
         "checksum_length": int(getattr(eff, "checksum_length", 0) or 0),
-        "unknown4": [],
-        "unknown3": [],
+        "checksum": getattr(eff, "checksum", "") or "",
         "effects": [],
+        "impact_sounds": [],
+        "additional_sounds": [],
     }
-
-    # We only preserve lengths for unknown lists; content is hidden in UI
-    blob["unknown4"] = [{} for _ in range(int(getattr(eff, "length4", 0) or 0))]
-    blob["unknown3"] = [{} for _ in range(int(getattr(eff, "lenght3", 0) or 0))]
 
     for se in getattr(eff, "skel_effekts", []) or []:
         entry = {"action": getattr(se, "name", "") or "", "keyframes": []}
@@ -480,6 +480,63 @@ def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
             }
             entry["keyframes"].append(kd)
         blob["effects"].append(entry)
+
+    for sound_container in getattr(eff, "impact_sounds", []) or []:
+        sc = {
+            "sound_header": {
+                "is_one": int(sound_container.sound_header.is_one),
+                "uk_floats": list(getattr(sound_container.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+            },
+            "uk_index": int(getattr(sound_container, "uk_index", 0) or 0),
+            "nbr_sound_variations": int(getattr(sound_container, "nbr_sound_variations", 0) or 0),
+            "sound_files": [
+                {
+                    "weight": int(sound_file.weight),
+                    "sound_header": {
+                        "is_one": int(sound_file.sound_header.is_one),
+                        "uk_floats": list(getattr(sound_file.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+                    },
+                    "sound_file_name_length": int(getattr(sound_file, "sound_file_name_length", 0) or 0),
+                    "sound_file_name": getattr(sound_file, "sound_file_name", "") or "",
+                }
+                for sound_file in (getattr(sound_container, "sound_files", []) or [])
+            ],
+        }
+        blob["impact_sounds"].append(sc)
+    
+    for add_sound_container in getattr(eff, "additional_sounds", []) or []:
+        asc = {
+            "sound_header": {
+                "is_one": int(add_sound_container.sound_header.is_one),
+                "uk_floats": list(getattr(add_sound_container.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+            },
+            "sound_type": int(getattr(add_sound_container, "sound_type", 0) or 0),
+            "nbr_sound_variations": int(getattr(add_sound_container, "nbr_sound_variations", 0) or 0),
+            "sound_containers": []
+        }
+        for sound_container in getattr(add_sound_container, "sound_containers", []) or []:
+            sc = {
+                "sound_header": {
+                    "is_one": int(sound_container.sound_header.is_one),
+                    "uk_floats": list(getattr(sound_container.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+                },
+                "uk_index": int(getattr(sound_container, "uk_index", 0) or 0),
+                "nbr_sound_variations": int(getattr(sound_container, "nbr_sound_variations", 0) or 0),
+                "sound_files": [
+                    {
+                        "weight": int(sound_file.weight),
+                        "sound_header": {
+                            "is_one": int(sound_file.sound_header.is_one),
+                            "uk_floats": list(getattr(sound_file.sound_header, "uk_floats", [1, 1, 1, 1, 1])),
+                        },
+                        "sound_file_name_length": int(getattr(sound_file, "sound_file_name_length", 0) or 0),
+                        "sound_file_name": getattr(sound_file, "sound_file_name", "") or "",
+                    }
+                    for sound_file in (getattr(sound_container, "sound_files", []) or [])
+                ],
+            }
+            asc["sound_containers"].append(sc)
+        blob["additional_sounds"].append(asc)
 
     return blob
 
@@ -531,13 +588,77 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
         eff.skel_effekts.append(se)
 
     eff.length = len(eff.skel_effekts)
-    # lengths for unknown lists
-    u4 = blob.get("unknown4") or []
-    u3 = blob.get("unknown3") or []
-    eff.length4 = int(len(u4))
-    eff.unknown4 = [UKS3() for _ in range(eff.length4)]
-    eff.lenght3 = int(len(u3))
-    eff.unknown3 = [UKS1() for _ in range(eff.lenght3)]
+
+    eff.impact_sounds = []
+    
+    for scd in (blob.get("impact_sounds") or []):
+        sc = SoundContainer()
+        shd = scd.get("sound_header", {})
+        sh = SoundHeader()
+        sh.is_one = int(shd.get("is_one", 0) or 0)
+        sh.uk_floats = list(shd.get("uk_floats", [1, 1, 1, 1, 1]))
+        sc.sound_header = sh
+        sc.uk_index = int(scd.get("uk_index", 0) or 0)
+        sc.nbr_sound_variations = int(scd.get("nbr_sound_variations", 0) or 0)
+
+        sc.sound_files = []
+        for sfd in (scd.get("sound_files") or []):
+            sf = SoundFile()
+            sf.weight = int(sfd.get("weight", 100) or 0) & 0xFF
+            sfd_shd = sfd.get("sound_header", {})
+            sfd_sh = SoundHeader()
+            sfd_sh.is_one = int(sfd_shd.get("is_one", 0) or 0)
+            sfd_sh.uk_floats = list(sfd_shd.get("uk_floats", [1, 1, 1, 1, 1]))
+            sf.sound_header = sfd_sh
+            sf.sound_file_name_length = int(sfd.get("sound_file_name_length", 0) or 0)
+            sf.sound_file_name = str(sfd.get("sound_file_name", "") or "")
+            sc.sound_files.append(sf)
+        
+        eff.impact_sounds.append(sc)
+    
+    eff.number_impact_sounds = len(eff.impact_sounds)
+
+    eff.additional_sounds = []
+    
+    for ascd in (blob.get("additional_sounds") or []):
+        asc = AdditionalSoundContainer()
+        ashd = ascd.get("sound_header", {})
+        ash = SoundHeader()
+        ash.is_one = int(ashd.get("is_one", 0) or 0)
+        ash.uk_floats = list(ashd.get("uk_floats", [1, 1, 1, 1, 1]))
+        asc.sound_header = ash
+        asc.sound_type = SoundType(int(ascd.get("sound_type", 0) or 0))
+        asc.nbr_sound_variations = int(ascd.get("nbr_sound_variations", 0) or 0)
+
+        asc.sound_containers = []
+        for scd in (ascd.get("sound_containers") or []):
+            sc = SoundContainer()
+            shd = scd.get("sound_header", {})
+            sh = SoundHeader()
+            sh.is_one = int(shd.get("is_one", 0) or 0)
+            sh.uk_floats = list(shd.get("uk_floats", [1, 1, 1, 1, 1]))
+            sc.sound_header = sh
+            sc.uk_index = int(scd.get("uk_index", 0) or 0)
+            sc.nbr_sound_variations = int(scd.get("nbr_sound_variations", 0) or 0)
+
+            sc.sound_files = []
+            for sfd in (scd.get("sound_files") or []):
+                sf = SoundFile()
+                sf.weight = int(sfd.get("weight", 100) or 0) & 0xFF
+                sfd_shd = sfd.get("sound_header", {})
+                sfd_sh = SoundHeader()
+                sfd_sh.is_one = int(sfd_shd.get("is_one", 0) or 0)
+                sfd_sh.uk_floats = list(sfd_shd.get("uk_floats", [1, 1, 1, 1, 1]))
+                sf.sound_header = sfd_sh
+                sf.sound_file_name_length = int(sfd.get("sound_file_name_length", 0) or 0)
+                sf.sound_file_name = str(sfd.get("sound_file_name", "") or "")
+                sc.sound_files.append(sf)
+            
+            asc.sound_containers.append(sc)
+        
+        eff.additional_sounds.append(asc)
+    
+    eff.number_additional_Sounds = len(eff.additional_sounds)
     return eff
 
 

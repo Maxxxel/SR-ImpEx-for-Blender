@@ -2756,7 +2756,6 @@ class EffectSet:
             for additional_sound in self.additional_sounds:
                 additional_sound.write(file)
 
-
     def size(self) -> int:
         base = 6 + self.checksum_length
         if self.type in [10, 11, 12]:
