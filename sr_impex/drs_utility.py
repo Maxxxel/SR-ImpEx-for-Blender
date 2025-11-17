@@ -1053,7 +1053,7 @@ def save_image_copy_as_png(img: bpy.types.Image, output_path: str, file_ending: 
         if file_ending != "_par":
             # Override Alpha Mode to Straight to avoid premult issues
             new_img.alpha_mode = "STRAIGHT"
-            
+
             # colorspace: default to sRGB; try to mirror source if possible
             try:
                 src_cs = getattr(img, "colorspace_settings", None)
@@ -1064,7 +1064,7 @@ def save_image_copy_as_png(img: bpy.types.Image, output_path: str, file_ending: 
             except Exception:
                 # best-effort; sRGB is fine
                 pass
-            
+
             new_img.pixels.foreach_set(buf)  # fast vectorized copy
 
             # Save as PNG without touching the original image
@@ -1104,7 +1104,7 @@ def convert_image_to_dds(
     temp_filename = output_filename + ".png"
     temp_filename = temp_filename.strip('"').strip("'")
     temp_path = os.path.join(temp_dir, temp_filename)
-    
+
     try:
         save_image_copy_as_png(img, temp_path, file_ending)
     except RuntimeError as e:
@@ -1353,182 +1353,199 @@ def collect_ik_atlases_from_blender(
     return atlases
 
 
-# --- Action export helpers (localize actions & rewrite blob) -----------------
+# --- Action export helpers (build/output SKA names) -----------------
 
-def _find_armature_in(col: bpy.types.Collection) -> bpy.types.Object | None:
-    """Armature in a DRS model collection, ignoring any Control_Rig."""
-    def visit(c: bpy.types.Collection) -> bpy.types.Object | None:
-        for o in c.objects:
-            if o.type == "ARMATURE" and "Control_Rig" not in o.name:
-                return o
-        for ch in c.children:
-            ao = visit(ch)
-            if ao:
-                return ao
+
+def _norm_ska_key(name: str | None) -> str:
+    """Map any animation reference to a normalized lowercase key without extension."""
+    if not name:
+        return ""
+    base = os.path.basename((name or "").strip())
+    if base.lower().endswith(".ska"):
+        base = base[:-4]
+    return base.strip().lower()
+
+
+def _collect_ska_references(col: bpy.types.Collection) -> list[tuple[str, str | None]]:
+    """Return (current, original) tuples for every animation reference in the blobs."""
+    refs: list[tuple[str, str | None]] = []
+
+    def _add(name: str | None, original: str | None = None) -> None:
+        s = (name or "").strip()
+        if not s:
+            return
+        refs.append((s, (original or "").strip() or None))
+
+    raw_anim = col.get(ANIM_BLOB_KEY)
+    if raw_anim:
+        try:
+            blob = json.loads(raw_anim)
+        except Exception:
+            blob = {}
+        for mk in blob.get("mode_keys", []) or []:
+            for v in mk.get("variants", []) or []:
+                _add(v.get("file"), v.get("original_file_name"))
+        for msd in blob.get("marker_sets", []) or []:
+            _add(msd.get("file"), msd.get("original_file_name"))
+
+    raw_effect = col.get(EFFECT_BLOB_KEY)
+    if raw_effect:
+        try:
+            eff_blob = json.loads(raw_effect)
+        except Exception:
+            eff_blob = {}
+        for ed in eff_blob.get("effects", []) or []:
+            _add(ed.get("action"))
+
+    return refs
+
+
+def _determine_action_for_blob_name(col: bpy.types.Collection, blob_name: str) -> bpy.types.Action | None:
+    resolved_name = _resolve_action_from_blob_name(col, blob_name)
+    if not resolved_name:
         return None
-    return visit(col)
+    act = bpy.data.actions.get(resolved_name)
+    if not act:
+        return None
+    if isinstance(act.name, str) and "." in act.name:
+        base, suffix = act.name.rsplit(".", 1)
+        if suffix.isdigit() and base in bpy.data.actions:
+            return bpy.data.actions.get(base)
+    return act
 
 
-def _collect_action_names_for(col: bpy.types.Collection) -> list[str]:
-    """Reuse your existing list function if available; otherwise, be robust."""
-    try:
-        from .ska_utility import get_actions
-        names = list(get_actions(col) or [])
-    except Exception:
-        names = []
-    # strip sentinel if present
-    return [n for n in names if n and n != "None"]
+def _effective_prefix_for_action(action: bpy.types.Action | None, export_prefix: str | None) -> str:
+    if export_prefix is None:
+        try:
+            return str(action.get("prefix", "")) if action else ""
+        except Exception:
+            return ""
+    return export_prefix or ""
 
 
-def _ensure_local_actions_with_prefix(
+def _derive_action_short_name(action: bpy.types.Action | None, fallback: str) -> str:
+    if action:
+        name = (action.name or "").strip()
+        if name:
+            return name
+        try:
+            ui = action.get("ui_name", None)
+        except Exception:
+            ui = None
+        if ui:
+            return str(ui)
+    return fallback
+
+
+def _make_unique_export_basename(base: str, used: set[str]) -> str:
+    """Ensure exported basenames stay unique (case-insensitive) and within 63 chars."""
+    sanitized = (base or "animation").strip().replace(" ", "_")
+    if sanitized.lower().endswith(".ska"):
+        sanitized = sanitized[:-4]
+    sanitized = sanitized or "animation"
+    sanitized = sanitized[:63]
+    cand = sanitized
+    idx = 2
+    while cand.lower() in used:
+        suffix = f"_{idx:02d}"
+        trimmed = sanitized[: max(1, 63 - len(suffix))]
+        cand = f"{trimmed}{suffix}"
+        idx += 1
+    used.add(cand.lower())
+    return cand
+
+
+def _build_ska_export_name_map(
     current_collection: bpy.types.Collection,
-    prefix: str | None,
-) -> tuple[dict[str, str], list[bpy.types.Action]]:
-    arm = _find_armature_in(current_collection)
-    if not arm:
-        return {}, []
+    export_prefix: str | None,
+) -> dict[str, str]:
+    """
+    Build a mapping from normalized blob keys to their final exported SKA basenames
+    without mutating the underlying JSON blobs.
+    """
+    refs = _collect_ska_references(current_collection)
+    if not refs:
+        return {}
 
-    # 1) pull names from the copied blob
-    raw = current_collection.get(ANIM_BLOB_KEY)
-    try:
-        blob = json.loads(raw) if raw else {}
-    except Exception:
-        blob = {}
-    want_files = []
-    for mk in blob.get("mode_keys", []) or []:
-        for v in mk.get("variants", []) or []:
-            f = (v.get("file") or "").strip()
-            if not f:
-                continue
-            want_files.append(f[:-4] if f.lower().endswith(".ska") else f)
-    # unique preserve order
-    seen, src_names = set(), []
-    for n in want_files:
-        if n not in seen:
-            seen.add(n)
-            src_names.append(n)
-
-    created: list[bpy.types.Action] = []
+    used: set[str] = set()
     name_map: dict[str, str] = {}
+    seen_keys: set[str] = set()
 
-    def _unique(name: str) -> str:
-        base = name[:63]
-        if base not in bpy.data.actions:
-            return base
-        i = 1
-        while True:
-            cand = f"{base[:60]}.{i:02d}"
-            if cand not in bpy.data.actions:
-                return cand
-            i += 1
-
-    for src_blob_name in src_names:
-        # 2) resolve 'skel_human_2h_idle1' -> 'idle1' (existing Action)
-        resolved_act_name = _resolve_action_from_blob_name(current_collection, src_blob_name)
-        if not resolved_act_name:
+    for blob_name, original in refs:
+        key = _norm_ska_key(blob_name)
+        if not key or key in seen_keys:
             continue
-        src_act = bpy.data.actions.get(resolved_act_name)
-        if not src_act:
-            continue
+        seen_keys.add(key)
 
-        # 3) build short duplicate name from the *resolved* (short) action name
-        short = src_act.name  # e.g. 'idle1'
-        eff_prefix = src_act.get("prefix", "") if prefix is None else (prefix or "")
-        dup_name_base = f"{eff_prefix}_{short}" if eff_prefix and not short.startswith(eff_prefix + "_") else short
-        new_name = _unique(dup_name_base)
+        act = _determine_action_for_blob_name(current_collection, blob_name)
+        short = _derive_action_short_name(act, key)
+        eff_prefix = _effective_prefix_for_action(act, export_prefix)
 
-        dup = src_act.copy()
-        dup.name = new_name
-        dup["prefix"] = eff_prefix
-        created.append(dup)
+        base = short
+        if eff_prefix:
+            pref = eff_prefix.strip().replace(" ", "_")
+            if not base.startswith(pref + "_"):
+                base = f"{pref}_{base}"
 
-        # map the blob key (original) -> duplicate short name
-        name_map[src_blob_name] = dup.name
+        if not act and export_prefix is None and original:
+            # fall back to the original full name if we are supposed to keep it
+            base = os.path.basename((original or "").strip()) or base
 
-    if not arm.animation_data:
-        arm.animation_data_create()
+        final_base = _make_unique_export_basename(base, used)
+        name_map[key] = final_base
 
-    return name_map, created
+        # also map the original reference if present
+        orig_key = _norm_ska_key(original)
+        if orig_key and orig_key not in name_map:
+            name_map[orig_key] = final_base
+
+    return name_map
 
 
-def _rewrite_anim_blob_variant_files(
-    col: bpy.types.Collection,
-    name_map: dict[str, str],
+def _lookup_export_ska_filename(name: str | None, ska_name_map: dict[str, str]) -> str | None:
+    key = _norm_ska_key(name)
+    if not key:
+        return None
+    mapped = ska_name_map.get(key)
+    if not mapped:
+        return None
+    return mapped if mapped.lower().endswith(".ska") else f"{mapped}.ska"
+
+
+def _apply_ska_name_map_to_animation_set(
+    animation_set: AnimationSet | None,
+    ska_name_map: dict[str, str],
 ) -> None:
-    raw = col.get(ANIM_BLOB_KEY)
-    if not raw:
-        return
-    try:
-        b = json.loads(raw)
-    except Exception:
+    if not animation_set or not ska_name_map:
         return
 
-    def norm(s: str) -> str:
-        s = (s or "").strip()
-        return s[:-4] if s.lower().endswith(".ska") else s
+    for mk in getattr(animation_set, "mode_animation_keys", []) or []:
+        for var in getattr(mk, "animation_set_variants", []) or []:
+            new_name = _lookup_export_ska_filename(getattr(var, "file", ""), ska_name_map)
+            if new_name and new_name != getattr(var, "file", ""):
+                var.file = new_name
+                var.length = len(var.file)
 
-    # Build resolver: original (bare) -> duplicate (bare)
-    nm = {}
-    for k, v in (name_map or {}).items():
-        nm[norm(k)] = v
-        nm[norm(os.path.basename(k))] = v
-
-    changed = False
-    for mk in b.get("mode_keys", []) or []:
-        for v in mk.get("variants", []) or []:
-            cur = (v.get("file") or "").strip()
-            key = norm(cur)
-            # remember previous original if missing
-            if not v.get("original_file_name"):
-                v["original_file_name"] = cur if cur else (v.get("original_file_name") or "")
-            # replace 'file' with the local duplicate short name
-            dup = name_map.get(key) or name_map.get(os.path.basename(key))
-            if dup:
-                v["file"] = dup if dup.lower().endswith(".ska") else (dup + ".ska")
-                changed = True
-
-    if changed:
-        col[ANIM_BLOB_KEY] = json.dumps(b, separators=(",", ":"), ensure_ascii=False)
+    for ms in getattr(animation_set, "animation_marker_sets", []) or []:
+        new_name = _lookup_export_ska_filename(getattr(ms, "name", ""), ska_name_map)
+        if new_name and new_name != getattr(ms, "name", ""):
+            ms.name = new_name
+            ms.length = len(ms.name)
 
 
-def _rewrite_effectset_skeleff_names(
-    eff: "EffectSet",
-    name_map: dict[str, str],
+def _apply_ska_name_map_to_effect_set(
+    effect_set: EffectSet | None,
+    ska_name_map: dict[str, str],
 ) -> None:
-    """
-    Update EffectSet.SkelEff.name to the local duplicate action names created
-    in _ensure_local_actions_with_prefix(). Also fixes the length field.
-
-    name_map: original (bare) → duplicate (bare) action name
-              e.g. {"skel_human_2h_idle1": "MyPrefix_idle1"}
-    """
-    if not eff or not getattr(eff, "skel_effekts", None) or not name_map:
+    if not effect_set or not ska_name_map:
         return
 
-    def _norm(s: str) -> str:
-        s = (s or "").strip()
-        return s[:-4] if s.lower().endswith(".ska") else s
-
-    # Build a tolerant LUT (accept full / basename)
-    lut = {}
-    for k, v in (name_map or {}).items():
-        kb = _norm(k)
-        lut[kb] = v
-        lut[os.path.basename(kb)] = v
-
-    changed = False
-    for se in eff.skel_effekts or []:
-        cur = (getattr(se, "name", "") or "").strip()
-        key = _norm(cur)
-        new_name = lut.get(key) or lut.get(os.path.basename(key))
-        if new_name and new_name != cur:
-            # SkelEff.name should link to a SKA action name (no extension)
+    for se in getattr(effect_set, "skel_effekts", []) or []:
+        new_name = _lookup_export_ska_filename(getattr(se, "name", ""), ska_name_map)
+        if new_name and new_name != getattr(se, "name", ""):
             se.name = new_name
             se.length = len(se.name)
-            changed = True
 
-    # nothing to store back here; EffectSet is a struct that will be written out later
-    return
 
 def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str) -> str:
     """
@@ -1549,6 +1566,7 @@ def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str)
         mp = json.loads(raw) if isinstance(raw, str) else {}
     except Exception:
         mp = {}
+
     for key in (s, os.path.basename(s), base, os.path.basename(base)):
         cand = mp.get(key)
         if cand and cand in bpy.data.actions:
@@ -1575,6 +1593,7 @@ def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str)
 
     return ""
 
+
 def _find_drs_bsdf(mat: bpy.types.Material):
     if not mat or not mat.use_nodes:
         return None
@@ -1583,6 +1602,7 @@ def _find_drs_bsdf(mat: bpy.types.Material):
             return n
     return None
 
+
 def _find_by_label(mat: bpy.types.Material, node_type: str, *labels: str):
     if not mat or not mat.use_nodes:
         return None
@@ -1590,6 +1610,7 @@ def _find_by_label(mat: bpy.types.Material, node_type: str, *labels: str):
         if n.type == node_type and n.label in labels:
             return n
     return None
+
 
 def _first_image_upstream(socket: bpy.types.NodeSocket, max_depth: int = 16, keyword: str = None):
     """Walk upstream from a socket until we hit a TEX_IMAGE node, else None."""
@@ -1616,6 +1637,7 @@ def _first_image_upstream(socket: bpy.types.NodeSocket, max_depth: int = 16, key
     return None
 
 
+# DEBUG CODE for OBBTree visualization (keep it)
 # class DRS_OT_debug_obb_tree(bpy.types.Operator):
 #     """Calculates and visualizes an OBBTree for the selected collection's meshes."""
 
@@ -1905,7 +1927,7 @@ def import_csk_skeleton(
     # Ensure both collections are visible in the current ViewLayer
     ensure_in_view_layer(source_collection)
     ensure_in_view_layer(armature_collection)
-    
+
     armature_object: bpy.types.Object = bpy.data.objects.new(
         f"{locator_prefix}Armature", armature_data
     )
@@ -1921,7 +1943,7 @@ def import_csk_skeleton(
         create_bone_tree(armature_data, bone_list, bone_list[0])
         # Parent the bones using the parent_index from the DRSBone objects
         edit_bones = armature_data.edit_bones
-        
+
         # Old Approach, working but ugly
         for _, bone_data in enumerate(bone_list):
             if bone_data.parent != -1:  # Root bones have a parent_index of -1
@@ -1935,11 +1957,11 @@ def import_csk_skeleton(
 
     # Your bind pose recording function is correct and should be called at the end.
     record_bind_pose(bone_list, armature_data)
-    
+
     # auto_align_tails(armature_object)
-    
+
     return armature_object, bone_list
-        
+
 
 def create_bone_weights(
     mesh_file: CDspMeshFile, skin_data: CSkSkinInfo, geo_mesh_data: CGeoMesh
@@ -2110,7 +2132,7 @@ def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh
                     f.flow_scale.z,
                     f.flow_scale.w,
                 )
-            
+
             _update_flow_nodes(mesh_object.drs_flow)
         # wind
         if hasattr(mesh_object, "drs_wind") and mesh_object.drs_wind:
@@ -2182,7 +2204,7 @@ def create_material(
                     )
                 case 1668510770:
                     drs_material.set_flumap(texture.name, dir_name)
-    
+
     if mesh_object:
         drs_material.create_wind_nodes(mesh_object)
 
@@ -2730,7 +2752,7 @@ def load_drs(
 
     # Apply the Transformations to the Source Collection
     parent_under_game_axes(source_collection, apply_transform)
-    
+
     # Create a duplicate of the armature and call it control_rig
     if use_control_rig and armature_object:
         # Select the armature object
@@ -2741,7 +2763,7 @@ def load_drs(
         bpy.ops.object.duplicate()
         control_rig = bpy.context.view_layer.objects.active
         control_rig.name = f"{armature_object.name}_Control_Rig"
-        
+
         # Now we need to set constraints on the original armature to copy transforms from the control rig
         with ensure_mode('POSE'):
             for bone in armature_object.pose.bones:
@@ -2754,7 +2776,7 @@ def load_drs(
         with ensure_mode('EDIT'):
             for bone in control_rig.data.edit_bones:
                 bone.use_deform = False  # Disable deformation on the original armature
-        
+
         # Link the both Rigs to the GRT_Action_Bakery_Global_Settings if available
         if hasattr(bpy.context.scene, "GRT_Action_Bakery_Global_Settings"):
             bpy.context.scene.GRT_Action_Bakery_Global_Settings.Target_Armature = armature_object
@@ -4043,7 +4065,7 @@ def create_mesh(
     flu_map = None
     skip_normal_map = True
     skip_param_map = True
-    
+
     # Gather user flags
     user_flags = 0
     try:
@@ -4052,7 +4074,7 @@ def create_mesh(
             user_flags = int(mp.bool_parameter)
     except Exception:
         user_flags = 0
-    
+
     def _bit(i: int) -> bool:
         return (user_flags >> i) & 1
 
@@ -4094,7 +4116,7 @@ def create_mesh(
     normal_img_node    = _find_by_label(mat, 'TEX_IMAGE', 'Normal Map (_nor)')
     ref_img_node       = _find_by_label(mat, 'TEX_IMAGE', 'Refraction Map (_ref)')
     ref_col_node       = _find_by_label(mat, 'RGB', 'Refraction Color')
-    
+
     # Assure we have .image not None
     if metal_img_node and not getattr(metal_img_node, "image", None):
         metal_img_node = None
@@ -4160,7 +4182,7 @@ def create_mesh(
             mr_src_r, mr_src_g, mr_src_a, mr_src_b,
             new_mesh, mesh_index, model_name, folder_path
         )
-        
+
         # --- FLU map image (behind bit 16, same enable as the par system) ---
         if flu_tex_l1 and getattr(flu_tex_l1, "image", None):
             new_mesh.textures.length += 1
@@ -4242,7 +4264,7 @@ def create_mesh(
             "Warning",
             "WARNING",
         )
-    
+
     return new_mesh, per_mesh_bone_data
 
 
@@ -5128,148 +5150,30 @@ def update_mesh_file_root_reference(
 
 
 def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLocatorList:
-    """
-    Build CDrwLocatorList for export.
-
-    Priority:
-      1) Use the editor's stored JSON blob on the DRSModel_* collection (authoritative).
-      2) If missing/malformed, derive from scene objects following the same rules
-         as the editor's "Sync from Scene" (bone local vs world-in-game-space),
-         then convert that temporary blob via `blob_to_cdrw`.
-    """
     def _empty(version: int = 5) -> CDrwLocatorList:
         return CDrwLocatorList(magic=0, version=int(version or 5), length=0, slocators=[])
 
     if not source_collection:
         return _empty()
 
-    # --- 1) Prefer the blob exactly as authored in the editor ----------------
-    try:
-        raw = source_collection.get(BLOB_KEY)
-        if raw:
-            blob = json.loads(raw)
-            if "locators" in blob:
-                cdrw = blob_to_cdrw(blob)
-                cdrw.length = len(cdrw.slocators or [])
-                if not getattr(cdrw, "version", None):
-                    cdrw.version = int(blob.get("version", 5) or 5)
-                if not getattr(cdrw, "magic", None):
-                    cdrw.magic = 0
-                return cdrw
-    except Exception:
-        # Fall through to scene derivation
-        pass
-    # -------------------------------------------------------------------------
+    raw = source_collection.get(BLOB_KEY)
+    if raw:
+        blob = json.loads(raw)
+        if "locators" in blob:
+            cdrw = blob_to_cdrw(blob)
+            cdrw.length = len(cdrw.slocators or [])
+            if not getattr(cdrw, "version", None):
+                cdrw.version = int(blob.get("version", 5) or 5)
+            if not getattr(cdrw, "magic", None):
+                cdrw.magic = 0
+            return cdrw
 
-    # --- 2) Fallback: derive a blob from the scene like the editor -----------
-    # Helpers mirror the editor's logic (names/UID search, GO handling, bone-local vs world)
-    LOCATOR_PREFIX = "Locator_"
-
-    def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
-        def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
-            for o in c.objects:
-                if o.type == "ARMATURE" and "Control_Rig" not in o.name:
-                    return o
-            for ch in c.children:
-                a = visit(ch)
-                if a:
-                    return a
-            return None
-        return visit(col)
-
-    def _find_game_orientation(root: bpy.types.Collection) -> Optional[bpy.types.Object]:
-        TARGET = "GameOrientation"
-        def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
-            for o in c.objects:
-                if TARGET in o.name:
-                    return o
-            for ch in c.children:
-                got = visit(ch)
-                if got:
-                    return got
-            return None
-        return visit(root)
-
-    def _iter_locator_objects(root: bpy.types.Collection):
-        out = []
-        def visit(c: bpy.types.Collection):
-            for o in c.objects:
-                if (UID_KEY in o.keys()) or o.name.startswith(LOCATOR_PREFIX):
-                    out.append(o)
-            for ch in c.children:
-                visit(ch)
-        visit(root)
-        return out
-
-    def _bone_index_from_name(arm: bpy.types.Object, name: str) -> int:
-        if not arm or not name:
-            return -1
-        return arm.data.bones.find(name)
-
-    def _flatten_m3(m) -> list[float]:
-        try:
-            return [float(m[i][j]) for i in range(3) for j in range(3)]
-        except Exception:
-            v = list(m)
-            if len(v) == 9:
-                return [float(x) for x in v]
-            return [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
-
-    def _infer_class_id_from_name(name: str) -> int:
-        # Same rule the editor uses
-        if name.startswith(LOCATOR_PREFIX):
-            t = name[len(LOCATOR_PREFIX):]
-            for k, v in LocatorClass.items():
-                if v == t:
-                    return int(k)
-        return 0
-
-    arm = _find_armature(source_collection)
-    go = _find_game_orientation(source_collection)
-
-    # Build a temporary blob compatible with blob_to_cdrw()
-    temp_blob = {"version": 5, "locators": []}
-
-    for obj in _iter_locator_objects(source_collection):
-        entry = {
-            "uid": obj.get(UID_KEY) or "",   # not strictly required for export
-            "class_id": int(obj.get("_class_id", _infer_class_id_from_name(obj.name))),
-            "file": obj.get("_file", ""),
-            "bone_id": -1,
-            "uk_int": -1,
-            "rot3x3": [1, 0, 0, 0, 1, 0, 0, 0, 1],
-            "pos": [0, 0, 0],
-        }
-
-        # Bone-local -> store LOCAL (bone space). Non-bone -> WORLD IN GAME SPACE.
-        if (
-            obj.parent_type == "BONE"
-            and obj.parent is not None
-            and obj.parent.type == "ARMATURE"
-            and obj.parent_bone
-        ):
-            entry["bone_id"] = int(_bone_index_from_name(obj.parent, obj.parent_bone))
-            entry["pos"] = list(obj.location)
-            entry["rot3x3"] = _flatten_m3(obj.matrix_basis.to_3x3())
-        else:
-            entry["bone_id"] = -1
-            if go and obj.parent == go:
-                mw_game = go.matrix_world.inverted() @ obj.matrix_world
-            else:
-                mw_game = obj.matrix_world
-            entry["pos"] = list(mw_game.translation)
-            entry["rot3x3"] = _flatten_m3(mw_game.to_3x3())
-
-        temp_blob["locators"].append(entry)
-
-    try:
-        cdrw = blob_to_cdrw(temp_blob)
-        cdrw.length = len(cdrw.slocators or [])
-        cdrw.version = int(temp_blob.get("version", 5) or 5)
-        cdrw.magic = 281702437
-        return cdrw
-    except Exception:
-        return _empty()
+    logger.log(
+        f"Failed to read CDrwLocatorList blob from collection {source_collection.name}: {e}. Returning empty locator list!!!",
+        "Warning",
+        "WARNING",
+    )
+    return _empty()
 
 
 def create_effect_set(file_name: str, source_collection_copy: bpy.types.Collection) -> EffectSet:
@@ -5283,8 +5187,12 @@ def create_effect_set(file_name: str, source_collection_copy: bpy.types.Collecti
         try:
             blob = json.loads(raw)
             return _blob_to_effectset(blob)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            logger.log(
+                f"Failed to read EffectSet blob from collection {source_collection_copy.name}: {e}. Falling back to empty EffectSet with checksum.",
+                "Warning",
+                "WARNING",
+            )
 
     # fallback: empty EffectSet with checksum
     new_effect_set = EffectSet()
@@ -5304,7 +5212,7 @@ def _ska_names_from_blob(col: bpy.types.Collection) -> list[str]:
         b = json.loads(raw)
     except Exception:
         return []
-    names = []
+    names: list[str] = []
     for mk in b.get("mode_keys", []) or []:
         for v in mk.get("variants", []) or []:
             f = (v.get("file") or "").strip()
@@ -5313,9 +5221,8 @@ def _ska_names_from_blob(col: bpy.types.Collection) -> list[str]:
             if f.lower().endswith(".ska"):
                 f = f[:-4]
             names.append(f)
-    # unique while preserving order
-    seen = set()
-    out = []
+
+    seen, out = set(), []
     for n in names:
         if n not in seen:
             seen.add(n)
@@ -5327,19 +5234,42 @@ def export_ska_actions_all(
     folder_path: str,
     current_collection: bpy.types.Collection,
     context: bpy.types.Context,
-    only_names: list[str] | None = None,
+    ska_name_map: dict[str, str] | None = None,
 ):
-    """Export SKAs referenced by the blob (or a provided whitelist)."""
-    if only_names is None:
-        action_names = _ska_names_from_blob(current_collection)
-    else:
-        action_names = list(dict.fromkeys(only_names))  # unique, order-preserving
+    """
+    Exportiere alle SKA-Dateien, die im Animation-Blob referenziert werden.
 
-    for action_name in action_names:
-        # guard: export only if the action exists
-        if bpy.data.actions.get(action_name) is None:
+        Wichtiger Punkt:
+        - Der Dateiname auf Disk orientiert sich an der finalen Export-Benennung
+            (ska_name_map) und fällt zurück auf den Blob-Namen, falls kein Mapping existiert.
+        - Die passende Action wird über _resolve_action_from_blob_name()
+            (plus Fallbacks) gesucht.
+    """
+    ska_basenames = _ska_names_from_blob(current_collection)
+    if not ska_basenames:
+        return
+
+    for base in ska_basenames:
+        base = (base or "").strip()
+        if not base:
             continue
-        export_ska(context, os.path.join(folder_path, action_name), action_name)
+
+        act_name = _resolve_action_from_blob_name(current_collection, base)
+
+        if not act_name or bpy.data.actions.get(act_name) is None:
+            for cand in (base, base + ".ska", base.split(".")[0]):
+                if bpy.data.actions.get(cand) is not None:
+                    act_name = cand
+                    break
+
+        if not act_name or bpy.data.actions.get(act_name) is None:
+            continue
+
+        export_key = _norm_ska_key(base)
+        mapped_name = (ska_name_map or {}).get(export_key)
+        final_base = mapped_name or base
+
+        export_ska(context, os.path.join(folder_path, final_base), act_name)
 
 
 def save_drs(
@@ -5369,7 +5299,7 @@ def save_drs(
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Failed to duplicate collection: {e}. Type {type(e)}", "ERROR")
         return abort(keep_debug_collections, None)
-    
+
     # Copy the AnimationSet blob from the source into the export copy (full fidelity)
     try:
         raw_blob = source_collection.get(ANIM_BLOB_KEY)
@@ -5377,12 +5307,28 @@ def save_drs(
             source_collection_copy[ANIM_BLOB_KEY] = raw_blob
     except Exception:
         pass
-    
+
     # Copy the EffectSet blob from the source into the export copy (full fidelity)
     try:
         raw_effect_blob = source_collection.get(EFFECT_BLOB_KEY)
         if raw_effect_blob:
             source_collection_copy[EFFECT_BLOB_KEY] = raw_effect_blob
+    except Exception:
+        pass
+
+    # Copy the action resolution map so blob names can still be resolved on the copy
+    try:
+        raw_action_map = source_collection.get("_drs_action_map")
+        if raw_action_map:
+            source_collection_copy["_drs_action_map"] = raw_action_map
+    except Exception:
+        pass
+
+    # Copy the CDrwLocatorList blob from the source into the export copy (full fidelity)
+    try:
+        raw_cdrw_blob = source_collection.get(BLOB_KEY)
+        if raw_cdrw_blob:
+            source_collection_copy[BLOB_KEY] = raw_cdrw_blob
     except Exception:
         pass
 
@@ -5461,7 +5407,7 @@ def save_drs(
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Error setting origin for meshes: {e}", "Origin Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
-    
+
     # === Action name strategy for export =========================================
     export_prefix: str | None
     if set_model_name_prefix == "model_name":
@@ -5475,18 +5421,9 @@ def save_drs(
     else:  # keep_existing
         export_prefix = None
 
-    # Localize actions (duplicate inside the *copy*) and apply prefix on duplicates
-    local_name_map, _dups  = _ensure_local_actions_with_prefix(
-        source_collection_copy, export_prefix
-    )
+    # Build name mapping once so AnimationSet, EffectSet and SKA files share consistent naming
+    ska_name_map = _build_ska_export_name_map(source_collection_copy, export_prefix)
 
-    # Rewrite only the copied collection's AnimationSet blob to point to the local names
-    # (No changes to the original/main collection.)
-    try:
-        _rewrite_anim_blob_variant_files(source_collection_copy, local_name_map)
-    except Exception as e:
-        logger.log(f"Warning: failed to rewrite variant files on export copy: {e}", "Warning", "WARNING")
-    
     # === CREATE DRS STRUCTURE =================================================
     folder_path = os.path.dirname(filepath)
 
@@ -5566,6 +5503,14 @@ def save_drs(
                     "Failed to create AnimationSet.", "Animation Set Error", "ERROR"
                 )
                 return abort(keep_debug_collections, source_collection_copy)
+            try:
+                _apply_ska_name_map_to_animation_set(new_drs_file.animation_set, ska_name_map)
+            except Exception as e:
+                logger.log(
+                    f"Warning: failed to apply SKA name map to AnimationSet: {e}",
+                    "Warning",
+                    "WARNING",
+                )
             # Fox for Animated Object -> No Markers, hasAtlas = 1, allow only modekeys with visJob = 0
             if model_type in ["AnimatedObjectNoCollision", "AnimatedObjectCollision"]:
                 new_drs_file.animation_set.has_atlas = 1
@@ -5621,11 +5566,16 @@ def save_drs(
                     "Failed to create EffectSet.", "Effect Set Error", "ERROR"
                 )
                 return abort(keep_debug_collections, source_collection_copy)
-            # Rewrite only the copied collection's EffectSet blob to point to the local names
+
             try:
-                _rewrite_effectset_skeleff_names(new_drs_file.effect_set, local_name_map)
+                _apply_ska_name_map_to_effect_set(new_drs_file.effect_set, ska_name_map)
             except Exception as e:
-                logger.log(f"Warning: failed to rewrite EffectSet files on export copy: {e}", "Warning", "WARNING")
+                logger.log(
+                    f"Warning: failed to apply SKA name map to EffectSet: {e}",
+                    "Warning",
+                    "WARNING",
+                )
+
             new_drs_file.push_node_infos("EffectSet", new_drs_file.effect_set)
         elif node == "CGeoPrimitiveContainer":
             pass  # Nothing happens here
@@ -5656,10 +5606,12 @@ def save_drs(
             "AnimatedObjectCollision",
             "AnimatedUnit",
         ]:
-            export_ska_actions_all(folder_path, source_collection_copy, context, only_names=list(local_name_map.values()))
+            # Namen & Prefix kommen jetzt ausschließlich aus dem Blob
+            export_ska_actions_all(folder_path, source_collection_copy, context, ska_name_map)
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Error exporting SKA actions: {e}", "SKA Export Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
+
 
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:

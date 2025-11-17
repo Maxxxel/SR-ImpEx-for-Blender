@@ -1,6 +1,6 @@
 import json
 from os.path import dirname, realpath
-from typing import List
+from typing import List, Union
 from collections import defaultdict
 from mathutils import Vector, Quaternion
 import bpy
@@ -20,12 +20,12 @@ def get_current_collection() -> bpy.types.Collection:
     return bpy.context.view_layer.active_layer_collection.collection
 
 
-def get_current_armature() -> bpy.types.Object:
+def get_current_armature() -> Union[bpy.types.Object, None]:
     """Returns the armature of the current collection or none."""
     current_collection = get_current_collection()
     if current_collection is None:
         return None
-    
+
     # Assure we have the right collection Name -> Should be Armature_Collection
     if "Armature" not in current_collection.name:
         # We are for sure in the main Collection DRSModel... so we need to dig one level deeper
@@ -75,7 +75,7 @@ def get_actions(current_collection: bpy.types.Collection = None) -> List[str]:
             # But avoid actions linked to Control_Rig Armatures
             if "Control_Rig" in action.name:
                 continue
-            
+
             for fcurve in action.fcurves:
                 # Check if the action references this object's properties or pose bones
                 if fcurve.data_path.startswith(("location", "rotation", "scale")):
@@ -87,7 +87,45 @@ def get_actions(current_collection: bpy.types.Collection = None) -> List[str]:
                     break
 
     # Return sorted list for consistent ordering
-    return sorted(relevant_actions)
+    sorted_actions = sorted(relevant_actions)
+
+    # Stelle sicher, dass alle relevanten Actions die DRS-Name-Properties haben
+    for act_name in sorted_actions:
+        act = bpy.data.actions.get(act_name)
+        if not act:
+            continue
+
+        try:
+            raw = act.get("raw_name", None)
+        except Exception:
+            raw = None
+        if not raw:
+            raw = act.name or ""
+            try:
+                act["raw_name"] = raw
+            except Exception:
+                pass
+
+        try:
+            ui = act.get("ui_name", None)
+        except Exception:
+            ui = None
+        if not ui:
+            base = raw
+            if base.lower().endswith(".ska"):
+                base = base[:-4]
+            short = base
+            if "-" in short:
+                short = short.rsplit("-", 1)[-1]
+            if "_" in short:
+                short = short.rsplit("_", 1)[-1]
+            short = short or base or raw
+            try:
+                act["ui_name"] = short
+            except Exception:
+                pass
+
+    return sorted_actions
 
 
 def generate_bone_id(bone_name: str) -> int:
@@ -98,19 +136,27 @@ def generate_bone_id(bone_name: str) -> int:
     return bone_id
 
 
+# invert Bézier→Hermite for each axis
+def invert_bezier_hermite_for_axis(fc: bpy.types.FCurve, i: int, total_frames: float) -> float:
+    p = fc.keyframe_points[i]
+    n = fc.keyframe_points[i + 1]
+    df = n.co[0] - p.co[0]
+    return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
+
+
 def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> None:
     """Export the current scene to a .ska file."""
     # Find the Animation Data by the given action name in the current context
     action = bpy.data.actions.get(action_name)
     if action is None:
         raise ValueError(f"Action '{action_name}' not found in the current context.")
-    
+
     try:
         frame_length = action["frame_length"]
     except Exception:
         frame_length = None
         print(f"Warning: Action {action_name} missing 'frame_length' property. Using frame range instead.")
-    
+
     if frame_length is None:
         # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
         frame_length = action.frame_range[1] - action.frame_range[0]
@@ -120,7 +166,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     except Exception:
         fps = None
         print(f"Warning: Action {action_name} missing 'original_fps' property. Using current scene fps.")
-    
+
     fps = context.scene.render.fps = int(fps)
 
     duration = frame_length / fps
@@ -286,21 +332,14 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                         loc_keyframe.tan_z = 0.0
                         loc_keyframe.tan_w = 0.0
                     else:
-                        # invert Bézier→Hermite for each axis
-                        def M(fc: bpy.types.FCurve) -> float:
-                            p = fc.keyframe_points[i]
-                            n = fc.keyframe_points[i + 1]
-                            df = n.co[0] - p.co[0]
-                            return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
-
-                        M_local = Vector((M(loc_fcs[0]), M(loc_fcs[1]), M(loc_fcs[2])))
-                        M_file = bind_rot @ M_local
-                        loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = M_file[:]
+                        m_local = Vector((invert_bezier_hermite_for_axis(loc_fcs[0], i, total_frames), invert_bezier_hermite_for_axis(loc_fcs[1], i, total_frames), invert_bezier_hermite_for_axis(loc_fcs[2], i, total_frames)))
+                        m_file = bind_rot @ m_local
+                        loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = m_file[:]
                     loc_keyframe.tan_w = 0.0  # No tangents for W in location keyframes
                     keyframes.append(loc_keyframe)
             except Exception as e:
                 raise RuntimeError(f"Error generating location keyframes for bone '{bone_name}': {e}") from e
-            
+
             rot_header = SKAHeader()
             rot_header.type = 1
             rot_header.tick = last_tick
@@ -331,15 +370,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                         rot_keyframe.tan_z = 0.0
                         rot_keyframe.tan_w = 0.0
                     else:
-                        # invert Bézier→Hermite for each axis
-                        def Mq(fc: bpy.types.FCurve) -> float:
-                            p = fc.keyframe_points[i]
-                            n = fc.keyframe_points[i + 1]
-                            df = n.co[0] - p.co[0]
-                            return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
-
                         local_q = Quaternion(
-                            (Mq(rot_fcs[0]), Mq(rot_fcs[1]), Mq(rot_fcs[2]), Mq(rot_fcs[3]))
+                            (invert_bezier_hermite_for_axis(rot_fcs[0], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[1], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[2], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[3], i, total_frames))
                         )
                         file_q = bind_rot @ local_q
                         rot_keyframe.tan_w = -file_q.w

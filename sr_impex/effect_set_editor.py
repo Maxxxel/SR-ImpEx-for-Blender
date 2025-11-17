@@ -32,7 +32,7 @@ from .drs_definitions import (
 )
 
 from .drs_resolvers import resolve_action_from_blob_name
-from .asset_library import sound_candidates_for_base, is_sound_cached
+from .debug_asset_library import sound_candidates_for_base, is_sound_cached
 
 EFFECT_BLOB_KEY = "EffectSetJSON"
 resource_dir = dirname(realpath(__file__)) + "/resources"
@@ -48,11 +48,69 @@ def _norm_ska_name(s: str) -> str:
     return s if s.lower().endswith(".ska") else (s + ".ska")
 
 
-def _actions_enum(_self=None, _context=None):
-    # Mirrors your AnimationSet editor approach: list bpy.data.actions + "(none)"
-    items = [("NONE", "(none)", "No action")]
-    if bpy.data.actions:
-        items.extend((a.name, a.name, "") for a in bpy.data.actions)
+# ---------------------------------------------------------------------------
+# Actions: UI / Name-Handling
+# ---------------------------------------------------------------------------
+
+def _ensure_action_name_props(act: bpy.types.Action) -> str:
+    try:
+        raw = act.get("raw_name", None)
+    except Exception:
+        raw = None
+
+    if not raw:
+        raw = act.name or ""
+        try:
+            act["raw_name"] = raw
+        except Exception:
+            pass
+
+    try:
+        ui = act.get("ui_name", None)
+    except Exception:
+        ui = None
+    if ui:
+        return str(ui)
+
+    base = raw
+    if base.lower().endswith(".ska"):
+        base = base[:-4]
+
+    short = base
+    if "-" in short:
+        short = short.rsplit("-", 1)[-1]
+    if "_" in short:
+        short = short.rsplit("_", 1)[-1]
+
+    short = short or base or raw
+
+    try:
+        act["ui_name"] = short
+    except Exception:
+        pass
+
+    return short
+
+
+def _action_label_from_id(action_id: str) -> str:
+    if not action_id or action_id == "NONE":
+        return "<None>"
+    act = bpy.data.actions.get(action_id)
+    if not act:
+        return action_id
+    return _ensure_action_name_props(act)
+
+
+def _actions_enum(_self, _ctx):
+    acts = bpy.data.actions
+    items = [("NONE", "<None>", "")]
+    pairs = []
+    for act in acts:
+        ident = act.name
+        label = _ensure_action_name_props(act)
+        pairs.append((ident, label))
+    pairs.sort(key=lambda p: p[1].lower())
+    items.extend((ident, label, "") for ident, label in pairs)
     return items
 
 
@@ -120,42 +178,6 @@ def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
     return visit(col)
 
 
-def _find_cached_audio(base: str, lang: str) -> Optional[str]:
-    """
-    Prefer audio from our extracted assets cache.
-    Expected layouts (checked in order):
-      assets_cache/{lang}/{base}.wav
-      assets_cache/sounds/{lang}/{base}.wav
-      assets_cache/audio/{lang}/{base}.wav
-    Fallbacks:
-      same as above with .ogg/.mp3
-      glob search under assets_cache/**/{lang}/**/{base}.* (wav/ogg/mp3)
-    Returns absolute file path or None.
-    """
-    if not base or not lang:
-        return None
-    # use resource_dir to access asset_cache/sounds/base/lang.wav
-    base_name = pathlib.Path(base).stem  # strip any extension
-    search_paths = [
-        Path(resource_dir) / "asset_cache" / "sounds" / base_name / f"{lang}.wav",
-    ]
-    for p in search_paths:
-        if p.exists():
-            file_path = str(p.resolve())
-            return file_path
-    # try .ogg/.mp3 variants?
-    return None
-
-def _ensure_scene_marker(scene: bpy.types.Scene, name: str, frame: int) -> None:
-    # Ensure unique marker name
-    final = name
-    i = 1
-    while final in scene.timeline_markers:
-        i += 1
-        final = f"{name}_{i}"
-    scene.timeline_markers.new(name=final, frame=int(frame))
-
-
 def _activate_and_bind_action(context: bpy.types.Context, arm: bpy.types.Object, act: bpy.types.Action):
     """Make armature active/selected and ensure the action is bound for playback."""
     vl = context.view_layer
@@ -168,104 +190,6 @@ def _activate_and_bind_action(context: bpy.types.Context, arm: bpy.types.Object,
         arm.animation_data_create()
     arm.animation_data.action = act
 
-def _ensure_drs_audio_collection(context: bpy.types.Context) -> Optional[bpy.types.Collection]:
-    """Create/return Audio_Collection under the active DRSModel collection."""
-    parent_col = _active_drs_collection(context)
-    if not parent_col:
-        return None
-    # Find or create Audio_Collection
-    col = parent_col.children.get("Audio_Collection")
-    if not col:
-        col = bpy.data.collections.new("Audio_Collection")
-        parent_col.children.link(col)
-    return col
-
-def _clear_drs_speakers(scene: bpy.types.Scene, action_name: Optional[str] = None) -> int:
-    """
-    Delete speaker objects.
-    If action_name is provided, deletes only speakers for that action (DRS_SPK::<action_name>::*).
-    If action_name is None, deletes ALL DRS_SPK::* speakers.
-    """
-    removed = 0
-    to_delete = []
-    prefix = f"DRS_SPK::{action_name}::" if action_name else "DRS_SPK::"
-    
-    for obj in scene.objects:
-        if obj.type == 'SPEAKER' and obj.name.startswith(prefix):
-            to_delete.append(obj)
-            
-    for obj in to_delete:
-        try:
-            # Unlink from all collections, then remove
-            for col in list(obj.users_collection):
-                col.objects.unlink(obj)
-            bpy.data.objects.remove(obj, do_unlink=True)
-            removed += 1
-        except Exception:
-            pass
-    return removed
-
-def _sound_from_path(filepath: str) -> bpy.types.Sound:
-    """Get or load a bpy.data.sounds datablock for a file."""
-    # reuse existing datablock if loaded
-    for snd in bpy.data.sounds:
-        if bpy.path.abspath(snd.filepath) == bpy.path.abspath(filepath):
-            return snd
-    return bpy.data.sounds.load(filepath, check_existing=True)
-
-def _place_speaker_at_frame(context: bpy.types.Context,act: bpy.types.Action,base: str,lang_key: str,filepath: str,frame_start: int,*,norm_time: float = 0.0,pitch: float = 1.0,volume: float = 1.0,distance_max: float = 50.0,distance_ref: float = 1.0,attenuation: float = 1.0) -> Optional[bpy.types.Object]:
-    """Create/update a speaker for this action, set 3D params, and keyframe mute over the sound duration."""
-    scn = context.scene
-    col = _active_drs_collection(context)
-    if not col:
-        return None
-    arm = _find_armature(col)
-    if not arm:
-        return None
-    
-    aud_col = _ensure_drs_audio_collection(context)
-    if aud_col is None:
-        aud_col = scn.collection  # fallback
-        
-    # one speaker per sound event (action + time + base)
-    time_tag = f"{norm_time:.3f}".replace(".", "_")
-    name = f"DRS_SPK::{act.name}::{time_tag}_{base}_{lang_key}"
-    
-    # We always create a new one, assuming _clear_drs_speakers was called
-    spk = scn.objects.get(name)
-    if spk:
-        try:
-            for c in list(spk.users_collection):
-                c.objects.unlink(spk)
-            bpy.data.objects.remove(spk, do_unlink=True)
-        except Exception:
-            pass # ignore if removal fails
-
-    spk_data = bpy.data.speakers.new(name=f"{name}_SPK")
-    spk = bpy.data.objects.new(name, spk_data)
-    aud_col.objects.link(spk)
-    spk.parent = arm
-    spk.matrix_parent_inverse = arm.matrix_world.inverted()
-    
-    # assign sound
-    snd = _sound_from_path(filepath)
-    spk.data.sound = snd
-    spk.data.volume = float(volume)
-    spk.data.pitch = float(pitch)
-    spk.data.distance_max = float(distance_max)
-    spk.data.distance_reference = float(distance_ref)
-    spk.data.attenuation = float(attenuation)
-    
-    # compute duration in frames
-    dur = getattr(snd, "frame_duration", None)
-    if not dur:
-        # fallback duration: derive from length (seconds) * fps if available
-        dur = int(round((getattr(snd, "length", 1.0)) * scn.render.fps / max(1, scn.render.fps_base)))
-    frame_end = int(frame_start + int(dur))
-    
-    # ensure action binding (for armature playback)
-    _activate_and_bind_action(context, arm, act)
-    return spk
 
 # -----------------------
 # State
@@ -308,55 +232,6 @@ class EffKeyframePG(bpy.types.PropertyGroup):
 
     variants: CollectionProperty(type=EffVariantPG)  # type: ignore
     active_variant: IntProperty(default=0)  # type: ignore
-    
-    # Language dropdown (for audio keyframes)
-    def _lang_items(self, context):
-        # Try to get the variant base name from our parent list item UI
-        # We can’t access parent directly here, so the UI callback recomputes,
-        # but this still lets us expose a per-keyframe language selection.
-        # Fallback to empty list if base can’t be resolved at draw time.
-        try:
-            # UI draws this only for audio keys and resolves 'base' there;
-            # this function will be re-evaluated when the UI changes.
-            area_ctx = context
-        except Exception:
-            area_ctx = None
-        # Provide a minimal list; actual options are injected in the draw code
-        # via EnumProperty update (see UI section).
-        # Returning an empty list is legal; we will replace items at draw time.
-        return []
-
-    lang: bpy.props.StringProperty(
-        name="Language",
-        description="Language for cached audio (e.g. 'en', 'de')",
-        default="en",
-    ) # type: ignore
-    # 3D audio parameters (per keyframe – minimal schema bump)
-    pitch: bpy.props.FloatProperty(
-        name="Pitch",
-        description="Playback pitch multiplier for this sound",
-        default=1.0, soft_min=0.25, soft_max=4.0, min=0.01, max=8.0
-    ) # type: ignore
-    distance_max: bpy.props.FloatProperty(
-        name="Max Distance",
-        description="Distance at which sound is no longer attenuated",
-        default=50.0, min=0.01, soft_max=500.0
-    ) # type: ignore
-    distance_ref: bpy.props.FloatProperty(
-        name="Ref Distance",
-        description="Distance at which volume is 1.0 before attenuation",
-        default=1.0, min=0.001, soft_max=10.0
-    ) # type: ignore
-    attenuation: bpy.props.FloatProperty(
-        name="Falloff",
-        description="How quickly volume decreases with distance",
-        default=1.0, min=0.0, soft_max=8.0
-    ) # type: ignore
-    volume: bpy.props.FloatProperty(
-        name="Volume",
-        description="Base volume multiplier",
-        default=1.0, min=0.0, soft_max=2.0
-    ) # type: ignore
 
     def to_dict(self) -> Dict:
         return {
@@ -570,7 +445,7 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
     eff.skel_effekts = []
     for ed in (blob.get("effects") or []):
         se = DRS_SkelEff()
-        ska = _norm_ska_name(ed.get("action", ""))
+        ska = _norm_ska_name(ed.get("action", "") or "")
         se.name = ska
         se.length = len(se.name)
 
@@ -659,7 +534,7 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
         ash.pitch_shift_min = float(ashd.get("pitch_shift_min", 1.0))
         ash.pitch_shift_max = float(ashd.get("pitch_shift_max", 1.0))
         asc.sound_header = ash
-        asc.sound_type = SoundType(int(ascd.get("sound_type", 0)))
+        asc.sound_type = int(ascd.get("sound_type", 0))
         asc.nbr_sound_variations = int(ascd.get("nbr_sound_variations", 0))
 
         asc.sound_containers = []
@@ -717,14 +592,19 @@ class DRS_UL_EffectKeyframes(bpy.types.UIList):
         label = dict(item.bl_rna.properties['key_type'].enum_items).get(item.key_type).name
         row.label(text=label)
 
+
 class DRS_UL_Effects(bpy.types.UIList):
     bl_idname = "DRS_UL_Effects"
 
     def draw_item(self, _ctx, layout, _data, item: 'EffEntryPG', _icon, _active, _flt):
         row = layout.row(align=True)
-        label = item.action if item.action and item.action != "NONE" else "<None>"
+        label = _action_label_from_id(item.action)
         row.label(text=label, icon="ACTION")
-        row.label(text=f"{len(item.keyframes)} effect{'s' if len(item.keyframes) != 1 else ''}")
+        row.label(
+            text=f"{len(item.keyframes)} effect{'s' if len(item.keyframes) != 1 else ''}"
+        )
+
+
 
 class DRS_UL_EffectVariants(bpy.types.UIList):
     bl_idname = "DRS_UL_EffectVariants"
@@ -942,212 +822,6 @@ class DRS_OT_Effect_PlayAction(bpy.types.Operator):
         bpy.ops.screen.animation_play()
         return {"FINISHED"}
 
-
-class DRS_OT_Effect_PlaceAudio(bpy.types.Operator):
-    """Place cached audio at the keyframe's normalized time and play."""
-    bl_idname = "drs.effect_place_audio"
-    bl_label = "Place & Play"
-    bl_options = {"INTERNAL"}
-
-    base_name: bpy.props.StringProperty(default="")  # e.g. ack_enforcer_strike1
-    action_name: bpy.props.StringProperty(default="")  # Action to map normalized time
-    norm_time: bpy.props.FloatProperty(default=0.0, min=0.0, max=1.0)
-
-    # Build languages dynamically from the base_name
-    def _lang_items(self, _ctx):
-        langs = sound_candidates_for_base(self.base_name) or {}
-        items = [(k, k, "") for k in sorted(langs.keys())]
-        return items if items else [("","<none>","")]
-
-    language: bpy.props.StringProperty(
-        name="Language",
-        description="Language for cached audio (e.g. 'en', 'de')",
-        default="en",
-    ) # type: ignore
-    # Optional overrides for 3D params
-    pitch: bpy.props.FloatProperty(default=1.0)
-    volume: bpy.props.FloatProperty(default=1.0)
-    distance_max: bpy.props.FloatProperty(default=50.0)
-    distance_ref: bpy.props.FloatProperty(default=1.0)
-    attenuation: bpy.props.FloatProperty(default=1.0)
-
-    def execute(self, context):
-        base = (self.base_name or "").strip()
-        act_name = (self.action_name or "").strip()
-        if not base:
-            self.report({"ERROR"}, "No base sound name.")
-            return {"CANCELLED"}
-        if not act_name or act_name == "NONE":
-            self.report({"ERROR"}, "No Action set on this Effect entry.")
-            return {"CANCELLED"}
-        act = bpy.data.actions.get(act_name)
-        if not act:
-            self.report({"ERROR"}, f"Action '{act_name}' not found.")
-            return {"CANCELLED"}
-
-        col = _active_drs_collection(context)
-        if not col:
-            self.report({"ERROR"}, "No active DRSModel_* collection found.")
-            return {"CANCELLED"}
-        arm = _find_armature(col)
-        if not arm:
-            self.report({"ERROR"}, "No Armature found in active DRSModel_* collection.")
-            return {"CANCELLED"}
-        _activate_and_bind_action(context, arm, act)
-
-        # Resolve filepath from cache
-        langs = sound_candidates_for_base(base) or {}
-        if not langs:
-            self.report({"ERROR"}, f"No cached audio for '{base}'.")
-            return {"CANCELLED"}
-        lang_key = (self.language or "").strip()
-        if not lang_key or lang_key not in langs:
-            # fall back to first available if invalid/empty
-            lang_key = next(iter(sorted(langs.keys())))
-        
-        filepath = _find_cached_audio(base, lang_key)
-        if not filepath:
-            # last resort: use whatever the index returned (old behavior)
-            filepath = langs.get(lang_key)
-        if not filepath or not os.path.exists(filepath):
-            self.report({"ERROR"}, f"Language '{lang_key}' not available in assets_cache for base '{base}'.")
-            return {"CANCELLED"}
-
-        # Compute frame from normalized time against action frame range
-        f0, f1 = act.frame_range
-        span = max(1.0, (f1 - f0))
-        frame = int(round(f0 + float(self.norm_time) * span))
-
-        scn = context.scene
-        
-        # Remove other speakers for this action
-        _clear_drs_speakers(scn, action_name=act_name)
-        
-        spk = _place_speaker_at_frame(context, act, base, lang_key, filepath, frame,
-                                      norm_time=self.norm_time,
-                                      pitch=float(self.pitch),
-                                      volume=float(self.volume),
-                                      distance_max=float(self.distance_max),
-                                      distance_ref=float(self.distance_ref),
-                                      attenuation=float(self.attenuation))
-        if not spk:
-            self.report({"ERROR"}, "Failed to place Speaker object.")
-            return {"CANCELLED"}
-
-        # Always add a scene marker so it's visible in the timeline
-        _ensure_scene_marker(scn, name=f"AUD:{base}:{lang_key}", frame=int(frame))
-        
-        # Move timeline and play
-        scn.frame_current = int(frame)
-        try:
-            bpy.ops.screen.animation_play()
-        except Exception:
-            pass
-        return {"FINISHED"}
-
-
-class DRS_OT_Effect_PlaceAllAudio(bpy.types.Operator):
-    """Place all audio keyframes for the active Effect entry as Speakers."""
-    bl_idname = "drs.effect_place_all_audio"
-    bl_label = "Place All Audio (Speakers)"
-    bl_options = {"INTERNAL"}
-
-    @classmethod
-    def poll(cls, context):
-        st = _state()
-        if not (0 <= st.active_index < len(st.items)):
-            return False
-        it = st.items[st.active_index]
-        return it.action and it.action != "NONE"
-
-    def execute(self, context):
-        st = _state()
-        if not (0 <= st.active_index < len(st.items)):
-            return {"CANCELLED"}
-        
-        it = st.items[st.active_index]
-        act_name = it.action
-        act = bpy.data.actions.get(act_name)
-        if not act:
-            self.report({"ERROR"}, f"Action '{act_name}' not found.")
-            return {"CANCELLED"}
-
-        col = _active_drs_collection(context)
-        if not col:
-            self.report({"ERROR"}, "No active DRSModel_* collection found.")
-            return {"CANCELLED"}
-        arm = _find_armature(col)
-        if not arm:
-            self.report({"ERROR"}, "No Armature found in active DRSModel_* collection.")
-            return {"CANCELLED"}
-
-        _activate_and_bind_action(context, arm, act)
-        scn = context.scene
-        # Clear all existing speakers and markers for this action
-        _clear_drs_speakers(scn, action_name=act_name)
-        for m in list(scn.timeline_markers):
-            if m.name.startswith(f"AUD:{act_name}:"):
-                scn.timeline_markers.remove(m)
-
-        f0, f1 = act.frame_range
-        span = max(1.0, (f1 - f0))
-        placed_count = 0
-
-        for kf_idx, k in enumerate(it.keyframes):
-            if k.key_type != "0" or not k.variants:
-                continue
-            
-            # Use the active variant for this keyframe
-            v_idx = max(0, min(k.active_variant, len(k.variants) - 1))
-            v = k.variants[v_idx]
-            base = pathlib.Path(v.file or "").stem
-            if not base:
-                continue
-
-            # Resolve filepath
-            langs = sound_candidates_for_base(base) or {}
-            if not langs:
-                continue # Skip if no sound file
-            
-            lang_key = k.lang
-            if not lang_key or lang_key not in langs:
-                lang_key = next(iter(sorted(langs.keys())))
-            
-            filepath = _find_cached_audio(base, lang_key)
-            if not filepath or not os.path.exists(filepath):
-                continue # Skip if file not found
-
-            norm_time = float(k.time)
-            frame = int(round(f0 + norm_time * span))
-
-            spk = _place_speaker_at_frame(
-                context, act, base, lang_key, filepath, frame,
-                norm_time=norm_time,
-                pitch=float(k.pitch),
-                volume=float(k.volume),
-                distance_max=float(k.distance_max),
-                distance_ref=float(k.distance_ref),
-                attenuation=float(k.attenuation)
-            )
-            
-            if spk:
-                placed_count += 1
-                _ensure_scene_marker(scn, name=f"AUD:{act_name}:{base}_{lang_key}", frame=int(frame))
-
-        if placed_count == 0:
-            self.report({"INFO"}, "No valid audio keyframes found to place.")
-            return {"CANCELLED"}
-
-        # Move timeline to start and play
-        scn.frame_current = int(f0)
-        try:
-            bpy.ops.screen.animation_play()
-        except Exception:
-            pass
-        
-        self.report({"INFO"}, f"Placed {placed_count} audio speaker(s).")
-        return {"FINISHED"}
-
 # -----------------------
 # Panel (always visible)
 # -----------------------
@@ -1185,15 +859,6 @@ def _draw_effectset_ui(layout, context):
         box.use_property_decorate = False
         box.prop(it, "action", text="Action")
         
-        # --- Action-level playback ---
-        # play_row = box.row(align=True)
-        # # Play all audio + anim
-        # op_all = play_row.operator("drs.effect_place_all_audio", text="Play All Audio", icon="PLAY_SOUND")
-        # # Play anim only
-        # op_anim = play_row.operator("drs.effect_play_action", text="Play (Anim Only)", icon="ACTION")
-        # op_anim.action_name = it.action
-        
-
         # Keyframes
         kbox = box.box()
         head = kbox.row(align=True)
@@ -1247,62 +912,6 @@ def _draw_effectset_ui(layout, context):
                 det.prop(v, "file")
                 det.prop(v, "weight")
 
-                # Extra UI for Audio keys only
-                # if k.key_type == "0":
-                #     # Derive base like 'ack_enforcer_strike1' from user string
-                #     name = (v.file or "").strip()
-                #     # accept names like 'Animation/acks_fight/ack_enforcer_strike1.wav'
-                #     base = pathlib.Path(name).stem if name else ""
-                #     if base:
-                #         langs = sound_candidates_for_base(base)
-                #         sub = det.box()
-                #         sub.label(text=f"Sound match: {base}")
-                #         if langs:
-                #             cached = is_sound_cached(base)
-                #             if not cached:
-                #                 row = sub.row(align=True)
-                #                 row.label(text=f"Languages: {', '.join(sorted(langs.keys()))}")
-                #                 op = row.operator("drs.assetlib_sound_read", icon="IMPORT", text="Read file")
-                #                 op.base_name = base
-                #             else:
-                #                 # Persisted language (string) + Place & Play button
-                #                 # Default to first available if empty/invalid
-                #                 if not k.lang or k.lang not in langs:
-                #                     k.lang = next(iter(sorted(langs.keys())))
-                #                 row_lang = sub.row(align=True)
-                #                 row_lang.prop(k, "lang", text="Lang")
-                                
-                #                 # 3D audio parameters
-                #                 col3d = sub.column(align=True)
-                #                 col3d.prop(k, "pitch")
-                #                 col3d.prop(k, "volume")
-                #                 split = col3d.split(factor=0.5)
-                #                 left = split.column(align=True); right = split.column(align=True)
-                #                 left.prop(k, "distance_ref")
-                #                 left.prop(k, "attenuation")
-                #                 right.prop(k, "distance_max")
-                                
-                #                 row_act = sub.row(align=True)
-                #                 op2 = row_act.operator("drs.effect_place_audio", text="Place & Play (This Key)", icon="PLAY_SOUND")
-                #                 op2.base_name = base
-                #                 op2.action_name = it.action
-                #                 op2.norm_time = float(k.time)
-                #                 op2.language = k.lang
-                #                 # pass-through 3D params
-                #                 op2.pitch = float(k.pitch)
-                #                 op2.volume = float(k.volume)
-                #                 op2.distance_max = float(k.distance_max)
-                #                 op2.distance_ref = float(k.distance_ref)
-                #                 op2.attenuation = float(k.attenuation)
-
-                #                 # Show which languages exist for quick reference
-                #                 sub.label(text=f"Available: {', '.join(sorted(langs.keys()))}", icon="CHECKMARK")
-                #         else:
-                #             sub.label(text="Not found in asset cache index.", icon="ERROR")
-                #     else:
-                #         info = det.box()
-                #         info.label(text="Set Variant file name to find sound (e.g. .../ack_xxx.wav)", icon="INFO")
-
 
 class DRS_PT_EffectSetDock(bpy.types.Panel):
     """Sidepanel version in View3D (N-panel), always visible with hint if no DRS model."""
@@ -1333,9 +942,6 @@ _classes = (
     DRS_OT_Keyframe_Add,
     DRS_OT_Keyframe_Remove,
     DRS_OT_Keyframe_Move,
-    # DRS_OT_Effect_PlayAction,
-    # DRS_OT_Effect_PlaceAudio,
-    # DRS_OT_Effect_PlaceAllAudio, # Added
     DRS_OT_Variant_Add,
     DRS_OT_Variant_Remove,
     DRS_OT_Effect_Save,
@@ -1348,10 +954,8 @@ def register():
     for cls in _classes:
         bpy.utils.register_class(cls)
     bpy.types.WindowManager.drs_effect_state = PointerProperty(type=EffState)
-    # Removed drs_place_as_speaker
 
 def unregister():
     del bpy.types.WindowManager.drs_effect_state
-    # Removed drs_place_as_speaker
     for cls in reversed(_classes):
         bpy.utils.unregister_class(cls)

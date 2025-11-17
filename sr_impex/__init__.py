@@ -19,7 +19,6 @@ from . import locator_editor
 from . import animation_set_editor
 from . import material_flow_editor
 from . import effect_set_editor
-from . import asset_library
 
 bl_info = {
     "name": "SR-ImpEx",
@@ -33,7 +32,7 @@ bl_info = {
     "tracker_url": "",
 }
 
-is_dev_version = False
+IS_DEV_VERSION = False
 resource_dir = dirname(realpath(__file__)) + "/resources"
 
 
@@ -57,12 +56,12 @@ def available_actions(_self, _context):
     return [(act, act, "") for act in actions]
 
 
-_menus_attached = False
+_MENUES_ATTACHED = False
 
 
 def _attach_menus_idempotent():
-    global _menus_attached
-    if _menus_attached:
+    global _MENUES_ATTACHED
+    if _MENUES_ATTACHED:
         return
     # Remove old callbacks if they exist (safe if they don't)
     try:
@@ -76,11 +75,11 @@ def _attach_menus_idempotent():
     # Append once
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
-    _menus_attached = True
+    _MENUES_ATTACHED = True
 
 
 def _detach_menus_safely():
-    global _menus_attached
+    global _MENUES_ATTACHED
     try:
         bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     except Exception:  # pylint: disable=broad-exception-caught
@@ -90,7 +89,7 @@ def _detach_menus_safely():
     # pylint: disable=broad-exception-caught
     except Exception:
         pass
-    _menus_attached = False
+    _MENUES_ATTACHED = False
 
 
 # ----------------------------------------------------
@@ -492,6 +491,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
             return {"CANCELLED"}
 
         armature = next((o for o in active_coll.objects if o.type == "ARMATURE"), None)
+        armature_coll = None
         if armature is None:
             # Check for an Armature_Collection inside the active collection
             armature_coll = active_coll.children.get("Armature_Collection")
@@ -500,6 +500,9 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
                 armature = next(
                     (o for o in armature_coll.objects if o.type == "ARMATURE" and not o.name.startswith("Control_Rig")), None
                 )
+            else:
+                self.report({"ERROR"}, "No armature collection found in the selected collection")
+                return {"CANCELLED"}
 
         if armature is None:
             self.report({"ERROR"}, "No armature found in the selected collection")
@@ -601,7 +604,7 @@ def menu_func_import(self, _context):
     self.layout.operator(
         ImportBFModel.bl_idname,
         text="Battleforge (.drs) - "
-        + (is_dev_version and "DEV" or "")
+        + (IS_DEV_VERSION and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
         + "."
@@ -612,7 +615,7 @@ def menu_func_import(self, _context):
     self.layout.operator(
         NewBFScene.bl_idname,
         text="New Battleforge Scene - "
-        + (is_dev_version and "DEV" or "")
+        + (IS_DEV_VERSION and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
         + "."
@@ -626,7 +629,7 @@ def menu_func_export(self, _context):
     self.layout.operator(
         ExportBFModel.bl_idname,
         text="Battleforge (.drs) - "
-        + (is_dev_version and "DEV" or "")
+        + (IS_DEV_VERSION and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
         + "."
@@ -637,7 +640,7 @@ def menu_func_export(self, _context):
     self.layout.operator(
         ExportSKAFile.bl_idname,
         text="Battleforge Animation (.ska) - "
-        + (is_dev_version and "DEV" or "")
+        + (IS_DEV_VERSION and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
         + "."
@@ -661,7 +664,6 @@ def register():
     material_flow_editor.register()
     animation_set_editor.register()
     effect_set_editor.register()
-    # asset_library.register()
 
 
 def unregister():
@@ -678,4 +680,3 @@ def unregister():
     material_flow_editor.unregister()
     animation_set_editor.unregister()
     effect_set_editor.unregister()
-    # asset_library.unregister()
