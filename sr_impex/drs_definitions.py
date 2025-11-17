@@ -2601,9 +2601,9 @@ class SkelEff:
 @dataclass(eq=False, repr=False)
 class SoundHeader:
     is_one: int = 0  # short ALWAYS 1
+    volume: float = 1.0
     min_falloff: float = 1.0
     max_falloff: float = 1.0
-    volume: float = 1.0
     pitch_shift_min: float = 1.0
     pitch_shift_max: float = 1.0
     
@@ -2624,18 +2624,46 @@ class SoundHeader:
     
     def size(self) -> int:
         return 2 + 20
-        
+
+
+@dataclass(eq=False, repr=False)
+class SoundHeader2:
+    is_one: int = 0  # short ALWAYS 1
+    volume: float = 1.0
+    pitch_shift_min: float = 1.0
+    pitch_shift_max: float = 1.0
+    min_falloff: float = 1.0
+    max_falloff: float = 1.0
+    
+    def read(self, file: BinaryIO) -> "SoundHeader":
+        self.is_one = unpack("h", file.read(2))[0]
+        (
+            self.volume,
+            self.pitch_shift_min,
+            self.pitch_shift_max,
+            self.min_falloff,
+            self.max_falloff,
+        ) = unpack("fffff", file.read(20))
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("h", self.is_one))
+        file.write(pack("fffff", self.volume, self.pitch_shift_min, self.pitch_shift_max, self.min_falloff, self.max_falloff))
+    
+    def size(self) -> int:
+        return 2 + 20        
+
 
 @dataclass(eq=False, repr=False)
 class SoundFile:
     weight: int = 0  # byte
-    sound_header: SoundHeader =  SoundHeader()
+    sound_header: SoundHeader2 =  SoundHeader2()
     sound_file_name_length: int = 0  # Int
     sound_file_name: str = ""  # CString
     
     def read(self, file: BinaryIO) -> "SoundFile":
         self.weight = unpack("B", file.read(1))[0]
-        self.sound_header = SoundHeader().read(file)
+        self.sound_header = SoundHeader2().read(file)
         self.sound_file_name_length = unpack("i", file.read(4))[0]
         self.sound_file_name = file.read(self.sound_file_name_length).decode("utf-8").strip("\x00")
         return self
