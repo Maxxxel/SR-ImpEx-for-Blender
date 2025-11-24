@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
 from typing import List, Union, BinaryIO, Optional
+from urllib.parse import non_hierarchical
 from mathutils import Vector, Matrix, Quaternion
 from .file_io import FileReader, FileWriter
 
@@ -107,6 +108,14 @@ LocatorClass = {
     15: "SpellHitAll",  # as above
     16: "Hit",  # Point of being hit by attacks/spells
     29: "Projectile_Spawn",  # Point to use attacks/spells from -> sometimes FXB
+}
+
+SoundType = {
+    "Impact": 0,
+    "Step": 1,
+    "Spawn": 3,
+    "Cheer": 5,
+    "Fight": 8,
 }
 
 # Also Node Order
@@ -2590,125 +2599,144 @@ class SkelEff:
         return base
 
 
-@dataclass
-class SthSound:
-    sth_sound_file: int = 0  # byte
-    unknown: int = 0  # short
-    unknown_list: List[int] = field(
-        default_factory=list, metadata={"size": 5}
-    )  # 5 ints
-    lenght: int = 0  # int
-    file_name: str = ""  # CString split into length and name
-
-    def read(self, file: BinaryIO) -> "SthSound":
-        self.sth_sound_file = unpack("B", file.read(1))[0]
-        self.unknown = unpack("h", file.read(2))[0]
-        self.unknown_list = list(unpack("5i", file.read(20)))
-        self.lenght = unpack("i", file.read(4))[0]
-        self.file_name = file.read(self.lenght).decode("utf-8").strip("\x00")
+@dataclass(eq=False, repr=False)
+class SoundHeader:
+    is_one: int = 0  # short ALWAYS 1
+    volume: float = 1.0
+    min_falloff: float = 1.0
+    max_falloff: float = 1.0
+    pitch_shift_min: float = 1.0
+    pitch_shift_max: float = 1.0
+    
+    def read(self, file: BinaryIO) -> "SoundHeader":
+        self.is_one = unpack("h", file.read(2))[0]
+        (
+            self.min_falloff,
+            self.max_falloff,
+            self.volume,
+            self.pitch_shift_min,
+            self.pitch_shift_max,
+        ) = unpack("fffff", file.read(20))
         return self
-
+    
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("B", self.sth_sound_file))
-        file.write(pack("h", self.unknown))
-        file.write(pack("5i", *self.unknown_list))
-        file.write(pack("i", self.lenght))
-        file.write(self.file_name.encode("utf-8"))
-
+        file.write(pack("h", self.is_one))
+        file.write(pack("fffff", self.min_falloff, self.max_falloff, self.volume, self.pitch_shift_min, self.pitch_shift_max))
+    
     def size(self) -> int:
-        return 23 + self.lenght
+        return 2 + 20
 
 
 @dataclass(eq=False, repr=False)
-class UKS2:
-    unknown: int = 0  # short
-    unknown_list: List[int] = field(
-        default_factory=list, metadata={"size": 5}
-    )  # 5 ints
-    unknown_2: int = 0  # short
-    lenght: int = 0  # short
-    sth_sound: List[SthSound] = field(default_factory=list)
-
-    def read(self, file: BinaryIO) -> "UKS2":
-        self.unknown = unpack("h", file.read(2))[0]
-        self.unknown_list = list(unpack("5i", file.read(20)))
-        self.unknown_2 = unpack("h", file.read(2))[0]
-        self.lenght = unpack("h", file.read(2))[0]
-        self.sth_sound = [SthSound().read(file) for _ in range(self.lenght)]
+class SoundHeader2:
+    is_one: int = 0  # short ALWAYS 1
+    volume: float = 1.0
+    pitch_shift_min: float = 1.0
+    pitch_shift_max: float = 1.0
+    min_falloff: float = 1.0
+    max_falloff: float = 1.0
+    
+    def read(self, file: BinaryIO) -> "SoundHeader":
+        self.is_one = unpack("h", file.read(2))[0]
+        (
+            self.volume,
+            self.pitch_shift_min,
+            self.pitch_shift_max,
+            self.min_falloff,
+            self.max_falloff,
+        ) = unpack("fffff", file.read(20))
         return self
-
+    
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("h", self.unknown))
-        file.write(pack("5i", *self.unknown_list))
-        file.write(pack("h", self.unknown_2))
-        file.write(pack("h", self.lenght))
-        for sth_sound in self.sth_sound:
-            sth_sound.write(file)
-
+        file.write(pack("h", self.is_one))
+        file.write(pack("fffff", self.volume, self.pitch_shift_min, self.pitch_shift_max, self.min_falloff, self.max_falloff))
+    
     def size(self) -> int:
-        return 26 + sum(sth_sound.size() for sth_sound in self.sth_sound)
+        return 2 + 20        
 
 
 @dataclass(eq=False, repr=False)
-class UKS1:
-    unknown: int = 0  # short
-    unknown_list: List[int] = field(
-        default_factory=list, metadata={"size": 5}
-    )  # 5 ints
-    unknown_2: int = 0  # short
-    length: int = 0  # short
-    unknown_structs: List[UKS2] = field(default_factory=list)
-
-    def read(self, file: BinaryIO) -> "UKS1":
-        self.unknown = unpack("h", file.read(2))[0]
-        self.unknown_list = list(unpack("5i", file.read(20)))
-        self.unknown_2 = unpack("h", file.read(2))[0]
-        self.length = unpack("h", file.read(2))[0]
-        self.unknown_structs = [UKS2().read(file) for _ in range(self.length)]
+class SoundFile:
+    weight: int = 0  # byte
+    sound_header: SoundHeader2 =  SoundHeader2()
+    sound_file_name_length: int = 0  # Int
+    sound_file_name: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "SoundFile":
+        self.weight = unpack("B", file.read(1))[0]
+        self.sound_header = SoundHeader2().read(file)
+        self.sound_file_name_length = unpack("i", file.read(4))[0]
+        self.sound_file_name = file.read(self.sound_file_name_length).decode("utf-8").strip("\x00")
         return self
-
+    
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("h", self.unknown))
-        file.write(pack("5i", *self.unknown_list))
-        file.write(pack("h", self.unknown_2))
-        file.write(pack("h", self.length))
-        for unknown_struct in self.unknown_structs:
-            unknown_struct.write(file)
-
+        file.write(pack("B", self.weight))
+        self.sound_header.write(file)
+        file.write(pack("i", self.sound_file_name_length))
+        file.write(self.sound_file_name.encode("utf-8"))
+        
     def size(self) -> int:
-        return 26 + sum(
-            unknown_struct.size() for unknown_struct in self.unknown_structs
-        )
+        return 1 + self.sound_header.size() + 4 + self.sound_file_name_length
 
 
 @dataclass(eq=False, repr=False)
-class UKS3:
-    unknown: int = 0  # short
-    unknown_list: List[int] = field(
-        default_factory=list, metadata={"size": 5}
-    )  # 5 ints
-    unknown_2: int = 0  # short
-    lenght: int = 0  # short
-    sth_sound: List[SthSound] = field(default_factory=list)
-
-    def read(self, file: BinaryIO) -> "UKS3":
-        self.unknown = unpack("h", file.read(2))[0]
-        self.unknown_list = list(unpack("5i", file.read(20)))
-        self.unknown_2 = unpack("h", file.read(2))[0]
-        self.lenght = unpack("h", file.read(2))[0]
-        self.sth_sound = [SthSound().read(file) for _ in range(self.lenght)]
+class SoundContainer:
+    sound_header: SoundHeader = SoundHeader()
+    uk_index: int = 0  # short // [0, 1, 2, 3, 13, 15, 18, 25, 30, 33, 35, 38]; 0 only used by ImpactSounds
+    nbr_sound_variations: int = 0  # short
+    sound_files: List[SoundFile] = field(default_factory=list)
+    
+    def read(self, file: BinaryIO) -> "SoundContainer":
+        self.sound_header = SoundHeader().read(file)
+        self.uk_index = unpack("h", file.read(2))[0]
+        self.nbr_sound_variations = unpack("h", file.read(2))[0]
+        self.sound_files = [
+            SoundFile().read(file) for _ in range(self.nbr_sound_variations)
+        ]
         return self
-
+    
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("h", self.unknown))
-        file.write(pack("5i", *self.unknown_list))
-        file.write(pack("h", self.unknown_2))
-        file.write(pack("h", self.lenght))
-        for sth_sound in self.sth_sound:
-            sth_sound.write(file)
-
+        self.sound_header.write(file)
+        file.write(pack("h", self.uk_index))
+        file.write(pack("h", self.nbr_sound_variations))
+        for sound_file in self.sound_files:
+            sound_file.write(file)
+            
     def size(self) -> int:
-        return 26 + sum(sth_sound.size() for sth_sound in self.sth_sound)
+        base = self.sound_header.size() + 2 + 2
+        for sound_file in self.sound_files:
+            base += sound_file.size()
+        return base
+
+
+@dataclass(eq=False, repr=False)
+class AdditionalSoundContainer:
+    sound_header: SoundHeader = SoundHeader()
+    sound_type: int = 0  # short use ENUM SoundType
+    nbr_sound_variations: int = 0  # short
+    sound_containers: List[SoundContainer] = field(default_factory=list)
+    
+    def read(self, file: BinaryIO) -> "AdditionalSoundContainer":
+        self.sound_header = SoundHeader().read(file)
+        self.sound_type = unpack("h", file.read(2))[0]
+        self.nbr_sound_variations = unpack("h", file.read(2))[0]
+        self.sound_containers = [
+            SoundContainer().read(file) for _ in range(self.nbr_sound_variations)
+        ]
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        self.sound_header.write(file)
+        file.write(pack("h", self.sound_type))
+        file.write(pack("h", self.nbr_sound_variations))
+        for sound_container in self.sound_containers:
+            sound_container.write(file)
+            
+    def size(self) -> int:
+        base = self.sound_header.size() + 2 + 2
+        for sound_container in self.sound_containers:
+            base += sound_container.size()
+        return base
 
 
 @dataclass(eq=False, repr=False)
@@ -2721,10 +2749,10 @@ class EffectSet:
     unknown: List[float] = field(
         default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0]
     )  # Vector3
-    length4: int = 0  # short
-    unknown4: List[UKS3] = field(default_factory=list)
-    lenght3: int = 0  # short
-    unknown3: List[UKS1] = field(default_factory=list)
+    number_impact_sounds: int = 0  # short
+    impact_sounds: List[SoundContainer] = field(default_factory=list)
+    number_additional_Sounds: int = 0  # short
+    additional_sounds: List[AdditionalSoundContainer] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "EffectSet":
         self.type = unpack("h", file.read(2))[0]
@@ -2739,10 +2767,15 @@ class EffectSet:
             self.skel_effekts = [
                 SkelEff().read(file, self.type) for _ in range(self.length)
             ]
-            self.length4 = unpack("h", file.read(2))[0]
-            self.unknown4 = [UKS3().read(file) for _ in range(self.length4)]
-            self.lenght3 = unpack("h", file.read(2))[0]
-            self.unknown3 = [UKS1().read(file) for _ in range(self.lenght3)]
+            self.number_impact_sounds = unpack("h", file.read(2))[0]
+            self.impact_sounds = [
+                SoundContainer().read(file) for _ in range(self.number_impact_sounds)
+            ]
+            self.number_additional_Sounds = unpack("h", file.read(2))[0]
+            self.additional_sounds = [
+                AdditionalSoundContainer().read(file)
+                for _ in range(self.number_additional_Sounds)
+            ]
         return self
 
     def write(self, file: BinaryIO) -> None:
@@ -2755,12 +2788,12 @@ class EffectSet:
             file.write(pack("i", self.length))
             for skel_eff in self.skel_effekts:
                 skel_eff.write(file)
-            file.write(pack("h", self.length4))
-            for unknown in self.unknown4:
-                unknown.write(file)
-            file.write(pack("h", self.lenght3))
-            for unknown in self.unknown3:
-                unknown.write(file)
+            file.write(pack("h", self.number_impact_sounds))
+            for impact_sound in self.impact_sounds:
+                impact_sound.write(file)
+            file.write(pack("h", self.number_additional_Sounds))
+            for additional_sound in self.additional_sounds:
+                additional_sound.write(file)
 
     def size(self) -> int:
         base = 6 + self.checksum_length
@@ -2771,11 +2804,11 @@ class EffectSet:
             for skel_eff in self.skel_effekts:
                 base += skel_eff.size()
             base += 2
-            for unknown in self.unknown4:
-                base += unknown.size()
+            for impact_sound in self.impact_sounds:
+                base += impact_sound.size()
             base += 2
-            for unknown in self.unknown3:
-                base += unknown.size()
+            for additional_sound in self.additional_sounds:
+                base += additional_sound.size()
         return base
 
 
@@ -2967,6 +3000,1023 @@ class MeshSetGrid:
 
 
 @dataclass(eq=False, repr=False)
+class FloatStaticTrack:
+    value: float = 0.0  # float
+    
+    def read(self, file: BinaryIO) -> "FloatStaticTrack":
+        self.value = unpack("f", file.read(4))[0]
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("f", self.value))
+        
+    def size(self) -> int:
+        return 4
+
+
+@dataclass(eq=False, repr=False)
+class Vector3StaticTrack:
+    value: Vector3 = field(default_factory=Vector3)
+
+    def read(self, file: BinaryIO) -> "Vector3StaticTrack":
+        self.value = Vector3().read(file)
+        return self
+
+    def write(self, file: BinaryIO) -> None:
+        self.value.write(file)
+
+    def size(self) -> int:
+        return 12
+
+
+@dataclass(eq=False, repr=False)
+class StringStaticTrack:
+    length: int = 0  # int
+    value: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "StringStaticTrack":
+        self.length = unpack("I", file.read(4))[0]
+        self.value = file.read(self.length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.length))
+        file.write(self.value.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + self.length
+
+
+@dataclass(eq=False, repr=False)
+class Vector3OtherStaticTrack:
+    value: Vector3 = field(default_factory=Vector3)
+
+    def read(self, file: BinaryIO) -> "Vector3OtherStaticTrack":
+        self.value = Vector3().read(file)
+        return self
+
+    def write(self, file: BinaryIO) -> None:
+        self.value.write(file)
+
+    def size(self) -> int:
+        return 12
+
+
+@dataclass(eq=False, repr=False)
+class Static:
+    header: int = 4166493980  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    track_type: int = 0  # uint
+    data_type_header: int = 0 # uint
+    data: Union[FloatStaticTrack, Vector3StaticTrack, StringStaticTrack, Vector3OtherStaticTrack] = None
+    
+    def read(self, file: BinaryIO) -> "Static":
+        (self.header, self.version, self.track_type, self.data_type_header) = unpack("IIII", file.read(16))
+        assert self.header == 4166493980, f"Invalid Static header: {self.header}"
+        assert self.version == 1, f"Unsupported Static version: {self.version}"
+        if self.data_type_header == 0xF857A7F7:
+            self.data = FloatStaticTrack().read(file)
+        elif self.data_type_header == 0xF857A77C:
+            self.data = Vector3StaticTrack().read(file)
+        elif self.data_type_header == 0xF857A757:
+            self.data = StringStaticTrack().read(file)
+        elif self.data_type_header == 0xF857A747:
+            self.data = Vector3OtherStaticTrack().read(file)
+        else:
+            raise ValueError(f"Unknown data type header: {self.data_type_header}")
+        return self
+
+
+@dataclass(eq=False, repr=False)
+class TrackKeyframe:
+    frame: float = 0.0  # float
+    data: Union[float, Vector3] = 0.0  # float or Vector3 depending on the track type
+    
+    def size(self) -> int:
+        if isinstance(self.data, float):
+            return 4 + 4
+        elif isinstance(self.data, Vector3):
+            return 4 + 12
+        else:
+            raise ValueError("Invalid data type for TrackKeyframe")
+
+
+@dataclass(eq=False, repr=False)
+class FloatKeyframe(TrackKeyframe):
+    header: int = 0xF87EF70A  # uint TODO: Check if always the same
+    start_control_point_header: int = 0xF87EFC95  # uint TODO: Check if always the same
+    control_point_header: int = 0xF87EF7C9  # uint TODO: Check if always the same
+    frame: float = 0.0  # float
+    data: float = 0.0  # float
+    
+    def read(self, file: BinaryIO) -> "FloatKeyframe":
+        (self.header,) = unpack("I", file.read(4))
+        self.frame = unpack("f", file.read(4))[0]
+        self.data = unpack("f", file.read(4))[0]
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("f", self.frame))
+        file.write(pack("f", self.data))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4
+
+
+@dataclass(eq=False, repr=False)
+class Vector3Keyframe(TrackKeyframe):
+    header: int = 0xF87E7EC7  # uint TODO: Check if always the same
+    start_control_point_header: int = 0xF87E7C95  # uint TODO: Check if always the same
+    control_point_header: int = 0xF87E7EC9  # uint TODO: Check if always the same
+    frame: float = 0.0  # float
+    data: Vector3 = field(default_factory=Vector3)
+    
+    def read(self, file: BinaryIO) -> "FloatKeyframe":
+        (self.header,) = unpack("I", file.read(4))
+        self.frame = unpack("f", file.read(4))[0]
+        self.data = Vector3().read(file)
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("f", self.frame))
+        self.data.write(file)
+        
+    def size(self) -> int:
+        return 4 + 4 + 12
+
+
+def _read_entries_and_control_points(file: BinaryIO) -> Tuple[List[TrackKeyframe], List[TrackKeyframe]]:
+    entries = []
+    control_points = []
+    current_header = unpack("I", file.peek(4))[0]
+    
+    if current_header == FloatKeyframe().header:
+        while current_header == FloatKeyframe().header:
+            keyframe = FloatKeyframe().read(file)
+            entries.append(keyframe)
+            current_header = unpack("I", file.peek(4))[0]
+        
+        control_data_header = unpack("I", file.read(4))[0]
+        
+        if control_data_header == FloatKeyframe().start_control_point_header:
+            current_header = unpack("I", file.peek(4))[0]
+            while current_header == FloatKeyframe().control_point_header:
+                keyframe = FloatKeyframe().read(file)
+                control_points.append(keyframe)
+                current_header = unpack("I", file.peek(4))[0]
+                
+            end_control_point_header = unpack("I", file.read(4))[0]
+            assert end_control_point_header == 0xF876AC3E, f"Invalid end control point header: {end_control_point_header}"
+    elif current_header == Vector3Keyframe().header:
+        while current_header == Vector3Keyframe().header:
+            keyframe = Vector3Keyframe().read(file)
+            entries.append(keyframe)
+            current_header = unpack("I", file.peek(4))[0]
+        
+        control_data_header = unpack("I", file.read(4))[0]
+        
+        if control_data_header == Vector3Keyframe().start_control_point_header:
+            current_header = unpack("I", file.peek(4))[0]
+            while current_header == Vector3Keyframe().control_point_header:
+                keyframe = Vector3Keyframe().read(file)
+                control_points.append(keyframe)
+                current_header = unpack("I", file.peek(4))[0]
+                
+            end_control_point_header = unpack("I", file.read(4))[0]
+            assert end_control_point_header == 0xF876AC3E, f"Invalid end control point header: {end_control_point_header}"
+    else:
+        raise ValueError(f"Unknown keyframe header: {current_header}")
+    
+    return entries, control_points
+
+
+@dataclass(eq=False, repr=False)
+class Track:
+    header: int = 0xF876AC30  # uint TODO: Check if always the same
+    start_track_header: int = 0xF8575767  # uint TODO: Check if always the same
+    version: int = 4 # uint
+    track_type: int = 0 # uint
+    length: float = 0.0 # float
+    track_dim: int = 0 # uint
+    track_mode: int = 0 # uint
+    interpolation_type: int = 0 # uint
+    evaluation_type: int = 0 # uint
+    entries: List[TrackKeyframe] = field(default_factory=list)
+    control_points: List[TrackKeyframe] = field(default_factory=list)
+
+    def read(self, file: BinaryIO) -> "Track":
+        (self.header, self.version, self.track_type) = unpack("III", file.read(12))
+        assert self.header == 0xF876AC30, f"Invalid Track header: {self.header}"
+        assert self.version == 4, f"Unsupported Track version: {self.version}"
+        self.length = unpack("f", file.read(4))[0]
+        (self.track_dim, self.track_mode, self.interpolation_type, self.evaluation_type) = unpack("IIII", file.read(16))
+        self.entries, self.control_points = _read_entries_and_control_points(file)
+        if len(self.entries) == 0:
+            raise ValueError("Track must have at least one entry")
+        return self
+
+
+@dataclass(eq=False, repr=False)
+class NodeLink:
+    header: int = 0xF82D712E  # uint
+    version: int = 0  # uint
+    parent_length: int = 0  # uint
+    parent: str = ""  # CString
+    slot_length: int = 0  # uint
+    slot: str = ""  # CString
+    destination_slot_length: int = 0  # uint
+    destination_slot: str = ""  # CString
+    world: int = 0  # uint
+    node: int = 0  # uint
+    floor: int = 0  # uint
+    aim: int = 0  # uint
+    span: int = 0  # uint
+    locator: int = 0  # uint
+
+    def read(self, file: BinaryIO) -> "NodeLink":
+        self.header = unpack("I", file.read(4))[0]
+        assert self.header == 0xF82D712E, f"Invalid NodeLink header: {self.header}"
+        version = unpack("I", file.read(4))[0]
+        assert version in [1, 2, 3], f"Unsupported NodeLink version: {version}"
+        parent_length = unpack("I", file.read(4))[0]
+        self.parent = file.read(parent_length).decode("utf-8").strip("\x00")
+        slot_length = unpack("I", file.read(4))[0]
+        self.slot = file.read(slot_length).decode("utf-8").strip("\x00")
+        destination_slot_length = unpack("I", file.read(4))[0]
+        self.destination_slot = file.read(destination_slot_length).decode("utf-8").strip("\x00")
+        (self.world, self.node, self.floor, self.aim, self.span) = unpack("IIIII", file.read(20))
+        if version > 2:
+            self.locator = unpack("I", file.read(4))[0]
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.parent_length))
+        file.write(self.parent.encode("utf-8"))
+        file.write(pack("I", self.slot_length))
+        file.write(self.slot.encode("utf-8"))
+        file.write(pack("I", self.destination_slot_length))
+        file.write(self.destination_slot.encode("utf-8"))
+        file.write(pack("IIIII", self.world, self.node, self.floor, self.aim, self.span))
+        if self.version > 2:
+            file.write(pack("I", self.locator))
+            
+    def size(self) -> int:
+        size = 4 + 4 + 4 + self.parent_length + 4 + self.slot_length + 4 + self.destination_slot_length + 20
+        if self.version > 2:
+            size += 4
+        return size
+
+
+@dataclass(eq=False, repr=False)
+class Element:
+    end_element_children_header = 0xF8E2DE2D # uint
+    node_link: NodeLink = field(default_factory=NodeLink)
+    start_element_header = 0xF8E7EAA7 # uint
+    version: int = 1 # uint
+    name_length: int = 0 # uint
+    name: str = "" # CString
+    element_type_header: int = 0 # uint
+    end_element_header = 0xF8E75E2D # uint
+    static_tracks: List[Static] = field(default_factory=list)
+    tracks: List[Track] = field(default_factory=list)
+    start_element_children_header = 0xF876E2D0 # uint
+    parent: Optional["Element"] = field(default=None)
+    children: List["Element"] = field(default_factory=list)
+    
+    def read(self, file: BinaryIO, parent: Element, ignores: List[int], depth: int) -> "Element":
+        self.node_link = NodeLink().read(file)
+        start_element_header = unpack("I", file.read(4))[0]
+        assert start_element_header == self.start_element_header, f"Invalid start element header: {start_element_header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported Element version: {self.version}"
+        self.name_length = unpack("I", file.read(4))[0]
+        raw = file.read(self.name_length)
+        try:
+            self.name = raw.decode("utf-8").strip("\x00")
+        except UnicodeDecodeError:
+            self.name = raw.decode("latin-1").strip("\x00")
+        self.element_type_header = unpack("I", file.peek(4))[0]
+        header = self.element_type_header
+
+        match header:
+            case header if header in _element_type_map:
+                element_class = _element_type_map[header]
+                element_instance = element_class().read(file)
+                setattr(self, element_class.__name__.lower(), element_instance)
+            case _:
+                raise ValueError(f"Unknown element type header: {self.element_type_header}")
+            
+        end_element_header = unpack("I", file.read(4))[0]
+        assert end_element_header == self.end_element_header, f"Invalid end element header: {end_element_header}"
+        
+        track_counter = 0
+        current_header = unpack("I", file.peek(4))[0]
+        while current_header == Track().start_track_header:
+            header_track: int  = unpack("I", file.read(4))[0]
+            track_counter += 1
+            current_header = unpack("I", file.peek(4))[0]
+
+        if track_counter != 2 and not self.element_type_header in [0xF8A23E54, 0xF8534D4D]:
+            raise ValueError(f"Element must have exactly 2 tracks, found {track_counter}. Element name: {self.name}, Type: {hex(self.element_type_header)}")
+        
+        self.static_tracks = _read_static_tracks(file)
+        self.tracks = _read_tracks(file)
+        
+        parent.children.append(self)
+        self.parent = parent
+        
+        self.start_element_children_header = unpack("I", file.read(4))[0]
+        assert self.start_element_children_header == 0xF876E2D0, f"Invalid start_element_children_header: {self.start_element_children_header}"
+        
+        # Check if we have Effect Type
+        if self.element_type_header == 0xF8EFFE37:
+            ignores[depth] += 1
+            
+        next_parent = self
+        depth += 1
+        
+        current_header = unpack("I", file.peek(4))[0]
+        while current_header == Element.end_element_children_header:
+            self.end_element_children_header = unpack("I", file.read(4))[0]
+            if ignores[depth] > 0:
+                ignores[depth] -= 1
+            else:
+                if next_parent is not None:
+                    next_parent = next_parent.parent
+                else:
+                    if depth != 0:
+                        raise ValueError("Element parent is None but depth is not zero")
+                depth -= 1
+            current_header = unpack("I", file.peek(4))[0]
+        
+        if depth == -1:
+            return self
+            
+        return self.read(file, next_parent, ignores, depth)
+
+
+@dataclass(eq=False, repr=False)
+class Light(Element):
+    header: int = 0xF8716470  # uint TODO: Check if always the same
+    range: int = 0  # uint
+    radinace: float = 0.0  # float
+    
+    def read(self, file: BinaryIO) -> "Light":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8716470, f"Invalid Light header: {self.header}"
+        self.range = unpack("I", file.read(4))[0]
+        self.radinace = unpack("f", file.read(4))[0]
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.range))
+        file.write(pack("f", self.radinace))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4
+
+
+@dataclass(eq=False, repr=False)
+class StaticDecal(Element):
+    header: int = 0xF85DECA7  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    color_texture_length: int = 0  # uint
+    color_texture: str = ""  # CString
+    normal_texture_length: int = 0  # uint
+    normal_texture: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "StaticDecal":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF85DECA7, f"Invalid StaticDecal header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version in [1, 2], f"Unsupported StaticDecal version: {self.version}"
+        self.color_texture_length = unpack("I", file.read(4))[0]
+        self.color_texture = file.read(self.color_texture_length).decode("utf-8").strip("\x00")
+        if self.version == 2:
+            self.normal_texture_length = unpack("I", file.read(4))[0]
+            self.normal_texture = file.read(self.normal_texture_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.color_texture_length))
+        file.write(self.color_texture.encode("utf-8"))
+        if self.version == 2:
+            file.write(pack("I", self.normal_texture_length))
+            file.write(self.normal_texture.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.color_texture_length + (4 + self.normal_texture_length if self.version == 2 else 0)
+
+
+@dataclass(eq=False, repr=False)
+class Sound(Element):
+    header: int = 0xF850C5D0  # uint TODO: Check if always the same
+    version : int = 1  # uint
+    sound_file_length: int = 0  # uint
+    sound_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "Sound":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF850C5D0, f"Invalid Sound header: {self.header}"
+        self.version = unpack("I", file.read(4))[0]
+        assert self.version == 1, f"Unsupported Sound version: {self.version}"
+        self.sound_file_length = unpack("I", file.read(4))[0]
+        self.sound_file = file.read(self.sound_file_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.sound_file_length))
+        file.write(self.sound_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.sound_file_length
+
+
+@dataclass(eq=False, repr=False)
+class Billboard(Element):
+    header: int = 0xF88177BD  # uint TODO: Check if always the same
+    version : int = 1  # uint 1 or 2
+    texture_one_length: int = 0  # uint
+    texture_one: str = ""  # CString
+    texture_two_length: int = 0  # uint
+    texture_two: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "Billboard":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF88177BD, f"Invalid Billboard header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version in [1, 2], f"Unsupported Billboard version: {self.version}"
+        self.texture_one_length = unpack("I", file.read(4))[0]
+        self.texture_one = file.read(self.texture_one_length).decode("utf-8").strip("\x00")
+        if self.version == 2:
+            self.texture_two_length = unpack("I", file.read(4))[0]
+            self.texture_two = file.read(self.texture_two_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.texture_one_length))
+        file.write(self.texture_one.encode("utf-8"))
+        if self.version == 2:
+            file.write(pack("I", self.texture_two_length))
+            file.write(self.texture_two.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.texture_one_length + (4 + self.texture_two_length if self.version == 2 else 0)
+
+
+@dataclass(eq=False, repr=False)
+class Emitter(Element):
+    header: int = 0xF8E31777  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    emitter_file_length: int = 0  # uint
+    emitter_file: str = ""  # CString
+    particle_count: int = 0  # uint TODO: Check if always 0
+    
+    def read(self, file: BinaryIO) -> "Emitter":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8E31777, f"Invalid Emitter header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported Emitter version: {self.version}"
+        self.emitter_file_length = unpack("I", file.read(4))[0]
+        self.emitter_file = file.read(self.emitter_file_length).decode("utf-8").strip("\x00")
+        self.particle_count = unpack("I", file.read(4))[0]
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.emitter_file_length))
+        file.write(self.emitter_file.encode("utf-8"))
+        file.write(pack("I", self.particle_count))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.emitter_file_length + 4
+
+
+@dataclass(eq=False, repr=False)
+class CameraShake(Element):
+    header: int = 0xF8C5AAEE  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    
+    def read(self, file: BinaryIO) -> "CameraShake":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8C5AAEE, f"Invalid CameraShake header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported CameraShake version: {self.version}"
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        
+    def size(self) -> int:
+        return 4 + 4
+
+
+@dataclass(eq=False, repr=False)
+class EffectMesh(Element):
+    header: int = 0xF83E5400  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    mesh_file_length: int = 0  # uint
+    mesh_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "EffectMesh":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF83E5400, f"Invalid EffectMesh header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported EffectMesh version: {self.version}"
+        self.mesh_file_length = unpack("I", file.read(4))[0]
+        self.mesh_file = file.read(self.mesh_file_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.mesh_file_length))
+        file.write(self.mesh_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.mesh_file_length
+
+
+@dataclass(eq=False, repr=False)
+class Effect(Element):
+    header: int = 0xF8EFFE37  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    effect_file_length: int = 0  # uint
+    effect_file: str = ""  # CString
+    embedded: int = 0  # uint TODO: Check if always 0
+    length: float = 0.0
+    
+    def read(self, file: BinaryIO) -> "Effect":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8EFFE37, f"Invalid Effect header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported Effect version: {self.version}"
+        self.effect_file_length = unpack("I", file.read(4))[0]
+        self.effect_file = file.read(self.effect_file_length).decode("utf-8").strip("\x00")
+        self.embedded = unpack("I", file.read(4))[0]
+        self.length = unpack("f", file.read(4))[0]
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.effect_file_length))
+        file.write(self.effect_file.encode("utf-8"))
+        file.write(pack("I", self.embedded))
+        file.write(pack("f", self.length))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.effect_file_length + 4 + 4
+
+
+@dataclass(eq=False, repr=False)
+class Trail(Element):
+    header: int = 0xF878A175  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    trail_file_length: int = 0  # uint
+    trail_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "Trail":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF878A175, f"Invalid Trail header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported Trail version: {self.version}"
+        self.trail_file_length = unpack("I", file.read(4))[0]
+        self.trail_file = file.read(self.trail_file_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.trail_file_length))
+        file.write(self.trail_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.trail_file_length
+
+
+@dataclass(eq=False, repr=False)
+class PhysicGroup(Element):
+    header: int = 0xF8504752  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    
+    def read(self, file: BinaryIO) -> "PhysicGroup":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8504752, f"Invalid PhysicGroup header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported PhysicGroup version: {self.version}"
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        
+    def size(self) -> int:
+        return 4 + 4
+
+
+@dataclass(eq=False, repr=False)
+class Physic(Element):
+    header: int = 0xF8504859  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    physic_file_length: int = 0  # uint
+    physic_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "Physic":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8504859, f"Invalid Physic header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported Physic version: {self.version}"
+        self.physic_file_length = unpack("I", file.read(4))[0]
+        self.physic_file = file.read(self.physic_file_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.physic_file_length))
+        file.write(self.physic_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.physic_file_length
+
+
+@dataclass(eq=False, repr=False)
+class Decal(Element):
+    header: int = 0xF8DECA70
+    version: int = 1  # uint
+    decal_file_length: int = 0  # uint
+    decal_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "Decal":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8DECA70, f"Invalid Decal header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported Decal version: {self.version}"
+        self.decal_file_length = unpack("I", file.read(4))[0]
+        self.decal_file = file.read(self.decal_file_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.decal_file_length))
+        file.write(self.decal_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.decal_file_length
+
+
+@dataclass(eq=False, repr=False)
+class Force(Element):
+    header: int = 0xF8466F72  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    
+    def read(self, file: BinaryIO) -> "Force":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8466F72, f"Invalid Force header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported Force version: {self.version}"
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        
+    def size(self) -> int:
+        return 4 + 4
+
+
+@dataclass(eq=False, repr=False)
+class ForcePoint(Element):
+    header: int = 0xF8504650
+    version: int = 1  # uint
+    
+    def read(self, file: BinaryIO) -> "ForcePoint":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8504650, f"Invalid ForcePoint header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported ForcePoint version: {self.version}"
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        
+    def size(self) -> int:
+        return 4 + 4
+
+
+@dataclass(eq=False, repr=False)
+class AnimatedMesh(Element):
+    header: int = 0xF8A23E54
+    version: int = 1  # uint
+    mesh_file_length: int = 0  # uint
+    mesh_file: str = ""  # CString
+    animation_file_length: int = 0  # uint
+    animation_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "AnimatedMesh":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8A23E54, f"Invalid AnimatedMesh header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported AnimatedMesh version: {self.version}"
+        self.mesh_file_length = unpack("I", file.read(4))[0]
+        self.mesh_file = file.read(self.mesh_file_length).decode("utf-8").strip("\x00")
+        self.animation_file_length = unpack("I", file.read(4))[0]
+        self.animation_file = file.read(self.animation_file_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.mesh_file_length))
+        file.write(self.mesh_file.encode("utf-8"))
+        file.write(pack("I", self.animation_file_length))
+        file.write(self.animation_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.mesh_file_length + 4 + self.animation_file_length
+
+
+@dataclass(eq=False, repr=False)
+class AnimatedMeshMaterial(Element):
+    header: int = 0xF8534D4D
+    version: int = 1  # uint
+    mesh_material_file_length: int = 0  # uint
+    mesh_material_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "AnimatedMeshMaterial":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8534D4D, f"Invalid AnimatedMeshMaterial header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported AnimatedMeshMaterial version: {self.version}"
+        self.mesh_material_file_length = unpack("I", file.read(4))[0]
+        self.mesh_material_file = file.read(self.mesh_material_file_length).decode("utf-8").strip("\x00")
+        
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.mesh_material_file_length))
+        file.write(self.mesh_material_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.mesh_material_file_length
+
+
+@dataclass(eq=False, repr=False)
+class WaterDecal(Element):
+    header: int = 0xF8ADECA7
+    version: int = 1  # uint
+    decal_file_length: int = 0  # uint
+    decal_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "WaterDecal":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF8ADECA7, f"Invalid WaterDecal header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported WaterDecal version: {self.version}"
+        self.decal_file_length = unpack("I", file.read(4))[0]
+        self.decal_file = file.read(self.decal_file_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.decal_file_length))
+        file.write(self.decal_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.decal_file_length
+
+
+@dataclass(eq=False, repr=False)
+class SfpSystem(Element):
+    header: int = 0xF85F6575  # uint TODO: Check if always the same
+    version: int = 1  # uint
+    system_file_length: int = 0  # uint
+    system_file: str = ""  # CString
+    
+    def read(self, file: BinaryIO) -> "SfpSystem":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF85F6575, f"Invalid SfpSystem header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported SfpSystem version: {self.version}"
+        self.system_file_length = unpack("I", file.read(4))[0]
+        self.system_file = file.read(self.system_file_length).decode("utf-8").strip("\x00")
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        file.write(pack("I", self.system_file_length))
+        file.write(self.system_file.encode("utf-8"))
+        
+    def size(self) -> int:
+        return 4 + 4 + 4 + self.system_file_length
+
+
+@dataclass(eq=False, repr=False)
+class SfpEmitter(Element):
+    header: int = 0xF85F6E31
+    version: int = 1  # uint
+    
+    def read(self, file: BinaryIO) -> "SfpEmitter":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF85F6E31, f"Invalid SfpEmitter header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported SfpEmitter version: {self.version}"
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        
+    def size(self) -> int:
+        return 4 + 4
+
+
+@dataclass(eq=False, repr=False)
+class SfpForceField(Element):
+    header: int = 0xF85F6FFD
+    version: int = 1  # uint
+    
+    def read(self, file: BinaryIO) -> "SfpForceField":
+        (self.header,) = unpack("I", file.read(4))
+        assert self.header == 0xF85F6FFD, f"Invalid SfpForceField header: {self.header}"
+        (self.version,) = unpack("I", file.read(4))
+        assert self.version == 1, f"Unsupported SfpForceField version: {self.version}"
+        return self
+    
+    def write(self, file: BinaryIO) -> None:
+        file.write(pack("I", self.header))
+        file.write(pack("I", self.version))
+        
+    def size(self) -> int:
+        return 4 + 4
+
+
+_element_type_map = {
+    0xF8716470: Light,
+    0xF85DECA7: StaticDecal,
+    0xF850C5D0: Sound,
+    0xF88177BD: Billboard,
+    0xF8E31777: Emitter,
+    0xF8C5AAEE: CameraShake,
+    0xF83E5400: EffectMesh,
+    0xF8EFFE37: Effect,
+    0xF878A175: Trail,
+    0xF8504752: PhysicGroup,
+    0xF8504859: Physic,
+    0xF8DECA70: Decal,
+    0xF8466F72: Force,
+    0xF8504650: ForcePoint,
+    0xF8A23E54: AnimatedMesh,
+    0xF8534D4D: AnimatedMeshMaterial,
+    0xF8ADECA7: WaterDecal,
+    0xF85F6575: SfpSystem,
+    0xF85F6E31: SfpEmitter,
+    0xF85F6FFD: SfpForceField,
+}
+
+
+def _read_static_tracks(file: BinaryIO) -> List[Static]:
+    static_tracks = []
+    current_header = unpack("I", file.peek(4))[0]
+    while current_header == Static().header:
+        static_track = Static().read(file)
+        static_tracks.append(static_track)
+        current_header = unpack("I", file.peek(4))[0]
+    return static_tracks
+
+
+def _read_tracks(file: BinaryIO) -> List[Track]:
+    tracks = []
+    current_header = unpack("I", file.peek(4))[0]
+    while current_header == Track().header:
+        track = Track().read(file)
+        tracks.append(track)
+        current_header = unpack("I", file.peek(4))[0]
+    return tracks
+
+
+@dataclass(eq=False, repr=False, init=True)
+class SpecialEffect(Element):
+    header: int = 0xF8AEADE7  # uint TODO: Check if always the same
+    length: float = 0.0  # float
+    play_length: float = 0.0  # float
+    setup_file_name_length: int = 0  # uint
+    setup_file_name: str = ""  # CString
+    setup_source_id: int = 0  # int TODO: Check for all variations
+    setup_target_id: int = 0  # int TODO: Check for all variations
+    static_tracks: List[Static] = field(default_factory=list)  # TODO: Check if always 9 static tracks or 0
+    tracks: List[Track] = field(default_factory=list)
+
+
+def _read_element(file: BinaryIO, parent: Union[Element, None] = None) -> Union[Element, None]:
+    current_header = unpack("I", file.peek(4))[0]
+    if current_header != Element.end_element_children_header:
+        depth = 1
+        ignores = [0] * 16
+        return Element().read(file, parent, ignores, depth)
+    return None
+
+
+@dataclass(eq=False, repr=False)
+class FxMaster:
+    version: int = 1 # uint
+    magic: int = 4172197351 # uint
+    revision: int = 2 # uint
+    name_length: int = 0 # uint
+    name: str = "" # CString TODO: Check if always empty
+    length: float = 0.0 # float
+    setup_file_name_length: int = 0 # uint
+    setup_file_name: str = "" # CString
+    setup_source_id: int = 0 # int TODO: Check for all variations
+    setup_target_id: int = 0 # int TODO: Check for all variations
+    play_length: float = 0.0 # float TODO: check if always the same as length
+    unknown_zero_1: int = 0 # uint TODO: Check if always 0
+    unknown_zero_2: int = 0 # uint TODO: Check if always 0
+    header_one: int = 4166473575 # uint TODO: Check if always the same
+    header_two: int = 4166473575 # uint TODO: Check if always the same
+    static_tracks: List[Static] = field(default_factory=list) # TODO: Check if always 9 static tracks or 0
+    tracks: List[Track] = field(default_factory=list)
+    start_element_children_header: int = 0xF876E2D0 # uint TODO: Check if always the same
+    end_element_children_header: int = 0xF8E2DE2D # uint TODO: Check if always the same
+    special_effect: SpecialEffect = field(default_factory=SpecialEffect)
+
+    def read(self, file: BinaryIO) -> "FxMaster":
+        (self.version, self.magic, self.revision) = unpack("III", file.read(12))
+        assert self.version == 1, f"Unsupported FxMaster version: {self.version}"
+        assert self.magic == 4172197351, f"Invalid FxMaster magic: {self.magic}"
+        assert self.revision == 2, f"Unsupported FxMaster revision: {self.revision}"
+        self.name_length = unpack("I", file.read(4))[0]
+        self.name = file.read(self.name_length).decode("utf-8").strip("\x00")
+        self.length = unpack("f", file.read(4))[0]
+        self.setup_file_name_length = unpack("I", file.read(4))[0]
+        self.setup_file_name = file.read(self.setup_file_name_length).decode("utf-8").strip("\x00")
+        (self.setup_source_id, self.setup_target_id) = unpack("ii", file.read(8))
+        self.play_length = unpack("f", file.read(4))[0]
+        (self.unknown_zero_1, self.unknown_zero_2) = unpack("II", file.read(8))
+        assert self.unknown_zero_1 == 0, f"Expected unknown_zero_1 to be 0, got {self.unknown_zero_1}"
+        assert self.unknown_zero_2 == 0, f"Expected unknown_zero_2 to be 0, got {self.unknown_zero_2}"
+        (self.header_one, self.header_two) = unpack("II", file.read(8))
+        assert self.header_one == 4166473575, f"Invalid header_one: {self.header_one}"
+        assert self.header_two == 4166473575, f"Invalid header_two: {self.header_two}"
+        self.static_tracks = _read_static_tracks(file)
+        self.tracks = _read_tracks(file)
+        self.start_element_children_header = unpack("I", file.read(4))[0]
+        assert self.start_element_children_header == 0xF876E2D0, f"Invalid start_element_children_header: {self.start_element_children_header}"
+        self.special_effect = SpecialEffect()
+        _read_element(file, self.special_effect)
+        return self
+    
+    def write(self, file: BinaryIO):
+        file.write(pack("III", self.version, self.magic, self.revision))
+        file.write(pack("I", self.name_length))
+        file.write(self.name.encode("utf-8"))
+        file.write(pack("f", self.length))
+        file.write(pack("I", self.setup_file_name_length))
+        file.write(self.setup_file_name.encode("utf-8"))
+        file.write(pack("ii", self.setup_source_id, self.setup_target_id))
+        file.write(pack("f", self.play_length))
+        file.write(pack("II", self.unknown_zero_1, self.unknown_zero_2))
+        file.write(pack("II", self.header_one, self.header_two))
+        for static_track in self.static_tracks:
+            static_track.write(file)
+        for track in self.tracks:
+            track.write(file)
+        file.write(pack("I", self.start_element_children_header))
+        file.write(pack("I", self.end_element_children_header))
+        for element in self.elements:
+            element.write(file)
+    
+    def size(self) -> int:
+        size = 12 + 4 + self.name_length + 4 + 4 + self.setup_file_name_length + 8 + 4 + 8 + 8 + 4 + 4
+        for static_track in self.static_tracks:
+            size += static_track.size()
+        for track in self.tracks:
+            size += track.size()
+        for element in self.elements:
+            size += element.size()
+        return size
+
+
+@dataclass(eq=False, repr=False)
 class DRS:
     operator: object = None
     context: object = None
@@ -2994,6 +4044,7 @@ class DRS:
     collision_shape_node: Node = None
     effect_set_node: Node = None
     cdrw_locator_list_node: Node = None
+    fx_master_node: Node = None
     animation_set: AnimationSet = None
     cdsp_mesh_file: CDspMeshFile = None
     cgeo_mesh: CGeoMesh = None
@@ -3007,6 +4058,7 @@ class DRS:
     cdrw_locator_list: CDrwLocatorList = None
     effect_set: EffectSet = None
     animation_timings: AnimationTimings = None
+    fx_master: FxMaster = None
     model_type: str = None
 
     def __post_init__(self):
@@ -3086,7 +4138,7 @@ class DRS:
             688490554: "effect_set_node",
             735146985: "cdrw_locator_list_node",
             -196433635: "gd_locator_list_node",  # Not yet implemented
-            -1424862619: "fx_master_node",  # Not yet implemented
+            -1424862619: "fx_master_node",
         }
 
         for _ in range(self.node_count - 1):
@@ -3117,7 +4169,7 @@ class DRS:
             "EffectSet": "effect_set_node",
             "CDrwLocatorList": "cdrw_locator_list_node",
             "CGdLocatorList": "gd_locator_list_node",  # Not yet implemented
-            "FxMaster": "fx_master_node",  # Not yet implemented
+            "FxMaster": "fx_master_node",
         }
 
         for _ in range(self.node_count - 1):

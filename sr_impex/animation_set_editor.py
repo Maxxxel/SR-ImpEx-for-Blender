@@ -47,6 +47,56 @@ _ACTIONS_ENUM_COUNT = -1
 # Stronger enum cache invalidation (by names signature)
 _ACTIONS_ENUM_SIG = ""
 
+# ---------------------------------------------------------------------------
+# Actions: UI / Name-Handling
+# ---------------------------------------------------------------------------
+
+def _ensure_action_name_props(act: bpy.types.Action) -> str:
+    """
+    Stellt sicher, dass 'raw_name' und 'ui_name' auf der Action gesetzt sind.
+    Gibt den UI-Namen zurück.
+    """
+    try:
+        raw = act.get("raw_name", None)
+    except Exception:
+        raw = None
+
+    if not raw:
+        raw = act.name or ""
+        try:
+            act["raw_name"] = raw
+        except Exception:
+            pass
+
+    # Falls bereits vorhanden, direkt zurückgeben
+    try:
+        ui = act.get("ui_name", None)
+    except Exception:
+        ui = None
+    if ui:
+        return str(ui)
+
+    # UI-Name aus raw_name ableiten
+    base = raw
+    if base.lower().endswith(".ska"):
+        base = base[:-4]
+
+    # erst nach '-', dann nach '_'
+    short = base
+    if "-" in short:
+        short = short.rsplit("-", 1)[-1]
+    if "_" in short:
+        short = short.rsplit("_", 1)[-1]
+
+    short = short or base or raw
+
+    try:
+        act["ui_name"] = short
+    except Exception:
+        pass
+
+    return short
+
 
 def _actions_sig():
     try:
@@ -69,10 +119,20 @@ def _actions_enum(_self, _ctx):
     acts = bpy.data.actions
     sig = _actions_sig()
     if (_ACTIONS_ENUM_CACHE is None) or (sig != _ACTIONS_ENUM_SIG):
-        names = [a.name for a in acts]
-        names.sort()
+        # baue (identifier, label)-Paare
+        pairs = []
+        for act in acts:
+            ui = _ensure_action_name_props(act)
+            ident = act.name           # technischer Schlüssel bleibt der echte Action-Name
+            label = ui or ident        # UI-Label
+            pairs.append((ident, label))
+
+        # nach Label sortieren, damit es schön aussieht
+        pairs.sort(key=lambda p: p[1].lower())
+
         items = [("NONE", "<None>", "")]
-        items.extend((n, n, "") for n in names)
+        items.extend((ident, label, "") for ident, label in pairs)
+
         _ACTIONS_ENUM_CACHE = items
         _ACTIONS_ENUM_COUNT = len(acts)
         _ACTIONS_ENUM_SIG = sig
