@@ -1,7 +1,8 @@
+from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
-from typing import List, Union, BinaryIO, Optional
+from typing import List, Union, BinaryIO, Optional, Tuple
 from urllib.parse import non_hierarchical
 from mathutils import Vector, Matrix, Quaternion
 from .file_io import FileReader, FileWriter
