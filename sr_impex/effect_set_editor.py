@@ -28,11 +28,9 @@ from .drs_definitions import (
     SoundFile,
     SoundContainer,
     AdditionalSoundContainer,
-    SoundType,
 )
 
 from .drs_resolvers import resolve_action_from_blob_name
-from .debug_asset_library import sound_candidates_for_base, is_sound_cached
 
 EFFECT_BLOB_KEY = "EffectSetJSON"
 resource_dir = dirname(realpath(__file__)) + "/resources"
