@@ -101,6 +101,7 @@ from .effect_set_editor import (
     EFFECT_BLOB_KEY,
 )
 from .material_flow_editor import _update_wind_geometry_nodes, _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
+from .fxb_loader import load_fxb_effect
 
 try:
     # when installed as a Blender add-on package
@@ -904,7 +905,7 @@ def process_slocator_import(
     world_rot = local_rot.copy()
 
     # Depending on the Type we create a Marker or load a drs-file or ska-file
-    if slocator.class_type == "DestructiblePart":
+    if slocator.class_type == "DestructiblePart" and slocator.file_name_length > 0:
         locator_object = load_static_bms_module(
             slocator.file_name, dir_name, source_collection
         )
@@ -925,13 +926,52 @@ def process_slocator_import(
         )
         return
     else:
-        # We sometimes have .fxb files -> Effects, we ignore them for now
+        if slocator.file_name.lower().endswith(".fxb"):
+            try:
+                effects_dir = dir_name
+                while True:
+                    parent_dir = os.path.dirname(effects_dir)
+                    if os.path.basename(effects_dir).lower() == "gfx":
+                        effects_dir = os.path.join(parent_dir, "gfx", "effects")
+                        break
+                    if parent_dir == effects_dir:
+                        # Reached the root without finding 'gfx'
+                        raise FileNotFoundError(
+                            "Could not find 'gfx' directory in path."
+                        )
+                    effects_dir = parent_dir
+            except Exception as e:  # pylint: disable=broad-except
+                print(
+                    f"Warning [process_slocator_import]: Could not load effect {slocator.file_name}: {e}"
+                )
         # Create visual sphere for locator
         bpy.ops.mesh.primitive_uv_sphere_add(radius=0.1, location=(0, 0, 0))
         locator_object = bpy.context.object
         locator_object.name = f"Locator_{slocator.class_type}"
         source_collection.objects.link(locator_object)
         bpy.context.collection.objects.unlink(locator_object)
+        
+        # If this is an FXB effect, try to load and visualize it
+        # if slocator.file_name.lower().endswith('.fxb') and locator_object:
+        #     try:
+        #         fxb_path = os.path.join(effects_dir, slocator.file_name)
+        #         effect_obj = load_fxb_effect(
+        #             fxb_path,
+        #             locator_object,
+        #             effect_name=os.path.splitext(slocator.file_name)[0]
+        #         )
+        #         if effect_obj:
+        #             logger.log(
+        #                 f"Loaded FXB effect: {slocator.file_name}",
+        #                 "Info",
+        #                 "INFO"
+        #             )
+        #     except Exception as fx_error:
+        #         logger.log(
+        #             f"Could not visualize FXB effect {slocator.file_name}: {fx_error}",
+        #             "Warning",
+        #             "WARNING"
+                # )
 
     if not locator_object and slocator.class_type != "Turret":
         logger.log(
