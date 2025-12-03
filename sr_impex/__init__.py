@@ -19,6 +19,7 @@ from . import locator_editor
 from . import animation_set_editor
 from . import material_flow_editor
 from . import effect_set_editor
+from . import bmg_state_editor
 
 bl_info = {
     "name": "SR-ImpEx",
@@ -182,6 +183,11 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         description="Import collision shapes",
         default=True,
     )  # type: ignore
+    import_s0_collision_shapes: BoolProperty(
+        name="Import S0 Collision Shapes",
+        description="Import collision shapes for S0 (undamaged) meshsets. S2 collision shapes are always imported as they differ from S0. BMG-level collision shapes apply to all S0 meshsets.",
+        default=False,
+    )  # type: ignore
     import_animation: BoolProperty(
         name="Import Animation", description="Import animation", default=True
     )  # type: ignore
@@ -256,6 +262,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         # Create a Modules Section
         layout.label(text="Modules Settings", icon="OBJECT_DATA")
         layout.prop(self, "import_collision_shape")
+        layout.prop(self, "import_s0_collision_shapes")
         layout.prop(self, "import_modules")
         layout.prop(self, "import_construction")
         layout.prop(self, "import_debris")
@@ -281,6 +288,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             ignore=("filter_glob", "clear_scene", "create_size_reference")
         )
         keywords["import_collision_shape"] = self.import_collision_shape
+        keywords["import_s0_collision_shapes"] = self.import_s0_collision_shapes
         keywords["import_animation"] = self.import_animation
         keywords["smooth_animation"] = self.smooth_animation
         keywords["import_ik_atlas"] = self.import_ik_atlas
@@ -664,6 +672,7 @@ def register():
     material_flow_editor.register()
     animation_set_editor.register()
     effect_set_editor.register()
+    bmg_state_editor.register()
 
 
 def unregister():
@@ -680,3 +689,4 @@ def unregister():
     material_flow_editor.unregister()
     animation_set_editor.unregister()
     effect_set_editor.unregister()
+    bmg_state_editor.unregister()

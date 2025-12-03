@@ -103,6 +103,7 @@ from .effect_set_editor import (
 from .material_flow_editor import _update_wind_geometry_nodes, _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
 from .fxb_loader import load_fxb_effect
 
+
 try:
     # when installed as a Blender add-on package
     from .drs_definitions import ExportError
@@ -117,6 +118,9 @@ texture_cache_nor = {}
 texture_cache_par = {}
 texture_cache_flu = {}
 texture_cache_ref = {}
+
+# Blob keys for storing metadata on collections
+MESHGRID_BLOB_KEY = "sr_impex_meshgrid_blob"
 
 with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
@@ -145,6 +149,36 @@ def persist_effect_blob_on_collection(
         return None
     blob = _effectset_to_blob(eff)
     source_collection[EFFECT_BLOB_KEY] = json.dumps(
+        blob, separators=(",", ":"), ensure_ascii=False
+    )
+    return blob
+
+
+def persist_meshgrid_blob_on_collection(
+    source_collection: bpy.types.Collection, bmg_file: "BMG"
+) -> dict | None:
+    """Create and store a minimal MeshSetGrid blob on the model collection."""
+    grid = getattr(bmg_file, "mesh_set_grid", None)
+    if grid is None:
+        return None
+
+    cells = []
+    for m in grid.mesh_modules or []:
+        cells.append({
+            "has_mesh_set": int(getattr(m, "has_mesh_set", 0) or 0),
+            "mesh_object_name": ""  # Will be filled during mesh creation
+        })
+
+    blob = {
+        "grid_width": int(getattr(grid, "grid_width", 0) or 0),
+        "grid_height": int(getattr(grid, "grid_height", 0) or 0),
+        "module_distance": float(getattr(grid, "module_distance", 2.0) or 2.0),
+        "is_center_pivoted": int(getattr(grid, "is_center_pivoted", 0) or 0),
+        "grid_rotation": int(getattr(grid, "grid_rotation", 0) or 0),
+        "cells": cells,  # row-major, same order as MeshSetGrid.read
+    }
+
+    source_collection[MESHGRID_BLOB_KEY] = json.dumps(
         blob, separators=(",", ":"), ensure_ascii=False
     )
     return blob
@@ -1047,6 +1081,306 @@ def process_debris_import(state_based_mesh_set, source_collection, dir_name, bas
 
                     # Link the debris mesh object to the collection.
                     state_collection.objects.link(mesh_object)
+
+
+def import_debris_from_xml(xml_file_path: str, dir_name: str, base_name: str, collection_name: str) -> bpy.types.Collection:
+    """
+    Import debris models from an XML file and return a collection containing them.
+    
+    Args:
+        xml_file_path: Path to the XML file defining debris
+        dir_name: Directory containing the mesh files
+        base_name: Base name for material naming
+        collection_name: Name for the debris collection
+    
+    Returns:
+        Collection containing all debris meshes from the XML
+    """
+    debris_collection = bpy.data.collections.new(collection_name)
+    
+    # Load and parse the XML file
+    with open(xml_file_path, "r", encoding="utf-8") as file:
+        xml_file = file.read()
+    xml_root = ET.fromstring(xml_file)
+    
+    # Loop through PhysicObject elements and create meshes
+    for element in xml_root.findall(".//Element[@type='PhysicObject']"):
+        resource = element.attrib.get("resource")
+        name = element.attrib.get("name")
+        if resource and name:
+            debris_drs_file = DRS().read(os.path.join(dir_name, "meshes", resource))
+            for mesh_index in range(debris_drs_file.cdsp_mesh_file.mesh_count):
+                # Create the mesh data and object
+                mesh_data = create_static_mesh(
+                    debris_drs_file.cdsp_mesh_file, mesh_index
+                )
+                mesh_object = bpy.data.objects.new(
+                    f"CDspMeshFile_{name}", mesh_data
+                )
+                
+                # Create and assign the material
+                material = create_material(
+                    dir_name,
+                    mesh_index,
+                    debris_drs_file.cdsp_mesh_file.meshes[mesh_index],
+                    f"{base_name}_{name}",
+                )
+                mesh_data.materials.append(material)
+                
+                # Link the debris mesh object to the collection
+                debris_collection.objects.link(mesh_object)
+    
+    return debris_collection
+
+
+def create_meshset_structure(
+    parent_collection: bpy.types.Collection,
+    meshset_index: int,
+    mesh_states: list,
+    destruction_states: list,
+    dir_name: str,
+    base_name: str,
+    armature_object: bpy.types.Object = None,
+    import_collision_shape: bool = False,
+    import_s0_collision_shapes: bool = False,
+) -> tuple[bpy.types.Collection, bpy.types.Object]:
+    """
+    Create organized hierarchical structure for a single MeshSet with all states.
+    
+    Structure:
+        MeshSet_N
+        ├── States_Collection (hidden by default)
+        │   ├── S0_Undamaged
+        │   ├── S2_Damaged
+        │   └── Debris_Collection
+        │       ├── S2_Debris (hidden)
+        │       └── S3_Debris (hidden)
+        └── Active_State (empty marker)
+    
+    Args:
+        parent_collection: Parent collection to link the MeshSet to
+        meshset_index: Index of this MeshSet
+        mesh_states: List of MeshState objects from StateBasedMeshSet
+        destruction_states: List of DestructionState objects
+        dir_name: Directory containing files
+        base_name: Base name for materials
+        armature_object: Armature to parent meshes to
+        import_collision_shape: Whether to import collision shapes for S2 states
+        import_s0_collision_shapes: Whether to import collision shapes for S0 states (BMG-level shapes apply to all S0)
+    
+    Returns:
+        (meshset_collection, active_marker) tuple
+    """
+    # Create MeshSet container
+    meshset_col = bpy.data.collections.new(f"MeshSet_{meshset_index}")
+    parent_collection.children.link(meshset_col)
+    
+    # Create States subcollection (hidden by default) with unique name
+    states_col = bpy.data.collections.new(f"States_Collection_{meshset_index}")
+    meshset_col.children.link(states_col)
+    states_col.hide_viewport = True
+    states_col.hide_render = True
+    
+    # Import each mesh state (S0, S2, etc.)
+    for mesh_state in mesh_states:
+        if mesh_state.has_files:
+            state_name = f"S{mesh_state.state_num}_{'Undamaged' if mesh_state.state_num == 0 else 'Damaged'}"
+            state_col = bpy.data.collections.new(state_name)
+            state_col["state_type"] = f"S{mesh_state.state_num}"
+            state_col["mesh_set_index"] = meshset_index
+            states_col.children.link(state_col)
+            
+            # Create Meshes subcollection
+            meshes_col = bpy.data.collections.new("Meshes_Collection")
+            state_col.children.link(meshes_col)
+            
+            # Load DRS file
+            drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
+            
+            # Import collision shapes if present
+            # S0 (undamaged): only import if import_s0_collision_shapes is True (BMG-level shapes apply to all S0)
+            # S2+ (damaged): always import as they differ from S0 due to damage
+            should_import_collision = False
+            if drs_file.collision_shape is not None and import_collision_shape:
+                if mesh_state.state_num == 0:
+                    should_import_collision = import_s0_collision_shapes
+                else:
+                    should_import_collision = True
+            
+            if should_import_collision:
+                import_collision_shapes(state_col, drs_file)
+            
+            # Import meshes
+            for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
+                mesh_object, _ = create_mesh_object(
+                    drs_file,
+                    mesh_index,
+                    dir_name,
+                    base_name,
+                    armature_object,
+                )
+                setup_material_parameters(mesh_object, drs_file, mesh_index)
+                meshes_col.objects.link(mesh_object)
+    
+    # Create Debris subcollection
+    if destruction_states and len(destruction_states) > 0:
+        debris_col = bpy.data.collections.new("Debris_Collection")
+        states_col.children.link(debris_col)
+        debris_col.hide_viewport = True
+        debris_col.hide_render = True
+        
+        # Import debris from each destruction state XML
+        for destruction_state in destruction_states:
+            xml_file_path = os.path.join(dir_name, destruction_state.file_name)
+            if os.path.exists(xml_file_path):
+                debris_state_name = f"S{destruction_state.state_num}_Debris"
+                debris_state_col = import_debris_from_xml(
+                    xml_file_path,
+                    dir_name,
+                    base_name,
+                    debris_state_name
+                )
+                debris_state_col["state_type"] = f"S{destruction_state.state_num}_debris"
+                debris_state_col["mesh_set_index"] = meshset_index
+                debris_col.children.link(debris_state_col)
+    
+    # Create active state marker (empty object)
+    active_marker = bpy.data.objects.new(f"Active_State_MeshSet_{meshset_index}", None)
+    active_marker.empty_display_type = 'CUBE'
+    active_marker.empty_display_size = 0.5
+    active_marker["active_state"] = "S0"  # Default to undamaged
+    active_marker["mesh_set_index"] = meshset_index
+    meshset_col.objects.link(active_marker)
+    
+    # Initially show S0 (undamaged) state
+    switch_meshset_state(meshset_col, "S0")
+    
+    return meshset_col, active_marker
+
+
+def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state: str):
+    """
+    Switch which state is visible/active for editing in a MeshSet.
+    
+    Args:
+        meshset_collection: The MeshSet_N collection
+        target_state: One of 'S0', 'S2', 'S2_with_debris', 'S3_destroyed', 'all_states'
+    """
+    def show_collection_recursive(col):
+        """Recursively show a collection and all its children"""
+        col.hide_viewport = False
+        col.hide_render = False
+        for child in col.children:
+            show_collection_recursive(child)
+    
+    # Find States_Collection (may have suffix like .001 if renamed by Blender)
+    states_col = None
+    for child in meshset_collection.children:
+        if child.name.startswith("States_Collection"):
+            states_col = child
+            break
+    
+    if not states_col:
+        print(f"[BMG State] No States_Collection found in {meshset_collection.name}")
+        return
+    
+    print(f"[BMG State] Switching {meshset_collection.name} to {target_state}")
+    print(f"[BMG State] States_Collection children: {[c.name for c in states_col.children]}")
+    
+    # First, make States_Collection itself visible (parent must be visible)
+    states_col.hide_viewport = False
+    
+    # Hide all child states first
+    for col in states_col.children_recursive:
+        col.hide_viewport = True
+        col.hide_render = True
+    
+    # Show requested state(s)
+    if target_state == "S0":
+        for child in states_col.children:
+            if child.name.startswith("S0_Undamaged"):
+                show_collection_recursive(child)
+                break
+    
+    elif target_state == "S2":
+        for child in states_col.children:
+            if child.name.startswith("S2_Damaged"):
+                show_collection_recursive(child)
+                break
+    
+    elif target_state == "S2_with_debris":
+        # Show S2 damaged state
+        for child in states_col.children:
+            if child.name.startswith("S2_Damaged"):
+                print(f"[BMG State] Showing S2_Damaged: {child.name}")
+                show_collection_recursive(child)
+                break
+        # Show S2 debris
+        for child in states_col.children:
+            if child.name.startswith("Debris_Collection"):
+                print(f"[BMG State] Found Debris_Collection: {child.name}")
+                print(f"[BMG State] Debris children: {[c.name for c in child.children]}")
+                child.hide_viewport = False  # Make Debris_Collection itself visible
+                child.hide_render = False
+                for debris_col in child.children:
+                    if debris_col.name.startswith("S2_Debris"):
+                        print(f"[BMG State] Showing S2_Debris: {debris_col.name}")
+                        show_collection_recursive(debris_col)
+                        print(f"[BMG State] S2_Debris visibility: viewport={not debris_col.hide_viewport}, render={not debris_col.hide_render}")
+                        break
+                break
+    
+    elif target_state == "S3_destroyed":
+        for child in states_col.children:
+            if child.name.startswith("Debris_Collection"):
+                print(f"[BMG State] Found Debris_Collection for S3: {child.name}")
+                child.hide_viewport = False  # Make Debris_Collection itself visible
+                child.hide_render = False
+                for debris_col in child.children:
+                    print(f"[BMG State] Showing debris: {debris_col.name}")
+                    show_collection_recursive(debris_col)
+                    print(f"[BMG State] Debris visibility after show: viewport={not debris_col.hide_viewport}, render={not debris_col.hide_render}")
+                break
+    
+    elif target_state == "all_states":
+        # Show everything for editing
+        states_col.hide_viewport = False
+        for col in states_col.children_recursive:
+            col.hide_viewport = False
+    
+    # Update active marker
+    for obj in meshset_collection.objects:
+        if obj.type == 'EMPTY' and "active_state" in obj:
+            obj["active_state"] = target_state
+
+
+def export_meshset_state(meshset_collection: bpy.types.Collection, state_type: str = "S0") -> bpy.types.Collection:
+    """
+    Get the collection for a specific state from a MeshSet for export.
+    
+    Args:
+        meshset_collection: The MeshSet_N collection
+        state_type: State type to export (e.g., 'S0', 'S2')
+    
+    Returns:
+        The state collection, or None if not found
+    """
+    # Find States_Collection (may have suffix)
+    states_col = None
+    for child in meshset_collection.children:
+        if child.name.startswith("States_Collection"):
+            states_col = child
+            break
+    
+    if not states_col:
+        return None
+    
+    # Find target state collection
+    for col in states_col.children:
+        if col.get("state_type") == state_type:
+            return col
+    
+    return None
 
 
 def save_image_copy_as_png(img: bpy.types.Image, output_path: str, file_ending: str = None) -> None:
@@ -2844,6 +3178,7 @@ def import_state_based_mesh_set(
     smooth_animation,
     import_debris: bool,
     import_collision_shape: bool,
+    import_s0_collision_shapes: bool,
     import_ik_atlas: bool,
     base_name: str,
     slocator: SLocator = None,
@@ -2971,76 +3306,108 @@ def import_mesh_set_grid(
     base_name: str,
     import_debris: bool,
     import_collision_shape: bool,
+    import_s0_collision_shapes: bool,
     import_ik_atlas: bool,
 ):
-    # Create StateBasedMeshSet Collection to store the Mesh Objects
-    state_based_mesh_set_collection: bpy.types.Collection = bpy.data.collections.new(
-        "StateBasedMeshSet_Collection"
+    """
+    Import a MeshSetGrid using the new hierarchical collection structure.
+    
+    Creates a cleaner hierarchy:
+        MeshSetGrid_0
+        ├── MeshSet_0
+        │   ├── States_Collection (hidden)
+        │   │   ├── S0_Undamaged
+        │   │   ├── S2_Damaged
+        │   │   └── Debris_Collection (hidden)
+        │   └── Active_State (marker)
+        └── MeshSet_1
+            └── ...
+    """
+    # Create MeshSetGrid Collection to organize all MeshSets
+    mesh_set_grid_collection: bpy.types.Collection = bpy.data.collections.new(
+        "MeshSetGrid_0"
     )
-    source_collection.children.link(state_based_mesh_set_collection)
+    source_collection.children.link(mesh_set_grid_collection)
     bone_list = None
+    
+    # Track mesh objects per module index for grid mapping
+    module_mesh_map = {}
+    module_index = 0
 
     for module in bmg_file.mesh_set_grid.mesh_modules:
         if module.has_mesh_set:
-            for mesh_set in module.state_based_mesh_set.mesh_states:
-                if mesh_set.has_files:
-                    file_path = os.path.join(dir_name, mesh_set.drs_file)
-                    drs_file = DRS().read(file_path)
-
-                    if armature_object is None:
-                        armature_object, bone_list = setup_armature(
-                            source_collection, drs_file
-                        )
-
-                    state_collection_name = f"Mesh_State_{mesh_set.state_num}"
-                    state_collection = find_or_create_collection(
-                        state_based_mesh_set_collection, state_collection_name
-                    )
-
-                    state_meshes_collection: bpy.types.Collection = (
-                        bpy.data.collections.new("Meshes_Collection")
-                    )
-                    state_collection.children.link(state_meshes_collection)
-
-                    for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-                        mesh_object, _ = create_mesh_object(
-                            drs_file,
-                            mesh_index,
-                            dir_name,
-                            base_name,
-                            armature_object,
-                        )
-                        setup_material_parameters(mesh_object, drs_file, mesh_index)
-                        state_meshes_collection.objects.link(mesh_object)
-
-                    if drs_file.collision_shape is not None and import_collision_shape:
-                        import_collision_shapes(state_collection, drs_file)
-
+            # Setup armature if needed (shared across all modules)
+            if armature_object is None:
+                # Try to get skeleton from first available mesh state
+                for mesh_state in module.state_based_mesh_set.mesh_states:
+                    if mesh_state.has_files:
+                        file_path = os.path.join(dir_name, mesh_state.drs_file)
+                        drs_file = DRS().read(file_path)
+                        if drs_file.csk_skeleton is not None:
+                            armature_object, bone_list = setup_armature(
+                                source_collection, drs_file
+                            )
+                            break
+            
+            # Create structured MeshSet with all states organized hierarchically
+            meshset_col, active_marker = create_meshset_structure(
+                parent_collection=mesh_set_grid_collection,
+                meshset_index=module_index,
+                mesh_states=module.state_based_mesh_set.mesh_states,
+                destruction_states=module.state_based_mesh_set.destruction_states if import_debris else [],
+                dir_name=dir_name,
+                base_name=base_name,
+                armature_object=armature_object,
+                import_collision_shape=import_collision_shape,
+                import_s0_collision_shapes=import_s0_collision_shapes,
+            )
+            
+            # Store reference to first mesh object for grid mapping
+            states_col = None
+            for child in meshset_col.children:
+                if child.name.startswith("States_Collection"):
+                    states_col = child
+                    break
+            
+            if states_col:
+                # Get first mesh from S0 state
+                s0_col = None
+                for child in states_col.children:
+                    if child.name.startswith("S0_Undamaged"):
+                        s0_col = child
+                        break
+                
+                if s0_col:
+                    meshes_col = None
+                    for child in s0_col.children:
+                        if child.name.startswith("Meshes_Collection"):
+                            meshes_col = child
+                            break
+                    
+                    if meshes_col and len(meshes_col.objects) > 0:
+                        first_mesh = meshes_col.objects[0]
+                        module_mesh_map[module_index] = first_mesh.name
+                        first_mesh["grid_cell_index"] = module_index
+            
+            # Handle IK atlas if needed
+            if import_ik_atlas and armature_object is not None and bone_list is not None:
+                for mesh_state in module.state_based_mesh_set.mesh_states:
+                    if mesh_state.has_files:
+                        file_path = os.path.join(dir_name, mesh_state.drs_file)
+                        drs_file = DRS().read(file_path)
                         if (
-                            import_ik_atlas
-                            and drs_file.csk_skeleton is not None
-                            and armature_object is not None
+                            drs_file.csk_skeleton is not None
                             and drs_file.animation_set is not None
-                            and bone_list is not None
                         ):
                             import_animation_ik_atlas(
                                 armature_object, drs_file.animation_set, bone_list
                             )
+                            break  # Only need to do this once per module
+        
+        # Increment module index for each module (even if no mesh)
+        module_index += 1
 
-            # Get individual desctruction States
-            if import_debris:
-                destruction_collection: bpy.types.Collection = bpy.data.collections.new(
-                    "Destruction_State_Collection"
-                )
-                source_collection.children.link(destruction_collection)
-                process_debris_import(
-                    module.state_based_mesh_set,
-                    destruction_collection,
-                    dir_name,
-                    base_name,
-                )
-
-    return armature_object, bone_list
+    return armature_object, bone_list, module_mesh_map
 
 
 def load_bmg(
@@ -3048,6 +3415,7 @@ def load_bmg(
     filepath="",
     apply_transform=True,
     import_collision_shape=False,
+    import_s0_collision_shapes=False,
     import_animation=True,
     smooth_animation=True,
     import_ik_atlas=False,
@@ -3070,6 +3438,7 @@ def load_bmg(
 
     # persist_locator_blob_on_collection(source_collection, bmg_file)
     persist_animset_blob_on_collection(source_collection, bmg_file)
+    persist_meshgrid_blob_on_collection(source_collection, bmg_file)
 
     # Models share the same Skeleton Files, so we only need to create one Armature and share it across all sub-modules!
     armature_object = None
@@ -3156,7 +3525,7 @@ def load_bmg(
 
     # Import Mesh Set Grid
     if bmg_file.mesh_set_grid is not None:
-        armature_object, bone_list = import_mesh_set_grid(
+        armature_object, bone_list, module_mesh_map = import_mesh_set_grid(
             bmg_file,
             source_collection,
             armature_object,
@@ -3164,8 +3533,24 @@ def load_bmg(
             base_name,
             import_debris,
             import_collision_shape,
+            import_s0_collision_shapes,
             import_ik_atlas,
         )
+        
+        # Update blob with mesh object names
+        if module_mesh_map:
+            import json
+            blob_data = source_collection.get(MESHGRID_BLOB_KEY)
+            if blob_data:
+                try:
+                    blob = json.loads(blob_data)
+                    cells = blob.get("cells", [])
+                    for idx, mesh_name in module_mesh_map.items():
+                        if idx < len(cells):
+                            cells[idx]["mesh_object_name"] = mesh_name
+                    source_collection[MESHGRID_BLOB_KEY] = json.dumps(blob, separators=(",", ":"), ensure_ascii=False)
+                except Exception as e:
+                    print(f"Warning: Failed to update mesh grid blob with mesh names: {e}")
 
     # Import Construction
     if import_construction:
@@ -3211,6 +3596,7 @@ def load_bmg(
                         smooth_animation,
                         import_debris,
                         import_collision_shape,
+                        import_s0_collision_shapes,
                         import_ik_atlas,
                         module_name,
                         slocator,
