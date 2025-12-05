@@ -3,7 +3,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
 from typing import List, Union, BinaryIO, Optional, Tuple
-from urllib.parse import non_hierarchical
 from mathutils import Vector, Matrix, Quaternion
 from .file_io import FileReader, FileWriter
 
@@ -341,8 +340,6 @@ TrackEvaluation = {
     # maybe we have a third here
 }
 
-
-# Also Node Order
 InformationIndices = {
     "AnimatedUnit": {  # AnimatedInteractableObjectNoCollisionWithEffects
         "CGeoMesh": 1,
@@ -397,6 +394,49 @@ InformationIndices = {
         "CGeoPrimitiveContainer": 2,
         "collisionShape": 11,
     },
+    "StaticBuildingCollision": {
+        "MeshSetGrid": 1,
+        "CGeoPrimitiveContainer": 2,
+        "collisionShape": 3,
+    },
+    "StaticBuildingNoCollision": {
+        "MeshSetGrid": 1,
+    },
+    "AnimatedBuildingCollisionEffects": {
+        "MeshSetGrid": 1,
+        "AnimationSet": 5,
+        "AnimationTimings": 4,
+        "EffectSet": 2,
+        "CGeoPrimitiveContainer": 3,
+        "collisionShape": 6,
+    },
+    "AnimatedBuildingCollisionNoEffects": {
+        "MeshSetGrid": 1,
+        "AnimationSet": 4,
+        "AnimationTimings": 3,
+        "CGeoPrimitiveContainer": 2,
+        "collisionShape": 5,
+    },
+    "StaticBuildingCollisionMesh": {
+        "CGeoMesh": 1,
+        "CGeoOBBTree": 5,
+        "CDspJointMap": 4,
+        "CDspMeshFile": 3,
+        "DrwResourceMeta": 6,
+        "CGeoPrimitiveContainer": 2,
+        "collisionShape": 7,
+    },
+    "AnimatedBuildingCollisionMesh": {
+        "CGeoMesh": 1,
+        "CGeoOBBTree": 6,
+        "CDspJointMap": 5,
+        "CSkSkinInfo": 7,
+        "CSkSkeleton": 3,
+        "CDspMeshFile": 4,
+        "DrwResourceMeta": 8,
+        "CGeoPrimitiveContainer": 2,
+        "collisionShape": 9,
+    }
 }
 
 WriteOrder = {
@@ -451,6 +491,51 @@ WriteOrder = {
         "CGeoMesh",
         "AnimationSet",
         "AnimationTimings",
+        "collisionShape",
+    ],
+    "StaticBuildingCollision": [
+        "MeshSetGrid",
+        "CGeoPrimitiveContainer",
+        "collisionShape",
+    ],
+    "StaticBuildingNoCollision": [
+        "MeshSetGrid",
+    ],
+    "AnimatedBuildingCollisionEffects": [
+        "MeshSetGrid",
+        "AnimationSet",
+        "AnimationTimings",
+        "EffectSet",
+        "CGeoPrimitiveContainer",
+        "collisionShape",
+    ],
+    "AnimatedBuildingCollisionNoEffects": [
+        "MeshSetGrid",
+        "AnimationSet",
+        "AnimationTimings",
+        "CGeoPrimitiveContainer",
+        "collisionShape",
+    ],
+    "StaticBuildingCollisionMesh": [
+        "CDspJointMap",
+        "CDspMeshFile",
+        # maybe LocatorList?
+        "DrwResourceMeta",
+        "CGeoPrimitiveContainer",
+        "CGeoOBBTree",
+        "CGeoMesh",
+        "collisionShape",
+    ],
+    "AnimatedBuildingCollisionMesh": [
+        "CDspJointMap",
+        "CSkSkinInfo",
+        "CSkSkeleton",
+        "CDspMeshFile",
+        # maybe LocatorList?
+        "DrwResourceMeta",
+        "CGeoPrimitiveContainer",
+        "CGeoOBBTree",
+        "CGeoMesh",
         "collisionShape",
     ],
 }
@@ -3071,7 +3156,19 @@ class SMeshState:
         return self
 
     def write(self, file: BinaryIO):
-        pass
+        file.write(pack("i", self.state_num))
+        file.write(pack("h", self.has_files))
+        if self.has_files:
+            file.write(pack("i", self.uk_file_length))
+            file.write(self.uk_file.encode("utf-8"))
+            file.write(pack("i", self.drs_file_length))
+            file.write(self.drs_file.encode("utf-8"))
+    
+    def size(self) -> int:
+        size = 6
+        if self.has_files:
+            size += 4 + self.uk_file_length + 4 + self.drs_file_length
+        return size
 
 
 @dataclass(eq=False, repr=False)
@@ -3093,12 +3190,20 @@ class DestructionState:
             .strip("\x00")
         )
         return self
+    
+    def write(self, file: BinaryIO):
+        file.write(pack("i", self.state_num))
+        file.write(pack("i", self.file_name_length))
+        file.write(self.file_name.encode("utf-8"))
+    
+    def size(self) -> int:
+        return 8 + self.file_name_length
 
 
 @dataclass(eq=False, repr=False)
 class StateBasedMeshSet:
-    uk: int = 1  # Short # Depends on the Type i guess
-    uk2: int = 11  # Int # Depends on the type i guess
+    version: int = 1  # Short # Depends on the Type i guess
+    revision: int = 10  # Int # Depends on the type i guess
     num_mesh_states: int = 1  # Int Always needs one
     mesh_states: List[SMeshState] = field(default_factory=list)
     num_destruction_states: int = 1  # Int
@@ -3106,8 +3211,8 @@ class StateBasedMeshSet:
 
     def read(self, file: BinaryIO) -> "StateBasedMeshSet":
         """Reads the StateBasedMeshSet from the buffer"""
-        self.uk = unpack("h", file.read(2))[0]
-        self.uk2 = unpack("i", file.read(4))[0]
+        self.version = unpack("h", file.read(2))[0]
+        self.revision = unpack("i", file.read(4))[0]
         self.num_mesh_states = unpack("i", file.read(4))[0]
         self.mesh_states = [
             SMeshState().read(file) for _ in range(self.num_mesh_states)
@@ -3119,25 +3224,50 @@ class StateBasedMeshSet:
         return self
 
     def write(self, file: BinaryIO):
-        pass
+        file.write(pack("h", self.version))
+        file.write(pack("i", self.revision))
+        file.write(pack("i", self.num_mesh_states))
+        for mesh_state in self.mesh_states:
+            mesh_state.write(file)
+        file.write(pack("i", self.num_destruction_states))
+        for destruction_state in self.destruction_states:
+            destruction_state.write(file)
+    
+    def size(self) -> int:
+        size = 6 + 4
+        for mesh_state in self.mesh_states:
+            size += mesh_state.size()
+        size += 4
+        for destruction_state in self.destruction_states:
+            size += destruction_state.size()
+        return size
 
 
 @dataclass(eq=False, repr=False)
 class MeshGridModule:
-    uk: int = 0  # Short
+    rotation: int = 0  # Short
     has_mesh_set: int = 0  # Byte
     state_based_mesh_set: StateBasedMeshSet = None
 
     def read(self, file: BinaryIO) -> "MeshGridModule":
         """Reads the MeshGridModule from the buffer"""
-        self.uk = unpack("h", file.read(2))[0]
+        self.rotation = unpack("h", file.read(2))[0]
         self.has_mesh_set = unpack("B", file.read(1))[0]
         if self.has_mesh_set:
             self.state_based_mesh_set = StateBasedMeshSet().read(file)
         return self
 
     def write(self, file: BinaryIO):
-        pass
+        file.write(pack("h", self.rotation))
+        file.write(pack("B", self.has_mesh_set))
+        if self.has_mesh_set:
+            self.state_based_mesh_set.write(file)
+    
+    def size(self) -> int:
+        size = 3
+        if self.has_mesh_set:
+            size += self.state_based_mesh_set.size()
+        return size
 
 
 @dataclass(eq=False, repr=False)
@@ -3152,8 +3282,8 @@ class MeshSetGrid:
     grid_rotation: int = 0  # Short
     ground_decal_length: int = 0  # Int
     ground_decal: str = ""  # String
-    uk_string0_length: int = 0  # Int
-    uk_string0: str = ""  # String
+    effect_gen_debris_length: int = 0  # Int
+    effect_gen_debris: str = ""  # String to XMl file. Only used by some fire and nature buildings
     uk_string1_length: int = 0  # Int
     uk_string1: str = ""  # String
     module_distance: float = 2  # Float
@@ -3192,11 +3322,11 @@ class MeshSetGrid:
             .decode("utf-8")
             .strip("\x00")
         )
-        self.uk_string0_length = unpack("i", file.read(4))[0]
-        self.uk_string0 = (
+        self.effect_gen_debris_length = unpack("i", file.read(4))[0]
+        self.effect_gen_debris = (
             unpack(
-                f"{self.uk_string0_length}s",
-                file.read(calcsize(f"{self.uk_string0_length}s")),
+                f"{self.effect_gen_debris_length}s",
+                file.read(calcsize(f"{self.effect_gen_debris_length}s")),
             )[0]
             .decode("utf-8")
             .strip("\x00")
@@ -3220,7 +3350,32 @@ class MeshSetGrid:
         return self
 
     def write(self, file: BinaryIO):
-        pass
+        file.write(pack("h", self.revision))
+        file.write(pack("B", self.grid_width))
+        file.write(pack("B", self.grid_height))
+        file.write(pack("i", self.name_length))
+        file.write(self.name.encode("utf-8"))
+        file.write(pack("i", self.uuid_length))
+        file.write(self.uuid.encode("utf-8"))
+        file.write(pack("h", self.grid_rotation))
+        file.write(pack("i", self.ground_decal_length))
+        file.write(self.ground_decal.encode("utf-8"))
+        file.write(pack("i", self.effect_gen_debris_length))
+        file.write(self.effect_gen_debris.encode("utf-8"))
+        file.write(pack("i", self.uk_string1_length))
+        file.write(self.uk_string1.encode("utf-8"))
+        file.write(pack("f", self.module_distance))
+        file.write(pack("B", self.is_center_pivoted))
+        for module in self.mesh_modules:
+            module.write(file)
+        self.cdrw_locator_list.write(file)
+    
+    def size(self) -> int:
+        size = 2 + 1 + 1 + 4 + self.name_length + 4 + self.uuid_length + 2 + 4 + self.ground_decal_length + 4 + self.effect_gen_debris_length + 4 + self.uk_string1_length + 4 + 1
+        for module in self.mesh_modules:
+            size += module.size()
+        size += self.cdrw_locator_list.size()
+        return size
 
 
 @dataclass(eq=False, repr=False)

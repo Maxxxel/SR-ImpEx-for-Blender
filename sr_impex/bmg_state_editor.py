@@ -7,7 +7,7 @@ Allows switching between undamaged, damaged, and destruction states.
 
 import bpy
 from bpy.types import Operator, Panel
-from bpy.props import StringProperty, EnumProperty
+from bpy.props import EnumProperty
 
 
 class BMG_OT_SwitchMeshState(Operator):
