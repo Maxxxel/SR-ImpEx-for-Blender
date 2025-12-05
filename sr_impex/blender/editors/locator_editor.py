@@ -24,7 +24,7 @@ from mathutils import Matrix, Vector
 
 # ---- Imports from your DRS definitions --------------------------------------
 
-from .drs_definitions import (
+from sr_impex.definitions.drs_definitions import (
     CDrwLocatorList,
     SLocator,
     CMatCoordinateSystem,

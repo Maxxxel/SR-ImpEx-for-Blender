@@ -28,15 +28,15 @@ from bpy.props import (
 # Abilities / actions
 # ---------------------------------------------------------------------------
 
-from .abilities import (
+from sr_impex.abilities import (
     must_have_abilities,
     situational_abilities,
     additional_abilities,
 )
 
-from .drs_definitions import AnimationType as DRS_ANIM_TYPE
+from sr_impex.definitions.drs_definitions import AnimationType as DRS_ANIM_TYPE
 
-from .drs_resolvers import resolve_action_from_blob_name as _resolve_action_name
+from sr_impex.utilities.drs_resolvers import resolve_action_from_blob_name as _resolve_action_name
 
 
 _ANIMTYPE_BY_ID = {v: k for k, v in DRS_ANIM_TYPE.items()}
@@ -1073,7 +1073,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
     def _animtype_to_int(name_or_num) -> int:
         # supports both numeric and names from DRS_ANIM_TYPE
         try:
-            from .drs_definitions import AnimationType as DRS_ANIM_TYPE
+            from .definitions.drs_definitions import AnimationType as DRS_ANIM_TYPE
         except Exception:
             DRS_ANIM_TYPE = {}
         s = f"{name_or_num}".strip()
@@ -1217,7 +1217,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
             v.timing_has = True
             # keep the spec readable in UI (string OK), we export ints later
             try:
-                from .drs_definitions import AnimationType as DRS_ANIM_TYPE
+                from .definitions.drs_definitions import AnimationType as DRS_ANIM_TYPE
 
                 inv = {v: k for k, v in DRS_ANIM_TYPE.items()}
                 v.timing_type = inv.get(atype_int, str(atype_int))

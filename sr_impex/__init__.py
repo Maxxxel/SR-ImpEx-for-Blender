@@ -6,20 +6,21 @@ from os.path import dirname, realpath
 import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
-from .drs_utility import (
+from sr_impex.core.profiler import print_profiling_report
+from .utilities.drs_utility import (
     load_drs,
     save_drs,
-    load_bmg,
     create_new_bf_scene,
     # DRS_OT_debug_obb_tree,
 )
-from .ska_utility import export_ska, get_actions
-from . import addon_updater_ops
-from . import locator_editor
-from . import animation_set_editor
-from . import material_flow_editor
-from . import effect_set_editor
-from . import bmg_state_editor
+from .utilities.bmg_utility import load_bmg
+from .utilities.ska_utility import export_ska, get_actions
+from .updater import addon_updater_ops
+from .blender.editors import locator_editor
+from .blender.editors import animation_set_editor
+from .blender.editors import material_flow_editor
+from .blender.editors import effect_set_editor
+from .blender.editors import bmg_state_editor
 
 bl_info = {
     "name": "SR-ImpEx",
@@ -313,11 +314,14 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         if self.filepath.endswith(".drs"):
             keywords.pop("import_debris")
             keywords.pop("import_construction")
+            keywords.pop("import_s0_collision_shapes")
             load_drs(context, **keywords)
+            print_profiling_report()
             return {"FINISHED"}
         elif self.filepath.endswith(".bmg"):
             keywords.pop("import_modules")
             load_bmg(context, **keywords)
+            print_profiling_report()
             return {"FINISHED"}
         else:
             self.report({"ERROR"}, "Unsupported file type")

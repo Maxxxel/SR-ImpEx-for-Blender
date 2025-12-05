@@ -5,8 +5,8 @@ import json
 from mathutils import Quaternion, Vector
 import bpy
 
-from .ska_definitions import SKA, SKAKeyframe
-from .drs_definitions import DRSBone
+from sr_impex.definitions.ska_definitions import SKA, SKAKeyframe
+from sr_impex.definitions.drs_definitions import DRSBone
 
 IS_44_PLUS = bpy.app.version >= (4, 4, 0)
 

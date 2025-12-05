@@ -5,10 +5,11 @@ from collections import defaultdict
 from mathutils import Vector, Quaternion
 import bpy
 
-from .ska_definitions import SKA, SKAHeader, SKAKeyframe
-from .message_logger import MessageLogger
+from sr_impex.definitions.ska_definitions import SKA, SKAHeader, SKAKeyframe
+from sr_impex.core.message_logger import MessageLogger
 
-resource_dir = dirname(realpath(__file__)) + "/resources"
+# Resources are in sr_impex/resources, need to go up one level from utilities/
+resource_dir = dirname(dirname(realpath(__file__))) + "/resources"
 logger = MessageLogger()
 
 with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:

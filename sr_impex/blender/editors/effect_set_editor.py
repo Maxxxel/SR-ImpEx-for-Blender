@@ -19,7 +19,7 @@ from bpy.props import (
 )
 
 # Import your current DRS defs (latest uploaded)
-from .drs_definitions import (
+from sr_impex.definitions.drs_definitions import (
     EffectSet as DRS_EffectSet,
     SkelEff as DRS_SkelEff,
     Keyframe as DRS_Keyframe,
@@ -30,7 +30,7 @@ from .drs_definitions import (
     AdditionalSoundContainer,
 )
 
-from .drs_resolvers import resolve_action_from_blob_name
+from sr_impex.utilities.drs_resolvers import resolve_action_from_blob_name
 
 EFFECT_BLOB_KEY = "EffectSetJSON"
 resource_dir = dirname(realpath(__file__)) + "/resources"

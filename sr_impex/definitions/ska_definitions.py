@@ -1,7 +1,7 @@
 from typing import BinaryIO
 from struct import calcsize, unpack, pack
 from dataclasses import dataclass, field
-from .file_io import FileReader
+from sr_impex.core.file_io import FileReader
 
 
 @dataclass(eq=False, repr=False)

@@ -24,11 +24,9 @@ from mathutils import Vector
 import bpy
 
 from bpy_extras.image_utils import load_image
-from .drs_definitions import (
-    DRS, FxMaster, Element, Emitter, Track, TrackType,
-    FloatKeyframe, Vector3Keyframe
-)
-from .message_logger import MessageLogger
+from sr_impex.definitions.drs_definitions import DRS, TrackType, FloatKeyframe, Vector3Keyframe
+from sr_impex.definitions.fxb_definitions import FxMaster, Element, Emitter, Track
+from .core.message_logger import MessageLogger
 
 logger = MessageLogger()
 

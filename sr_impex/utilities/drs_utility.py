@@ -26,10 +26,9 @@ import bmesh
 # pylint: disable=import-error
 import numpy as np
 
-from .drs_definitions import (
+from sr_impex.core.profiler import profile
+from sr_impex.definitions.drs_definitions import (
     DRS,
-    BMS,
-    BMG,
     BoneMatrix,
     CDspMeshFile,
     CylinderShape,
@@ -53,7 +52,6 @@ from .drs_definitions import (
     CMatCoordinateSystem,
     CDspJointMap,
     MeshData,
-    StateBasedMeshSet,
     Vertex,
     LevelOfDetail,
     EmptyString,
@@ -82,36 +80,37 @@ from .drs_definitions import (
     IKAtlas,
     Constraint
 )
-from .drs_material import DRSMaterial
-from .ska_definitions import SKA
-from .ska_utility import get_actions, export_ska
-from .transform_utils import (
+from sr_impex.definitions.bmg_definitions import BMS, BMG, StateBasedMeshSet
+from sr_impex.blender.drs_material import DRSMaterial
+from sr_impex.definitions.ska_definitions import SKA
+from sr_impex.utilities.ska_utility import get_actions, export_ska
+from sr_impex.blender.transform_utils import (
     ensure_mode,
     parent_under_game_axes,
     create_empty,
 )
-from .bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
-from .animation_utils import import_ska_animation
-from .message_logger import MessageLogger
-from .locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
-from .animation_set_editor import ANIM_BLOB_KEY
-from .effect_set_editor import (
+from sr_impex.blender.bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
+from sr_impex.blender.animation_utils import import_ska_animation
+from sr_impex.core.message_logger import MessageLogger
+from sr_impex.blender.editors.locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
+from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
+from sr_impex.blender.editors.effect_set_editor import (
     effectset_to_blob as _effectset_to_blob,
     blob_to_effectset as _blob_to_effectset,
     EFFECT_BLOB_KEY,
 )
-from .material_flow_editor import _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
+from sr_impex.blender.editors.material_flow_editor import _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
 
 
 try:
     # when installed as a Blender add-on package
-    from .drs_definitions import ExportError
+    from sr_impex.definitions.drs_definitions import ExportError
 except Exception:
     # fallback when running the files as loose scripts (no package)
-    from drs_definitions import ExportError
+    from sr_impex.drs_definitions import ExportError
 
 logger = MessageLogger()
-resource_dir = dirname(realpath(__file__)) + "/resources"
+resource_dir = dirname(dirname(realpath(__file__))) + "/resources"
 texture_cache_col = {}
 texture_cache_nor = {}
 texture_cache_par = {}
@@ -412,7 +411,7 @@ def animtimings_to_blob(anim_timings) -> list[dict]:
 
 
 def blob_to_animationtimings(blob) -> "AnimationTimings":
-    from .drs_definitions import (
+    from .definitions.drs_definitions import (
         AnimationTimings,
         AnimationTiming,
         TimingVariant,
@@ -779,7 +778,7 @@ def generate_bone_id(bone_name: str) -> int:
     bone_id = sum(ord(char) for char in bone_name) % (2**32 - 1)
     return bone_id
 
-
+@profile
 def load_static_bms_module(
     file_name: str, dir_name: str, parent_collection: bpy.types.Collection
 ):
@@ -911,7 +910,7 @@ def load_turret_animation(
         ),
     )
 
-
+@profile
 def process_slocator_import(
     slocator: SLocator,
     source_collection: bpy.types.Collection,
@@ -1947,7 +1946,7 @@ def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str)
 
     # fall back to the editor's robust resolver
     try:
-        from .animation_set_editor import _resolve_action_name as _editor_resolve
+        from .blender.editors.animation_set_editor import _resolve_action_name as _editor_resolve
         cand = _editor_resolve(s)
         if cand != "NONE" and cand in bpy.data.actions:
             return cand
@@ -2359,6 +2358,7 @@ def create_bone_weights(
     return bone_weights
 
 
+@profile
 def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Mesh:
     battleforge_mesh_data: BattleforgeMesh = mesh_file.meshes[mesh_index]
     # _name = override_name if (override_name != '') else f"State_{i}" if (state == True) else f"{i}"
@@ -3009,6 +3009,7 @@ def import_bounding_box(
     logger.log(f"AABB Bounding Box creation took {end_time - start_time:.2f} seconds.")
 
 
+@profile
 def load_drs(
     context: bpy.types.Context,
     filepath="",
@@ -3409,6 +3410,7 @@ def import_mesh_set_grid(
     return armature_object, bone_list, module_mesh_map
 
 
+@profile
 def load_bmg(
     context: bpy.types.Context,
     filepath="",
@@ -5088,6 +5090,7 @@ def create_skin_info(
     return skin_info
 
 
+@profile
 def create_skeleton(
     armature_object: bpy.types.Object,
     bone_map: Dict[str, Dict[str, Optional[int]]],

@@ -41,7 +41,7 @@ class BMG_OT_SwitchMeshState(Operator):
         return False
     
     def execute(self, context):
-        from .drs_utility import switch_meshset_state
+        from .utilities.drs_utility import switch_meshset_state
         
         # Try to get MeshSet collection from context
         meshset_collection = None
@@ -98,7 +98,7 @@ class BMG_OT_SwitchAllMeshSetsState(Operator):
         return False
     
     def execute(self, context):
-        from .drs_utility import switch_meshset_state
+        from .utilities.drs_utility import switch_meshset_state
         
         count = 0
         # Find all DRSModel collections first, then look for MeshSetGrid children
