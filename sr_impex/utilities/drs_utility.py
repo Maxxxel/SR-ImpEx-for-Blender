@@ -106,7 +106,7 @@ try:
     from sr_impex.definitions.drs_definitions import ExportError
 except Exception:
     # fallback when running the files as loose scripts (no package)
-    from sr_impex.drs_definitions import ExportError
+    from sr_impex.definitions.drs_definitions import ExportError
 
 logger = MessageLogger()
 resource_dir = dirname(dirname(realpath(__file__))) + "/resources"
