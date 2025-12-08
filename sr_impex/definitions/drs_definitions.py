@@ -1,502 +1,40 @@
 from __future__ import annotations
-from contextlib import contextmanager
+
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
-from typing import List, Union, BinaryIO, Optional, Tuple, TYPE_CHECKING
-from mathutils import Vector, Matrix, Quaternion
+from typing import BinaryIO, List, Optional, TYPE_CHECKING, Union
+
+from mathutils import Matrix, Quaternion, Vector
+
+# Explicit export list to placate lint tools.
+__all__: list[str] = []  # pylint: disable=invalid-all-object
+
 from sr_impex.core.file_io import FileReader, FileWriter
-
-class ExportError(RuntimeError):
-    """Unified export error that bubbles up to the operator/UI."""
-    pass
-
-
-@contextmanager
-def error_context(ctx: str):
-    """Attach human-readable context to any exception and re-raise as ExportError."""
-    try:
-        yield
-    except ExportError:
-        # already normalized, bubble up unchanged
-        raise
-    except Exception as e:
-        raise ExportError(f"{ctx}: {e}") from e
-
-__all__ = ["ExportError", "error_context", ...]
-
-def unpack_data(file: BinaryIO, *formats: str) -> List[List[Union[float, int]]]:
-    result = []
-    for fmt in formats:
-        result.append(list(unpack(fmt, file.read(calcsize(fmt)))))
-    return result
-
-
-def _wrap_write_method(cls):
-    """Wrap cls.write(self, file, ...) so any exception becomes ExportError with class/name context."""
-    orig = getattr(cls, "write", None)
-    if not callable(orig):
-        return
-
-    def wrapped(self, *args, **kwargs):
-        try:
-            return orig(self, *args, **kwargs)
-        except ExportError:
-            # Already normalized somewhere deeper.
-            raise
-        except Exception as e:
-            # Try to enrich with a useful identifier if present
-            ident = None
-            for attr in ("name", "id", "mesh_name", "material_name"):
-                if hasattr(self, attr):
-                    ident = getattr(self, attr)
-                    if ident:
-                        break
-            extra = f" name={ident}" if ident else ""
-            raise ExportError(f"{cls.__name__}.write failed{extra}: {e}") from e
-
-    setattr(cls, "write", wrapped)
-
-
-def _auto_wrap_all_write_methods(module_globals: dict):
-    """Find all classes defined in this module and wrap their write methods."""
-    for _name, obj in list(module_globals.items()):
-        if isinstance(obj, type) and hasattr(obj, "write") and callable(getattr(obj, "write")):
-            _wrap_write_method(obj)
-
+from sr_impex.definitions.base_types import (
+    BaseContainer,
+    CMatCoordinateSystem,
+    ExportError,
+    Matrix4x4,
+    Node,
+    NodeInformation,
+    RootNode,
+    RootNodeInformation,
+    Vector3,
+    Vector4,
+    _auto_wrap_all_write_methods,
+    error_context,
+    Face,
+)
+from sr_impex.definitions.enums import (
+    AnimationType,
+    LocatorClass,
+)
 
 if TYPE_CHECKING:
     from sr_impex.definitions.fxb_definitions import FxMaster
 
 
-MagicValues = {
-    "CDspJointMap": -1340635850,
-    "CGeoMesh": 100449016,
-    "CGeoOBBTree": -933519637,
-    "CSkSkinInfo": -761174227,
-    "CDspMeshFile": -1900395636,
-    "DrwResourceMeta": -183033339,
-    "collisionShape": 268607026,
-    "CGeoPrimitiveContainer": 1396683476,
-    "CSkSkeleton": -2110567991,
-    "CDrwLocatorList": 735146985,
-    "AnimationSet": -475734043,
-    "AnimationTimings": -1403092629,
-    "EffectSet": 688490554,
-}
-
-AnimationType = {
-    "CastResolve": 0,
-    "Spawn": 1,
-    "Melee": 2,
-    "Channel": 3,
-    "ModeSwitch": 4,
-    "WormMovement": 5,
-}
-
-LocatorClass = {
-    0: "HealthBar",  # Health Bar placement offset
-    1: "DestructiblePart",  # Static module for parts/destructibles
-    2: "Construction",  # aka. PivotOffset internally; Construction pieces
-    3: "Turret",  # Animated attached unit that will play its attack animations -> SKA
-    4: "FxbIdle",  # aka. WormDecal internally, effects for when not moving, only worm uses this originally
-    5: "Wheel",  # Animated attached unit that will play its idle and walk/run animations
-    6: "StaticPerm",  # aka. FXNode internally; Building/Object permanent effects
-    7: "Unknown7",  #
-    8: "DynamicPerm",  # Unit permanent effects -> FXB
-    9: "DamageFlameSmall",  # Building fire location from damage, plays effect_building_flame_small.fxb
-    10: "DamageFlameSmallSmoke",  # Building fire location from damage, plays effect_building_flame_small_smoke.fxb
-    11: "DamageFlameLarge",  # Building fire location from damage, plays effect_building_flame_large.fxb
-    12: "DamageSmokeOnly",  # Building smoke location from damage, plays effect_building_flame_smoke.fxb
-    13: "DamageFlameHuge",  # Building fire location from damage, plays effect_building_flame_huge.fxb
-    14: "SpellCast",  # seemingly not used anymore
-    15: "SpellHitAll",  # as above
-    16: "Hit",  # Point of being hit by attacks/spells
-    29: "Projectile_Spawn",  # Point to use attacks/spells from -> sometimes FXB
-}
-
-SoundType = {
-    "Impact": 0,
-    "Step": 1,
-    "Spawn": 3,
-    "Cheer": 5,
-    "Fight": 8,
-}
-
-TrackType = {
-    "Unknown" : -1,
-    "Translate" : 0,
-    "Rotate" : 1,
-    "Scale" : 2,
-    "Anim" : 3,
-    "Color" : 4,
-    "Alpha" : 5,
-    "Size" : 6,
-    "Time" : 7,
-    "BlendMode" : 8,
-    "Light_Range" : 9,
-    "Start_Color" : 10,
-    "End_Color" : 11,
-    "Start_Alpha" : 12,
-    "End_Alpha" : 13,
-    "Start_Radiance" : 14,
-    "End_Radiance" : 15,
-    "Start_Size" : 16,
-    "End_Size" : 17,
-    "StartEnd_Weight" : 18,
-    "Random_Color" : 19,
-    "Random_Luminance" : 20,
-    "Random_Size" : 21,
-    "Particle_BlendMode" : 22,
-    "Use_Lighting" : 23, #Use particle color as albedo for passive lighting.
-    "Shape" : 24,
-    "Force" : 25,
-    "Force_Direction" : 26,
-    "Force_Variance" : 27,
-    "Force_Gravity" : 28,
-    "Phase_Variance" : 29,
-    "Phase_Start" : 30,
-    "Rotation_Speed" : 31,
-    "Emitter_Geometry" : 32,
-    "Speed_Factor" : 33,
-    "Playback_Mode" : 34,
-    "Random_Force_Factor" : 35,
-    "Particles" : 36,
-    "Trail_Length" : 37,
-    "Use_Radiance" : 38,
-    "Rotation_Offset" : 39,
-    "Radiance" : 40,
-    "Shape2" : 41,
-    "Shape3" : 42,
-    "AlphaTest" : 43,
-    "Synchrony" : 44,
-    "Radius" : 45,
-    "Radius_Weight" : 46,
-    "Phase" : 47,
-    "Frequency" : 48,
-    "Height_Influence" : 49,
-    "Sine_Size" : 50,
-    "Particle_Texture_Division" : 51,
-    "Texture_Division_U" : 52,
-    "Texture_Division_V" : 53,
-    "Texture_Display" : 54,
-    "Optical_Density" : 55, #When optical density is > 0, the alpha channel\nis multiplied with an opacity valuecalculated\nfrom density and particle size.
-    "Start_Emissive_Color" : 56, #The emissive color is multiplied with radiance and added to the particle color.
-    "End_Emissive_Color" : 57, #The emissive color is multiplied with radiance and added to the particle color.
-    "HDR_Exponent" : 58,
-    "Glow_Alpha" : 59,
-    "Time_Address" : 60,
-    "Shadow_Mode" : 61,
-    "Hardness_Modifier" : 62,
-    "Particle_Mode" : 63,
-    "Distortion_FallOff" : 64,
-    "Offset_Towards_Camera" : 65,
-    "Alignment_Axis" : 66,
-    "Pivot_Point" : 67,
-    "Twosided" : 68,
-    "BillBoard_Mode" : 69,
-    "Distortion_FallOff_Dup_1" : 70,
-    "Hardness_Modifier_Dup_1" : 71,
-    "Force_Dup_1" : 72,
-    "Range" : 73,
-    "Power" : 74,
-    "Ground_Level" : 75,
-    "Mass" : 76,
-    "Volume" : 77,
-    "Min_Falloff" : 78,
-    "Max_Falloff" : 79,
-    "Pitch_Min" : 80,
-    "Amplitude_Translate" : 81,
-    "Frequency_Translate" : 82,
-    "Amplitude_Rotate" : 83,
-    "Frequency_Rotate" : 84,
-    "Min_Falloff_Dup_1" : 85,
-    "Max_Falloff_Dup_1" : 86,
-    "Add_Translate" : 87, #Add. Translate
-    "Add_Rotate" : 88, #Add. Rotate
-    "Size_SfpEmitter_Area" : 89, #CFxSize_Dup_1
-    "Alpha_Scale" : 90,
-    "Alpha_Offset" : 91,
-    "Alpha_Test" : 92,
-    "Lighting" : 93,
-    "Fade_Source" : 94,
-    "Fade_Target" : 95,
-    "Depth_Sort" : 96,
-    "Gravity" : 97,
-    "Dampening" : 98,
-    "Scale_Dup_1" : 99,
-    "Opening_Angle_H" : 100,
-    "Opening_Angle_V" : 101,
-    "Velocity" : 102,
-    "Velocity_Variation" : 103,
-    "Lifetime" : 104,
-    "Lifetime_Variation" : 105,
-    "Rate" : 106,
-    "Rate_Variation" : 107,
-    "Mass_Dup_1" : 108,
-    "Mass_Variation" : 109,
-    "Strength" : 110,
-    "Size_SfpEmitter_Particle" : 111, #CFxSize_Dup_2
-    "Size_Variation" : 112,
-    "RampFloat_1_Input" : 113,
-    "RampFloat_2_Input" : 114,
-    "RampVector3_1_Input" : 115,
-    "RampVector3_2_Input" : 116,
-    "RampFloat_1_Output" : 117,
-    "RampFloat_2_Output" : 118,
-    "RampVector3_1_Output" : 119,
-    "RampVector3_2_Output" : 120,
-    "Float_1_Input_Scale" : 121,
-    "Float_2_Input_Scale" : 122,
-    "Vector3_1_Input_Scale" : 123,
-    "Vector3_2_Input_Scale" : 124,
-    "Force_Type" : 125,
-    "Resilience" : 126,
-    "Sphere_Radius" : 127,
-    "Falloff_Radius" : 128,
-    "Color_Dup_1" : 129,
-    "Alpha_Dup_1" : 130,
-    "Emissive" : 131,
-    "Glow_Alpha_Dup_1" : 132,
-    "Rotation_Initial" : 133,
-    "Rotation_Speed_Min" : 134,
-    "Rotation_Speed_Max" : 135,
-    "Distortion_Strength" : 136,
-    "Shape_Propabilities" : 137,
-    "Force_Range" : 138,
-    "Force_Full_Power_Range" : 139,
-    "Force_Power" : 140,
-    "Force_Jitter_Frequency" : 141,
-    "Force_Cross_Jitter_Freq" : 142,
-    "Force_Jitter_Power" : 143,
-    "Force_Cross_Jitter_Power" : 144,
-    "Emitter_Shape" : 145,
-    "Shape_Thickness" : 146,
-    "Shape_Angle_H" : 147,
-    "Shape_Angle_V" : 148,
-    "Pt1_Orientation" : 149,
-    "Distort_Max_Speed" : 150,
-    "Distort_Length" : 151,
-    "Pitch_Max" : 152,
-    "Kill_Radius" : 153,
-    "Particle_Distort_Vec" : 154,
-    "Uniform_Force" : 155,
-    "Rotation_Speed_Dup_1" : 156,
-    "Rotation_Min_Falloff" : 157,
-    "Rotation_Max_Falloff" : 158,
-    "Rotation_Tube_Height" : 159,
-    "Shadow_Pass" : 160,
-    "Emitter_Emitter_Quota" : 161,
-    "Emitter_Emitter_Index" : 162,
-    "Type" : 163,
-    "Effect_Alpha" : 164,
-    "Inherit_Alpha" : 165,
-    "LOD_Bias" : 166,
-    "Group_Collision" : 167,
-    "Offset_Mode" : 168,
-    "Trail_Alignment" : 169,
-    "Start_Width" : 170,
-    "End_Width" : 171,
-    "Start_Fadeout" : 172,
-    "Lifetime_Dup_1" : 173,
-    "Min_Segment_Length" : 174,
-    "Trail_Interpolation" : 175,
-    "RampFloat_1_Input_Dup_1" : 176,
-    "RampFloat_2_Input_Dup_1" : 177,
-    "RampVector3_1_Input_Dup_1" : 178,
-    "RampVector3_2_Input_Dup_1" : 179,
-    "RampFloat_1_Output_Dup_1" : 180,
-    "RampFloat_2_Output_Dup_1" : 181,
-    "RampVector3_1_Output_Dup_1" : 182,
-    "RampVector3_2_Output_Dup_1" : 183,
-    "Distort_Variation" : 184,
-    "Texture_Offset" : 185,
-    "Texture_Zoom" : 186,
-    "InheritVelocity" : 187,
-    "DepthWriteThreshold" : 188,
-    "Torque" : 189
-}
-
-TrackDim = {
-    "TimeElapsed" : 0,
-    "TimeScaled" : 1,
-    "TimeRemaining" : 2,
-    "TimeAbsolute" : 3,
-    "Size" : 4,
-    "Power" : 5,
-    "Random" : 6
-    # default here
-}
-
-TrackMode = {
-    "Loop" : 0,
-    "Bounce" : 1,
-    "Clamp" : 2,
-}
-
-TrackInterpolation = {
-    "Linear" : 0,
-    "Bezier" : 1,
-}
-
-TrackEvaluation = {
-    "Track" : 0,
-    "Ramp" : 1,
-    # maybe we have a third here
-}
-
-InformationIndices = {
-    "AnimatedUnit": {  # AnimatedInteractableObjectNoCollisionWithEffects
-        "CGeoMesh": 1,
-        "CGeoOBBTree": 8,
-        "CDspJointMap": 7,
-        "CSkSkinInfo": 9,
-        "CSkSkeleton": 4,
-        "CDspMeshFile": 5,
-        "CDrwLocatorList": 3,
-        "DrwResourceMeta": 11,
-        "AnimationSet": 10,
-        "AnimationTimings": 6,
-        "EffectSet": 2,
-    },
-    "StaticObjectCollision": {
-        "CGeoMesh": 1,
-        "CGeoOBBTree": 5,
-        "CDspJointMap": 4,
-        "CDspMeshFile": 3,
-        "DrwResourceMeta": 6,
-        "CGeoPrimitiveContainer": 2,
-        "collisionShape": 7,
-    },
-    "StaticObjectNoCollision": {
-        "CGeoMesh": 1,
-        "CGeoOBBTree": 4,
-        "CDspJointMap": 3,
-        "CDspMeshFile": 2,
-        "DrwResourceMeta": 5,
-    },
-    "AnimatedObjectNoCollision": {
-        "CGeoMesh": 1,
-        "CGeoOBBTree": 6,
-        "CDspJointMap": 5,
-        "CSkSkinInfo": 7,
-        "CSkSkeleton": 2,
-        "CDspMeshFile": 3,
-        "DrwResourceMeta": 9,
-        "AnimationSet": 8,
-        "AnimationTimings": 4,
-    },
-    "AnimatedObjectCollision": {
-        "CGeoMesh": 1,
-        "CGeoOBBTree": 7,
-        "CDspJointMap": 6,
-        "CSkSkinInfo": 8,
-        "CSkSkeleton": 3,
-        "CDspMeshFile": 4,
-        "DrwResourceMeta": 10,
-        "AnimationSet": 9,
-        "AnimationTimings": 5,
-        "CGeoPrimitiveContainer": 2,
-        "collisionShape": 11,
-    },
-    "StaticBuildingCollision": {
-        "MeshSetGrid": 1,
-        "CGeoPrimitiveContainer": 2,
-        "collisionShape": 3,
-    },
-    "StaticBuildingNoCollision": {
-        "MeshSetGrid": 1,
-    },
-    "AnimatedBuildingCollisionEffects": {
-        "MeshSetGrid": 1,
-        "AnimationSet": 5,
-        "AnimationTimings": 4,
-        "EffectSet": 2,
-        "CGeoPrimitiveContainer": 3,
-        "collisionShape": 6,
-    },
-    "AnimatedBuildingCollisionNoEffects": {
-        "MeshSetGrid": 1,
-        "AnimationSet": 4,
-        "AnimationTimings": 3,
-        "CGeoPrimitiveContainer": 2,
-        "collisionShape": 5,
-    },
-    "StaticBuildingCollisionMesh": {
-        "CGeoMesh": 1,
-        "CGeoOBBTree": 5,
-        "CDspJointMap": 4,
-        "CDspMeshFile": 3,
-        "DrwResourceMeta": 6,
-        "CGeoPrimitiveContainer": 2,
-        "collisionShape": 7,
-    },
-    "AnimatedBuildingCollisionMesh": {
-        "CGeoMesh": 1,
-        "CGeoOBBTree": 6,
-        "CDspJointMap": 5,
-        "CSkSkinInfo": 7,
-        "CSkSkeleton": 3,
-        "CDspMeshFile": 4,
-        "DrwResourceMeta": 8,
-        "CGeoPrimitiveContainer": 2,
-        "collisionShape": 9,
-    }
-}
-
-WriteOrder = {
-    "AnimatedUnit": [
-        "CDspJointMap",
-        "CSkSkinInfo",
-        "CSkSkeleton",
-        "CDspMeshFile",
-        "CDrwLocatorList",
-        "DrwResourceMeta",
-        "CGeoOBBTree",
-        "CGeoMesh",
-        "AnimationSet",
-        "AnimationTimings",
-        "EffectSet",
-    ],
-    "StaticObjectCollision": [
-        "CDspJointMap",
-        "CDspMeshFile",
-        "DrwResourceMeta",
-        "CGeoPrimitiveContainer",
-        "CGeoOBBTree",
-        "CGeoMesh",
-        "collisionShape",
-    ],
-    "StaticObjectNoCollision": [
-        "CDspJointMap",
-        "CDspMeshFile",
-        "DrwResourceMeta",
-        "CGeoOBBTree",
-        "CGeoMesh",
-    ],
-    "AnimatedObjectNoCollision": [
-        "CDspJointMap",
-        "CSkSkinInfo",
-        "CSkSkeleton",
-        "CDspMeshFile",
-        "DrwResourceMeta",
-        "CGeoOBBTree",
-        "CGeoMesh",
-        "AnimationSet",
-        "AnimationTimings",
-    ],
-    "AnimatedObjectCollision": [
-        "CDspJointMap",
-        "CSkSkinInfo",
-        "CSkSkeleton",
-        "CDspMeshFile",
-        "DrwResourceMeta",
-        "CGeoPrimitiveContainer",
-        "CGeoOBBTree",
-        "CGeoMesh",
-        "AnimationSet",
-        "AnimationTimings",
-        "collisionShape",
-    ],
+BUILDING_NODE_LAYOUTS = {
     "StaticBuildingCollision": [
         "MeshSetGrid",
         "CGeoPrimitiveContainer",
@@ -545,132 +83,16 @@ WriteOrder = {
 }
 
 
-@dataclass(eq=False, repr=False)
-class RootNode:
-    identifier: int = 0
-    unknown: int = 0
-    length: int = field(default=9, init=False)
-    name: str = "root node"
-
-    def read(self, file: BinaryIO) -> "RootNode":
-        self.identifier, self.unknown, self.length = unpack("iii", file.read(12))
-        self.name = file.read(self.length).decode("utf-8").strip("\x00")
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        file.write(
-            pack(
-                f"iii{self.length}s",
-                self.identifier,
-                self.unknown,
-                self.length,
-                self.name.encode("utf-8"),
-            )
-        )
-
-    def size(self) -> int:
-        return calcsize(f"iii{self.length}s")
+def unpack_data(file: BinaryIO, *formats: str):
+    """Unpack a sequence of format strings from the binary file."""
+    return [list(unpack(fmt, file.read(calcsize(fmt)))) for fmt in formats]
 
 
-@dataclass(eq=False, repr=False)
-class Node:
-    info_index: int = 0
-    length: int = field(default=0, init=False)
-    name: str = ""
-    zero: int = 0
-
-    def __post_init__(self):
-        self.length = len(self.name)
-
-    def read(self, file: BinaryIO) -> "Node":
-        self.info_index, self.length = unpack("ii", file.read(8))
-        self.name = (
-            unpack(f"{self.length}s", file.read(calcsize(f"{self.length}s")))[0]
-            .decode("utf-8")
-            .strip("\x00")
-        )
-        self.zero = unpack("i", file.read(4))[0]
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        file.write(pack("i", self.info_index))
-        file.write(pack("i", self.length))
-        file.write(pack(f"{self.length}s", self.name.encode("utf-8")))
-        file.write(pack("i", self.zero))
-
-    def size(self) -> int:
-        return 8 + calcsize(f"{self.length}s") + 4
-
-
-@dataclass(eq=False, repr=False)
-class RootNodeInformation:
-    zeroes: List[int] = field(default_factory=lambda: [0] * 16)
-    neg_one: int = -1
-    one: int = 1
-    node_information_count: int = 0
-    zero: int = 0
-    data_object: None = None  # Placeholder
-    node_size: int = 0
-    node_name = ""
-
-    def read(self, file: BinaryIO) -> "RootNodeInformation":
-        self.zeroes = unpack("16b", file.read(16))
-        self.neg_one, self.one, self.node_information_count, self.zero = unpack(
-            "iiii", file.read(16)
-        )
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        file.write(
-            pack(
-                "16biiii",
-                *self.zeroes,
-                self.neg_one,
-                self.one,
-                self.node_information_count,
-                self.zero,
-            )
-        )
-
-    def size(self) -> int:
-        return 32
-
-    def update_offset(self, _: int) -> None:
-        pass
-
-
-@dataclass(eq=False, repr=False)
-class NodeInformation:
-    """Node Information"""
-
-    magic: int = field(init=False)
-    identifier: int = -1
-    offset: int = -1
-    node_size: int = field(init=False)
-    spacer: List[int] = field(default_factory=lambda: [0] * 16)
-    node_name: str = ""
-
-    def __post_init__(self):
-        self.magic = MagicValues.get(self.node_name) if self.node_name else 0
-
-    def read(self, file: BinaryIO) -> "NodeInformation":
-        self.magic, self.identifier, self.offset, self.node_size = unpack(
-            "iiii", file.read(16)
-        )
-        self.spacer = unpack("16b", file.read(16))
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        file.write(
-            pack("iiii", self.magic, self.identifier, self.offset, self.node_size)
-        )
-        file.write(pack("16b", *self.spacer))
-
-    def update_offset(self, offset: int) -> None:
-        self.offset = offset
-
-    def size(self) -> int:
-        return calcsize("iiii16b")
+WriteOrder = BUILDING_NODE_LAYOUTS
+InformationIndices = {
+    model_type: {name: index + 1 for index, name in enumerate(nodes)}
+    for model_type, nodes in BUILDING_NODE_LAYOUTS.items()
+}
 
 
 @dataclass(eq=False, repr=False)
@@ -759,126 +181,6 @@ class VertexData:
 
 
 @dataclass(eq=False, repr=False)
-class Face:
-    indices: List[int] = field(default_factory=lambda: [0] * 3)
-
-    def read(self, file: BinaryIO) -> "Face":
-        self.indices = list(unpack("3H", file.read(6)))
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        try:
-            file.write(pack("3H", *self.indices))
-        except Exception as e:
-            raise RuntimeError(f"Face write failed for indices {self.indices}: {e}") from e
-
-    def size(self) -> int:
-        return 6
-
-
-@dataclass(repr=False)
-class Vector4:
-    x: float = 0.0
-    y: float = 0.0
-    z: float = 0.0
-    w: float = 0.0
-    xyz: Vector = field(default_factory=lambda: Vector((0, 0, 0)))
-
-    def read(self, file: BinaryIO) -> "Vector4":
-        self.x, self.y, self.z, self.w = unpack("4f", file.read(16))
-        self.xyz = Vector((self.x, self.y, self.z))
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        file.write(pack("4f", self.x, self.y, self.z, self.w))
-
-    def size(self) -> int:
-        return 16
-
-
-@dataclass(repr=False)
-class Vector3:
-    x: float = 0.0
-    y: float = 0.0
-    z: float = 0.0
-    xyz: Vector = field(default_factory=lambda: Vector((0, 0, 0)))
-
-    def __post_init__(self):
-        self.xyz = Vector((self.x, self.y, self.z))
-
-    def read(self, file: BinaryIO) -> "Vector3":
-        self.x, self.y, self.z = unpack("3f", file.read(12))
-        self.xyz = Vector((self.x, self.y, self.z))
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        file.write(pack("3f", self.x, self.y, self.z))
-
-    def size(self) -> int:
-        return 12
-
-
-@dataclass(eq=True, repr=False)
-class Matrix4x4:
-    matrix: tuple = ((0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0))
-
-    def read(self, file: BinaryIO) -> "Matrix4x4":
-        self.matrix = unpack("16f", file.read(64))
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        # We have 4 Tuples of 4 floats
-        for i in range(4):
-            file.write(pack("4f", *self.matrix[i]))
-
-    def size(self) -> int:
-        return 64
-
-
-@dataclass(eq=True, repr=False)
-class Matrix3x3:
-    matrix: tuple = ((0, 0, 0), (0, 0, 0), (0, 0, 0))
-    math_matrix: Matrix = field(
-        default_factory=lambda: Matrix(((0, 0, 0), (0, 0, 0), (0, 0, 0)))
-    )
-
-    def read(self, file: BinaryIO) -> "Matrix3x3":
-        self.matrix = unpack("9f", file.read(36))
-        self.math_matrix = Matrix(
-            (
-                (self.matrix[0], self.matrix[1], self.matrix[2]),
-                (self.matrix[3], self.matrix[4], self.matrix[5]),
-                (self.matrix[6], self.matrix[7], self.matrix[8]),
-            )
-        )
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        file.write(pack("9f", *self.matrix))
-
-    def size(self) -> int:
-        return 36
-
-
-@dataclass(eq=True, repr=False)
-class CMatCoordinateSystem:
-    matrix: Matrix3x3 = field(default_factory=Matrix3x3)
-    position: Vector3 = field(default_factory=Vector3)
-
-    def read(self, file: BinaryIO) -> "CMatCoordinateSystem":
-        self.matrix = Matrix3x3().read(file)
-        self.position = Vector3().read(file)
-        return self
-
-    def write(self, file: BinaryIO) -> None:
-        self.matrix.write(file)
-        self.position.write(file)
-
-    def size(self) -> int:
-        return self.matrix.size() + self.position.size()
-
-
-@dataclass(eq=False, repr=False)
 class CGeoMesh:
     magic: int = 1
     index_count: int = 0
@@ -941,16 +243,16 @@ class MeshData:
         return self
 
     def write(self, file: BinaryIO) -> None:
+        i = -1
         try:
             file.write(pack("ii", self.revision, self.vertex_size))
-        except Exception as e:
-            raise RuntimeError(f"MeshData header write failed [revision={self.revision}, vertex_size={self.vertex_size}]: {e}") from e
-
-        try:
-            for i, vertex in enumerate(self.vertices):
+            for idx, vertex in enumerate(self.vertices):
+                i = idx
                 vertex.write(file, self.revision)
         except Exception as e:
-            raise RuntimeError(f"Vertex write failed at index {i}, revision={self.revision}: {e}") from e
+            raise RuntimeError(
+                f"Vertex write failed at index {i}, revision={self.revision}: {e}"
+            ) from e
 
 
     def size(self) -> int:
@@ -1058,7 +360,6 @@ class BoneWeight:
         self.indices: List[int] = indices
         self.weights: List[float] = weights
 
-
 @dataclass(eq=False, repr=False)
 class CSkSkeleton:
     magic: int = 1558308612
@@ -1067,7 +368,7 @@ class CSkSkeleton:
     bone_matrices: List[BoneMatrix] = field(default_factory=list)
     bone_count: int = 0
     bones: List[Bone] = field(default_factory=list)
-    super_parent: "Matrix4x4" = field(
+    super_parent: Matrix4x4 = field(
         default_factory=lambda: Matrix4x4(
             ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))
         )
@@ -1075,9 +376,7 @@ class CSkSkeleton:
 
     def read(self, file: BinaryIO) -> "CSkSkeleton":
         self.magic, self.version, self.bone_matrix_count = unpack("iii", file.read(12))
-        self.bone_matrices = [
-            BoneMatrix().read(file) for _ in range(self.bone_matrix_count)
-        ]
+        self.bone_matrices = [BoneMatrix().read(file) for _ in range(self.bone_matrix_count)]
         self.bone_count = unpack("i", file.read(4))[0]
         self.bones = [Bone().read(file) for _ in range(self.bone_count)]
         self.super_parent = Matrix4x4().read(file)
@@ -1265,7 +564,6 @@ class Material:
         else:
             file.write(pack("f", self.unknown))
             raise TypeError(f"Unknown Material {self.unknown}")
-        return self
 
     def size(self) -> int:
         return 4 + 4
@@ -1620,23 +918,25 @@ class CDspMeshFile:
     def write(self, file: BinaryIO) -> None:
         try:
             file.write(pack("i", self.magic))
-        except Exception:
-            raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
+        except Exception as exc:
+            raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}") from exc
 
         if self.magic == 1314189598:
             try:
                 file.write(pack("ii", self.zero, self.mesh_count))
-            except Exception:
-                raise TypeError(f"This Mesh has the wrong Mesh Count: {self.mesh_count}")
+            except Exception as exc:
+                raise TypeError(
+                    f"This Mesh has the wrong Mesh Count: {self.mesh_count}"
+                ) from exc
             try:
                 self.bounding_box_lower_left_corner.write(file)
-            except Exception:
-                raise TypeError("Error writing bounding_box_lower_left_corner")
+            except Exception as exc:
+                raise TypeError("Error writing bounding_box_lower_left_corner") from exc
 
             try:
                 self.bounding_box_upper_right_corner.write(file)
-            except Exception:
-                raise TypeError("Error writing bounding_box_upper_right_corner")
+            except Exception as exc:
+                raise TypeError("Error writing bounding_box_upper_right_corner") from exc
 
             for mesh in self.meshes:
                 mesh.write(file)
@@ -1644,8 +944,8 @@ class CDspMeshFile:
             try:
                 for point in self.some_points:
                     point.write(file)
-            except Exception:
-                raise TypeError("Error writing some_points")
+            except Exception as exc:
+                raise TypeError("Error writing some_points") from exc
         else:
             raise TypeError(f"This Mesh has the wrong Magic Value: {self.magic}")
 
@@ -2043,9 +1343,8 @@ class CGeoPrimitiveContainer:
         # Add code here if you need to read specific data for this class
         return self
 
-    def write(self, _: BinaryIO) -> "CGeoPrimitiveContainer":
-        """Writes the CGeoPrimitiveContainer to the buffer"""
-        pass
+    def write(self, _: BinaryIO) -> None:
+        """Writes the CGeoPrimitiveContainer to the buffer (no payload)."""
 
     def size(self) -> int:
         """Returns the size of the CGeoPrimitiveContainer"""
@@ -2255,6 +1554,8 @@ class ModeAnimationKey:
         file.write(pack(f"{self.length}s", self.file.encode("utf-8")))
         file.write(pack("i", self.unknown))
         if self.type == 1:
+            if not isinstance(self.unknown2, list):
+                raise TypeError("ModeAnimationKey.type==1 expects unknown2 as list")
             file.write(pack("24B", *self.unknown2))
         elif self.type <= 5:
             file.write(pack("i", self.unknown2))
@@ -2429,11 +1730,10 @@ class AnimationSet:
     length: int = 11
     magic: str = "Battleforge"
     version: int = 6
-    default_run_speed: float = 4.8  # TODO: Add a way to show/edit this value in Blender
-    # TODO: Add a way to show/edit this value in Blender
+    default_run_speed: float = 4.8  # Default values observed in source files
     default_walk_speed: float = 2.3
     revision: int = 0  # 0 For Animated Objects
-    # TODO find out how often these values are used and for which object/unit/building types
+    # Mode change metadata is currently informational only
     mode_change_type: int = 0
     hovering_ground: int = 0
     fly_bank_scale: float = 1  # Changes for flying units
@@ -2949,7 +2249,7 @@ class SoundHeader2:
     min_falloff: float = 1.0
     max_falloff: float = 1.0
     
-    def read(self, file: BinaryIO) -> "SoundHeader":
+    def read(self, file: BinaryIO) -> "SoundHeader2":
         self.is_one = unpack("h", file.read(2))[0]
         (
             self.volume,
@@ -3123,25 +2423,6 @@ class EffectSet:
             for additional_sound in self.additional_sounds:
                 base += additional_sound.size()
         return base
-
-@dataclass(eq=False, repr=False)
-class BaseContainer:
-    """Base class for DRS, BMG, FXB file formats sharing common packaging structure"""
-    operator: object = None
-    context: object = None
-    keywords: object = None
-    magic: int = -981667554
-    number_of_models: int = 1
-    node_information_offset: int = 20
-    node_hierarchy_offset: int = 20
-    data_offset: int = 20  # 20 = Default Data Offset
-    node_count: int = 1
-    nodes: List[Node] = field(default_factory=lambda: [RootNode()])
-    node_informations: List[Union[NodeInformation, RootNodeInformation]] = field(
-        default_factory=lambda: [RootNodeInformation()]
-    )
-    model_type: str = None
-
 
 @dataclass(eq=False, repr=False)
 class DRS(BaseContainer):
@@ -3372,65 +2653,5 @@ class DRS(BaseContainer):
             raise ExportError(f"DRS.save failed: {e}") from e
         finally:
             writer.close()
-
-
-@dataclass(eq=False, repr=False)
-class BMS(BaseContainer):
-    """BMS (Building Module Set) file format for construction pieces"""
-    node_information_offset: int = -1
-    node_hierarchy_offset: int = -1
-    root_node: RootNode = RootNode()
-    state_based_mesh_set_node: NodeInformation = None
-    state_based_mesh_set: StateBasedMeshSet = None
-    animation_set: AnimationSet = None  # Fake Object
-
-    def read(self, file_name: str) -> "BMS":
-        reader = FileReader(file_name)
-        (
-            self.magic,
-            self.number_of_models,
-            self.node_information_offset,
-            self.node_hierarchy_offset,
-            self.node_count,
-        ) = unpack("iiiii", reader.read(20))
-
-        if self.magic != -981667554 or self.node_count < 1:
-            raise TypeError(
-                f"This is not a valid file. Magic: {self.magic}, NodeCount: {self.node_count}"
-            )
-
-        reader.seek(self.node_information_offset)
-        self.node_informations[0] = RootNodeInformation().read(reader)
-
-        node_information_map = {
-            120902304: "state_based_mesh_set_node",
-        }
-
-        for _ in range(self.node_count - 1):
-            node_info = NodeInformation().read(reader)
-            setattr(self, node_information_map.get(node_info.magic, ""), node_info)
-
-        reader.seek(self.node_hierarchy_offset)
-        self.nodes[0] = RootNode().read(reader)
-
-        reader.seek(self.node_hierarchy_offset)
-        node_map = {
-            "StateBasedMeshSet": "state_based_mesh_set_node",
-        }
-
-        for _ in range(self.node_count - 1):
-            node = Node().read(reader)
-            setattr(self, node_map.get(node.name, ""), node)
-
-        for key, value in node_map.items():
-            # remove _node from the value
-            node_info: NodeInformation = getattr(self, value, None)
-            index = value.replace("_node", "")
-            if node_info is not None:
-                reader.seek(node_info.offset)
-                setattr(self, index, globals()[key]().read(reader))
-
-        reader.close()
-        return self
 
 _auto_wrap_all_write_methods(globals())

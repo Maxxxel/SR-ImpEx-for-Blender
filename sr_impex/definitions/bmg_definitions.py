@@ -8,12 +8,23 @@ which define building layouts with modular grids and state-based meshes.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
-from typing import List, Union, BinaryIO
+from typing import BinaryIO, List, cast
+
 from sr_impex.core.file_io import FileReader
+from sr_impex.definitions.base_types import (
+    BaseContainer,
+    Node,
+    NodeInformation,
+    RootNode,
+    RootNodeInformation,
+)
 from sr_impex.definitions.drs_definitions import (
-    BaseContainer, Node, RootNode, NodeInformation, RootNodeInformation,
-    AnimationSet, AnimationTimings, CGeoPrimitiveContainer,
-    CollisionShape, EffectSet, CDrwLocatorList
+    AnimationSet,
+    AnimationTimings,
+    CDrwLocatorList,
+    CGeoPrimitiveContainer,
+    CollisionShape,
+    EffectSet,
 )
 
 
@@ -60,7 +71,7 @@ class SMeshState:
             file.write(self.uk_file.encode("utf-8"))
             file.write(pack("i", self.drs_file_length))
             file.write(self.drs_file.encode("utf-8"))
-    
+
     def size(self) -> int:
         size = 6
         if self.has_files:
@@ -88,12 +99,12 @@ class DestructionState:
             .strip("\x00")
         )
         return self
-    
+
     def write(self, file: BinaryIO):
         file.write(pack("i", self.state_num))
         file.write(pack("i", self.file_name_length))
         file.write(self.file_name.encode("utf-8"))
-    
+
     def size(self) -> int:
         return 8 + self.file_name_length
 
@@ -131,7 +142,7 @@ class StateBasedMeshSet:
         file.write(pack("i", self.num_destruction_states))
         for destruction_state in self.destruction_states:
             destruction_state.write(file)
-    
+
     def size(self) -> int:
         size = 6 + 4
         for mesh_state in self.mesh_states:
@@ -162,7 +173,7 @@ class MeshGridModule:
         file.write(pack("B", self.has_mesh_set))
         if self.has_mesh_set:
             self.state_based_mesh_set.write(file)
-    
+
     def size(self) -> int:
         size = 3
         if self.has_mesh_set:
@@ -270,7 +281,7 @@ class MeshSetGrid:
         for module in self.mesh_modules:
             module.write(file)
         self.cdrw_locator_list.write(file)
-    
+
     def size(self) -> int:
         size = (
             2 + 1 + 1 + 4 + self.name_length + 4 + self.uuid_length +
@@ -359,11 +370,12 @@ class BMG(BaseContainer):
             else:
                 raise TypeError(f"Unknown Node: {node.name}")
 
-        for node in self.nodes:
-            if not hasattr(node, "info_index"):
+        for node in self.nodes[1:]:  # skip root node, it has no info_index
+            if not isinstance(node, Node):
                 continue
+            node = cast(Node, node)
 
-            node_info = self.node_informations[node.info_index]
+            node_info = self.node_informations[node.info_index]  # type: ignore[attr-defined]
             if node_info is None:
                 raise TypeError(f"Node {node.name} not found")
 
@@ -371,7 +383,7 @@ class BMG(BaseContainer):
             node_name = node_map.get(node.name, None).replace("_node", "")
             if node_map is None:
                 raise TypeError(f"Node {node.name} not found in node_map")
-            
+
             val = node.name
             if val == "collisionShape":
                 val = "CollisionShape"

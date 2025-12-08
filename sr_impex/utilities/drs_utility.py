@@ -71,15 +71,14 @@ from sr_impex.definitions.drs_definitions import (
     VertexData,
     AnimationSetVariant,
     CGeoSphere,
-    Matrix3x3,
     CDrwLocatorList,
     AnimationMarkerSet,
     AnimationMarker,
     EffectSet,
-    LocatorClass,
     IKAtlas,
     Constraint
 )
+from sr_impex.definitions.base_types import Matrix3x3
 from sr_impex.definitions.bmg_definitions import BMS, BMG, StateBasedMeshSet
 from sr_impex.blender.drs_material import DRSMaterial
 from sr_impex.definitions.ska_definitions import SKA

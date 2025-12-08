@@ -18,7 +18,6 @@ from bpy.props import (
     CollectionProperty,
     PointerProperty,
     EnumProperty,
-    BoolProperty,
 )
 from mathutils import Matrix, Vector
 
@@ -28,10 +27,11 @@ from sr_impex.definitions.drs_definitions import (
     CDrwLocatorList,
     SLocator,
     CMatCoordinateSystem,
-    Matrix3x3,
     Vector3,
     LocatorClass,
 )
+
+from sr_impex.definitions.base_types import Matrix3x3
 
 # ---- Constants ---------------------------------------------------------------
 

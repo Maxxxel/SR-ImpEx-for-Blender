@@ -28,7 +28,7 @@ from bpy.props import (
 # Abilities / actions
 # ---------------------------------------------------------------------------
 
-from sr_impex.abilities import (
+from sr_impex.definitions.abilities import (
     must_have_abilities,
     situational_abilities,
     additional_abilities,

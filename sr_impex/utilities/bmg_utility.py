@@ -8,7 +8,7 @@ BMG files define building layouts with modular grids and state-based meshes.
 import os
 import json
 import time
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, Dict, Optional
 from mathutils import Matrix
 import bpy
 
@@ -215,7 +215,7 @@ def import_mesh_set_grid(
 ) -> Tuple[bpy.types.Object, Optional[list], Dict[int, str]]:
     """
     Import a MeshSetGrid using the new hierarchical collection structure.
-    
+
     Creates a cleaner hierarchy:
         MeshSetGrid_0
         ├── MeshSet_0
@@ -226,7 +226,7 @@ def import_mesh_set_grid(
         │   └── Active_State (marker)
         └── MeshSet_1
             └── ...
-    
+
     Returns:
         Tuple of (armature_object, bone_list, module_mesh_map)
     """
@@ -236,7 +236,7 @@ def import_mesh_set_grid(
     )
     source_collection.children.link(mesh_set_grid_collection)
     bone_list = None
-    
+
     # Track mesh objects per module index for grid mapping
     module_mesh_map = {}
     module_index = 0
@@ -255,9 +255,9 @@ def import_mesh_set_grid(
                                 source_collection, drs_file
                             )
                             break
-            
+
             # Create structured MeshSet with all states organized hierarchically
-            meshset_col, active_marker = create_meshset_structure(
+            meshset_col, _ = create_meshset_structure(
                 parent_collection=mesh_set_grid_collection,
                 meshset_index=module_index,
                 mesh_states=module.state_based_mesh_set.mesh_states,
@@ -268,14 +268,14 @@ def import_mesh_set_grid(
                 import_collision_shape=import_collision_shape,
                 import_s0_collision_shapes=import_s0_collision_shapes,
             )
-            
+
             # Store reference to first mesh object for grid mapping
             states_col = None
             for child in meshset_col.children:
                 if child.name.startswith("States_Collection"):
                     states_col = child
                     break
-            
+
             if states_col:
                 # Get first mesh from S0 state
                 s0_col = None
@@ -283,19 +283,19 @@ def import_mesh_set_grid(
                     if child.name.startswith("S0_Undamaged"):
                         s0_col = child
                         break
-                
+
                 if s0_col:
                     meshes_col = None
                     for child in s0_col.children:
                         if child.name.startswith("Meshes_Collection"):
                             meshes_col = child
                             break
-                    
+
                     if meshes_col and len(meshes_col.objects) > 0:
                         first_mesh = meshes_col.objects[0]
                         module_mesh_map[module_index] = first_mesh.name
                         first_mesh["grid_cell_index"] = module_index
-            
+
             # Handle IK atlas if needed
             if import_ik_atlas and armature_object is not None and bone_list is not None:
                 for mesh_state in module.state_based_mesh_set.mesh_states:
@@ -310,7 +310,7 @@ def import_mesh_set_grid(
                                 armature_object, drs_file.animation_set, bone_list
                             )
                             break  # Only need to do this once per module
-        
+
         # Increment module index for each module (even if no mesh)
         module_index += 1
 
@@ -337,7 +337,7 @@ def load_bmg(
 ):
     """
     Load a BMG (Building Mesh Grid) file into Blender.
-    
+
     BMG files contain building layouts with modular grids and state-based meshes.
     Each grid cell can contain different mesh states (undamaged, damaged, destroyed)
     and debris physics objects.
@@ -451,7 +451,7 @@ def load_bmg(
             import_s0_collision_shapes,
             import_ik_atlas,
         )
-        
+
         # Update blob with mesh object names
         if module_mesh_map:
             blob_data = source_collection.get(MESHGRID_BLOB_KEY)
