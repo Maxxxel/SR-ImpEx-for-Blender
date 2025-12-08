@@ -28,71 +28,18 @@ from sr_impex.definitions.base_types import (
 from sr_impex.definitions.enums import (
     AnimationType,
     LocatorClass,
+    WriteOrder,
+    InformationIndices
 )
 
 if TYPE_CHECKING:
     from sr_impex.definitions.fxb_definitions import FxMaster
 
 
-BUILDING_NODE_LAYOUTS = {
-    "StaticBuildingCollision": [
-        "MeshSetGrid",
-        "CGeoPrimitiveContainer",
-        "collisionShape",
-    ],
-    "StaticBuildingNoCollision": [
-        "MeshSetGrid",
-    ],
-    "AnimatedBuildingCollisionEffects": [
-        "MeshSetGrid",
-        "AnimationSet",
-        "AnimationTimings",
-        "EffectSet",
-        "CGeoPrimitiveContainer",
-        "collisionShape",
-    ],
-    "AnimatedBuildingCollisionNoEffects": [
-        "MeshSetGrid",
-        "AnimationSet",
-        "AnimationTimings",
-        "CGeoPrimitiveContainer",
-        "collisionShape",
-    ],
-    "StaticBuildingCollisionMesh": [
-        "CDspJointMap",
-        "CDspMeshFile",
-        # maybe LocatorList?
-        "DrwResourceMeta",
-        "CGeoPrimitiveContainer",
-        "CGeoOBBTree",
-        "CGeoMesh",
-        "collisionShape",
-    ],
-    "AnimatedBuildingCollisionMesh": [
-        "CDspJointMap",
-        "CSkSkinInfo",
-        "CSkSkeleton",
-        "CDspMeshFile",
-        # maybe LocatorList?
-        "DrwResourceMeta",
-        "CGeoPrimitiveContainer",
-        "CGeoOBBTree",
-        "CGeoMesh",
-        "collisionShape",
-    ],
-}
-
 
 def unpack_data(file: BinaryIO, *formats: str):
     """Unpack a sequence of format strings from the binary file."""
     return [list(unpack(fmt, file.read(calcsize(fmt)))) for fmt in formats]
-
-
-WriteOrder = BUILDING_NODE_LAYOUTS
-InformationIndices = {
-    model_type: {name: index + 1 for index, name in enumerate(nodes)}
-    for model_type, nodes in BUILDING_NODE_LAYOUTS.items()
-}
 
 
 @dataclass(eq=False, repr=False)

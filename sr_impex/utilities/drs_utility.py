@@ -76,7 +76,10 @@ from sr_impex.definitions.drs_definitions import (
     AnimationMarker,
     EffectSet,
     IKAtlas,
-    Constraint
+    Constraint,
+    AnimationTiming,
+    TimingVariant,
+    Timing,
 )
 from sr_impex.definitions.base_types import Matrix3x3
 from sr_impex.definitions.bmg_definitions import BMS, BMG, StateBasedMeshSet
@@ -92,14 +95,13 @@ from sr_impex.blender.bmesh_utils import new_bmesh_from_object, edit_bmesh_from_
 from sr_impex.blender.animation_utils import import_ska_animation
 from sr_impex.core.message_logger import MessageLogger
 from sr_impex.blender.editors.locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
-from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
+from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY, _resolve_action_name as _editor_resolve
 from sr_impex.blender.editors.effect_set_editor import (
     effectset_to_blob as _effectset_to_blob,
     blob_to_effectset as _blob_to_effectset,
     EFFECT_BLOB_KEY,
 )
 from sr_impex.blender.editors.material_flow_editor import _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
-
 
 try:
     # when installed as a Blender add-on package
@@ -410,13 +412,6 @@ def animtimings_to_blob(anim_timings) -> list[dict]:
 
 
 def blob_to_animationtimings(blob) -> "AnimationTimings":
-    from .definitions.drs_definitions import (
-        AnimationTimings,
-        AnimationTiming,
-        TimingVariant,
-        Timing,
-    )  # reuse your defs
-
     at_root = AnimationTimings()
     at_root.version = 4
     at_root.animation_timings = []
@@ -532,7 +527,7 @@ def update_armature_references(
                     # Update the modifier's armature reference to the copied armature
                     modifier.object = dupe_lut[modifier.object]
 
-
+@profile
 def copy(
     parent: bpy.types.Collection, collection: bpy.types.Collection, linked: bool = False
 ) -> bpy.types.Collection:
@@ -562,14 +557,14 @@ def copy(
 
     return new_coll
 
-
+@profile
 def triangulate(meshes_collection: bpy.types.Collection) -> None:
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
             with new_bmesh_from_object(obj) as bm:
                 tri(bm, faces=bm.faces[:])  # pylint: disable=E1111, E1120
 
-
+@profile
 def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
     """Check if the Models are valid for the game. This includes the following checks:
     - Check if the Meshes have more than 32767 Vertices"""
@@ -599,7 +594,7 @@ def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
 
     return True
 
-
+@profile
 def split_meshes_by_uv_islands(meshes_collection: bpy.types.Collection) -> None:
     """Split the Meshes by UV Islands."""
     for obj in meshes_collection.objects:
@@ -623,7 +618,7 @@ def split_meshes_by_uv_islands(meshes_collection: bpy.types.Collection) -> None:
                     for e in old_seams:
                         e.seam = True
 
-
+@profile
 def set_origin_to_world_origin(meshes_collection: bpy.types.Collection) -> None:
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
@@ -1825,7 +1820,7 @@ def _make_unique_export_basename(base: str, used: set[str]) -> str:
     used.add(cand.lower())
     return cand
 
-
+@profile
 def _build_ska_export_name_map(
     current_collection: bpy.types.Collection,
     export_prefix: str | None,
@@ -1945,7 +1940,6 @@ def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str)
 
     # fall back to the editor's robust resolver
     try:
-        from .blender.editors.animation_set_editor import _resolve_action_name as _editor_resolve
         cand = _editor_resolve(s)
         if cand != "NONE" and cand in bpy.data.actions:
             return cand
@@ -2006,75 +2000,6 @@ def _first_image_upstream(socket: bpy.types.NodeSocket, max_depth: int = 16, key
                 continue
             stack.append(in_s)
     return None
-
-
-# DEBUG CODE for OBBTree visualization (keep it)
-# class DRS_OT_debug_obb_tree(bpy.types.Operator):
-#     """Calculates and visualizes an OBBTree for the selected collection's meshes."""
-
-#     bl_idname = "drs.debug_obb_tree"
-#     bl_label = "Debug OBBTree"
-#     bl_description = "Calculates a new OBBTree from the meshes in the active collection and visualizes it"
-
-#     def execute(self, context):
-#         start_time = time.time()
-#         # 1. Check if a valid collection is selected
-#         active_layer_coll = context.view_layer.active_layer_collection
-#         if active_layer_coll is None or active_layer_coll == context.scene.collection:
-#             logger.log(
-#                 "Please select a specific model collection in the Outliner.",
-#                 "Error",
-#                 "ERROR",
-#             )
-#             logger.display()
-#             return {"CANCELLED"}
-
-#         source_collection = active_layer_coll.collection
-
-#         # 2. Verify collection name and find the Meshes_Collection
-#         if not source_collection.name.startswith("DRSModel_"):
-#             logger.log(
-#                 f"Selected collection '{source_collection.name}' is not a valid DRSModel collection.",
-#                 "Error",
-#                 "ERROR",
-#             )
-#             logger.display()
-#             return {"CANCELLED"}
-
-#         meshes_collection = get_collection(source_collection, "Meshes_Collection")
-#         if not meshes_collection:
-#             logger.log(
-#                 f"Could not find a 'Meshes_Collection' within '{source_collection.name}'.",
-#                 "Error",
-#                 "ERROR",
-#             )
-#             logger.display()
-#             return {"CANCELLED"}
-
-#         # 3. Gather mesh objects ONLY from that specific collection
-#         mesh_objects = [obj for obj in meshes_collection.objects if obj.type == "MESH"]
-#         if not mesh_objects:
-#             logger.log(
-#                 "No mesh objects found in 'Meshes_Collection'.", "Error", "ERROR"
-#             )
-#             logger.display()
-#             return {"CANCELLED"}
-
-#         # Create the unified Mesh
-#         unified_mesh = create_unified_mesh(meshes_collection)
-
-#         cgeo_obb_tree = create_cgeo_obb_tree(unified_mesh)
-
-#         end_time = time.time()
-#         elapsed_time = end_time - start_time
-#         logger.log(
-#             f"OBBTree calculation and visualization completed in {elapsed_time:.2f} seconds.",
-#             "Info",
-#             "INFO",
-#         )
-#         logger.display()
-
-#         return {"FINISHED"}
 
 
 # endregion
@@ -2843,7 +2768,10 @@ def import_cgeo_mesh(cgeo_mesh: CGeoMesh, collection: bpy.types.Collection) -> N
 
 
 def import_obb_tree(
-    obb_tree: CGeoOBBTree, collection: bpy.types.Collection, limit_depth: int
+    obb_tree: CGeoOBBTree,
+    collection: bpy.types.Collection,
+    limit_depth: int,
+    view_depth: int | None = None,
 ) -> None:
     """
     Creates a true hierarchical representation of the OBB tree in Blender
@@ -2890,7 +2818,7 @@ def import_obb_tree(
         if blender_collections[node_index] is not None:
             return blender_collections[node_index]
 
-        node_data = obb_tree.obb_nodes[node_index]
+        node_data: OBBNode = obb_tree.obb_nodes[node_index]
 
         if node_data.node_depth > limit_depth:
             return None
@@ -2911,6 +2839,9 @@ def import_obb_tree(
             node_data.oriented_bounding_box
         )
         cube_obj.matrix_world = transform_matrix
+        if view_depth is not None and node_data.node_depth != view_depth:
+            cube_obj.hide_viewport = True
+            cube_obj.hide_render = True
 
         # --- Use a cached material for visualization ---
         mat = material_cache.get(node_data.node_depth)
@@ -3681,7 +3612,7 @@ def load_bmg(
 
 # region Export Blender Model to DRS
 
-
+@profile
 def verify_collections(
     source_collection: bpy.types.Collection, model_type: str
 ) -> bool:
@@ -3791,7 +3722,7 @@ def verify_collections(
 
     return True
 
-
+@profile
 def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Mesh:
     """Create a unified Mesh from a Collection of Meshes."""
 
@@ -3824,7 +3755,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
 
     return unified
 
-
+@profile
 def create_cgeo_mesh(unique_mesh: bpy.types.Mesh) -> CGeoMesh:
     """Create a CGeoMesh from a Blender Mesh Object."""
     _cgeo_mesh = CGeoMesh()
@@ -3845,7 +3776,7 @@ def create_cgeo_mesh(unique_mesh: bpy.types.Mesh) -> CGeoMesh:
 
     return _cgeo_mesh
 
-
+@profile
 def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
     unified_mesh.calc_loop_triangles()
     vcount = len(unified_mesh.vertices)
@@ -4079,7 +4010,7 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
     tree.faces = out_faces
     return tree
 
-
+@profile
 def create_cdsp_joint_map(
     add_skin_mesh: bool,
     mesh_bone_data: List[Dict[str, int]],
@@ -4693,7 +4624,7 @@ def create_mesh(
 
     return new_mesh, per_mesh_bone_data
 
-
+@profile
 def create_cdsp_mesh_file(
     meshes_collection: bpy.types.Collection,
     model_name: str,
@@ -4942,7 +4873,7 @@ def create_cylinder_shape(cylinder: bpy.types.Object) -> CylinderShape:
 
     return _cylinder_shape
 
-
+@profile
 def create_collision_shape(meshes_collection: bpy.types.Collection) -> CollisionShape:
     """Create a Collision Shape from a Collection of Collision Shapes."""
     _collision_shape = CollisionShape()
@@ -4972,7 +4903,7 @@ def create_collision_shape(meshes_collection: bpy.types.Collection) -> Collision
                         )
     return _collision_shape
 
-
+@profile
 def create_skin_info(
     unified_mesh: bpy.types.Mesh,
     meshes_collection: bpy.types.Collection,
@@ -5204,7 +5135,7 @@ def create_skeleton(
 
     return csk_skeleton
 
-
+@profile
 def create_animation_set(model_name: str, armature_object: bpy.types.Object, bone_map, source_collection_for_blob: bpy.types.Collection | None = None,) -> AnimationSet:
     """
     Build an AnimationSet for export from the AnimationSetJSON blob.
@@ -5468,7 +5399,7 @@ def create_animation_set(model_name: str, armature_object: bpy.types.Object, bon
 
     return anim
 
-
+@profile
 def create_animation_timings() -> Optional[AnimationTimings]:
     """
     Build AnimationTimings for export from the AnimationSetJSON blob.
@@ -5516,7 +5447,7 @@ def create_animation_timings() -> Optional[AnimationTimings]:
     # Use the existing helper to map blob -> AnimationTimings
     return blob_to_animationtimings({"timings": timings_list})
 
-
+@profile
 def create_bone_map(
     armature_object: bpy.types.Object,
 ) -> Dict[str, Dict[str, Optional[int]]]:
@@ -5550,7 +5481,7 @@ def create_bone_map(
     traverse_bone(root_bone, -1)
     return bone_map
 
-
+@profile
 def update_mesh_file_root_reference(
     cdsp_mesh_file: CDspMeshFile, mesh_bone_data: List[Dict[str, int]]
 ) -> CDspMeshFile:
@@ -5575,7 +5506,7 @@ def update_mesh_file_root_reference(
                 vertex.bone_indices[3] = per_mesh_bone_data["root_ref"]
     return cdsp_mesh_file
 
-
+@profile
 def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLocatorList:
     def _empty(version: int = 5) -> CDrwLocatorList:
         return CDrwLocatorList(magic=0, version=int(version or 5), length=0, slocators=[])
@@ -5602,7 +5533,7 @@ def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLoc
     )
     return _empty()
 
-
+@profile
 def create_effect_set(file_name: str, source_collection_copy: bpy.types.Collection) -> EffectSet:
     """
     Create EffectSet for export:
@@ -5656,7 +5587,7 @@ def _ska_names_from_blob(col: bpy.types.Collection) -> list[str]:
             out.append(n)
     return out
 
-
+@profile
 def export_ska_actions_all(
     folder_path: str,
     current_collection: bpy.types.Collection,

@@ -7,11 +7,16 @@ import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 from sr_impex.core.profiler import print_profiling_report
+from .blender.editors.obb_debug import (
+    DRS_OT_debug_obb_tree,
+    DRS_PT_debug_tools,
+    register_obb_debug_properties,
+    unregister_obb_debug_properties,
+)
 from .utilities.drs_utility import (
     load_drs,
     save_drs,
     create_new_bf_scene,
-    # DRS_OT_debug_obb_tree,
 )
 from .utilities.bmg_utility import load_bmg
 from .utilities.ska_utility import export_ska, get_actions
@@ -457,6 +462,8 @@ class ExportBFModel(bpy.types.Operator, ExportHelper):
             self.report({"INFO"}, "Export erfolgreich.")
         else:
             self.report({"ERROR"}, "Export fehlgeschlagen. Details im Popup.")
+            
+        print_profiling_report()
 
         # Purge unused data blocks
         bpy.ops.outliner.orphans_purge(do_recursive=True)
@@ -671,7 +678,9 @@ def register():
     bpy.utils.register_class(ShowMessagesOperator)
     _attach_menus_idempotent()
     bpy.utils.register_class(MyAddonPreferences)
-    # bpy.utils.register_class(DRS_OT_debug_obb_tree)
+    bpy.utils.register_class(DRS_OT_debug_obb_tree)
+    bpy.utils.register_class(DRS_PT_debug_tools)
+    register_obb_debug_properties()
     locator_editor.register()
     material_flow_editor.register()
     animation_set_editor.register()
@@ -688,7 +697,9 @@ def unregister():
     bpy.utils.unregister_class(ShowMessagesOperator)
     _detach_menus_safely()
     bpy.utils.unregister_class(MyAddonPreferences)
-    # bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
+    bpy.utils.unregister_class(DRS_PT_debug_tools)
+    bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
+    unregister_obb_debug_properties()
     locator_editor.unregister()
     material_flow_editor.unregister()
     animation_set_editor.unregister()
