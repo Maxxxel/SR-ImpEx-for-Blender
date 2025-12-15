@@ -23,6 +23,7 @@ from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
 from sr_impex.blender.editors.effect_set_editor import (
     EFFECT_BLOB_KEY,
 )
+from sr_impex.blender.editors.bmg_state_editor import MESHGRID_BLOB_KEY
 from sr_impex.utilities.helpers import verify_collections, abort, copy, build_ska_export_name_map
 
 # Import required functions from drs_utility

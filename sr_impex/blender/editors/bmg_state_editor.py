@@ -8,9 +8,104 @@ Allows switching between undamaged, damaged, and destruction states.
 import bpy
 from bpy.types import Operator, Panel
 from bpy.props import BoolProperty, EnumProperty
-from sr_impex.utilities.drs_utility import switch_meshset_state
 
 MESHGRID_BLOB_KEY = "sr_impex_meshgrid_blob"
+
+def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state: str):
+    """
+    Switch which state is visible/active for editing in a MeshSet.
+
+    Args:
+        meshset_collection: The MeshSet_N collection
+        target_state: One of 'S0', 'S2', 'S2_with_debris', 'S3_destroyed', 'all_states'
+    """
+    def show_collection_recursive(col):
+        """Recursively show a collection and all its children"""
+        col.hide_viewport = False
+        col.hide_render = False
+        for child in col.children:
+            show_collection_recursive(child)
+
+    # Find States_Collection (may have suffix like .001 if renamed by Blender)
+    states_col = None
+    for child in meshset_collection.children:
+        if child.name.startswith("States_Collection"):
+            states_col = child
+            break
+
+    if not states_col:
+        print(f"[BMG State] No States_Collection found in {meshset_collection.name}")
+        return
+
+    print(f"[BMG State] Switching {meshset_collection.name} to {target_state}")
+    print(f"[BMG State] States_Collection children: {[c.name for c in states_col.children]}")
+
+    # First, make States_Collection itself visible (parent must be visible)
+    states_col.hide_viewport = False
+
+    # Hide all child states first
+    for col in states_col.children_recursive:
+        col.hide_viewport = True
+        col.hide_render = True
+
+    # Show requested state(s)
+    if target_state == "S0":
+        for child in states_col.children:
+            if child.name.startswith("S0_Undamaged"):
+                show_collection_recursive(child)
+                break
+
+    elif target_state == "S2":
+        for child in states_col.children:
+            if child.name.startswith("S2_Damaged"):
+                show_collection_recursive(child)
+                break
+
+    elif target_state == "S2_with_debris":
+        # Show S2 damaged state
+        for child in states_col.children:
+            if child.name.startswith("S2_Damaged"):
+                print(f"[BMG State] Showing S2_Damaged: {child.name}")
+                show_collection_recursive(child)
+                break
+        # Show S2 debris
+        for child in states_col.children:
+            if child.name.startswith("Debris_Collection"):
+                print(f"[BMG State] Found Debris_Collection: {child.name}")
+                print(f"[BMG State] Debris children: {[c.name for c in child.children]}")
+                child.hide_viewport = False  # Make Debris_Collection itself visible
+                child.hide_render = False
+                for debris_col in child.children:
+                    if debris_col.name.startswith("S2_Debris"):
+                        print(f"[BMG State] Showing S2_Debris: {debris_col.name}")
+                        show_collection_recursive(debris_col)
+                        print(f"[BMG State] S2_Debris visibility: viewport={not debris_col.hide_viewport}, render={not debris_col.hide_render}")
+                        break
+                break
+
+    elif target_state == "S3_destroyed":
+        for child in states_col.children:
+            if child.name.startswith("Debris_Collection"):
+                print(f"[BMG State] Found Debris_Collection for S3: {child.name}")
+                child.hide_viewport = False  # Make Debris_Collection itself visible
+                child.hide_render = False
+                for debris_col in child.children:
+                    print(f"[BMG State] Showing debris: {debris_col.name}")
+                    show_collection_recursive(debris_col)
+                    print(f"[BMG State] Debris visibility after show: viewport={not debris_col.hide_viewport}, render={not debris_col.hide_render}")
+                break
+
+    elif target_state == "all_states":
+        # Show everything for editing
+        states_col.hide_viewport = False
+        for col in states_col.children_recursive:
+            col.hide_viewport = False
+
+    # Update active marker
+    for obj in meshset_collection.objects:
+        if obj.type == 'EMPTY' and "active_state" in obj:
+            obj["active_state"] = target_state
+
 
 def _iter_bmg_models():
     """Yield DRSModel collections that contain MeshSetGrid children."""
