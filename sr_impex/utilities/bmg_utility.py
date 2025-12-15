@@ -12,11 +12,18 @@ from typing import Tuple, Dict, Optional
 from mathutils import Matrix
 import bpy
 
-from sr_impex.core.profiler import profile
 from sr_impex.core.message_logger import MessageLogger
-from sr_impex.definitions.bmg_definitions import BMG, StateBasedMeshSet, BMS
+from sr_impex.definitions.bmg_definitions import BMG, MeshGridModule, MeshSetGrid, StateBasedMeshSet, BMS
 from sr_impex.definitions.drs_definitions import DRS, SLocator
 from sr_impex.definitions.ska_definitions import SKA
+from sr_impex.definitions.base_types import ExportError
+from sr_impex.definitions.enums import InformationIndices
+# from sr_impex.blender.editors.locator_editor import BLOB_KEY, UID_KEY
+from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
+from sr_impex.blender.editors.effect_set_editor import (
+    EFFECT_BLOB_KEY,
+)
+from sr_impex.utilities.helpers import verify_collections, abort, copy, build_ska_export_name_map
 
 # Import required functions from drs_utility
 # These are shared between DRS and BMG import/export
@@ -37,10 +44,12 @@ from sr_impex.utilities.drs_utility import (
     create_collision_shape_box_object,
     create_collision_shape_sphere_object,
     create_collision_shape_cylinder_object,
-    MESHGRID_BLOB_KEY,
 )
 
+
 logger = MessageLogger()
+
+# region Import BMG
 
 
 def persist_meshgrid_blob_on_collection(
@@ -317,7 +326,6 @@ def import_mesh_set_grid(
     return armature_object, bone_list, module_mesh_map
 
 
-@profile
 def load_bmg(
     context: bpy.types.Context,
     filepath="",
@@ -589,3 +597,167 @@ def load_bmg(
     logger.display()
 
     return {"FINISHED"}
+
+
+# endregion
+
+# region Export Blender Model to BMG 
+
+
+def create_mesh_set_grid():
+    _mesh_set_grid = MeshSetGrid()
+    # TODO: Calculate grid_width and grid_height based on model boundaries
+    # TODO: Check if UUID needs to be generated
+    # TODO: Check if we have a ground_decal in blender to use here
+    # TODO: Check how effect_gen_debris is used and make it an export option (only nature and fire)
+    # TODO: Create the total Cells based on the Mesh Size, and fill the cell(s) with the geiven mesh(es). Check if we need multi-cell setups anyway.
+    _total_cells = (_mesh_set_grid.grid_width * 2 + 1) * (_mesh_set_grid.grid_height * 2 + 1)
+    for _ in range(_total_cells):
+        _mesh_grid_module: MeshGridModule = MeshGridModule()
+        # TODO: Logic to select the cell for the model, for now we use center cell (0, 0)
+        if _ == _total_cells // 2 + 1:
+            _mesh_grid_module.has_mesh_set = 1
+            # TODO: Assign the mesh to the cell
+            # _mesh_grid_module.state_based_mesh_set = 
+            # We can break here as we try the 1 cell setup
+            break
+    # TODO: Create the Locators here, we dont need a separate outside Locator class for buildings it seems
+    return _mesh_set_grid
+
+
+def save_bmg(
+    context: bpy.types.Context,
+    filepath: str,
+    split_mesh_by_uv_islands: bool,
+    flip_normals: bool,
+    keep_debug_collections: bool,
+    model_type: str,
+    model_name: str,
+    export_all_ska_actions: bool,
+    set_model_name_prefix: str,
+    auto_fix_quad_faces: bool,
+):
+    """
+    Save the current Blender scene as a BMG (Building Mesh Grid) file.
+
+    BMG files contain building layouts with modular grids and state-based meshes.
+    Each grid cell can contain different mesh states (undamaged, damaged, destroyed)
+    and debris physics objects.
+    """
+    # === PRE-VALIDITY CHECKS =================================================
+    # Ensure active collection is valid
+    source_collection = bpy.context.view_layer.active_layer_collection.collection
+    if not verify_collections(source_collection, model_type):
+        return abort(keep_debug_collections, None)
+    
+    # Create a safe copy of the collection for export
+    try:
+        source_collection_copy = copy(context.scene.collection, source_collection)
+        source_collection_copy.name += ".copy"
+    except Exception as e:  # pylint: disable=broad-except
+        logger.log(f"Failed to duplicate collection: {e}. Type {type(e)}", "ERROR")
+        return abort(keep_debug_collections, None)
+    
+    # Copy the AnimationSet blob from the source into the export copy (full fidelity)
+    try:
+        raw_blob = source_collection.get(ANIM_BLOB_KEY)
+        if raw_blob:
+            source_collection_copy[ANIM_BLOB_KEY] = raw_blob
+    except Exception:
+        pass
+
+    # Copy the EffectSet blob from the source into the export copy (full fidelity)
+    try:
+        raw_effect_blob = source_collection.get(EFFECT_BLOB_KEY)
+        if raw_effect_blob:
+            source_collection_copy[EFFECT_BLOB_KEY] = raw_effect_blob
+    except Exception:
+        pass
+
+    # Copy the action resolution map so blob names can still be resolved on the copy
+    try:
+        raw_action_map = source_collection.get("_drs_action_map")
+        if raw_action_map:
+            source_collection_copy["_drs_action_map"] = raw_action_map
+    except Exception:
+        pass
+    
+    # TODO: Check if we need to get the Locators in MeshSet or somewhere to be checked here with a blob or later when we create the output
+    
+    # We need to run checks for several Meshes (states/debris). Maybe we should make the save_drs function more modular, so we can reuse parts here as we need?
+    
+    # === Action name strategy for export =========================================
+    export_prefix: str | None
+    if set_model_name_prefix == "model_name":
+        export_prefix = model_name
+    elif set_model_name_prefix == "folder_name":
+        export_prefix = os.path.basename(os.path.dirname(filepath))
+        # assure there are no spaces
+        export_prefix = export_prefix.replace(" ", "_")
+    elif set_model_name_prefix == "none":
+        export_prefix = ""
+    else:  # keep_existing
+        export_prefix = None
+
+    # Build name mapping once so AnimationSet, EffectSet and SKA files share consistent naming
+    ska_name_map = build_ska_export_name_map(source_collection_copy, export_prefix)
+    
+    # === CREATE DRS STRUCTURE ====================
+    folder_path = os.path.dirname(filepath)
+    
+    # Create the base layout of our bmg file
+    new_bmg_file: BMG = BMG(model_type=model_type)
+    
+    # First thing we always need to build is the MeshSetGrid
+    mesh_set_grid = create_mesh_set_grid()
+    
+    # Now we save the Nodes in Order
+    nodes = InformationIndices[model_type]
+    for node in nodes:
+        if node == "MeshSetGrid":
+            new_bmg_file.mesh_set_grid = mesh_set_grid
+            new_bmg_file.push_node_infos("MeshSetGrid", new_bmg_file.mesh_set_grid)
+        elif node == "AnimationSet":
+            pass
+        elif node == "AnimationTimings":
+            pass
+        elif node == "EffectSet":
+            pass
+        elif node == "CGeoPrimitiveContainer":
+            # its an empty
+            pass
+        elif node == "collisionShape":
+            # We take the ones we are given at top level, same as state0 collision shapes
+            pass
+        # TODO: Check if we should support additional types. Maybe they are not used/wrongly exported in existing models
+        
+    new_bmg_file.update_offsets()
+    
+    # === SAVE THE BMG FILE ====================================================
+    try:
+        new_bmg_file.save(os.path.join(folder_path, model_name + ".drs"))
+    except ExportError as e:
+        logger.log(str(e), "Export Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
+    except Exception as e:
+        logger.log(f"Unexpected error during save: {e}", "Export Error", "ERROR")
+        return abort(keep_debug_collections, source_collection_copy)
+    
+    # === Export of SKA Actions ==============================================
+    
+    # === CLEANUP & FINALIZE ===================================================
+    if not keep_debug_collections:
+        bpy.data.collections.remove(source_collection_copy)
+    
+    logger.log("Export completed successfully.", "Export Complete", "INFO")
+    logger.display()
+    
+    # Cleanup variables
+    ska_name_map = None
+    mesh_set_grid = None
+    new_bmg_file = None
+    source_collection_copy = None
+    
+    return {"FINISHED"}
+    
+# endregion

@@ -10,13 +10,15 @@ from dataclasses import dataclass, field
 from struct import calcsize, pack, unpack
 from typing import BinaryIO, List, cast
 
-from sr_impex.core.file_io import FileReader
+from sr_impex.core.file_io import FileReader, FileWriter
 from sr_impex.definitions.base_types import (
     BaseContainer,
     Node,
     NodeInformation,
     RootNode,
     RootNodeInformation,
+    error_context,
+    ExportError,
 )
 from sr_impex.definitions.drs_definitions import (
     AnimationSet,
@@ -26,6 +28,7 @@ from sr_impex.definitions.drs_definitions import (
     CollisionShape,
     EffectSet,
 )
+from sr_impex.definitions.enums import WriteOrder, InformationIndices
 
 
 @dataclass(eq=False, repr=False)
@@ -199,7 +202,7 @@ class MeshSetGrid:
     uk_string1_length: int = 0  # Int
     uk_string1: str = ""  # String
     module_distance: float = 2  # Float
-    is_center_pivoted: int = 0  # Byte
+    is_center_pivoted: int = 1  # Byte
     mesh_modules: List[MeshGridModule] = field(default_factory=list)
     cdrw_locator_list: CDrwLocatorList = None
 
@@ -310,6 +313,49 @@ class BMG(BaseContainer):
     animation_timings: AnimationTimings = None
     mesh_set_grid: MeshSetGrid = None
 
+    def __post_init__(self):
+        self.nodes = [RootNode()]
+        if self.model_type is not None:
+            model_struct = InformationIndices[self.model_type]
+            # Prefill the node_informations with the RootNodeInformation and empty NodeInformations
+            self.node_informations = [
+                RootNodeInformation(node_information_count=len(model_struct))
+            ]
+            self.node_count = len(model_struct) + 1
+            for _ in range(len(model_struct)):
+                self.node_informations.append(NodeInformation())
+
+            for index, (node_name, info_index) in enumerate(model_struct.items()):
+                node = Node(info_index, node_name)
+                self.nodes.append(node)
+                node_info = NodeInformation(identifier=index + 1, node_name=node_name)
+                # Fix for missing node_size as size is 0 and not Note for CGeoPrimitiveContainer
+                if node_name == "CGeoPrimitiveContainer":
+                    node_info.node_size = 0
+                self.node_informations[info_index] = node_info
+
+    def push_node_infos(self, class_name: str, data_object: object):
+        # Get the right node from self.node_informations
+        for node_info in self.node_informations:
+            if node_info.node_name == class_name:
+                node_info.data_object = data_object
+                node_info.node_size = data_object.size()
+                break
+
+    def update_offsets(self):
+        for node_name in WriteOrder[self.model_type]:
+            # get the right node_infortmation froms self.node_informations
+            node_information = next(
+                (
+                    node_info
+                    for node_info in self.node_informations
+                    if node_info.node_name == node_name
+                ),
+                None,
+            )
+            node_information.offset = self.data_offset
+            self.data_offset += node_information.node_size
+
     def read(self, file_name: str) -> "BMG":
         reader = FileReader(file_name)
         (
@@ -392,6 +438,52 @@ class BMG(BaseContainer):
 
         reader.close()
         return self
+    
+    def save(self, file_name: str):
+        writer = FileWriter(file_name)
+        try:
+            # offsets
+            for ni in self.node_informations:
+                self.node_information_offset += ni.node_size
+            self.node_hierarchy_offset = self.node_information_offset + 32 + (self.node_count - 1) * 32
+
+            # header
+            with error_context("BMG header"):
+                writer.write(pack(
+                    "iiiiI",
+                    self.magic,
+                    self.number_of_models,
+                    self.node_information_offset,
+                    self.node_hierarchy_offset,
+                    self.node_count,
+                ))
+
+            # packets (in WriteOrder)
+            for node_name in WriteOrder[self.model_type]:
+                if node_name == "CGeoPrimitiveContainer":
+                    continue
+                node_info = next((ni for ni in self.node_informations if ni.node_name == node_name), None)
+                with error_context(f"{node_name}.write"):
+                    node_info.data_object.write(writer)
+
+            # node infos
+            for node_info in self.node_informations:
+                with error_context(f"NodeInformation[{node_info.node_name}].write"):
+                    node_info.write(writer)
+
+            # hierarchy
+            for node in self.nodes:
+                with error_context(f"Hierarchy node '{node.name}'.write"):
+                    node.write(writer)
+
+        except ExportError:
+            # bubble normalized errors
+            raise
+        except Exception as e:
+            # normalize anything else
+            raise ExportError(f"DRS.save failed: {e}") from e
+        finally:
+            writer.close()
 
 
 @dataclass(eq=False, repr=False)

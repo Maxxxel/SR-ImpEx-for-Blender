@@ -58,4 +58,4 @@ MeshSetGrid:
         SLocators: depends
 
 CollisionShape:
-- Always the collision shapes of State 0 (duplicates). State2 will overwrite it if needed in the game engine.
+- Always the collision shapes of State 0 (duplicates). State2 is kind of an overwrite if present in the game engine.

@@ -10,6 +10,7 @@ from bpy.types import Operator, Panel
 from bpy.props import BoolProperty, EnumProperty
 from sr_impex.utilities.drs_utility import switch_meshset_state
 
+MESHGRID_BLOB_KEY = "sr_impex_meshgrid_blob"
 
 def _iter_bmg_models():
     """Yield DRSModel collections that contain MeshSetGrid children."""

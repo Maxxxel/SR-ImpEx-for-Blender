@@ -95,13 +95,16 @@ from sr_impex.blender.bmesh_utils import new_bmesh_from_object, edit_bmesh_from_
 from sr_impex.blender.animation_utils import import_ska_animation
 from sr_impex.core.message_logger import MessageLogger
 from sr_impex.blender.editors.locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
-from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY, _resolve_action_name as _editor_resolve
+from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
 from sr_impex.blender.editors.effect_set_editor import (
     effectset_to_blob as _effectset_to_blob,
     blob_to_effectset as _blob_to_effectset,
     EFFECT_BLOB_KEY,
 )
+from sr_impex.blender.editors.bmg_state_editor import MESHGRID_BLOB_KEY
 from sr_impex.blender.editors.material_flow_editor import _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
+
+from sr_impex.utilities.helpers import get_collection, verify_collections, abort, copy, build_ska_export_name_map
 
 try:
     # when installed as a Blender add-on package
@@ -117,9 +120,6 @@ texture_cache_nor = {}
 texture_cache_par = {}
 texture_cache_flu = {}
 texture_cache_ref = {}
-
-# Blob keys for storing metadata on collections
-MESHGRID_BLOB_KEY = "sr_impex_meshgrid_blob"
 
 with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
@@ -484,87 +484,13 @@ def find_or_create_collection(
     return collection
 
 
-def get_collection(
-    source_collection: bpy.types.Collection, name: str
-) -> Union[bpy.types.Collection, None]:
-    """Return the sub-collection whose name matches the provided name."""
-    for collection in source_collection.children:
-        if collection.name.startswith(name):
-            return collection
-    return None
-
-
-def abort(keep_debug_collections: bool, source_collection_copy: bpy.types.Collection):
-    if not keep_debug_collections and source_collection_copy is not None:
-        bpy.data.collections.remove(source_collection_copy)
-
-    logger.display()
-
-    return {"CANCELLED"}
-
-
-def copy_objects(
-    from_col: bpy.types.Collection,
-    to_col: bpy.types.Collection,
-    linked: bool,
-    dupe_lut: dict[bpy.types.Object, bpy.types.Object],
-) -> None:
-    for o in from_col.objects:
-        dupe = o.copy()
-        if not linked and o.data:
-            dupe.data = dupe.data.copy()
-        to_col.objects.link(dupe)
-        dupe_lut[o] = dupe
-
-
-def update_armature_references(
-    dupe_lut: dict[bpy.types.Object, bpy.types.Object],
-) -> None:
-    for _, copied in dupe_lut.items():
-        if copied and copied.type == "MESH":
-            for modifier in copied.modifiers:
-                if modifier.type == "ARMATURE" and modifier.object in dupe_lut:
-                    # Update the modifier's armature reference to the copied armature
-                    modifier.object = dupe_lut[modifier.object]
-
-@profile
-def copy(
-    parent: bpy.types.Collection, collection: bpy.types.Collection, linked: bool = False
-) -> bpy.types.Collection:
-    dupe_lut = defaultdict(lambda: None)
-
-    def _copy(parent, collection, linked=False) -> bpy.types.Collection:
-        cc = bpy.data.collections.new(collection.name)
-        copy_objects(collection, cc, linked, dupe_lut)
-
-        for c in collection.children:
-            _copy(cc, c, linked)
-
-        parent.children.link(cc)
-        return cc
-
-    # Create the copied collection hierarchy
-    new_coll = _copy(parent, collection, linked)
-
-    # Set the parent for each copied object based on the original hierarchy
-    for o, dupe in tuple(dupe_lut.items()):
-        parent = dupe_lut[o.parent]
-        if parent:
-            dupe.parent = parent
-
-    # Update armature modifiers in copied objects to reference copied armatures
-    update_armature_references(dupe_lut)
-
-    return new_coll
-
-@profile
 def triangulate(meshes_collection: bpy.types.Collection) -> None:
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
             with new_bmesh_from_object(obj) as bm:
                 tri(bm, faces=bm.faces[:])  # pylint: disable=E1111, E1120
 
-@profile
+
 def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
     """Check if the Models are valid for the game. This includes the following checks:
     - Check if the Meshes have more than 32767 Vertices"""
@@ -594,7 +520,7 @@ def verify_mesh_vertex_count(meshes_collection: bpy.types.Collection) -> bool:
 
     return True
 
-@profile
+
 def split_meshes_by_uv_islands(meshes_collection: bpy.types.Collection) -> None:
     """Split the Meshes by UV Islands."""
     for obj in meshes_collection.objects:
@@ -618,7 +544,7 @@ def split_meshes_by_uv_islands(meshes_collection: bpy.types.Collection) -> None:
                     for e in old_seams:
                         e.seam = True
 
-@profile
+
 def set_origin_to_world_origin(meshes_collection: bpy.types.Collection) -> None:
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
@@ -772,7 +698,7 @@ def generate_bone_id(bone_name: str) -> int:
     bone_id = sum(ord(char) for char in bone_name) % (2**32 - 1)
     return bone_id
 
-@profile
+
 def load_static_bms_module(
     file_name: str, dir_name: str, parent_collection: bpy.types.Collection
 ):
@@ -904,7 +830,7 @@ def load_turret_animation(
         ),
     )
 
-@profile
+
 def process_slocator_import(
     slocator: SLocator,
     source_collection: bpy.types.Collection,
@@ -976,7 +902,7 @@ def process_slocator_import(
         locator_object.name = f"Locator_{slocator.class_type}"
         source_collection.objects.link(locator_object)
         bpy.context.collection.objects.unlink(locator_object)
-        
+
         # If this is an FXB effect, try to load and visualize it
         # if slocator.file_name.lower().endswith('.fxb') and locator_object:
         #     try:
@@ -1078,23 +1004,23 @@ def process_debris_import(state_based_mesh_set, source_collection, dir_name, bas
 def import_debris_from_xml(xml_file_path: str, dir_name: str, base_name: str, collection_name: str) -> bpy.types.Collection:
     """
     Import debris models from an XML file and return a collection containing them.
-    
+
     Args:
         xml_file_path: Path to the XML file defining debris
         dir_name: Directory containing the mesh files
         base_name: Base name for material naming
         collection_name: Name for the debris collection
-    
+
     Returns:
         Collection containing all debris meshes from the XML
     """
     debris_collection = bpy.data.collections.new(collection_name)
-    
+
     # Load and parse the XML file
     with open(xml_file_path, "r", encoding="utf-8") as file:
         xml_file = file.read()
     xml_root = ET.fromstring(xml_file)
-    
+
     # Loop through PhysicObject elements and create meshes
     for element in xml_root.findall(".//Element[@type='PhysicObject']"):
         resource = element.attrib.get("resource")
@@ -1109,7 +1035,7 @@ def import_debris_from_xml(xml_file_path: str, dir_name: str, base_name: str, co
                 mesh_object = bpy.data.objects.new(
                     f"CDspMeshFile_{name}", mesh_data
                 )
-                
+
                 # Create and assign the material
                 material = create_material(
                     dir_name,
@@ -1118,10 +1044,10 @@ def import_debris_from_xml(xml_file_path: str, dir_name: str, base_name: str, co
                     f"{base_name}_{name}",
                 )
                 mesh_data.materials.append(material)
-                
+
                 # Link the debris mesh object to the collection
                 debris_collection.objects.link(mesh_object)
-    
+
     return debris_collection
 
 
@@ -1138,7 +1064,7 @@ def create_meshset_structure(
 ) -> tuple[bpy.types.Collection, bpy.types.Object]:
     """
     Create organized hierarchical structure for a single MeshSet with all states.
-    
+
     Structure:
         MeshSet_N
         ├── States_Collection (hidden by default)
@@ -1148,7 +1074,7 @@ def create_meshset_structure(
         │       ├── S2_Debris (hidden)
         │       └── S3_Debris (hidden)
         └── Active_State (empty marker)
-    
+
     Args:
         parent_collection: Parent collection to link the MeshSet to
         meshset_index: Index of this MeshSet
@@ -1159,20 +1085,20 @@ def create_meshset_structure(
         armature_object: Armature to parent meshes to
         import_collision_shape: Whether to import collision shapes for S2 states
         import_s0_collision_shapes: Whether to import collision shapes for S0 states (BMG-level shapes apply to all S0)
-    
+
     Returns:
         (meshset_collection, active_marker) tuple
     """
     # Create MeshSet container
     meshset_col = bpy.data.collections.new(f"MeshSet_{meshset_index}")
     parent_collection.children.link(meshset_col)
-    
+
     # Create States subcollection (hidden by default) with unique name
     states_col = bpy.data.collections.new(f"States_Collection_{meshset_index}")
     meshset_col.children.link(states_col)
     states_col.hide_viewport = True
     states_col.hide_render = True
-    
+
     # Import each mesh state (S0, S2, etc.)
     for mesh_state in mesh_states:
         if mesh_state.has_files:
@@ -1181,14 +1107,14 @@ def create_meshset_structure(
             state_col["state_type"] = f"S{mesh_state.state_num}"
             state_col["mesh_set_index"] = meshset_index
             states_col.children.link(state_col)
-            
+
             # Create Meshes subcollection
             meshes_col = bpy.data.collections.new("Meshes_Collection")
             state_col.children.link(meshes_col)
-            
+
             # Load DRS file
             drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
-            
+
             # Import collision shapes if present
             # S0 (undamaged): only import if import_s0_collision_shapes is True (BMG-level shapes apply to all S0)
             # S2+ (damaged): always import as they differ from S0 due to damage
@@ -1198,10 +1124,10 @@ def create_meshset_structure(
                     should_import_collision = import_s0_collision_shapes
                 else:
                     should_import_collision = True
-            
+
             if should_import_collision:
                 import_collision_shapes(state_col, drs_file)
-            
+
             # Import meshes
             for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
                 mesh_object, _ = create_mesh_object(
@@ -1213,14 +1139,14 @@ def create_meshset_structure(
                 )
                 setup_material_parameters(mesh_object, drs_file, mesh_index)
                 meshes_col.objects.link(mesh_object)
-    
+
     # Create Debris subcollection
     if destruction_states and len(destruction_states) > 0:
         debris_col = bpy.data.collections.new("Debris_Collection")
         states_col.children.link(debris_col)
         debris_col.hide_viewport = True
         debris_col.hide_render = True
-        
+
         # Import debris from each destruction state XML
         for destruction_state in destruction_states:
             xml_file_path = os.path.join(dir_name, destruction_state.file_name)
@@ -1235,7 +1161,7 @@ def create_meshset_structure(
                 debris_state_col["state_type"] = f"S{destruction_state.state_num}_debris"
                 debris_state_col["mesh_set_index"] = meshset_index
                 debris_col.children.link(debris_state_col)
-    
+
     # Create active state marker (empty object)
     active_marker = bpy.data.objects.new(f"Active_State_MeshSet_{meshset_index}", None)
     active_marker.empty_display_type = 'CUBE'
@@ -1243,17 +1169,17 @@ def create_meshset_structure(
     active_marker["active_state"] = "S0"  # Default to undamaged
     active_marker["mesh_set_index"] = meshset_index
     meshset_col.objects.link(active_marker)
-    
+
     # Initially show S0 (undamaged) state
     switch_meshset_state(meshset_col, "S0")
-    
+
     return meshset_col, active_marker
 
 
 def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state: str):
     """
     Switch which state is visible/active for editing in a MeshSet.
-    
+
     Args:
         meshset_collection: The MeshSet_N collection
         target_state: One of 'S0', 'S2', 'S2_with_debris', 'S3_destroyed', 'all_states'
@@ -1264,42 +1190,42 @@ def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state:
         col.hide_render = False
         for child in col.children:
             show_collection_recursive(child)
-    
+
     # Find States_Collection (may have suffix like .001 if renamed by Blender)
     states_col = None
     for child in meshset_collection.children:
         if child.name.startswith("States_Collection"):
             states_col = child
             break
-    
+
     if not states_col:
         print(f"[BMG State] No States_Collection found in {meshset_collection.name}")
         return
-    
+
     print(f"[BMG State] Switching {meshset_collection.name} to {target_state}")
     print(f"[BMG State] States_Collection children: {[c.name for c in states_col.children]}")
-    
+
     # First, make States_Collection itself visible (parent must be visible)
     states_col.hide_viewport = False
-    
+
     # Hide all child states first
     for col in states_col.children_recursive:
         col.hide_viewport = True
         col.hide_render = True
-    
+
     # Show requested state(s)
     if target_state == "S0":
         for child in states_col.children:
             if child.name.startswith("S0_Undamaged"):
                 show_collection_recursive(child)
                 break
-    
+
     elif target_state == "S2":
         for child in states_col.children:
             if child.name.startswith("S2_Damaged"):
                 show_collection_recursive(child)
                 break
-    
+
     elif target_state == "S2_with_debris":
         # Show S2 damaged state
         for child in states_col.children:
@@ -1321,7 +1247,7 @@ def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state:
                         print(f"[BMG State] S2_Debris visibility: viewport={not debris_col.hide_viewport}, render={not debris_col.hide_render}")
                         break
                 break
-    
+
     elif target_state == "S3_destroyed":
         for child in states_col.children:
             if child.name.startswith("Debris_Collection"):
@@ -1333,13 +1259,13 @@ def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state:
                     show_collection_recursive(debris_col)
                     print(f"[BMG State] Debris visibility after show: viewport={not debris_col.hide_viewport}, render={not debris_col.hide_render}")
                 break
-    
+
     elif target_state == "all_states":
         # Show everything for editing
         states_col.hide_viewport = False
         for col in states_col.children_recursive:
             col.hide_viewport = False
-    
+
     # Update active marker
     for obj in meshset_collection.objects:
         if obj.type == 'EMPTY' and "active_state" in obj:
@@ -1349,11 +1275,11 @@ def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state:
 def export_meshset_state(meshset_collection: bpy.types.Collection, state_type: str = "S0") -> bpy.types.Collection:
     """
     Get the collection for a specific state from a MeshSet for export.
-    
+
     Args:
         meshset_collection: The MeshSet_N collection
         state_type: State type to export (e.g., 'S0', 'S2')
-    
+
     Returns:
         The state collection, or None if not found
     """
@@ -1363,15 +1289,15 @@ def export_meshset_state(meshset_collection: bpy.types.Collection, state_type: s
         if child.name.startswith("States_Collection"):
             states_col = child
             break
-    
+
     if not states_col:
         return None
-    
+
     # Find target state collection
     for col in states_col.children:
         if col.get("state_type") == state_type:
             return col
-    
+
     return None
 
 
@@ -1722,152 +1648,6 @@ def collect_ik_atlases_from_blender(
 # --- Action export helpers (build/output SKA names) -----------------
 
 
-def _norm_ska_key(name: str | None) -> str:
-    """Map any animation reference to a normalized lowercase key without extension."""
-    if not name:
-        return ""
-    base = os.path.basename((name or "").strip())
-    if base.lower().endswith(".ska"):
-        base = base[:-4]
-    return base.strip().lower()
-
-
-def _collect_ska_references(col: bpy.types.Collection) -> list[tuple[str, str | None]]:
-    """Return (current, original) tuples for every animation reference in the blobs."""
-    refs: list[tuple[str, str | None]] = []
-
-    def _add(name: str | None, original: str | None = None) -> None:
-        s = (name or "").strip()
-        if not s:
-            return
-        refs.append((s, (original or "").strip() or None))
-
-    raw_anim = col.get(ANIM_BLOB_KEY)
-    if raw_anim:
-        try:
-            blob = json.loads(raw_anim)
-        except Exception:
-            blob = {}
-        for mk in blob.get("mode_keys", []) or []:
-            for v in mk.get("variants", []) or []:
-                _add(v.get("file"), v.get("original_file_name"))
-        for msd in blob.get("marker_sets", []) or []:
-            _add(msd.get("file"), msd.get("original_file_name"))
-
-    raw_effect = col.get(EFFECT_BLOB_KEY)
-    if raw_effect:
-        try:
-            eff_blob = json.loads(raw_effect)
-        except Exception:
-            eff_blob = {}
-        for ed in eff_blob.get("effects", []) or []:
-            _add(ed.get("action"))
-
-    return refs
-
-
-def _determine_action_for_blob_name(col: bpy.types.Collection, blob_name: str) -> bpy.types.Action | None:
-    resolved_name = _resolve_action_from_blob_name(col, blob_name)
-    if not resolved_name:
-        return None
-    act = bpy.data.actions.get(resolved_name)
-    if not act:
-        return None
-    if isinstance(act.name, str) and "." in act.name:
-        base, suffix = act.name.rsplit(".", 1)
-        if suffix.isdigit() and base in bpy.data.actions:
-            return bpy.data.actions.get(base)
-    return act
-
-
-def _effective_prefix_for_action(action: bpy.types.Action | None, export_prefix: str | None) -> str:
-    if export_prefix is None:
-        try:
-            return str(action.get("prefix", "")) if action else ""
-        except Exception:
-            return ""
-    return export_prefix or ""
-
-
-def _derive_action_short_name(action: bpy.types.Action | None, fallback: str) -> str:
-    if action:
-        name = (action.name or "").strip()
-        if name:
-            return name
-        try:
-            ui = action.get("ui_name", None)
-        except Exception:
-            ui = None
-        if ui:
-            return str(ui)
-    return fallback
-
-
-def _make_unique_export_basename(base: str, used: set[str]) -> str:
-    """Ensure exported basenames stay unique (case-insensitive) and within 63 chars."""
-    sanitized = (base or "animation").strip().replace(" ", "_")
-    if sanitized.lower().endswith(".ska"):
-        sanitized = sanitized[:-4]
-    sanitized = sanitized or "animation"
-    sanitized = sanitized[:63]
-    cand = sanitized
-    idx = 2
-    while cand.lower() in used:
-        suffix = f"_{idx:02d}"
-        trimmed = sanitized[: max(1, 63 - len(suffix))]
-        cand = f"{trimmed}{suffix}"
-        idx += 1
-    used.add(cand.lower())
-    return cand
-
-@profile
-def _build_ska_export_name_map(
-    current_collection: bpy.types.Collection,
-    export_prefix: str | None,
-) -> dict[str, str]:
-    """
-    Build a mapping from normalized blob keys to their final exported SKA basenames
-    without mutating the underlying JSON blobs.
-    """
-    refs = _collect_ska_references(current_collection)
-    if not refs:
-        return {}
-
-    used: set[str] = set()
-    name_map: dict[str, str] = {}
-    seen_keys: set[str] = set()
-
-    for blob_name, original in refs:
-        key = _norm_ska_key(blob_name)
-        if not key or key in seen_keys:
-            continue
-        seen_keys.add(key)
-
-        act = _determine_action_for_blob_name(current_collection, blob_name)
-        short = _derive_action_short_name(act, key)
-        eff_prefix = _effective_prefix_for_action(act, export_prefix)
-
-        base = short
-        if eff_prefix:
-            pref = eff_prefix.strip().replace(" ", "_")
-            if not base.startswith(pref + "_"):
-                base = f"{pref}_{base}"
-
-        if not act and export_prefix is None and original:
-            # fall back to the original full name if we are supposed to keep it
-            base = os.path.basename((original or "").strip()) or base
-
-        final_base = _make_unique_export_basename(base, used)
-        name_map[key] = final_base
-
-        # also map the original reference if present
-        orig_key = _norm_ska_key(original)
-        if orig_key and orig_key not in name_map:
-            name_map[orig_key] = final_base
-
-    return name_map
-
-
 def _lookup_export_ska_filename(name: str | None, ska_name_map: dict[str, str]) -> str | None:
     key = _norm_ska_key(name)
     if not key:
@@ -1911,52 +1691,6 @@ def _apply_ska_name_map_to_effect_set(
         if new_name and new_name != getattr(se, "name", ""):
             se.name = new_name
             se.length = len(se.name)
-
-
-def _resolve_action_from_blob_name(col: bpy.types.Collection, file_or_base: str) -> str:
-    """
-    Map 'skel_human_2h_idle1(.ska)' -> actual Action name (e.g. 'idle1').
-    Tries:
-      - user mapping _drs_action_map
-      - animation_set_editor._resolve_action_name
-      - basename / .ska stripping / truncations
-    Returns the Action name that exists in bpy.data.actions or "".
-    """
-    if not file_or_base:
-        return ""
-    s = (file_or_base or "").strip()
-    base = s[:-4] if s.lower().endswith(".ska") else s
-    # try mapping saved by importer
-    try:
-        raw = col.get("_drs_action_map", "{}")
-        mp = json.loads(raw) if isinstance(raw, str) else {}
-    except Exception:
-        mp = {}
-
-    for key in (s, os.path.basename(s), base, os.path.basename(base)):
-        cand = mp.get(key)
-        if cand and cand in bpy.data.actions:
-            return cand
-
-    # fall back to the editor's robust resolver
-    try:
-        cand = _editor_resolve(s)
-        if cand != "NONE" and cand in bpy.data.actions:
-            return cand
-    except Exception:
-        pass
-
-    # naive fallbacks
-    for cand in (base, os.path.basename(base), base + ".ska"):
-        if cand in bpy.data.actions:
-            return cand
-
-    # truncation fallback (Blender 63-char)
-    t = base[:63]
-    if t in bpy.data.actions:
-        return t
-
-    return ""
 
 
 def _find_drs_bsdf(mat: bpy.types.Material):
@@ -2282,7 +2016,7 @@ def create_bone_weights(
     return bone_weights
 
 
-@profile
+
 def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Mesh:
     battleforge_mesh_data: BattleforgeMesh = mesh_file.meshes[mesh_index]
     # _name = override_name if (override_name != '') else f"State_{i}" if (state == True) else f"{i}"
@@ -2939,7 +2673,7 @@ def import_bounding_box(
     logger.log(f"AABB Bounding Box creation took {end_time - start_time:.2f} seconds.")
 
 
-@profile
+
 def load_drs(
     context: bpy.types.Context,
     filepath="",
@@ -3241,7 +2975,7 @@ def import_mesh_set_grid(
 ):
     """
     Import a MeshSetGrid using the new hierarchical collection structure.
-    
+
     Creates a cleaner hierarchy:
         MeshSetGrid_0
         ├── MeshSet_0
@@ -3259,7 +2993,7 @@ def import_mesh_set_grid(
     )
     source_collection.children.link(mesh_set_grid_collection)
     bone_list = None
-    
+
     # Track mesh objects per module index for grid mapping
     module_mesh_map = {}
     module_index = 0
@@ -3278,7 +3012,7 @@ def import_mesh_set_grid(
                                 source_collection, drs_file
                             )
                             break
-            
+
             # Create structured MeshSet with all states organized hierarchically
             meshset_col, active_marker = create_meshset_structure(
                 parent_collection=mesh_set_grid_collection,
@@ -3291,14 +3025,14 @@ def import_mesh_set_grid(
                 import_collision_shape=import_collision_shape,
                 import_s0_collision_shapes=import_s0_collision_shapes,
             )
-            
+
             # Store reference to first mesh object for grid mapping
             states_col = None
             for child in meshset_col.children:
                 if child.name.startswith("States_Collection"):
                     states_col = child
                     break
-            
+
             if states_col:
                 # Get first mesh from S0 state
                 s0_col = None
@@ -3306,19 +3040,19 @@ def import_mesh_set_grid(
                     if child.name.startswith("S0_Undamaged"):
                         s0_col = child
                         break
-                
+
                 if s0_col:
                     meshes_col = None
                     for child in s0_col.children:
                         if child.name.startswith("Meshes_Collection"):
                             meshes_col = child
                             break
-                    
+
                     if meshes_col and len(meshes_col.objects) > 0:
                         first_mesh = meshes_col.objects[0]
                         module_mesh_map[module_index] = first_mesh.name
                         first_mesh["grid_cell_index"] = module_index
-            
+
             # Handle IK atlas if needed
             if import_ik_atlas and armature_object is not None and bone_list is not None:
                 for mesh_state in module.state_based_mesh_set.mesh_states:
@@ -3333,14 +3067,14 @@ def import_mesh_set_grid(
                                 armature_object, drs_file.animation_set, bone_list
                             )
                             break  # Only need to do this once per module
-        
+
         # Increment module index for each module (even if no mesh)
         module_index += 1
 
     return armature_object, bone_list, module_mesh_map
 
 
-@profile
+
 def load_bmg(
     context: bpy.types.Context,
     filepath="",
@@ -3467,7 +3201,7 @@ def load_bmg(
             import_s0_collision_shapes,
             import_ik_atlas,
         )
-        
+
         # Update blob with mesh object names
         if module_mesh_map:
             import json
@@ -3612,117 +3346,7 @@ def load_bmg(
 
 # region Export Blender Model to DRS
 
-@profile
-def verify_collections(
-    source_collection: bpy.types.Collection, model_type: str
-) -> bool:
-    # First Check if the selected Collection is a valid Collection by name DRSModel_...
-    if not source_collection.name.startswith("DRSModel_"):
-        logger.log(
-            "The selected Collection is not a valid Collection. Please select a Collection with the name DRSModel_...",
-            "Error",
-            "ERROR",
-        )
-        return False
 
-    # Check if the Collection has the correct Children
-    nodes = InformationIndices[model_type]
-    for node in nodes:
-        if (
-            node == "CGeoMesh"
-            or node == "CGeoOBBTree"
-            or node == "CDspJointMap"
-            or node == "CDspMeshFile"
-        ):
-            mesh_collection = get_collection(source_collection, "Meshes_Collection")
-
-            if mesh_collection is None:
-                logger.log("No Meshes Collection found!", "Error", "ERROR")
-                return False
-
-            # Check if the Meshes Collection has Meshes
-            if len(mesh_collection.objects) == 0:
-                logger.log(
-                    "No Meshes found in the Meshes Collection!", "Error", "ERROR"
-                )
-                return False
-
-            # Check if every mesh has a material
-            for mesh in mesh_collection.objects:
-                if mesh.type == "MESH":
-                    if len(mesh.material_slots) == 0:
-                        logger.log(
-                            f"No Material found for Mesh {mesh.name}!", "Error", "ERROR"
-                        )
-                        return False
-                    else:
-                        # print all the nodes with names and types we have in the material
-                        material_nodes = mesh.material_slots[0].material.node_tree.nodes
-                        for node in material_nodes:
-                            if node.type == "Group" and node.label != "DRSMaterial":
-                                logger.log(
-                                    f"Node {node.name} is not a DRSMaterial node!",
-                                    "Error",
-                                    "ERROR",
-                                )
-                                return False
-        if node == "collisionShape":
-            collision_collection = get_collection(
-                source_collection, "CollisionShapes_Collection"
-            )
-
-            if collision_collection is None:
-                logger.log(
-                    "No Collision Collection found! But is required for a model with collision shapes!",
-                    "Error",
-                    "ERROR",
-                )
-                return False
-
-            # Get Boxes, Spheres and Cylinders Collections from the Collision Collection
-            boxes_collection = None
-            spheres_collection = None
-            cylinders_collection = None
-            for child in collision_collection.children:
-                if child.name.startswith("Boxes_Collection"):
-                    boxes_collection = child
-                if child.name.startswith("Spheres_Collection"):
-                    spheres_collection = child
-                if child.name.startswith("Cylinders_Collection"):
-                    cylinders_collection = child
-            # Check if at least one of the Collision Shapes is present
-            if (
-                boxes_collection is None
-                and spheres_collection is None
-                and cylinders_collection is None
-            ):
-                logger.log(
-                    "No Collision Shapes found in the Collision Collection!",
-                    "Error",
-                    "ERROR",
-                )
-                return False
-            # Check if at least one of the Collision Shapes has Collision Shapes (mesh)
-            found_collision_shapes = False
-            for collision_shape in [
-                boxes_collection,
-                spheres_collection,
-                cylinders_collection,
-            ]:
-                if collision_shape is not None and len(collision_shape.objects) > 0:
-                    found_collision_shapes = True
-                    break
-            if not found_collision_shapes:
-                logger.log(
-                    "No Collision Shapes found in the Collision Collection!",
-                    "Error",
-                    "ERROR",
-                )
-                return False
-
-    return True
-
-@profile
 def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Mesh:
     """Create a unified Mesh from a Collection of Meshes."""
 
@@ -3755,7 +3379,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
 
     return unified
 
-@profile
+
 def create_cgeo_mesh(unique_mesh: bpy.types.Mesh) -> CGeoMesh:
     """Create a CGeoMesh from a Blender Mesh Object."""
     _cgeo_mesh = CGeoMesh()
@@ -3776,7 +3400,7 @@ def create_cgeo_mesh(unique_mesh: bpy.types.Mesh) -> CGeoMesh:
 
     return _cgeo_mesh
 
-@profile
+
 def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
     unified_mesh.calc_loop_triangles()
     vcount = len(unified_mesh.vertices)
@@ -4010,7 +3634,7 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
     tree.faces = out_faces
     return tree
 
-@profile
+
 def create_cdsp_joint_map(
     add_skin_mesh: bool,
     mesh_bone_data: List[Dict[str, int]],
@@ -4624,7 +4248,7 @@ def create_mesh(
 
     return new_mesh, per_mesh_bone_data
 
-@profile
+
 def create_cdsp_mesh_file(
     meshes_collection: bpy.types.Collection,
     model_name: str,
@@ -4873,7 +4497,7 @@ def create_cylinder_shape(cylinder: bpy.types.Object) -> CylinderShape:
 
     return _cylinder_shape
 
-@profile
+
 def create_collision_shape(meshes_collection: bpy.types.Collection) -> CollisionShape:
     """Create a Collision Shape from a Collection of Collision Shapes."""
     _collision_shape = CollisionShape()
@@ -4903,7 +4527,7 @@ def create_collision_shape(meshes_collection: bpy.types.Collection) -> Collision
                         )
     return _collision_shape
 
-@profile
+
 def create_skin_info(
     unified_mesh: bpy.types.Mesh,
     meshes_collection: bpy.types.Collection,
@@ -5020,7 +4644,6 @@ def create_skin_info(
     return skin_info
 
 
-@profile
 def create_skeleton(
     armature_object: bpy.types.Object,
     bone_map: Dict[str, Dict[str, Optional[int]]],
@@ -5135,7 +4758,7 @@ def create_skeleton(
 
     return csk_skeleton
 
-@profile
+
 def create_animation_set(model_name: str, armature_object: bpy.types.Object, bone_map, source_collection_for_blob: bpy.types.Collection | None = None,) -> AnimationSet:
     """
     Build an AnimationSet for export from the AnimationSetJSON blob.
@@ -5399,7 +5022,7 @@ def create_animation_set(model_name: str, armature_object: bpy.types.Object, bon
 
     return anim
 
-@profile
+
 def create_animation_timings() -> Optional[AnimationTimings]:
     """
     Build AnimationTimings for export from the AnimationSetJSON blob.
@@ -5447,7 +5070,7 @@ def create_animation_timings() -> Optional[AnimationTimings]:
     # Use the existing helper to map blob -> AnimationTimings
     return blob_to_animationtimings({"timings": timings_list})
 
-@profile
+
 def create_bone_map(
     armature_object: bpy.types.Object,
 ) -> Dict[str, Dict[str, Optional[int]]]:
@@ -5481,7 +5104,7 @@ def create_bone_map(
     traverse_bone(root_bone, -1)
     return bone_map
 
-@profile
+
 def update_mesh_file_root_reference(
     cdsp_mesh_file: CDspMeshFile, mesh_bone_data: List[Dict[str, int]]
 ) -> CDspMeshFile:
@@ -5506,7 +5129,7 @@ def update_mesh_file_root_reference(
                 vertex.bone_indices[3] = per_mesh_bone_data["root_ref"]
     return cdsp_mesh_file
 
-@profile
+
 def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLocatorList:
     def _empty(version: int = 5) -> CDrwLocatorList:
         return CDrwLocatorList(magic=0, version=int(version or 5), length=0, slocators=[])
@@ -5533,7 +5156,7 @@ def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLoc
     )
     return _empty()
 
-@profile
+
 def create_effect_set(file_name: str, source_collection_copy: bpy.types.Collection) -> EffectSet:
     """
     Create EffectSet for export:
@@ -5587,7 +5210,7 @@ def _ska_names_from_blob(col: bpy.types.Collection) -> list[str]:
             out.append(n)
     return out
 
-@profile
+
 def export_ska_actions_all(
     folder_path: str,
     current_collection: bpy.types.Collection,
@@ -5780,7 +5403,7 @@ def save_drs(
         export_prefix = None
 
     # Build name mapping once so AnimationSet, EffectSet and SKA files share consistent naming
-    ska_name_map = _build_ska_export_name_map(source_collection_copy, export_prefix)
+    ska_name_map = build_ska_export_name_map(source_collection_copy, export_prefix)
 
     # === CREATE DRS STRUCTURE =================================================
     folder_path = os.path.dirname(filepath)
