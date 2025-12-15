@@ -877,6 +877,122 @@ def _poll_editor_refresh():
     return 0.5
 
 
+_SLE_PROPAGATION_GUARD = False
+
+
+def _is_sle_role(role: str) -> bool:
+    r = (role or "").lower()
+    if "modechannel" in r:
+        return False
+    return r.endswith("start") or r.endswith("loop") or r.endswith("end")
+
+
+def _find_variant_owner(st, variant: bpy.types.PropertyGroup) -> tuple[int, int] | None:
+    """Return (mode_key_index, variant_index) for a variant PropertyGroup."""
+    try:
+        vptr = variant.as_pointer()
+    except Exception:
+        vptr = None
+    for mk_i, mk in enumerate(getattr(st, "mode_keys", []) or []):
+        for v_i, v in enumerate(getattr(mk, "variants", []) or []):
+            try:
+                if vptr is not None and v.as_pointer() == vptr:
+                    return mk_i, v_i
+            except Exception:
+                continue
+    return None
+
+
+def _propagate_sle_variant_file(st, src_mk_index: int, src_variant_index: int, new_file: str) -> None:
+    """For a Start/Loop/End group, keep the variant's action file in sync across all three ModeKeys."""
+    if not (0 <= src_mk_index < len(st.mode_keys)):
+        return
+    src_mk = st.mode_keys[src_mk_index]
+    if not _is_sle_role(getattr(src_mk, "role", "")):
+        return
+
+    try:
+        ab_name = _infer_ability_for_visjob(int(src_mk.vis_job), st)
+    except Exception:
+        ab_name = ""
+    sp = int(getattr(src_mk, "special_mode", 0))
+
+    # Gather all S/L/E modekeys in this group
+    targets: list[ModeKeyPG] = []
+    for mk in st.mode_keys:
+        if int(getattr(mk, "special_mode", 0)) != sp:
+            continue
+        if not _is_sle_role(getattr(mk, "role", "")):
+            continue
+        try:
+            if _infer_ability_for_visjob(int(mk.vis_job), st) != ab_name:
+                continue
+        except Exception:
+            continue
+        targets.append(mk)
+
+    if not targets:
+        return
+
+    # Ensure target has the requested variant index and set its file.
+    # Start/Loop/End segments are ranges on the same action, so they should share the same file.
+    raw_ska = _norm_ska_name(new_file) if new_file and new_file != "NONE" else ""
+    for mk in targets:
+        try:
+            if int(getattr(mk, "active_variant", 0)) != int(src_variant_index):
+                mk.active_variant = int(src_variant_index)
+        except Exception:
+            pass
+        while len(mk.variants) <= src_variant_index:
+            v = mk.variants.add()
+            v.weight = 100
+            v.start = 0.0
+            v.end = 1.0
+            v.allows_ik = True
+            v.force_no_blend = False
+            v.file = "NONE"
+            v.raw_ska = ""
+
+        v = mk.variants[src_variant_index]
+        if (v.file or "") != (new_file or ""):
+            v.file = new_file
+        if raw_ska and (getattr(v, "raw_ska", "") != raw_ska):
+            v.raw_ska = raw_ska
+
+
+def _on_variant_file_changed(self, _context):
+    """When editing a Loop Set, keep Start/Loop/End action assignment in sync."""
+    global _SLE_PROPAGATION_GUARD  # pylint: disable=global-statement
+    if _SLE_PROPAGATION_GUARD:
+        return
+
+    # Defer to timer to avoid touching lots of datablocks inside update callback
+    new_file = (getattr(self, "file", "") or "").strip()
+
+    def _apply():
+        global _SLE_PROPAGATION_GUARD  # pylint: disable=global-statement
+        try:
+            _SLE_PROPAGATION_GUARD = True
+            st = _state()
+            owner = _find_variant_owner(st, self)
+            if owner is None:
+                return None
+            mk_i, v_i = owner
+            _propagate_sle_variant_file(st, mk_i, v_i, new_file)
+            _redraw_ui()
+        except Exception:
+            pass
+        finally:
+            _SLE_PROPAGATION_GUARD = False
+        return None
+
+    try:
+        bpy.app.timers.register(_apply, first_interval=0.0)
+    except Exception:
+        # best-effort: if timers aren't available, do nothing (avoid crashes)
+        return
+
+
 
 class AnimVariantPG(bpy.types.PropertyGroup):
     weight: IntProperty(name="Weight", default=100, min=0, max=100)  # type: ignore
@@ -884,7 +1000,7 @@ class AnimVariantPG(bpy.types.PropertyGroup):
     end: FloatProperty(name="End", default=1.0, min=0.0, max=1.0)  # type: ignore
     allows_ik: BoolProperty(name="Allows IK", default=True)  # type: ignore
     force_no_blend: BoolProperty(name="Force No Blend", default=False)  # type: ignore
-    file: EnumProperty(name="Action", items=_actions_enum)  # type: ignore
+    file: EnumProperty(name="Action", items=_actions_enum, update=_on_variant_file_changed)  # type: ignore
     raw_ska: StringProperty(default="", options={"HIDDEN"})  # type: ignore
     # --- marker fields (attached per-variant) ---
     marker_has: BoolProperty(name="Has Marker", default=False, options={"HIDDEN"})  # type: ignore
@@ -1673,12 +1789,17 @@ class DRS_OT_PlayRange(bpy.types.Operator):
     def execute(self, context):
         st = _state()
         if not 0 <= self.mode_key_index < len(st.mode_keys):
+            print("CANCELLED: invalid mode key index")
             return {"CANCELLED"}
         mk = st.mode_keys[self.mode_key_index]
         if not 0 <= mk.active_variant < len(mk.variants):
+            print("CANCELLED: invalid active variant index")
             return {"CANCELLED"}
         v = mk.variants[mk.active_variant]
         act_name = (v.file or "").strip()
+        if act_name == "" or act_name == "NONE":
+            # try to get the first valid variant instead
+            pass
         act = (
             bpy.data.actions.get(act_name) if act_name and act_name != "NONE" else None
         )
@@ -1686,6 +1807,7 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         model = _active_model()
         arm = _find_armature(model) if model else None
         if not (act and arm):
+            print("CANCELLED: missing action or armature")
             return {"CANCELLED"}
 
         # Hide all marker objects when a generic play is triggered
@@ -1754,6 +1876,7 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         try:
             bpy.ops.screen.animation_play()
         except Exception as e:  # pylint: disable=bare-except
+            print(f"Failed to start playback: {e}")
             pass
         return {"FINISHED"}
 

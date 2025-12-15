@@ -202,22 +202,27 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
         else:
             logger.log(f"Skipping fcurve {fcurve.data_path}", "info", "INFO")
 
-    # Bones Lib, with loc and rot attributes
-    bone_lib = {}
+    # Bones Lib, with loc and rot attributes.
+    # IMPORTANT: The game format expects *two headers per bone* (loc + rot).
+    # Therefore we must include every armature bone, not only bones that appear
+    # in the action's FCurves.
+    bone_lib: dict[str, dict] = {}
+    for b in armature.data.bones:
+        bone_lib[b.name] = {
+            "loc_per_time": {"vec": [], "times": []},
+            "rot_per_time": {"quat": [], "times": []},
+        }
 
     # Iterate over all location_fcurves and extract the location
     try:
         for data_path, fcurves in location_fcurves.items():
             # Get the bone name from the data path
             bone_name = data_path.split('"')[1]
-            bone_lib[bone_name] = (
-                {
+            if bone_name not in bone_lib:
+                bone_lib[bone_name] = {
                     "loc_per_time": {"vec": [], "times": []},
                     "rot_per_time": {"quat": [], "times": []},
                 }
-                if bone_name not in bone_lib
-                else bone_lib[bone_name]
-            )
 
             # Collect all unique frame times from all axes
             all_frames = set()
@@ -259,14 +264,11 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
         for data_path, fcurves in rotation_fcurves.items():
             bone_name = data_path.split('"')[1]
             # Create bone entry if it doesn't exist (in case there are only rotation keyframes)
-            bone_lib[bone_name] = (
-                {
+            if bone_name not in bone_lib:
+                bone_lib[bone_name] = {
                     "loc_per_time": {"vec": [], "times": []},
                     "rot_per_time": {"quat": [], "times": []},
                 }
-                if bone_name not in bone_lib
-                else bone_lib[bone_name]
-            )
 
             # Collect all unique frame times from all axes
             all_frames = set()
@@ -302,8 +304,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
     except Exception as e:
         raise RuntimeError(f"Error processing rotation F-curves: {e}") from e
 
-    # Ensure every bone has both location and rotation data (game engine requirement)
-    # Bones must have at least one keyframe for both location and rotation
+    # Ensure every bone has both location and rotation data (game format requirement).
+    # Bones must have at least one keyframe for both location and rotation.
     for bone_name in list(bone_lib.keys()):
         data = bone_lib[bone_name]
         
@@ -311,21 +313,11 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
         if len(data["loc_per_time"]["vec"]) == 0:
             data["loc_per_time"]["times"].append(0.0)
             data["loc_per_time"]["vec"].append((0.0, 0.0, 0.0))
-            logger.log(
-                f"Bone '{bone_name}' has no location keyframes. Added default keyframe at t=0.",
-                "warning",
-                "WARNING",
-            )
         
         # If rotation is missing, add a single keyframe at t=0 with identity quaternion
         if len(data["rot_per_time"]["quat"]) == 0:
             data["rot_per_time"]["times"].append(0.0)
             data["rot_per_time"]["quat"].append((1.0, 0.0, 0.0, 0.0))
-            logger.log(
-                f"Bone '{bone_name}' has no rotation keyframes. Added default keyframe at t=0.",
-                "warning",
-                "WARNING",
-            )
 
     # Create Header, Time and Keyframes
     headers: list[SKAHeader] = []
