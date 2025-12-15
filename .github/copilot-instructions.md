@@ -1,58 +1,55 @@
 ## Quick context for AI coding agents working on SR-ImpEx-for-Blender
 
-This file gives targeted, actionable knowledge to help an AI coding agent be productive immediately in this repository.
-
-Keep this short and practical — reference code locations when possible.
+Targeted, actionable notes to be productive in this repo fast. Keep changes minimal and consistent with existing Blender add-on patterns.
 
 ### Big picture
-- The repo is a Blender-focused importer/exporter for a game's DRS/BMG model formats. The main Python package is `sr_impex/`.
-- `sr_impex/drs_utility.py` is the largest single file — it implements both import and export flows for model, mesh, material and animation data. Treat it as the primary integration surface.
-- Other important modules: `sr_impex/file_io.py` (format parsing), `sr_impex/drs_material.py` (material builder), `sr_impex/drs_resolvers.py` and `sr_impex/pak_indexer.py`. Use these for format semantics and I/O patterns.
-- There's a small tooling surface: `create_release_package.py` (packaging), `sr_impex/resources` (third-party or large binary resources, e.g. `vgmstream`).
+- This is a Blender 4.x add-on to import/export game formats (DRS/BMG + related animation data like SKA).
+- The main package is `sr_impex/` with three main surfaces:
+  - `sr_impex/utilities/`: format logic + higher-level import/export utilities (largest integration surface).
+  - `sr_impex/core/`: binary reading/writing, logging, profiling.
+  - `sr_impex/blender/`: Blender-specific operators/UI/helpers and material building.
+- Primary integration file: `sr_impex/utilities/drs_utility.py` (import/export, meshes, materials, collision, OBB tree helpers).
 
-### Key conventions and patterns (use these verbatim)
-- Collection / object naming conventions used by the addon (search and match exactly):
-  - DRS model container collections are named with prefix `DRSModel_<basename>`
-  - Meshes live in `Meshes_Collection` under the model collection
-  - Collision shapes live in `CollisionShapes_Collection` and subcollections `Boxes_Collection`, `Spheres_Collection`, `Cylinders_Collection`
-  - Debug assets go into `Debug_Collection`
-- Texture file suffixes used across importer/exporter and tooling:
-  - Color: `_col`  (see `set_color_map` in `drs_utility.py`)
-  - Normal: `_nor`  (see `set_normal_map`)
-  - Parameter pack: `_par` (metallic/roughness/emission/flu mask — see `set_metallic_roughness_emission_map`)
+### Key conventions (match exactly)
+- Collection naming used by the add-on:
+  - DRS model container collections: `DRSModel_<basename>`
+  - Meshes: `Meshes_Collection` under the model collection
+  - Collision: `CollisionShapes_Collection` with subcollections `Boxes_Collection`, `Spheres_Collection`, `Cylinders_Collection`
+  - Debug content: `Debug_Collection`
+  - Armature collections typically contain `Armature` in the name (see `sr_impex/utilities/ska_utility.py`).
+- Texture suffix conventions:
+  - Color: `_col`
+  - Normal: `_nor`
+  - Packed parameters: `_par` (metallic/roughness/emission/flu mask)
   - Flu map: `_flu`
-- Material/node discovery patterns:
-  - The project relies on labeled image nodes and a custom 'DRS Shader' node group; node labels like `Separate Metallic`, `Separate Roughness`, `Parameter Map (_par)`, `Flu Map Layer 1` are used to locate images.
-  - Many routines do "find-by-label" — prefer adding or updating tests that exercise node-tree lookup functions (`_find_by_label`, `_first_image_upstream`, `_find_drs_bsdf`).
-- Numeric constants are meaningful: texture records use integer identifiers (for example 1684432499 for color, 1936745324 for _par). Don't change them without checking importer expectations.
+  - See mapping/packing helpers in `sr_impex/utilities/drs_utility.py`.
+- Material/node discovery:
+  - The add-on relies on a custom “DRS Shader” node group and “find-by-label” logic.
+  - Keep node labels stable (examples: `Separate Metallic`, `Separate Roughness`, `Parameter Map (_par)`, `Flu Map Layer 1`).
+- Numeric IDs/constants in file formats matter. Don’t change texture record IDs/packing without confirming importer expectations.
 
-### Developer workflows (how to run / debug locally)
-- Run the addon inside Blender. Typical dev flow uses the VS Code Blender Development extension and launching Blender with the project as the script target. The project has been run with Blender 4.x in this workspace.
-- Packaging: `python.exe .\create_release_package.py` (Windows Powershell) — this script is present at repo root and used to assemble release artifacts.
-- Use the Blender bundled Python to execute addon logic (bpy is only available inside Blender). Unit tests are not present; for functional checks you must run Blender and exercise importer/exporter from the UI or via short driver scripts run inside Blender.
+### Where things live (open these first)
+1. `sr_impex/utilities/drs_utility.py` — main import/export integration surface.
+2. `sr_impex/core/file_io.py` — binary parsing/serialization primitives.
+3. `sr_impex/blender/drs_material.py` — material node construction and conventions.
+4. `sr_impex/utilities/drs_resolvers.py` — resolver logic used by import/export.
+5. `sr_impex/utilities/ska_utility.py` — animation export/import helpers (SKA).
+6. `sr_impex/blender/editors/` — UI panels/editors/operators (debug tooling lives here too).
 
-### Integration and external dependencies
-- The addon depends on Blender's Python + `bpy`. Native modules used by the code include `numpy` (used actively in `drs_utility.py` for PCA/OBB computations). Ensure numpy is available to the Blender Python environment when executing scripts that use those functions.
-- Large third-party assets/tools live under `sr_impex/resources` (e.g. `vgmstream`) — these are integration points for audio handling and binary helpers.
+### Developer workflow (Windows/Blender)
+- Run inside Blender (bpy is only available there). This repo is typically developed using the VS Code “Blender Development” extension.
+- Packaging/release assembly: `python.exe .\create_release_package.py`.
+- There are no conventional unit tests; validate changes by running Blender and exercising the UI/operators.
 
-### Code architecture notes (how data flows)
-- Import flow (high-level): read DRS/BMG -> create `DRSModel_<name>` collection -> create armature (skeleton) -> create `Meshes_Collection` and mesh objects -> create/link materials -> optionally import collision shapes, OBB tree, cgeomesh, and animation/IK atlas. See `load_drs()` in `drs_utility.py`.
-- Export flow (high-level): gather collections/meshes -> create unified mesh -> convert to CDspMeshFile/CollisionShape/OBB tree using helpers such as `create_unified_mesh`, `create_cdsp_mesh_file`, `create_cgeo_obb_tree`.
-- Material export expects specific node graph outputs. `set_metallic_roughness_emission_map` packs channels from up to four sources into a `_par` PNG — match the same packing when modifying exporter.
+### Blender API gotchas (important)
+- Avoid `bpy.ops` in tight loops; prefer `bpy.data.*` + direct datablock edits for speed and stability.
+- Don’t mutate Blender datablocks inside property update callbacks in a way that reassigns the same property (can recurse/crash). If you must touch scene data from an update callback, defer with `bpy.app.timers.register`.
+- When iterating collections/objects that you also hide/link/unlink, collect targets first to avoid iterator invalidation.
 
-### Typical edit patterns and low-risk areas to change
-- Small bugfixes inside helper utilities (`_find_by_label`, `_first_image_upstream`, `get_converted_texture`) are generally safe and well-contained. Add unit-style scripts for these functions if you want regression checks.
-- Avoid refactoring large blocks of `drs_utility.py` all at once. Prefer extracting small helpers and running manual Blender checks: the file contains many cross-cutting responsibilities tied to Blender runtime state.
+### External dependencies / resources
+- Runs on Blender’s Python (`bpy`, `mathutils`). Some utilities use `numpy` (ensure it’s available in the Blender Python env when needed).
+- Large third-party helpers live in `sr_impex/resources/` (e.g. `vgmstream`). Treat as integration points; avoid renaming/moving.
 
-### Files to open first (priority)
-1. `sr_impex/drs_utility.py` — importer/exporter, node conventions and naming (primary).
-2. `sr_impex/file_io.py` — format parsing/serialization helpers.
-3. `sr_impex/drs_material.py` — material node builder (labels and nodes used by exporter/importer).
-4. `create_release_package.py` — packaging workflow.
-5. `sr_impex/message_logger.py` — logging pattern used across the addon.
-
-### When you need more context or permission
-- If you plan to change numeric identifiers, texture packing, or on-disk file layout, confirm with the repo owner — importer expects exact identifiers and packing.
-- If you need to run or install Python packages into Blender's Python (e.g. numpy), mention the Blender version and OS so maintainers can supply exact install steps.
-
-If anything in this summary is unclear or you want a shorter vs longer version, tell me which parts to expand (examples, code pointers, or a checklist for onboarding new contributors).
+### When to ask before changing
+- File-format identifiers, texture packing, on-disk layouts, or shader graph conventions.
+- Anything that changes naming conventions for collections/objects/material nodes.
