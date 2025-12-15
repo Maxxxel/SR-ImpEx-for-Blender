@@ -353,15 +353,25 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                         loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
                         time = data["loc_per_time"]["times"][i]
                         # TODO: Maybe also zero values have a smoothing?
-                        if i == len(data["loc_per_time"]["vec"]) - 1 or time == 0.0 or not loc_fcs:
+                        # Check if we can compute tangents (need all axes and not the last keyframe)
+                        can_compute_tangents = (
+                            i < len(data["loc_per_time"]["vec"]) - 1 
+                            and time != 0.0 
+                            and all(axis in loc_fcs for axis in range(3))
+                        )
+                        
+                        if can_compute_tangents:
+                            m_local = Vector((
+                                invert_bezier_hermite_for_axis(loc_fcs[0], i, total_frames), 
+                                invert_bezier_hermite_for_axis(loc_fcs[1], i, total_frames), 
+                                invert_bezier_hermite_for_axis(loc_fcs[2], i, total_frames)
+                            ))
+                            m_file = bind_rot @ m_local
+                            loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = m_file[:]
+                        else:
                             loc_keyframe.tan_x = 0.0
                             loc_keyframe.tan_y = 0.0
                             loc_keyframe.tan_z = 0.0
-                            loc_keyframe.tan_w = 0.0
-                        else:
-                            m_local = Vector((invert_bezier_hermite_for_axis(loc_fcs[0], i, total_frames), invert_bezier_hermite_for_axis(loc_fcs[1], i, total_frames), invert_bezier_hermite_for_axis(loc_fcs[2], i, total_frames)))
-                            m_file = bind_rot @ m_local
-                            loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = m_file[:]
                         loc_keyframe.tan_w = 0.0  # No tangents for W in location keyframes
                         keyframes.append(loc_keyframe)
                 except Exception as e:
@@ -392,16 +402,20 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                         )
 
                         time = data["rot_per_time"]["times"][i]
-                        if i == len(data["rot_per_time"]["quat"]) - 1 or time == 0.0 or not rot_fcs:
-                            # TODO: Maybe also zero values have a smoothing?
-                            rot_keyframe.tan_x = 0.0
-                            rot_keyframe.tan_y = 0.0
-                            rot_keyframe.tan_z = 0.0
-                            rot_keyframe.tan_w = 0.0
-                        else:
-                            local_q = Quaternion(
-                                (invert_bezier_hermite_for_axis(rot_fcs[0], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[1], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[2], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[3], i, total_frames))
-                            )
+                        # Check if we can compute tangents (need all axes and not the last keyframe)
+                        can_compute_tangents = (
+                            i < len(data["rot_per_time"]["quat"]) - 1 
+                            and time != 0.0 
+                            and all(axis in rot_fcs for axis in range(4))
+                        )
+                        
+                        if can_compute_tangents:
+                            local_q = Quaternion((
+                                invert_bezier_hermite_for_axis(rot_fcs[0], i, total_frames), 
+                                invert_bezier_hermite_for_axis(rot_fcs[1], i, total_frames), 
+                                invert_bezier_hermite_for_axis(rot_fcs[2], i, total_frames), 
+                                invert_bezier_hermite_for_axis(rot_fcs[3], i, total_frames)
+                            ))
                             file_q = bind_rot @ local_q
                             rot_keyframe.tan_w = -file_q.w
                             rot_keyframe.tan_x, rot_keyframe.tan_y, rot_keyframe.tan_z = (
@@ -409,6 +423,12 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                                 file_q.y,
                                 file_q.z,
                             )
+                        else:
+                            # TODO: Maybe also zero values have a smoothing?
+                            rot_keyframe.tan_x = 0.0
+                            rot_keyframe.tan_y = 0.0
+                            rot_keyframe.tan_z = 0.0
+                            rot_keyframe.tan_w = 0.0
                         keyframes.append(rot_keyframe)
                 except Exception as e:
                     raise RuntimeError(f"Error generating rotation keyframes for bone '{bone_name}': {e}") from e
