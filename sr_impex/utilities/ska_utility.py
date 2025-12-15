@@ -139,13 +139,27 @@ def generate_bone_id(bone_name: str) -> int:
 
 # invert Bézier→Hermite for each axis
 def invert_bezier_hermite_for_axis(fc: bpy.types.FCurve, i: int, total_frames: float) -> float:
-    p = fc.keyframe_points[i]
-    n = fc.keyframe_points[i + 1]
-    df = n.co[0] - p.co[0]
-    return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
+    """Convert Blender Bezier handle slope to a Hermite tangent.
+
+    Note: This requires a *keyframe index*. When we resample curves on a union
+    of frame-times, the sample index may exceed the number of keyframes on a
+    specific axis. In that case we return 0.0 (no tangent) instead of crashing.
+    """
+    try:
+        kps = fc.keyframe_points
+        if i < 0 or (i + 1) >= len(kps):
+            return 0.0
+        p = kps[i]
+        n = kps[i + 1]
+        df = n.co[0] - p.co[0]
+        if df == 0.0:
+            return 0.0
+        return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
+    except Exception:
+        return 0.0
 
 
-def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> None:
+def export_ska(context: bpy.types.Context, filepath: str, action_name: str, export_tangents: bool = False) -> None:
     """Export the current scene to a .ska file."""
     # Find the Animation Data by the given action name in the current context
     action = bpy.data.actions.get(action_name)
@@ -377,15 +391,16 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                     loc_keyframe.w = 1.0
                     loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
                     time = data["loc_per_time"]["times"][i]
-                    # TODO: Maybe also zero values have a smoothing?
+                    # Note: zero-valued keys may also require smoothing.
                     # Check if we can compute tangents (need all axes and not the last keyframe)
                     can_compute_tangents = (
                         i < len(data["loc_per_time"]["vec"]) - 1 
                         and time != 0.0 
                         and all(axis in loc_fcs for axis in range(3))
+                        and all((i + 1) < len(loc_fcs[axis].keyframe_points) for axis in range(3))
                     )
                     
-                    if can_compute_tangents:
+                    if export_tangents and can_compute_tangents:
                         m_local = Vector((
                             invert_bezier_hermite_for_axis(loc_fcs[0], i, total_frames), 
                             invert_bezier_hermite_for_axis(loc_fcs[1], i, total_frames), 
@@ -431,9 +446,10 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                         i < len(data["rot_per_time"]["quat"]) - 1 
                         and time != 0.0 
                         and all(axis in rot_fcs for axis in range(4))
+                        and all((i + 1) < len(rot_fcs[axis].keyframe_points) for axis in range(4))
                     )
                     
-                    if can_compute_tangents:
+                    if export_tangents and can_compute_tangents:
                         local_q = Quaternion((
                             invert_bezier_hermite_for_axis(rot_fcs[0], i, total_frames), 
                             invert_bezier_hermite_for_axis(rot_fcs[1], i, total_frames), 
@@ -448,7 +464,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                             file_q.z,
                         )
                     else:
-                        # TODO: Maybe also zero values have a smoothing?
+                        # Note: zero-valued keys may also require smoothing.
                         rot_keyframe.tan_x = 0.0
                         rot_keyframe.tan_y = 0.0
                         rot_keyframe.tan_z = 0.0

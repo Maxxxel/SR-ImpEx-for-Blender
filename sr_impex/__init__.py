@@ -638,6 +638,12 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
         items=available_actions,  # Note: Pass the function, not the call result!
         update=update_filename,
     )  # type: ignore
+    
+    export_tangents: BoolProperty(
+        name="Export Tangents",
+        description="Export tangents for the animation (if available)",
+        default=False,
+    )  # type: ignore
 
     def invoke(self, context, event):
         # Retrieve the active collection from the active layer collection
@@ -691,9 +697,10 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
         layout = self.layout
         layout.label(text="Export Settings", icon="EXPORT")
         layout.prop(self, "action", text="Action")
+        layout.prop(self, "export_tangents", text="Export Tangents")
 
     def execute(self, context):
-        export_ska(context, self.filepath, self.action)
+        export_ska(context, self.filepath, self.action, export_tangents=self.export_tangents)
 
         return {"FINISHED"}
 
