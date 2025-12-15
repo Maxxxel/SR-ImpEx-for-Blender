@@ -188,11 +188,6 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
         else:
             logger.log(f"Skipping fcurve {fcurve.data_path}", "info", "INFO")
 
-    # Assure we have the same sizes
-    assert len(location_fcurves) == len(
-        rotation_fcurves
-    ), "Different number of location and rotation keyframes"
-
     # Bones Lib, with loc and rot attributes
     bone_lib = {}
 
@@ -210,25 +205,35 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                 else bone_lib[bone_name]
             )
 
-            coords = [[], [], []]
-
+            # Collect all unique frame times from all axes
+            all_frames = set()
+            fcurves_by_axis = {}
             for fcurve in fcurves:
                 axis_index = fcurve.array_index
-
                 assert axis_index < 3, f"Invalid axis {axis_index}"
-
-                # We can have multiple values for X | Y | Z over time
+                fcurves_by_axis[axis_index] = fcurve
                 for kp in fcurve.keyframe_points:
-                    coords[axis_index].append(kp.co[1])  # X | Y | Z value over time
-                    if axis_index == 0:
-                        assert duration > 0, f"Duration is zero: {action.frame_range[1]} / {fps}"
-                        assert fps > 0, "FPS is zero"
-                        t = (kp.co[0] / fps) / duration
-                        bone_lib[bone_name]["loc_per_time"]["times"].append(t)
-
-            assert (
-                len(coords[0]) == len(coords[1]) == len(coords[2])
-            ), "Uneven loc keycounts"
+                    all_frames.add(kp.co[0])
+            
+            # Sort frames to maintain consistent ordering
+            sorted_frames = sorted(all_frames)
+            
+            # Evaluate each axis at all frame times
+            coords = [[], [], []]
+            for frame in sorted_frames:
+                assert duration > 0, f"Duration is zero: {action.frame_range[1]} / {fps}"
+                assert fps > 0, "FPS is zero"
+                t = (frame / fps) / duration
+                bone_lib[bone_name]["loc_per_time"]["times"].append(t)
+                
+                for axis_index in range(3):
+                    if axis_index in fcurves_by_axis:
+                        # Evaluate the fcurve at this frame
+                        value = fcurves_by_axis[axis_index].evaluate(frame)
+                        coords[axis_index].append(value)
+                    else:
+                        # If this axis doesn't have an fcurve, use 0.0
+                        coords[axis_index].append(0.0)
 
             # Generate XYZ pairs
             bone_lib[bone_name]["loc_per_time"]["vec"].extend(zip(*coords))
@@ -239,30 +244,74 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
     try:
         for data_path, fcurves in rotation_fcurves.items():
             bone_name = data_path.split('"')[1]
-            # We should have the bone in the bone_lib
-            assert bone_name in bone_lib, f"Bone {bone_name} not found in the bone_lib"
+            # Create bone entry if it doesn't exist (in case there are only rotation keyframes)
+            bone_lib[bone_name] = (
+                {
+                    "loc_per_time": {"vec": [], "times": []},
+                    "rot_per_time": {"quat": [], "times": []},
+                }
+                if bone_name not in bone_lib
+                else bone_lib[bone_name]
+            )
 
-            coords = [[], [], [], []]
-
+            # Collect all unique frame times from all axes
+            all_frames = set()
+            fcurves_by_axis = {}
             for fcurve in fcurves:
                 axis_index = fcurve.array_index
-
                 assert axis_index < 4, f"Invalid axis {axis_index}"
-
+                fcurves_by_axis[axis_index] = fcurve
                 for kp in fcurve.keyframe_points:
-                    coords[axis_index].append(kp.co[1])  # W | X | Y | Z value over time
-                    if axis_index == 0:
-                        t = (kp.co[0] / fps) / duration
-                        bone_lib[bone_name]["rot_per_time"]["times"].append(t)
-
-            assert all(
-                len(coords[i]) == len(coords[0]) for i in range(4)
-            ), "Uneven rot keycounts"
+                    all_frames.add(kp.co[0])
+            
+            # Sort frames to maintain consistent ordering
+            sorted_frames = sorted(all_frames)
+            
+            # Evaluate each axis at all frame times
+            coords = [[], [], [], []]
+            for frame in sorted_frames:
+                t = (frame / fps) / duration
+                bone_lib[bone_name]["rot_per_time"]["times"].append(t)
+                
+                for axis_index in range(4):
+                    if axis_index in fcurves_by_axis:
+                        # Evaluate the fcurve at this frame
+                        value = fcurves_by_axis[axis_index].evaluate(frame)
+                        coords[axis_index].append(value)
+                    else:
+                        # If this axis doesn't have an fcurve, use default quaternion component
+                        # w=1, x=0, y=0, z=0 for identity quaternion
+                        coords[axis_index].append(1.0 if axis_index == 0 else 0.0)
 
             # Generate WXYZ pairs
             bone_lib[bone_name]["rot_per_time"]["quat"].extend(zip(*coords))
     except Exception as e:
         raise RuntimeError(f"Error processing rotation F-curves: {e}") from e
+
+    # Ensure every bone has both location and rotation data (game engine requirement)
+    # Bones must have at least one keyframe for both location and rotation
+    for bone_name in list(bone_lib.keys()):
+        data = bone_lib[bone_name]
+        
+        # If location is missing, add a single keyframe at t=0 with zero location
+        if len(data["loc_per_time"]["vec"]) == 0:
+            data["loc_per_time"]["times"].append(0.0)
+            data["loc_per_time"]["vec"].append((0.0, 0.0, 0.0))
+            logger.log(
+                f"Bone '{bone_name}' has no location keyframes. Added default keyframe at t=0.",
+                "warning",
+                "WARNING",
+            )
+        
+        # If rotation is missing, add a single keyframe at t=0 with identity quaternion
+        if len(data["rot_per_time"]["quat"]) == 0:
+            data["rot_per_time"]["times"].append(0.0)
+            data["rot_per_time"]["quat"].append((1.0, 0.0, 0.0, 0.0))
+            logger.log(
+                f"Bone '{bone_name}' has no rotation keyframes. Added default keyframe at t=0.",
+                "warning",
+                "WARNING",
+            )
 
     # Create Header, Time and Keyframes
     headers: list[SKAHeader] = []
@@ -309,6 +358,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
             bind_loc = bind_matrix.to_translation()
             bind_rot = bind_matrix.to_quaternion()
 
+            # Game engine requires both location and rotation headers for every bone
+            # Create location header (always, even if empty)
             loc_header = SKAHeader()
             loc_header.type = 0
             loc_header.tick = last_tick
@@ -319,7 +370,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
             headers.append(loc_header)
 
             try:
-                loc_fcs = loc_fcc_map[bone_name]
+                loc_fcs = loc_fcc_map.get(bone_name, {})
                 for i, loc in enumerate(data["loc_per_time"]["vec"]):
                     original_loc = bind_rot @ Vector(loc) + bind_loc
                     loc_keyframe = SKAKeyframe()
@@ -327,20 +378,31 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                     loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
                     time = data["loc_per_time"]["times"][i]
                     # TODO: Maybe also zero values have a smoothing?
-                    if i == len(data["loc_per_time"]["vec"]) - 1 or time == 0.0:
+                    # Check if we can compute tangents (need all axes and not the last keyframe)
+                    can_compute_tangents = (
+                        i < len(data["loc_per_time"]["vec"]) - 1 
+                        and time != 0.0 
+                        and all(axis in loc_fcs for axis in range(3))
+                    )
+                    
+                    if can_compute_tangents:
+                        m_local = Vector((
+                            invert_bezier_hermite_for_axis(loc_fcs[0], i, total_frames), 
+                            invert_bezier_hermite_for_axis(loc_fcs[1], i, total_frames), 
+                            invert_bezier_hermite_for_axis(loc_fcs[2], i, total_frames)
+                        ))
+                        m_file = bind_rot @ m_local
+                        loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = m_file[:]
+                    else:
                         loc_keyframe.tan_x = 0.0
                         loc_keyframe.tan_y = 0.0
                         loc_keyframe.tan_z = 0.0
-                        loc_keyframe.tan_w = 0.0
-                    else:
-                        m_local = Vector((invert_bezier_hermite_for_axis(loc_fcs[0], i, total_frames), invert_bezier_hermite_for_axis(loc_fcs[1], i, total_frames), invert_bezier_hermite_for_axis(loc_fcs[2], i, total_frames)))
-                        m_file = bind_rot @ m_local
-                        loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = m_file[:]
                     loc_keyframe.tan_w = 0.0  # No tangents for W in location keyframes
                     keyframes.append(loc_keyframe)
             except Exception as e:
                 raise RuntimeError(f"Error generating location keyframes for bone '{bone_name}': {e}") from e
 
+            # Create rotation header (always, even if empty)
             rot_header = SKAHeader()
             rot_header.type = 1
             rot_header.tick = last_tick
@@ -351,7 +413,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
             headers.append(rot_header)
 
             try:
-                rot_fcs = rot_fcc_map[bone_name]
+                rot_fcs = rot_fcc_map.get(bone_name, {})
                 for i, quat in enumerate(data["rot_per_time"]["quat"]):
                     stored_quat = Quaternion(quat)  # Assuming quat is in (w, x, y, z) order
                     original_quat = bind_rot @ stored_quat
@@ -364,16 +426,20 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                     )
 
                     time = data["rot_per_time"]["times"][i]
-                    if i == len(data["rot_per_time"]["quat"]) - 1 or time == 0.0:
-                        # TODO: Maybe also zero values have a smoothing?
-                        rot_keyframe.tan_x = 0.0
-                        rot_keyframe.tan_y = 0.0
-                        rot_keyframe.tan_z = 0.0
-                        rot_keyframe.tan_w = 0.0
-                    else:
-                        local_q = Quaternion(
-                            (invert_bezier_hermite_for_axis(rot_fcs[0], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[1], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[2], i, total_frames), invert_bezier_hermite_for_axis(rot_fcs[3], i, total_frames))
-                        )
+                    # Check if we can compute tangents (need all axes and not the last keyframe)
+                    can_compute_tangents = (
+                        i < len(data["rot_per_time"]["quat"]) - 1 
+                        and time != 0.0 
+                        and all(axis in rot_fcs for axis in range(4))
+                    )
+                    
+                    if can_compute_tangents:
+                        local_q = Quaternion((
+                            invert_bezier_hermite_for_axis(rot_fcs[0], i, total_frames), 
+                            invert_bezier_hermite_for_axis(rot_fcs[1], i, total_frames), 
+                            invert_bezier_hermite_for_axis(rot_fcs[2], i, total_frames), 
+                            invert_bezier_hermite_for_axis(rot_fcs[3], i, total_frames)
+                        ))
                         file_q = bind_rot @ local_q
                         rot_keyframe.tan_w = -file_q.w
                         rot_keyframe.tan_x, rot_keyframe.tan_y, rot_keyframe.tan_z = (
@@ -381,6 +447,12 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str) -> N
                             file_q.y,
                             file_q.z,
                         )
+                    else:
+                        # TODO: Maybe also zero values have a smoothing?
+                        rot_keyframe.tan_x = 0.0
+                        rot_keyframe.tan_y = 0.0
+                        rot_keyframe.tan_z = 0.0
+                        rot_keyframe.tan_w = 0.0
                     keyframes.append(rot_keyframe)
             except Exception as e:
                 raise RuntimeError(f"Error generating rotation keyframes for bone '{bone_name}': {e}") from e
