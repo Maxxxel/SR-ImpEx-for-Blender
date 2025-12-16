@@ -154,6 +154,32 @@ def insert_hermite_bezier_curve(
         kp1.handle_left.x = f1 - off_f
         kp1.handle_left.y = P1 - off_v1
 
+    # Also set endpoint handles so endpoint tangents survive round-trips.
+    # Blender doesn't need them for evaluation outside the curve range,
+    # but SKA stores tangents for *every* keyframe, including endpoints.
+    if n >= 2:
+        # First key: set LEFT handle from tangent[0] using first segment length
+        f0, f1 = frames[0], frames[1]
+        P0 = values[0]
+        M0 = tangents[0]
+        dt_n = (f1 - f0) / (duration * fps)
+        off_f = (f1 - f0) / 3.0
+        off_v0 = (M0 * dt_n) / 3.0
+        kp0 = fcurve.keyframe_points[0]
+        kp0.handle_left.x = f0 - off_f
+        kp0.handle_left.y = P0 - off_v0
+
+        # Last key: set RIGHT handle from tangent[-1] using last segment length
+        f0, f1 = frames[-2], frames[-1]
+        P1 = values[-1]
+        M1 = tangents[-1]
+        dt_n = (f1 - f0) / (duration * fps)
+        off_f = (f1 - f0) / 3.0
+        off_v1 = (M1 * dt_n) / 3.0
+        kp1 = fcurve.keyframe_points[-1]
+        kp1.handle_right.x = f1 + off_f
+        kp1.handle_right.y = P1 + off_v1
+
 
 def import_ska_animation(
     ska_file: SKA,
