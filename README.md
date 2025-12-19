@@ -4,7 +4,7 @@
 
 # Battleforge Model Importer/Exporter for Blender
 
-A Blender Add-on designed for easy importing and exporting of Battleforge game assets (`.drs`, `.bmg`). Streamline your workflow by quickly importing, editing, animating, and exporting models directly within Blender.
+A Blender add-on for working with BattleForge assets (`.drs`, `.bmg`, `.ska`). Import meshes, materials, collisions, skeletons, animations, tweak game metadata via custom editors, and export back to engine formats without leaving Blender.
 
 ---
 
@@ -45,7 +45,7 @@ Follow these steps to install the add-on into Blender:
 
 4. **Create New Battleforge Scene**  
    - Click the **New Battleforge Scene** button.  
-   - Blender generates a new Collection hierarchy.
+   - Blender generates the required `DRSModel_*` collection hierarchy.
 
 5. **Organize Collections**  
    - (Optional) Delete the original `Collection` hierarchy.  
@@ -80,20 +80,20 @@ Follow these steps to install the add-on into Blender:
 
 ## 🎯 Supported Features
 
-### ✅ Import Features
+### ✅ Supported Features
 
-- **File Formats**: `.drs`, `.bmg` (objects, units, buildings, and more)
-- **Meshes**: Geometry import
-- **Materials**: Color, Normal, Metalness, Roughness, Emission, Refraction
-- **Skeletons and Skins**: Armature structure and skinning
-- **Animations**: Full animation import
-
-### ✅ Export Features
-
-- **File Formats**: `.drs` for static and animated objects
-- **Meshes**: Geometry export
-- **Materials**: Color, Normal, Metalness, Roughness, Emission, Refraction
-- **Animations**: SKA files (editing existing or creating new ones)
+- **DRS/BMG import**: Meshes, materials (color/normal/parameter/refraction), collision shapes, armatures/skins, animations; building mesh-grid states for BMG assets.
+- **DRS export**: Static and animated models with collision, UV island splitting, transform application, debug collection retention.
+- **SKA animation export/import**: Create or edit SKA clips, map actions to abilities and animation types.
+- **Material helpers**: DRS shader node group, texture suffix conventions (`_col`, `_nor`, `_par`, `_flu`), parameter/flow controls, alpha/decal toggles.
+- **Collision + OBB tools**: Generate and visualize OBB trees, manage collision shape collections.
+- **Data editors (View 3D > Sidebar > DRS Editor unless noted)**:
+   - Animation Set Editor: map Blender actions to DRS animation types/abilities, manage ability metadata and visibility jobs.
+   - Effect Set Editor: edit EffectSet blobs (animations, variants, sounds) stored on `DRSModel_*` collections.
+   - Locator Editor: manage `CDrwLocatorList` entries (bone-local/world locators) with per-locator transforms and IDs.
+   - Material Flow / Flags Editor: drive DRS shader inputs (flow speed/scale, alpha/decal flags, normal/parameter/refraction toggles).
+   - OBB Debug Tools: build and depth-filter OBBTree visualizations under `Debug_Collection`.
+   - BMG State Editor (View 3D > Sidebar > BMG Editor): toggle building states (`S0`, `S2`, debris, destroyed) and collision visibility.
 
 ---
 
@@ -105,18 +105,15 @@ Demonstration of the Battleforge Model Importer for Blender in action:
 
 ---
 
-## 🔜 Roadmap (Future Development)
+## 🔜 Roadmap (Current Focus)
 
-- **Animation Smoothing**: Export Battleforge Engine compatible smoothing values for the SKA files.
-- **Model Preservation**: Edit models while preserving untouched original data.
-- **Fluid Map**: Currently unsupported due to Blender limitations (possible future workaround as a separate animation).
+- Bug fixing and stability for import/export and editor panels.
 
 ---
 
 ## ⚠️ Compatibility & Support
 
-- Compatible with Blender versions `3.x` and `4.x`.  
-- Older Blender versions may not be fully supported.
+- Compatible with Blender `4.x`; `3.x` may work but is not a primary target.
 
 Encountering issues or have suggestions?  
 Please report them by opening an issue on the [GitHub repository](./issues).
@@ -125,4 +122,4 @@ Please report them by opening an issue on the [GitHub repository](./issues).
 
 ## 📜 License
 
-This project is provided under the MIT License. Refer to the `LICENSE` file for details.
+This project uses a custom license: non-commercial use only, no modifications without consent, and redistribution of unmodified copies must keep notices intact. Format rights and game assets remain with their respective owners; see the `license` file for full terms.
