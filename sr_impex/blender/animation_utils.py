@@ -6,7 +6,7 @@ from mathutils import Quaternion, Vector
 import bpy
 
 from sr_impex.definitions.ska_definitions import SKA, SKAKeyframe
-from sr_impex.definitions.drs_definitions import DRSBone
+from sr_impex.definitions.skeleton_definitions import DRSBone
 
 IS_44_PLUS = bpy.app.version >= (4, 4, 0)
 
@@ -141,18 +141,18 @@ def insert_hermite_bezier_curve(
     # Compute and set handles
     for i in range(n - 1):
         f0, f1 = frames[i], frames[i + 1]
-        P0, P1 = values[i], values[i + 1]
-        M0, M1 = tangents[i], tangents[i + 1]
+        p0, p1 = values[i], values[i + 1]
+        m0, m1 = tangents[i], tangents[i + 1]
         dt_n = (f1 - f0) / (duration * fps)
         off_f = (f1 - f0) / 3.0
-        off_v0 = (M0 * dt_n) / 3.0
-        off_v1 = (M1 * dt_n) / 3.0
+        off_v0 = (m0 * dt_n) / 3.0
+        off_v1 = (m1 * dt_n) / 3.0
         kp0 = fcurve.keyframe_points[i]
         kp1 = fcurve.keyframe_points[i + 1]
         kp0.handle_right.x = f0 + off_f
-        kp0.handle_right.y = P0 + off_v0
+        kp0.handle_right.y = p0 + off_v0
         kp1.handle_left.x = f1 - off_f
-        kp1.handle_left.y = P1 - off_v1
+        kp1.handle_left.y = p1 - off_v1
 
     # Also set endpoint handles so endpoint tangents survive round-trips.
     # Blender doesn't need them for evaluation outside the curve range,
@@ -160,25 +160,25 @@ def insert_hermite_bezier_curve(
     if n >= 2:
         # First key: set LEFT handle from tangent[0] using first segment length
         f0, f1 = frames[0], frames[1]
-        P0 = values[0]
-        M0 = tangents[0]
+        p0 = values[0]
+        m0 = tangents[0]
         dt_n = (f1 - f0) / (duration * fps)
         off_f = (f1 - f0) / 3.0
-        off_v0 = (M0 * dt_n) / 3.0
+        off_v0 = (m0 * dt_n) / 3.0
         kp0 = fcurve.keyframe_points[0]
         kp0.handle_left.x = f0 - off_f
-        kp0.handle_left.y = P0 - off_v0
+        kp0.handle_left.y = p0 - off_v0
 
         # Last key: set RIGHT handle from tangent[-1] using last segment length
         f0, f1 = frames[-2], frames[-1]
-        P1 = values[-1]
-        M1 = tangents[-1]
+        p1 = values[-1]
+        m1 = tangents[-1]
         dt_n = (f1 - f0) / (duration * fps)
         off_f = (f1 - f0) / 3.0
-        off_v1 = (M1 * dt_n) / 3.0
+        off_v1 = (m1 * dt_n) / 3.0
         kp1 = fcurve.keyframe_points[-1]
         kp1.handle_right.x = f1 + off_f
-        kp1.handle_right.y = P1 + off_v1
+        kp1.handle_right.y = p1 + off_v1
 
 
 def import_ska_animation(
@@ -214,7 +214,7 @@ def import_ska_animation(
         print(f"Info: Action '{name}' already exists, assigned existing action.")
         return
 
-    action = create_action(arm_obj, name=name, cyclic=(ska_file.repeat > 1))
+    action = create_action(arm_obj, name=name, cyclic=ska_file.repeat > 1)
     duration = ska_file.duration
     frame_length = ska_file.frame_length
     original_fps = frame_length / duration
@@ -310,8 +310,7 @@ def import_ska_animation(
                     insert_or_replace_key(fcurve, fr, v, interpolation="LINEAR")
     # Add NLA track strip
     track = arm_obj.animation_data.nla_tracks.new()
-    strip = track.strips.new(action.name, 0, action)
-
+    track.strips.new(action.name, 0, action)
     track.name = action.name
     # Save Original Duration in the Action
     action["original_duration"] = duration

@@ -146,7 +146,7 @@ class SoundHeader:
     max_falloff: float = 1.0
     pitch_shift_min: float = 1.0
     pitch_shift_max: float = 1.0
-    
+
     def read(self, file: BinaryIO) -> "SoundHeader":
         self.is_one = unpack("h", file.read(2))[0]
         (
@@ -157,11 +157,11 @@ class SoundHeader:
             self.pitch_shift_max,
         ) = unpack("fffff", file.read(20))
         return self
-    
+
     def write(self, file: BinaryIO) -> None:
         file.write(pack("h", self.is_one))
         file.write(pack("fffff", self.min_falloff, self.max_falloff, self.volume, self.pitch_shift_min, self.pitch_shift_max))
-    
+
     def size(self) -> int:
         return 2 + 20
 
@@ -174,7 +174,7 @@ class SoundHeader2:
     pitch_shift_max: float = 1.0
     min_falloff: float = 1.0
     max_falloff: float = 1.0
-    
+
     def read(self, file: BinaryIO) -> "SoundHeader2":
         self.is_one = unpack("h", file.read(2))[0]
         (
@@ -185,13 +185,13 @@ class SoundHeader2:
             self.max_falloff,
         ) = unpack("fffff", file.read(20))
         return self
-    
+
     def write(self, file: BinaryIO) -> None:
         file.write(pack("h", self.is_one))
         file.write(pack("fffff", self.volume, self.pitch_shift_min, self.pitch_shift_max, self.min_falloff, self.max_falloff))
-    
+
     def size(self) -> int:
-        return 2 + 20        
+        return 2 + 20
 
 
 @dataclass(eq=False, repr=False)
@@ -200,20 +200,20 @@ class SoundFile:
     sound_header: SoundHeader2 =  SoundHeader2()
     sound_file_name_length: int = 0  # Int
     sound_file_name: str = ""  # CString
-    
+
     def read(self, file: BinaryIO) -> "SoundFile":
         self.weight = unpack("B", file.read(1))[0]
         self.sound_header = SoundHeader2().read(file)
         self.sound_file_name_length = unpack("i", file.read(4))[0]
         self.sound_file_name = file.read(self.sound_file_name_length).decode("utf-8").strip("\x00")
         return self
-    
+
     def write(self, file: BinaryIO) -> None:
         file.write(pack("B", self.weight))
         self.sound_header.write(file)
         file.write(pack("i", self.sound_file_name_length))
         file.write(self.sound_file_name.encode("utf-8"))
-        
+
     def size(self) -> int:
         return 1 + self.sound_header.size() + 4 + self.sound_file_name_length
 
@@ -224,7 +224,7 @@ class SoundContainer:
     uk_index: int = 0  # short # [0, 1, 2, 3, 13, 15, 18, 25, 30, 33, 35, 38]; 0 only used by ImpactSounds
     nbr_sound_variations: int = 0  # short
     sound_files: List[SoundFile] = field(default_factory=list)
-    
+
     def read(self, file: BinaryIO) -> "SoundContainer":
         self.sound_header = SoundHeader().read(file)
         self.uk_index = unpack("h", file.read(2))[0]
@@ -233,14 +233,14 @@ class SoundContainer:
             SoundFile().read(file) for _ in range(self.nbr_sound_variations)
         ]
         return self
-    
+
     def write(self, file: BinaryIO) -> None:
         self.sound_header.write(file)
         file.write(pack("h", self.uk_index))
         file.write(pack("h", self.nbr_sound_variations))
         for sound_file in self.sound_files:
             sound_file.write(file)
-            
+
     def size(self) -> int:
         base = self.sound_header.size() + 2 + 2
         for sound_file in self.sound_files:
@@ -254,7 +254,7 @@ class AdditionalSoundContainer:
     sound_type: int = 0  # short use ENUM SoundType
     nbr_sound_variations: int = 0  # short
     sound_containers: List[SoundContainer] = field(default_factory=list)
-    
+
     def read(self, file: BinaryIO) -> "AdditionalSoundContainer":
         self.sound_header = SoundHeader().read(file)
         self.sound_type = unpack("h", file.read(2))[0]
@@ -263,14 +263,14 @@ class AdditionalSoundContainer:
             SoundContainer().read(file) for _ in range(self.nbr_sound_variations)
         ]
         return self
-    
+
     def write(self, file: BinaryIO) -> None:
         self.sound_header.write(file)
         file.write(pack("h", self.sound_type))
         file.write(pack("h", self.nbr_sound_variations))
         for sound_container in self.sound_containers:
             sound_container.write(file)
-            
+
     def size(self) -> int:
         base = self.sound_header.size() + 2 + 2
         for sound_container in self.sound_containers:
@@ -290,7 +290,7 @@ class EffectSet:
     )  # Vector3
     number_impact_sounds: int = 0  # short
     impact_sounds: List[SoundContainer] = field(default_factory=list)
-    number_additional_Sounds: int = 0  # short
+    number_additional_sounds: int = 0  # short
     additional_sounds: List[AdditionalSoundContainer] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "EffectSet":
@@ -310,10 +310,10 @@ class EffectSet:
             self.impact_sounds = [
                 SoundContainer().read(file) for _ in range(self.number_impact_sounds)
             ]
-            self.number_additional_Sounds = unpack("h", file.read(2))[0]
+            self.number_additional_sounds = unpack("h", file.read(2))[0]
             self.additional_sounds = [
                 AdditionalSoundContainer().read(file)
-                for _ in range(self.number_additional_Sounds)
+                for _ in range(self.number_additional_sounds)
             ]
         return self
 
@@ -330,7 +330,7 @@ class EffectSet:
             file.write(pack("h", self.number_impact_sounds))
             for impact_sound in self.impact_sounds:
                 impact_sound.write(file)
-            file.write(pack("h", self.number_additional_Sounds))
+            file.write(pack("h", self.number_additional_sounds))
             for additional_sound in self.additional_sounds:
                 additional_sound.write(file)
 

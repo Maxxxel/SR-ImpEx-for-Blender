@@ -1,148 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from struct import calcsize, pack, unpack
-from typing import BinaryIO, List, Optional, TYPE_CHECKING, Union
-
-from mathutils import Matrix, Quaternion, Vector
-
-# Explicit export list to placate lint tools.
-__all__: list[str] = []  # pylint: disable=invalid-all-object
+from dataclasses import dataclass
+from struct import pack, unpack
 
 from sr_impex.core.file_io import FileReader, FileWriter
-from sr_impex.definitions.base_types import (
-    BaseContainer,
-    CMatCoordinateSystem,
-    ExportError,
-    Matrix4x4,
-    Node,
-    NodeInformation,
-    RootNode,
-    RootNodeInformation,
-    Vector3,
-    Vector4,
-    _auto_wrap_all_write_methods,
-    error_context,
-    Face,
-)
-from sr_impex.definitions.enums import (
-    AnimationType,
-    LocatorClass,
-    WriteOrder,
-    InformationIndices
-)
-
-if TYPE_CHECKING:
-    from sr_impex.definitions.fxb_definitions import FxMaster
-
-# Import all moved classes from the new modular definition files
-# These are re-exported for backward compatibility
-from sr_impex.definitions.mesh_definitions import (
-    Vertex,
-    VertexData,
-    CGeoMesh,
-    MeshData,
-    Texture,
-    Textures,
-    Material,
-    Materials,
-    Refraction,
-    LevelOfDetail,
-    EmptyString,
-    Flow,
-    BattleforgeMesh,
-    CDspMeshFile,
-    unpack_data,  # utility function
-)
-from sr_impex.definitions.skeleton_definitions import (
-    Bone,
-    BoneMatrix,
-    BoneVertex,
-    DRSBone,
-    BoneWeight,
-    CSkSkeleton,
-    CSkSkinInfo,
-    JointGroup,
-    CDspJointMap,
-)
-from sr_impex.definitions.collision_definitions import (
-    CGeoAABox,
-    BoxShape,
-    CGeoCylinder,
-    CylinderShape,
-    CGeoSphere,
-    SphereShape,
-    CollisionShape,
-)
-from sr_impex.definitions.obb_definitions import (
-    OBBNode,
-    CGeoOBBTree,
-)
-from sr_impex.definitions.locator_definitions import (
-    SLocator,
-    CDrwLocatorList,
-)
-from sr_impex.definitions.resource_definitions import (
-    DrwResourceMeta,
-    CGeoPrimitiveContainer,
-    Constraint,
-    IKAtlas,
-)
-from sr_impex.definitions.animation_definitions import (
-    AnimationSetVariant,
-    ModeAnimationKey,
-    AnimationMarker,
-    AnimationMarkerSet,
-    UnknownStruct2,
-    UnknownStruct,
-    AnimationSet,
-    Timing,
-    TimingVariant,
-    AnimationTiming,
-    StructV3,
-    AnimationTimings,
-)
-from sr_impex.definitions.effect_definitions import (
-    Variant,
-    Keyframe,
-    SkelEff,
-    SoundHeader,
-    SoundHeader2,
-    SoundFile,
-    SoundContainer,
-    AdditionalSoundContainer,
-    EffectSet,
-)
-
-# Re-export all moved classes for backward compatibility
-__all__ += [
-    # Mesh classes
-    'Vertex', 'VertexData', 'CGeoMesh', 'MeshData', 'Texture', 'Textures', 
-    'Material', 'Materials', 'Refraction', 'LevelOfDetail', 'EmptyString', 
-    'Flow', 'BattleforgeMesh', 'CDspMeshFile', 'unpack_data',
-    # Skeleton classes
-    'Bone', 'BoneMatrix', 'BoneVertex', 'DRSBone', 'BoneWeight', 
-    'CSkSkeleton', 'CSkSkinInfo', 'JointGroup', 'CDspJointMap',
-    # Collision classes
-    'CGeoAABox', 'BoxShape', 'CGeoCylinder', 'CylinderShape', 
-    'CGeoSphere', 'SphereShape', 'CollisionShape',
-    # OBB classes
-    'OBBNode', 'CGeoOBBTree',
-    # Locator classes
-    'SLocator', 'CDrwLocatorList',
-    # Resource classes
-    'DrwResourceMeta', 'CGeoPrimitiveContainer', 'Constraint', 'IKAtlas',
-    # Animation classes
-    'AnimationSetVariant', 'ModeAnimationKey', 'AnimationMarker', 
-    'AnimationMarkerSet', 'UnknownStruct2', 'UnknownStruct', 'AnimationSet', 
-    'Timing', 'TimingVariant', 'AnimationTiming', 'StructV3', 'AnimationTimings',
-    # Effect classes
-    'Variant', 'Keyframe', 'SkelEff', 'SoundHeader', 'SoundHeader2', 
-    'SoundFile', 'SoundContainer', 'AdditionalSoundContainer', 'EffectSet',
-    # DRS container
-    'DRS',
-]
-
+from sr_impex.definitions.base_types import BaseContainer,ExportError,Node,NodeInformation,RootNode,RootNodeInformation, _auto_wrap_all_write_methods, error_context
+from sr_impex.definitions.enums import WriteOrder, InformationIndices
+from sr_impex.definitions.fxb_definitions import FxMaster
+from sr_impex.definitions.mesh_definitions import CGeoMesh, CDspMeshFile
+from sr_impex.definitions.skeleton_definitions import CSkSkeleton,CSkSkinInfo,CDspJointMap
+from sr_impex.definitions.collision_definitions import CollisionShape
+from sr_impex.definitions.obb_definitions import CGeoOBBTree
+from sr_impex.definitions.locator_definitions import CDrwLocatorList
+from sr_impex.definitions.resource_definitions import DrwResourceMeta, CGeoPrimitiveContainer
+from sr_impex.definitions.animation_definitions import AnimationSet, AnimationTimings
+from sr_impex.definitions.effect_definitions import EffectSet
 
 @dataclass(eq=False, repr=False)
 class DRS(BaseContainer):
@@ -305,7 +177,7 @@ class DRS(BaseContainer):
                 # Root Node has no info_index
                 continue
 
-            node_info = self.node_informations[node.info_index]
+            node_info = self.node_informations[node.info_index] # pylint: disable=E1101
             if node_info is None:
                 raise TypeError(f"Node {node.name} not found")
 
@@ -319,7 +191,6 @@ class DRS(BaseContainer):
                 val = "CollisionShape"
 
             if val == "FxMaster":
-                from sr_impex.definitions.fxb_definitions import FxMaster
                 self.fx_master = FxMaster().read(reader)
                 continue
 

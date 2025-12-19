@@ -444,7 +444,7 @@ class BMG_OT_SwitchMeshState(Operator):
     bl_idname = "bmg.switch_mesh_state"
     bl_label = "Switch Mesh State"
     bl_options = {'REGISTER', 'UNDO'}
-    
+
     state: EnumProperty(
         name="State",
         description="Which state to display",
@@ -457,7 +457,7 @@ class BMG_OT_SwitchMeshState(Operator):
         ],
         default='S0'
     )
-    
+
     @classmethod
     def poll(cls, context):
         """Only enable if a MeshSet collection is selected or active"""
@@ -468,11 +468,11 @@ class BMG_OT_SwitchMeshState(Operator):
                 if col.name.startswith("MeshSet_"):
                     return True
         return False
-    
-    def execute(self, context):        
+
+    def execute(self, context):
         # Try to get MeshSet collection from context
         meshset_collection = None
-        
+
         if context.collection and context.collection.name.startswith("MeshSet_"):
             meshset_collection = context.collection
         elif context.active_object:
@@ -480,19 +480,19 @@ class BMG_OT_SwitchMeshState(Operator):
                 if col.name.startswith("MeshSet_"):
                     meshset_collection = col
                     break
-        
+
         if not meshset_collection:
             self.report({'WARNING'}, "No MeshSet collection found")
             return {'CANCELLED'}
-        
+
         # Switch the state
         switch_meshset_state(meshset_collection, self.state)
-        
+
         # Update viewport
         for area in context.screen.areas:
             if area.type == 'VIEW_3D':
                 area.tag_redraw()
-        
+
         self.report({'INFO'}, f"Switched to state: {self.state}")
         return {'FINISHED'}
 
@@ -502,7 +502,7 @@ class BMG_OT_SwitchAllMeshSetsState(Operator):
     bl_idname = "bmg.switch_all_meshsets_state"
     bl_label = "Switch All MeshSets State"
     bl_options = {'REGISTER', 'UNDO'}
-    
+
     state: EnumProperty(
         name="State",
         description="Which state to display",
@@ -515,7 +515,7 @@ class BMG_OT_SwitchAllMeshSetsState(Operator):
         ],
         default='S0'
     )
-    
+
     @classmethod
     def poll(cls, context):
         """Only enable if a DRSModel collection exists in the scene"""
@@ -523,8 +523,8 @@ class BMG_OT_SwitchAllMeshSetsState(Operator):
             if col.name.startswith("DRSModel_"):
                 return True
         return False
-    
-    def execute(self, context):       
+
+    def execute(self, context):
         count = 0
         # Find all DRSModel collections first, then look for MeshSetGrid children
         for col in bpy.data.collections:
@@ -537,16 +537,16 @@ class BMG_OT_SwitchAllMeshSetsState(Operator):
                             if meshset.name.startswith("MeshSet_"):
                                 switch_meshset_state(meshset, self.state)
                                 count += 1
-        
+
         if count == 0:
             self.report({'WARNING'}, "No MeshSet collections found")
             return {'CANCELLED'}
-        
+
         # Update viewport
         for area in context.screen.areas:
             if area.type == 'VIEW_3D':
                 area.tag_redraw()
-        
+
         self.report({'INFO'}, f"Switched {count} MeshSet(s) to state: {self.state}")
         return {'FINISHED'}
 
@@ -558,7 +558,7 @@ class BMG_PT_MeshStateEditor(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'BMG Editor'
-    
+
     @classmethod
     def poll(cls, context):
         """Only show panel if a BMG model is present"""
@@ -568,7 +568,7 @@ class BMG_PT_MeshStateEditor(Panel):
                     if child.name.startswith("MeshSetGrid_"):
                         return True
         return False
-    
+
     def draw(self, context):
         layout = self.layout
 
@@ -588,26 +588,26 @@ class BMG_PT_MeshStateEditor(Panel):
         vis_box.label(text="Visibility", icon='HIDE_OFF')
         vis_box.prop(context.window_manager, "bmg_show_collision_shapes", text="Show Collision Shapes")
         vis_box.prop(context.window_manager, "bmg_show_slocators", text="Show SLocators")
-        
+
         # All MeshSets section
         box = layout.box()
         box.label(text="All MeshSets in Scene", icon='WORLD')
-        
+
         col = box.column(align=True)
         col.label(text="Switch All States:")
-        
+
         op = col.operator("bmg.switch_all_meshsets_state", text="Show undamaged", icon='MESH_CUBE')
         op.state = 'S0'
-        
+
         op = col.operator("bmg.switch_all_meshsets_state", text="Show damaged", icon='MOD_EXPLODE')
         op.state = 'S2'
-        
+
         op = col.operator("bmg.switch_all_meshsets_state", text="Show damaged + Debris (should look undamaged)", icon='PHYSICS')
         op.state = 'S2_with_debris'
-        
+
         op = col.operator("bmg.switch_all_meshsets_state", text="Show Debris", icon='PARTICLE_DATA')
         op.state = 'S3_destroyed'
-        
+
         col.separator()
         op = col.operator("bmg.switch_all_meshsets_state", text="Show All Stages", icon='PRESET')
         op.state = 'all_states'

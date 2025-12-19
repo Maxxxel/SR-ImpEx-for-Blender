@@ -17,7 +17,7 @@ KNOWN_MATERIAL_FLAGS = {
 _MAX_BITS = 32
 
 # --- Material flags PG --------------------------------------------------------
-_updating_flags = False  # guard to avoid recursive updates
+_UPDATING_FLAGS = False  # guard to avoid recursive updates
 
 # In material_flow_editor.py
 
@@ -54,7 +54,7 @@ def _update_flow_nodes_logic(drs_flow_pg):
         return
 
     # Get the INNER node tree from the group
-    inner_tree = drs_group_node.node_tree
+    # inner_tree = drs_group_node.node_tree
 
     # Get the values from the property group
     # Note: We take the [0:3] (XYZ) components from the Vector4 properties
@@ -237,7 +237,7 @@ def _update_refraction_connection(obj):
     for node in nt.nodes:
         if node.type == "MIX_SHADER" and node.label == "Mix Refraction Shader":
             mix_refraction = node
-    
+
     if not mix_refraction:
         print("Mix Refraction Shader node not found.")
         return
@@ -354,15 +354,15 @@ def _update_flow_nodes(drs_flow_pg):
     _update_flow_nodes_logic(drs_flow_pg)
 
 def _on_raw_changed(self, _ctx):
-    global _updating_flags
-    if _updating_flags:
+    global _UPDATING_FLAGS
+    if _UPDATING_FLAGS:
         return
-    _updating_flags = True
+    _UPDATING_FLAGS = True
     v = int(self.bool_parameter) & 0xFFFFFFFF
     old_bit_0 = getattr(self, 'bit_0', False)
     for i in range(_MAX_BITS):
         setattr(self, f"bit_{i}", bool((v >> i) & 1))
-    _updating_flags = False
+    _UPDATING_FLAGS = False
     # Update alpha connection if bit 0 changed
     new_bit_0 = getattr(self, 'bit_0', False)
     if old_bit_0 != new_bit_0:
@@ -370,16 +370,16 @@ def _on_raw_changed(self, _ctx):
         _update_alpha_connection(obj)
 
 def _on_bit_changed(self, _ctx):
-    global _updating_flags
-    if _updating_flags:
+    global _UPDATING_FLAGS
+    if _UPDATING_FLAGS:
         return
-    _updating_flags = True
+    _UPDATING_FLAGS = True
     v = 0
     for i in range(_MAX_BITS):
         if getattr(self, f"bit_{i}", False):
             v |= 1 << i
     self.bool_parameter = v
-    _updating_flags = False
+    _UPDATING_FLAGS = False
 
 def _on_bit_0_changed(self, ctx):
     """Special handler for bit 0 (Enable Alpha Test) that updates shader graph."""
@@ -520,7 +520,7 @@ class DRS_PT_MaterialFlags(Panel):
         flags = o.drs_material
         layout.prop(flags, "bool_parameter")
 
-        max_known = max(KNOWN_MATERIAL_FLAGS.keys()) if KNOWN_MATERIAL_FLAGS else 0
+        # max_known = max(KNOWN_MATERIAL_FLAGS.keys()) if KNOWN_MATERIAL_FLAGS else 0
 
         col = layout.column(align=True)
         for i in range(_MAX_BITS):

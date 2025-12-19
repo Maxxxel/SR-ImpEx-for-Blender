@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 """Shared enum-like constant dictionaries for DRS/BMG/FXB formats."""
+from __future__ import annotations
 
 MagicValues = {
     "CDspJointMap": -1340635850,

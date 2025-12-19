@@ -259,10 +259,10 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                 fcurves_by_axis[axis_index] = fcurve
                 for kp in fcurve.keyframe_points:
                     all_frames.add(kp.co[0])
-            
+
             # Sort frames to maintain consistent ordering
             sorted_frames = sorted(all_frames)
-            
+
             # Evaluate each axis at all frame times
             coords = [[], [], []]
             for frame in sorted_frames:
@@ -270,7 +270,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                 assert fps > 0, "FPS is zero"
                 t = (frame / fps) / duration
                 bone_lib[bone_name]["loc_per_time"]["times"].append(t)
-                
+
                 for axis_index in range(3):
                     if axis_index in fcurves_by_axis:
                         # Evaluate the fcurve at this frame
@@ -305,16 +305,16 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                 fcurves_by_axis[axis_index] = fcurve
                 for kp in fcurve.keyframe_points:
                     all_frames.add(kp.co[0])
-            
+
             # Sort frames to maintain consistent ordering
             sorted_frames = sorted(all_frames)
-            
+
             # Evaluate each axis at all frame times
             coords = [[], [], [], []]
             for frame in sorted_frames:
                 t = (frame / fps) / duration
                 bone_lib[bone_name]["rot_per_time"]["times"].append(t)
-                
+
                 for axis_index in range(4):
                     if axis_index in fcurves_by_axis:
                         # Evaluate the fcurve at this frame
@@ -334,12 +334,12 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
     # Bones must have at least one keyframe for both location and rotation.
     for bone_name in list(bone_lib.keys()):
         data = bone_lib[bone_name]
-        
+
         # If location is missing, add a single keyframe at t=0 with zero location
         if len(data["loc_per_time"]["vec"]) == 0:
             data["loc_per_time"]["times"].append(0.0)
             data["loc_per_time"]["vec"].append((0.0, 0.0, 0.0))
-        
+
         # If rotation is missing, add a single keyframe at t=0 with identity quaternion
         if len(data["rot_per_time"]["quat"]) == 0:
             data["rot_per_time"]["times"].append(0.0)
@@ -414,11 +414,11 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                         len(data["loc_per_time"]["vec"]) >= 2
                         and all(axis in loc_fcs for axis in range(3))
                     )
-                    
+
                     if export_tangents and can_compute_tangents:
                         m_local = Vector((
-                            invert_bezier_hermite_for_axis_any(loc_fcs[0], i, total_frames), 
-                            invert_bezier_hermite_for_axis_any(loc_fcs[1], i, total_frames), 
+                            invert_bezier_hermite_for_axis_any(loc_fcs[0], i, total_frames),
+                            invert_bezier_hermite_for_axis_any(loc_fcs[1], i, total_frames),
                             invert_bezier_hermite_for_axis_any(loc_fcs[2], i, total_frames)
                         ))
                         m_file = bind_rot @ m_local
@@ -460,12 +460,12 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                         len(data["rot_per_time"]["quat"]) >= 2
                         and all(axis in rot_fcs for axis in range(4))
                     )
-                    
+
                     if export_tangents and can_compute_tangents:
                         local_q = Quaternion((
-                            invert_bezier_hermite_for_axis_any(rot_fcs[0], i, total_frames), 
-                            invert_bezier_hermite_for_axis_any(rot_fcs[1], i, total_frames), 
-                            invert_bezier_hermite_for_axis_any(rot_fcs[2], i, total_frames), 
+                            invert_bezier_hermite_for_axis_any(rot_fcs[0], i, total_frames),
+                            invert_bezier_hermite_for_axis_any(rot_fcs[1], i, total_frames),
+                            invert_bezier_hermite_for_axis_any(rot_fcs[2], i, total_frames),
                             invert_bezier_hermite_for_axis_any(rot_fcs[3], i, total_frames),
                         ))
                         file_q = bind_rot @ local_q

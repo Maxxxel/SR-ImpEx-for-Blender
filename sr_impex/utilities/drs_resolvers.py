@@ -1,6 +1,7 @@
 # drs_resolvers.py
 from __future__ import annotations
-import json, os
+import json
+import os
 from typing import Optional
 import bpy
 

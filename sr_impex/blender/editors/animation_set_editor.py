@@ -34,7 +34,7 @@ from sr_impex.definitions.abilities import (
     additional_abilities,
 )
 
-from sr_impex.definitions.drs_definitions import AnimationType as DRS_ANIM_TYPE
+from sr_impex.definitions.enums import AnimationType as DRS_ANIM_TYPE
 
 from sr_impex.utilities.drs_resolvers import resolve_action_from_blob_name as _resolve_action_name
 
@@ -521,7 +521,7 @@ def _register_extra_mode(col: bpy.types.Collection, mode_val: int) -> None:
         pass
 
 
-def _parse_modeswitch_target(role: str, cur_mode: int) -> int | None:
+def _parse_modeswitch_target(role: str, _cur_mode: int) -> int | None:
     r = (role or "").lower()
     if "modeswitch" not in r:
         return None
@@ -672,7 +672,7 @@ def _sync_marker_objects_from_state(used_actions: set[str] = None):
             for trimmed_action_name in used_actions:
                 if not trimmed_action_name in ska:
                     continue
-            
+
             _ensure_marker_object(col, vj, ska)
 
 
@@ -709,14 +709,12 @@ def _ability_items_cb(self, _ctx):
 
 
 def _ability_catalog():
-    cat = {}
-    for k in must_have_abilities.keys():
-        cat[k] = ("Must-have", must_have_abilities[k])
-    for k in situational_abilities.keys():
-        cat[k] = ("Situational", situational_abilities[k])
-    for k in additional_abilities.keys():
-        cat[k] = ("Additional", additional_abilities[k])
-    return cat
+    return {
+        **{k: ("Must-have", v) for k, v in must_have_abilities.items()},
+        **{k: ("Situational", v) for k, v in situational_abilities.items()},
+        **{k: ("Additional", v) for k, v in additional_abilities.items()},
+    }
+
 
 
 def _fill_picker_items(self_items, mode: int, query: str = ""):
@@ -739,14 +737,6 @@ def _fill_picker_items(self_items, mode: int, query: str = ""):
         it.category = cat
         it.available = True
         it.selected = False
-
-
-def _all_abilities_map():
-    d = {}
-    d.update(must_have_abilities)
-    d.update(situational_abilities)
-    d.update(additional_abilities)
-    return d
 
 
 def _normalize_role_match(role: str) -> str:
@@ -905,7 +895,7 @@ def _find_variant_owner(st, variant: bpy.types.PropertyGroup) -> tuple[int, int]
 
 def _propagate_sle_variant_file(st, src_mk_index: int, src_variant_index: int, new_file: str) -> None:
     """For a Start/Loop/End group, keep the variant's action file in sync across all three ModeKeys."""
-    if not (0 <= src_mk_index < len(st.mode_keys)):
+    if not 0 <= src_mk_index < len(st.mode_keys):
         return
     src_mk = st.mode_keys[src_mk_index]
     if not _is_sle_role(getattr(src_mk, "role", "")):
@@ -1187,11 +1177,6 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
     # key: (animation_type:int, animation_tag_id:int, is_enter_mode:int)
     # val: list of unique timing dicts (each can be consumed once)
     def _animtype_to_int(name_or_num) -> int:
-        # supports both numeric and names from DRS_ANIM_TYPE
-        try:
-            from .definitions.drs_definitions import AnimationType as DRS_ANIM_TYPE
-        except Exception:
-            DRS_ANIM_TYPE = {}
         s = f"{name_or_num}".strip()
         if s in DRS_ANIM_TYPE:
             return int(DRS_ANIM_TYPE[s])
@@ -1333,8 +1318,6 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
             v.timing_has = True
             # keep the spec readable in UI (string OK), we export ints later
             try:
-                from .definitions.drs_definitions import AnimationType as DRS_ANIM_TYPE
-
                 inv = {v: k for k, v in DRS_ANIM_TYPE.items()}
                 v.timing_type = inv.get(atype_int, str(atype_int))
             except Exception:
@@ -1421,7 +1404,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
             roles[_rolekey(mk)] = (mk, vlist)
         if "start" in roles and "loop" in roles:
             mk_s, vl_s = roles["start"]
-            mk_l, vl_l = roles["loop"]
+            _mk_l, vl_l = roles["loop"]
             if vl_s:
                 mk_s.start_to_loop = float(_v_of(vl_s[0]).end)
             if vl_l:
@@ -1820,7 +1803,7 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         except Exception:
             original_frame_length = None
             print(f"Warning: Action {act_name} missing 'frame_length' property. Using frame range instead.")
-        
+
         if original_frame_length is None:
             # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
             original_frame_length = act.frame_range[1] - act.frame_range[0]
@@ -1852,13 +1835,13 @@ class DRS_OT_PlayRange(bpy.types.Operator):
 
         start_range_float = self.start * original_frame_length
         end_range_float = self.end * original_frame_length
-        
+
         start_sub_frame = start_range_float - int(start_range_float)
         end_sub_frame = end_range_float - int(end_range_float)
 
         start_frame = int(round(self.start * original_frame_length))
         end_frame = int(round(self.end * original_frame_length))
-        
+
         # Enable Show Subframes
         context.scene.show_subframe = True
         context.scene.frame_current = start_frame
@@ -1877,7 +1860,6 @@ class DRS_OT_PlayRange(bpy.types.Operator):
             bpy.ops.screen.animation_play()
         except Exception as e:  # pylint: disable=bare-except
             print(f"Failed to start playback: {e}")
-            pass
         return {"FINISHED"}
 
 
@@ -1915,7 +1897,7 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
         except Exception:
             original_frame_length = None
             print("Warning: Action missing 'frame_length' property. Using frame range instead.")
-        
+
         if original_frame_length is None:
             # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
             original_frame_length = act.frame_range[1] - act.frame_range[0]
@@ -1925,11 +1907,11 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
         except Exception:
             original_fps = None
             print("Warning: Action missing 'original_fps' property. Using current scene fps.")
-        
+
         if original_fps:
             # Set the scene fps to the original fps of the animation
             context.scene.render.fps = int(original_fps)
-        
+
         # Enable Show Subframes
         context.scene.show_subframe = True
 
@@ -2260,7 +2242,7 @@ class DRS_OT_OpenAnimSetEditorWindow(bpy.types.Operator):
     bl_description = "Open a dedicated window with the AnimationSet Editor sidebar"
     bl_options = {"REGISTER", "INTERNAL"}
 
-    def execute(self, context):
+    def execute(self, _context):
         # Preload state if possible (but we open either way)
         col = _active_model()
         if col:
@@ -2365,12 +2347,12 @@ class DRS_OT_OpenAbilityPicker(bpy.types.Operator):
         _fill_picker_items(self.items, self.mode)
         self.active_index = min(max(0, self.active_index), max(0, len(self.items) - 1))
 
-    def invoke(self, context, event):
+    def invoke(self, context, _event):
         self.mode = _current_mode()
         self._rebuild_items(context)
         return context.window_manager.invoke_props_dialog(self, width=700)
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
         box = layout.box()
         box.template_list(

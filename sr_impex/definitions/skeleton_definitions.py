@@ -189,38 +189,42 @@ class CSkSkinInfo:
 
 @dataclass(eq=False, repr=False)
 class JointGroup:
-    count: int = 0
-    joints: List[int] = field(default_factory=list)
+    joint_count: int = 0
+    joints: List[int] = field(default_factory=list)  # short
 
     def read(self, file: BinaryIO) -> "JointGroup":
-        self.count = unpack("i", file.read(4))[0]
-        self.joints = list(unpack(f"{self.count}i", file.read(calcsize(f"{self.count}i"))))
+        self.joint_count = unpack("i", file.read(4))[0]
+        for _ in range(self.joint_count):
+            self.joints.append(unpack("h", file.read(2))[0])
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("i", self.count))
-        file.write(pack(f"{self.count}i", *self.joints))
+        file.write(pack("i", self.joint_count))
+        for joint in self.joints:
+            file.write(pack("h", joint))
 
     def size(self) -> int:
-        return 4 + calcsize(f"{self.count}i")
+        return 4 + 2 * len(self.joints)
 
 
 @dataclass(eq=False, repr=False)
 class CDspJointMap:
-    magic: int = 1347635794
     version: int = 1
     joint_group_count: int = 0
     joint_groups: List[JointGroup] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CDspJointMap":
-        self.magic, self.version, self.joint_group_count = unpack("iii", file.read(12))
-        self.joint_groups = [JointGroup().read(file) for _ in range(self.joint_group_count)]
+        self.version = unpack("i", file.read(4))[0]
+        self.joint_group_count = unpack("i", file.read(4))[0]
+        self.joint_groups = [
+            JointGroup().read(file) for _ in range(self.joint_group_count)
+        ]
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("iii", self.magic, self.version, self.joint_group_count))
+        file.write(pack("ii", self.version, self.joint_group_count))
         for joint_group in self.joint_groups:
             joint_group.write(file)
 
     def size(self) -> int:
-        return 12 + sum(jg.size() for jg in self.joint_groups)
+        return 8 + sum(joint_group.size() for joint_group in self.joint_groups)

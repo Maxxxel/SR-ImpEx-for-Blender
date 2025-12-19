@@ -6,9 +6,9 @@ which define building layouts with modular grids and state-based meshes.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from struct import calcsize, pack, unpack
-from typing import BinaryIO, List, cast
+from dataclasses import dataclass
+from struct import pack, unpack
+from typing import cast
 
 from sr_impex.core.file_io import FileReader, FileWriter
 from sr_impex.definitions.base_types import (
@@ -20,14 +20,10 @@ from sr_impex.definitions.base_types import (
     error_context,
     ExportError,
 )
-from sr_impex.definitions.drs_definitions import (
-    AnimationSet,
-    AnimationTimings,
-    CDrwLocatorList,
-    CGeoPrimitiveContainer,
-    CollisionShape,
-    EffectSet,
-)
+from sr_impex.definitions.animation_definitions import AnimationSet, AnimationTimings
+from sr_impex.definitions.collision_definitions import CollisionShape
+from sr_impex.definitions.effect_definitions import EffectSet
+from sr_impex.definitions.resource_definitions import CGeoPrimitiveContainer
 from sr_impex.definitions.grid_definitions import (
     SMeshState,
     DestructionState,
@@ -185,7 +181,7 @@ class BMG(BaseContainer):
 
         reader.close()
         return self
-    
+
     def save(self, file_name: str):
         writer = FileWriter(file_name)
         try:

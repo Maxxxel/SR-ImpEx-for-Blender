@@ -21,6 +21,17 @@ def abort(keep_debug_collections: bool, source_collection_copy: bpy.types.Collec
     return {"CANCELLED"}
 
 
+def find_or_create_collection(
+    source_collection: bpy.types.Collection, collection_name: str
+) -> bpy.types.Collection:
+    collection = source_collection.children.get(collection_name)
+    if collection is None:
+        collection = bpy.data.collections.new(collection_name)
+        source_collection.children.link(collection)
+
+    return collection
+
+
 def get_collection(
     source_collection: bpy.types.Collection, name: str
 ) -> Union[bpy.types.Collection, None]:

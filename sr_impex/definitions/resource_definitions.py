@@ -111,24 +111,42 @@ class Constraint:
 
 @dataclass(eq=False, repr=False)
 class IKAtlas:
-    identifier: int = 0
-    length: int = 0
-    constraints: List[Constraint] = field(default_factory=list)
+    """IKAtlas"""
+
+    identifier: int = 0  # BoneID
+    version: int = 2
+    axis: int = 2  # Always 2
+    chain_order: int = 0  # Order of Execution in the Bone Chain
+    constraints: List[Constraint] = field(default_factory=list)  # Always 3!
+    purpose_flags: int = 0  # 1, 2, 3, 6, 7: mostly 3, but what is it used for?
 
     def read(self, file: BinaryIO) -> "IKAtlas":
         """Reads the IKAtlas from the buffer"""
         self.identifier = unpack("i", file.read(4))[0]
-        self.length = unpack("i", file.read(4))[0]
-        self.constraints = [Constraint().read(file) for _ in range(self.length)]
+        self.version = unpack("h", file.read(2))[0]
+        if self.version >= 1:
+            self.axis, self.chain_order = unpack("ii", file.read(8))
+            self.constraints = [Constraint().read(file) for _ in range(3)]
+            if self.version >= 2:
+                self.purpose_flags = unpack("h", file.read(2))[0]
         return self
 
     def write(self, file: BinaryIO):
         """Writes the IKAtlas to the buffer"""
         file.write(pack("i", self.identifier))
-        file.write(pack("i", self.length))
-        for constraint in self.constraints:
-            constraint.write(file)
+        file.write(pack("h", self.version))
+        if self.version >= 1:
+            file.write(pack("ii", self.axis, self.chain_order))
+            for constraint in self.constraints:
+                constraint.write(file)
+            if self.version >= 2:
+                file.write(pack("h", self.purpose_flags))
 
     def size(self) -> int:
         """Returns the size of the IKAtlas"""
-        return 8 + sum(constraint.size() for constraint in self.constraints)
+        base = 6
+        if self.version >= 1:
+            base += 8 + sum(constraint.size() for constraint in self.constraints)
+            if self.version >= 2:
+                base += 2
+        return base

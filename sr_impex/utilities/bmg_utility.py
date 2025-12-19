@@ -9,17 +9,20 @@ import os
 import json
 import time
 from typing import Tuple, Dict, Optional
-from mathutils import Matrix
 import xml.etree.ElementTree as ET
+from mathutils import Matrix
 import bpy
 
 from sr_impex.core.message_logger import MessageLogger
-from sr_impex.definitions.bmg_definitions import BMG, MeshGridModule, MeshSetGrid, StateBasedMeshSet, BMS
-from sr_impex.definitions.drs_definitions import DRS, SLocator
+
+from sr_impex.definitions.bmg_definitions import BMG, BMS
+from sr_impex.definitions.drs_definitions import DRS
 from sr_impex.definitions.ska_definitions import SKA
+from sr_impex.definitions.locator_definitions import SLocator
+from sr_impex.definitions.grid_definitions import MeshGridModule, MeshSetGrid, StateBasedMeshSet
 from sr_impex.definitions.base_types import ExportError
 from sr_impex.definitions.enums import InformationIndices
-# from sr_impex.blender.editors.locator_editor import BLOB_KEY, UID_KEY
+
 from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
 from sr_impex.blender.editors.effect_set_editor import (
     EFFECT_BLOB_KEY,
@@ -818,7 +821,7 @@ def load_bmg(
 
 # endregion
 
-# region Export Blender Model to BMG 
+# region Export Blender Model to BMG
 
 
 def create_mesh_set_grid():
@@ -835,7 +838,7 @@ def create_mesh_set_grid():
         if _ == _total_cells // 2 + 1:
             _mesh_grid_module.has_mesh_set = 1
             # TODO: Assign the mesh to the cell
-            # _mesh_grid_module.state_based_mesh_set = 
+            # _mesh_grid_module.state_based_mesh_set =
             # We can break here as we try the 1 cell setup
             break
     # TODO: Create the Locators here, we dont need a separate outside Locator class for buildings it seems
@@ -866,7 +869,7 @@ def save_bmg(
     source_collection = bpy.context.view_layer.active_layer_collection.collection
     if not verify_collections(source_collection, model_type):
         return abort(keep_debug_collections, None)
-    
+
     # Create a safe copy of the collection for export
     try:
         source_collection_copy = copy(context.scene.collection, source_collection)
@@ -874,7 +877,7 @@ def save_bmg(
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Failed to duplicate collection: {e}. Type {type(e)}", "ERROR")
         return abort(keep_debug_collections, None)
-    
+
     # Copy the AnimationSet blob from the source into the export copy (full fidelity)
     try:
         raw_blob = source_collection.get(ANIM_BLOB_KEY)
@@ -898,11 +901,11 @@ def save_bmg(
             source_collection_copy["_drs_action_map"] = raw_action_map
     except Exception:
         pass
-    
+
     # TODO: Check if we need to get the Locators in MeshSet or somewhere to be checked here with a blob or later when we create the output
-    
+
     # We need to run checks for several Meshes (states/debris). Maybe we should make the save_drs function more modular, so we can reuse parts here as we need?
-    
+
     # === Action name strategy for export =========================================
     export_prefix: str | None
     if set_model_name_prefix == "model_name":
@@ -917,17 +920,17 @@ def save_bmg(
         export_prefix = None
 
     # Build name mapping once so AnimationSet, EffectSet and SKA files share consistent naming
-    ska_name_map = build_ska_export_name_map(source_collection_copy, export_prefix)
-    
+    # ska_name_map = build_ska_export_name_map(source_collection_copy, export_prefix)
+
     # === CREATE DRS STRUCTURE ====================
     folder_path = os.path.dirname(filepath)
-    
+
     # Create the base layout of our bmg file
     new_bmg_file: BMG = BMG(model_type=model_type)
-    
+
     # First thing we always need to build is the MeshSetGrid
     mesh_set_grid = create_mesh_set_grid()
-    
+
     # Now we save the Nodes in Order
     nodes = InformationIndices[model_type]
     for node in nodes:
@@ -947,9 +950,9 @@ def save_bmg(
             # We take the ones we are given at top level, same as state0 collision shapes
             pass
         # TODO: Check if we should support additional types. Maybe they are not used/wrongly exported in existing models
-        
+
     new_bmg_file.update_offsets()
-    
+
     # === SAVE THE BMG FILE ====================================================
     try:
         new_bmg_file.save(os.path.join(folder_path, model_name + ".drs"))
@@ -959,22 +962,22 @@ def save_bmg(
     except Exception as e:
         logger.log(f"Unexpected error during save: {e}", "Export Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
-    
+
     # === Export of SKA Actions ==============================================
-    
+
     # === CLEANUP & FINALIZE ===================================================
     if not keep_debug_collections:
         bpy.data.collections.remove(source_collection_copy)
-    
+
     logger.log("Export completed successfully.", "Export Complete", "INFO")
     logger.display()
-    
+
     # Cleanup variables
-    ska_name_map = None
+    # ska_name_map = None
     mesh_set_grid = None
     new_bmg_file = None
     source_collection_copy = None
-    
+
     return {"FINISHED"}
-    
+
 # endregion
