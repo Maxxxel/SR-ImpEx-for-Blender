@@ -10,6 +10,7 @@ import json
 import time
 from typing import Tuple, Dict, Optional
 from mathutils import Matrix
+import xml.etree.ElementTree as ET
 import bpy
 
 from sr_impex.core.message_logger import MessageLogger
@@ -23,7 +24,7 @@ from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
 from sr_impex.blender.editors.effect_set_editor import (
     EFFECT_BLOB_KEY,
 )
-from sr_impex.blender.editors.bmg_state_editor import MESHGRID_BLOB_KEY
+from sr_impex.blender.editors.bmg_state_editor import MESHGRID_BLOB_KEY, switch_meshset_state
 from sr_impex.utilities.helpers import verify_collections, abort, copy, build_ska_export_name_map
 
 # Import required functions from drs_utility
@@ -31,6 +32,7 @@ from sr_impex.utilities.helpers import verify_collections, abort, copy, build_sk
 from sr_impex.utilities.drs_utility import (
     create_static_mesh,
     create_material,
+    create_mesh_object,
     setup_armature,
     import_collision_shapes,
     import_ska_animation,
@@ -38,8 +40,6 @@ from sr_impex.utilities.drs_utility import (
     parent_under_game_axes,
     ensure_mode,
     find_or_create_collection,
-    create_meshset_structure,
-    process_debris_import,
     persist_animset_blob_on_collection,
     setup_material_parameters,
     create_collision_shape_box_object,
@@ -49,6 +49,222 @@ from sr_impex.utilities.drs_utility import (
 
 
 logger = MessageLogger()
+
+def process_debris_import(state_based_mesh_set, source_collection, dir_name, base_name):
+    for destruction_state in state_based_mesh_set.destruction_states:
+        state_collection_name = f"Destruction_State_{destruction_state.state_num}"
+        state_collection = find_or_create_collection(
+            source_collection, state_collection_name
+        )
+
+        # Load and parse the XML file.
+        xml_file_path = os.path.join(dir_name, destruction_state.file_name)
+        with open(xml_file_path, "r", encoding="utf-8") as file:
+            xml_file = file.read()
+        xml_root = ET.fromstring(xml_file)
+
+        # Loop through PhysicObject elements and create meshes.
+        for element in xml_root.findall(".//Element[@type='PhysicObject']"):
+            resource = element.attrib.get("resource")
+            name = element.attrib.get("name")
+            if resource and name:
+                debris_drs_file = DRS().read(os.path.join(dir_name, "meshes", resource))
+                for mesh_index in range(debris_drs_file.cdsp_mesh_file.mesh_count):
+                    # Create the mesh data and object.
+                    mesh_data = create_static_mesh(
+                        debris_drs_file.cdsp_mesh_file, mesh_index
+                    )
+                    mesh_object = bpy.data.objects.new(
+                        f"CDspMeshFile_{name}", mesh_data
+                    )
+
+                    # Create and assign the material.
+                    material = create_material(
+                        dir_name,
+                        mesh_index,
+                        debris_drs_file.cdsp_mesh_file.meshes[mesh_index],
+                        f"{base_name}_{name}",
+                    )
+                    mesh_data.materials.append(material)
+
+                    # Link the debris mesh object to the collection.
+                    state_collection.objects.link(mesh_object)
+
+
+def import_debris_from_xml(xml_file_path: str, dir_name: str, base_name: str, collection_name: str) -> bpy.types.Collection:
+    """
+    Import debris models from an XML file and return a collection containing them.
+
+    Args:
+        xml_file_path: Path to the XML file defining debris
+        dir_name: Directory containing the mesh files
+        base_name: Base name for material naming
+        collection_name: Name for the debris collection
+
+    Returns:
+        Collection containing all debris meshes from the XML
+    """
+    debris_collection = bpy.data.collections.new(collection_name)
+
+    # Load and parse the XML file
+    with open(xml_file_path, "r", encoding="utf-8") as file:
+        xml_file = file.read()
+    xml_root = ET.fromstring(xml_file)
+
+    # Loop through PhysicObject elements and create meshes
+    for element in xml_root.findall(".//Element[@type='PhysicObject']"):
+        resource = element.attrib.get("resource")
+        name = element.attrib.get("name")
+        if resource and name:
+            debris_drs_file = DRS().read(os.path.join(dir_name, "meshes", resource))
+            for mesh_index in range(debris_drs_file.cdsp_mesh_file.mesh_count):
+                # Create the mesh data and object
+                mesh_data = create_static_mesh(
+                    debris_drs_file.cdsp_mesh_file, mesh_index
+                )
+                mesh_object = bpy.data.objects.new(
+                    f"CDspMeshFile_{name}", mesh_data
+                )
+
+                # Create and assign the material
+                material = create_material(
+                    dir_name,
+                    mesh_index,
+                    debris_drs_file.cdsp_mesh_file.meshes[mesh_index],
+                    f"{base_name}_{name}",
+                )
+                mesh_data.materials.append(material)
+
+                # Link the debris mesh object to the collection
+                debris_collection.objects.link(mesh_object)
+
+    return debris_collection
+
+
+def create_meshset_structure(
+    parent_collection: bpy.types.Collection,
+    meshset_index: int,
+    mesh_states: list,
+    destruction_states: list,
+    dir_name: str,
+    base_name: str,
+    armature_object: bpy.types.Object = None,
+    import_collision_shape: bool = False,
+    import_s0_collision_shapes: bool = False,
+) -> tuple[bpy.types.Collection, bpy.types.Object]:
+    """
+    Create organized hierarchical structure for a single MeshSet with all states.
+
+    Structure:
+        MeshSet_N
+        ├── States_Collection (hidden by default)
+        │   ├── S0_Undamaged
+        │   ├── S2_Damaged
+        │   └── Debris_Collection
+        │       ├── S2_Debris (hidden)
+        │       └── S3_Debris (hidden)
+        └── Active_State (empty marker)
+
+    Args:
+        parent_collection: Parent collection to link the MeshSet to
+        meshset_index: Index of this MeshSet
+        mesh_states: List of MeshState objects from StateBasedMeshSet
+        destruction_states: List of DestructionState objects
+        dir_name: Directory containing files
+        base_name: Base name for materials
+        armature_object: Armature to parent meshes to
+        import_collision_shape: Whether to import collision shapes for S2 states
+        import_s0_collision_shapes: Whether to import collision shapes for S0 states (BMG-level shapes apply to all S0)
+
+    Returns:
+        (meshset_collection, active_marker) tuple
+    """
+    # Create MeshSet container
+    meshset_col = bpy.data.collections.new(f"MeshSet_{meshset_index}")
+    parent_collection.children.link(meshset_col)
+
+    # Create States subcollection (hidden by default) with unique name
+    states_col = bpy.data.collections.new(f"States_Collection_{meshset_index}")
+    meshset_col.children.link(states_col)
+    states_col.hide_viewport = True
+    states_col.hide_render = True
+
+    # Import each mesh state (S0, S2, etc.)
+    for mesh_state in mesh_states:
+        if mesh_state.has_files:
+            state_name = f"S{mesh_state.state_num}_{'Undamaged' if mesh_state.state_num == 0 else 'Damaged'}"
+            state_col = bpy.data.collections.new(state_name)
+            state_col["state_type"] = f"S{mesh_state.state_num}"
+            state_col["mesh_set_index"] = meshset_index
+            states_col.children.link(state_col)
+
+            # Create Meshes subcollection
+            meshes_col = bpy.data.collections.new("Meshes_Collection")
+            state_col.children.link(meshes_col)
+
+            # Load DRS file
+            drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
+
+            # Import collision shapes if present
+            # S0 (undamaged): only import if import_s0_collision_shapes is True (BMG-level shapes apply to all S0)
+            # S2+ (damaged): always import as they differ from S0 due to damage
+            should_import_collision = False
+            if drs_file.collision_shape is not None and import_collision_shape:
+                if mesh_state.state_num == 0:
+                    should_import_collision = import_s0_collision_shapes
+                else:
+                    should_import_collision = True
+
+            if should_import_collision:
+                import_collision_shapes(state_col, drs_file)
+
+            # Import meshes
+            for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
+                mesh_object, _ = create_mesh_object(
+                    drs_file,
+                    mesh_index,
+                    dir_name,
+                    base_name,
+                    armature_object,
+                )
+                setup_material_parameters(mesh_object, drs_file, mesh_index)
+                meshes_col.objects.link(mesh_object)
+
+    # Create Debris subcollection
+    if destruction_states and len(destruction_states) > 0:
+        debris_col = bpy.data.collections.new("Debris_Collection")
+        states_col.children.link(debris_col)
+        debris_col.hide_viewport = True
+        debris_col.hide_render = True
+
+        # Import debris from each destruction state XML
+        for destruction_state in destruction_states:
+            xml_file_path = os.path.join(dir_name, destruction_state.file_name)
+            if os.path.exists(xml_file_path):
+                debris_state_name = f"S{destruction_state.state_num}_Debris"
+                debris_state_col = import_debris_from_xml(
+                    xml_file_path,
+                    dir_name,
+                    base_name,
+                    debris_state_name
+                )
+                debris_state_col["state_type"] = f"S{destruction_state.state_num}_debris"
+                debris_state_col["mesh_set_index"] = meshset_index
+                debris_col.children.link(debris_state_col)
+
+    # Create active state marker (empty object)
+    active_marker = bpy.data.objects.new(f"Active_State_MeshSet_{meshset_index}", None)
+    active_marker.empty_display_type = 'CUBE'
+    active_marker.empty_display_size = 0.5
+    active_marker["active_state"] = "S0"  # Default to undamaged
+    active_marker["mesh_set_index"] = meshset_index
+    meshset_col.objects.link(active_marker)
+
+    # Initially show S0 (undamaged) state
+    switch_meshset_state(meshset_col, "S0")
+
+    return meshset_col, active_marker
+
 
 # region Import BMG
 

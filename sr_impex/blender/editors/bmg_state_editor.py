@@ -5,9 +5,12 @@ UI panel and operators for managing building mesh states (S0, S2, debris).
 Allows switching between undamaged, damaged, and destruction states.
 """
 
+import json
+import math
+
 import bpy
 from bpy.types import Operator, Panel
-from bpy.props import BoolProperty, EnumProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty
 
 MESHGRID_BLOB_KEY = "sr_impex_meshgrid_blob"
 
@@ -164,6 +167,278 @@ def _set_show_slocators(_self, value: bool) -> None:
     _set_visibility(_collect_child_collections("SLocators_Collection"), value)
     _tag_viewports()
 
+
+def _find_game_orientation(model_collection: bpy.types.Collection) -> bpy.types.Object | None:
+    """Return the GameOrientation helper inside the given model collection if present."""
+    for obj in model_collection.objects:
+        if obj.name.startswith("GameOrientation"):
+            return obj
+    return None
+
+
+def _ensure_meshgrid_collection(model_collection: bpy.types.Collection) -> tuple[bpy.types.Collection, str]:
+    """Find or create the visual grid collection, named alongside the real MeshSetGrid_* collection."""
+    base_grid_name = None
+    for child in model_collection.children:
+        if child.name.startswith("MeshSetGrid_"):
+            base_grid_name = child.name
+            break
+    base_grid_name = base_grid_name or "MeshSetGrid_0"
+    vis_name = f"{base_grid_name}_GridVis"
+
+    for child in model_collection.children:
+        if child.name == vis_name:
+            return child, base_grid_name
+
+    grid_col = bpy.data.collections.new(vis_name)
+    model_collection.children.link(grid_col)
+    return grid_col, base_grid_name
+
+
+def _cleanup_grid_objects(grid_collection: bpy.types.Collection) -> None:
+    """Remove existing grid objects (and orphaned meshes) before rebuilding."""
+    for obj in list(grid_collection.objects):
+        mesh_data = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+        if mesh_data and mesh_data.users == 0:
+            bpy.data.meshes.remove(mesh_data)
+
+
+def _get_grid_fill_material() -> bpy.types.Material:
+    """Get or create the shared semi-transparent fill material for occupied cells."""
+    mat_name = "BMG_MeshGrid_Fill"
+    mat = bpy.data.materials.get(mat_name)
+    if mat is None:
+        mat = bpy.data.materials.new(mat_name)
+        mat.use_nodes = False
+        mat.diffuse_color = (0.12, 0.65, 0.25, 0.35)  # rgba
+        mat.blend_method = "BLEND"
+        mat.shadow_method = "NONE"
+    return mat
+
+
+def _create_cell_mesh(name: str, size: float, height: float = 0.0) -> bpy.types.Object:
+    """Create a square cell mesh; if height>0, build a cube with that height."""
+    mesh = bpy.data.meshes.new(f"{name}_mesh")
+    half = size * 0.5
+    if height > 0:
+        h = height
+        verts = [
+            (-half, -half, 0.0),
+            (half, -half, 0.0),
+            (half, half, 0.0),
+            (-half, half, 0.0),
+            (-half, -half, h),
+            (half, -half, h),
+            (half, half, h),
+            (-half, half, h),
+        ]
+        faces = [
+            (0, 1, 2, 3),
+            (4, 5, 6, 7),
+            (0, 1, 5, 4),
+            (1, 2, 6, 5),
+            (2, 3, 7, 6),
+            (3, 0, 4, 7),
+        ]
+    else:
+        verts = [
+            (-half, -half, 0.0),
+            (half, -half, 0.0),
+            (half, half, 0.0),
+            (-half, half, 0.0),
+        ]
+        faces = [(0, 1, 2, 3)]
+
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+
+    obj = bpy.data.objects.new(name, mesh)
+    obj.display_type = "WIRE"
+    obj.show_in_front = True
+    return obj
+
+
+def _build_meshgrid_display(model_collection: bpy.types.Collection) -> bpy.types.Collection | None:
+    """Materialize the MeshSetGrid cells as wireframe meshes under the model collection."""
+    raw_blob = model_collection.get(MESHGRID_BLOB_KEY)
+    if not raw_blob:
+        return None
+
+    try:
+        blob = json.loads(raw_blob)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        print(f"[BMG MeshGrid] Failed to parse mesh grid blob: {exc}")
+        return None
+
+    # Blob can come from bmg_utility (rows/columns) or drs_utility (grid_width/grid_height)
+    width_raw = blob.get("grid_width", blob.get("columns", 0))
+    height_raw = blob.get("grid_height", blob.get("rows", 0))
+    width = int(width_raw or 0)
+    height = int(height_raw or 0)
+    cols = width * 2 + 1
+    rows = height * 2 + 1
+    if cols <= 0 or rows <= 0:
+        return None
+
+    step = float(blob.get("module_distance", 2.0) or 2.0)
+    rotation = math.radians(float(blob.get("grid_rotation", blob.get("orientation", 0)) or 0)) + math.radians(180.0)
+    cells = blob.get("cells", [])
+
+    grid_collection, base_grid_name = _ensure_meshgrid_collection(model_collection)
+    _cleanup_grid_objects(grid_collection)
+
+    game_orientation = _find_game_orientation(model_collection)
+
+    # Create a root empty so rotation is applied once to the whole grid (avoids overlapping rotated cells)
+    root_name = f"{base_grid_name}_GridRoot"
+    root_obj = bpy.data.objects.new(root_name, None)
+    root_obj.empty_display_type = "PLAIN_AXES"
+    root_obj.rotation_euler[2] = rotation
+    if game_orientation:
+        root_obj.parent = game_orientation
+        root_obj.matrix_parent_inverse = game_orientation.matrix_world.inverted()
+    grid_collection.objects.link(root_obj)
+    base_x = -((cols - 1) * step) * 0.5
+    base_y = ((rows - 1) * step) * 0.5
+
+    for idx in range(min(len(cells), rows * cols) if cells else rows * cols):
+        col_idx = idx % cols
+        row_idx = idx // cols
+        x = base_x + col_idx * step
+        y = base_y - row_idx * step
+
+        grid_x = col_idx - width
+        grid_y = height - row_idx
+
+        meshset_name = f"MeshSet_{idx}"
+        name = f"{meshset_name}_GridCell_x{grid_x}_y{grid_y}"
+        has_mesh = bool(cells[idx]["has_mesh_set"]) if idx < len(cells) else False
+        mesh_object_name = ""
+        if idx < len(cells):
+            mesh_object_name = cells[idx].get("mesh_object_name", "") or ""
+        mesh_obj = bpy.data.objects.get(mesh_object_name) if mesh_object_name else None
+        height = 10.0 if has_mesh else 0.0
+        obj = _create_cell_mesh(name, step, height)
+        obj.parent = root_obj
+        obj.location = (x, y, 0.0)
+        obj["grid_cell_index"] = idx
+        obj["meshset_name"] = meshset_name
+        obj["grid_coord"] = (grid_x, grid_y)
+        obj["grid_has_mesh_set"] = int(has_mesh)
+        if mesh_object_name:
+            obj["mesh_object_name"] = mesh_object_name
+
+        if has_mesh:
+            obj.display_type = "SOLID"
+            obj.show_in_front = True
+            obj.color = (0.12, 0.65, 0.25, 0.55)  # viewport tint
+            obj.active_material = _get_grid_fill_material()
+
+        grid_collection.objects.link(obj)
+
+        if mesh_obj:
+            obj.hide_viewport = mesh_obj.hide_viewport
+            obj.hide_render = mesh_obj.hide_render
+
+    return grid_collection
+
+
+def _iter_vis_grid_collections() -> list[bpy.types.Collection]:
+    cols: list[bpy.types.Collection] = []
+    for model in _iter_bmg_models():
+        for child in model.children:
+            if child.name.endswith("_GridVis"):
+                cols.append(child)
+    return cols
+
+
+def _iter_grid_cell_objects():
+    for col in _iter_vis_grid_collections():
+        for obj in col.objects:
+            yield obj
+
+
+def _sync_grid_cell_mesh_visibility(_depsgraph):
+    wm = getattr(bpy.context, "window_manager", None)
+    if wm and not getattr(wm, "bmg_show_meshgrid", True):
+        return
+    for cell in _iter_grid_cell_objects():
+        mesh_name = cell.get("mesh_object_name")
+        if not mesh_name:
+            continue
+        mesh_obj = bpy.data.objects.get(mesh_name)
+        if not mesh_obj:
+            continue
+        if mesh_obj.hide_viewport != cell.hide_viewport:
+            mesh_obj.hide_viewport = cell.hide_viewport
+        if mesh_obj.hide_render != cell.hide_viewport:
+            mesh_obj.hide_render = cell.hide_viewport
+
+
+def _read_meshgrid_rotation_degrees() -> float | None:
+    """Return the first available mesh grid rotation in degrees, if any."""
+    for model in _iter_bmg_models():
+        raw_blob = model.get(MESHGRID_BLOB_KEY)
+        if not raw_blob:
+            continue
+        try:
+            blob = json.loads(raw_blob)
+        except Exception:  # pylint: disable=broad-exception-caught
+            continue
+        rot_val = blob.get("grid_rotation", blob.get("orientation"))
+        if rot_val is None:
+            continue
+        try:
+            return float(rot_val)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _get_meshgrid_rotation(_self) -> float:
+    rotation_val = _read_meshgrid_rotation_degrees()
+    return float(rotation_val) if rotation_val is not None else 0.0
+
+
+def _set_meshgrid_rotation(_self, value: float) -> None:
+    show_grid = getattr(getattr(bpy.context, "window_manager", None), "bmg_show_meshgrid", False)
+    for model in _iter_bmg_models():
+        raw_blob = model.get(MESHGRID_BLOB_KEY)
+        if not raw_blob:
+            continue
+        try:
+            blob = json.loads(raw_blob)
+        except Exception:  # pylint: disable=broad-exception-caught
+            continue
+        blob["grid_rotation"] = float(value)
+        blob["orientation"] = float(value)
+        model[MESHGRID_BLOB_KEY] = json.dumps(blob, separators=(",", ":"), ensure_ascii=False)
+
+        vis_col = _build_meshgrid_display(model)
+        if vis_col:
+            vis_col.hide_viewport = not show_grid
+            vis_col.hide_render = not show_grid
+    _tag_viewports()
+
+
+def _get_show_meshgrid(_self) -> bool:
+    cols = _iter_vis_grid_collections()
+    if not cols:
+        return False
+    return any(not col.hide_viewport for col in cols)
+
+
+def _set_show_meshgrid(_self, value: bool) -> None:
+    for model in _iter_bmg_models():
+        if value:
+            _build_meshgrid_display(model)
+        for child in model.children:
+            if child.name.endswith("_GridVis"):
+                child.hide_viewport = not value
+                child.hide_render = not value
+    _tag_viewports()
+
 class BMG_OT_SwitchMeshState(Operator):
     """Switch the visible state of a MeshSet"""
     bl_idname = "bmg.switch_mesh_state"
@@ -297,6 +572,17 @@ class BMG_PT_MeshStateEditor(Panel):
     def draw(self, context):
         layout = self.layout
 
+        # Mesh grid controls
+        grid_box = layout.box()
+        grid_box.label(text="Mesh Grid", icon='SNAP_INCREMENT')
+        grid_box.prop(context.window_manager, "bmg_show_meshgrid", text="Show Mesh Grid")
+        grid_box.prop(
+            context.window_manager,
+            "bmg_meshgrid_rotation",
+            text="Rotation",
+            slider=True,
+        )
+
         # Visibility toggles
         vis_box = layout.box()
         vis_box.label(text="Visibility", icon='HIDE_OFF')
@@ -338,6 +624,24 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    bpy.types.WindowManager.bmg_show_meshgrid = BoolProperty(
+        name="Show Mesh Grid",
+        description="Toggle visibility of MeshSetGrid cells for all BMG models",
+        get=_get_show_meshgrid,
+        set=_set_show_meshgrid,
+    )
+    bpy.types.WindowManager.bmg_meshgrid_rotation = FloatProperty(
+        name="Mesh Grid Rotation",
+        description="Rotate MeshSet grid visualization (degrees)",
+        min=-360.0,
+        max=360.0,
+        soft_min=-360.0,
+        soft_max=360.0,
+        step=1,
+        precision=1,
+        get=_get_meshgrid_rotation,
+        set=_set_meshgrid_rotation,
+    )
     bpy.types.WindowManager.bmg_show_collision_shapes = BoolProperty(
         name="Show Collision Shapes",
         description="Toggle visibility of CollisionShapes_Collection in all BMG models",
@@ -350,13 +654,19 @@ def register():
         get=_get_show_slocators,
         set=_set_show_slocators,
     )
+    if _sync_grid_cell_mesh_visibility not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(_sync_grid_cell_mesh_visibility)
 
 
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
+    del bpy.types.WindowManager.bmg_show_meshgrid
+    del bpy.types.WindowManager.bmg_meshgrid_rotation
     del bpy.types.WindowManager.bmg_show_slocators
     del bpy.types.WindowManager.bmg_show_collision_shapes
+    if _sync_grid_cell_mesh_visibility in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(_sync_grid_cell_mesh_visibility)
 
 
 if __name__ == "__main__":
