@@ -1,55 +1,43 @@
 ## Quick context for AI coding agents working on SR-ImpEx-for-Blender
 
-Targeted, actionable notes to be productive in this repo fast. Keep changes minimal and consistent with existing Blender add-on patterns.
+Targeted notes so you can contribute without breaking importer/exporter expectations. Keep edits minimal and aligned with existing add-on conventions.
 
-### Big picture
-- This is a Blender 4.x add-on to import/export game formats (DRS/BMG + related animation data like SKA).
-- The main package is `sr_impex/` with three main surfaces:
-  - `sr_impex/utilities/`: format logic + higher-level import/export utilities (largest integration surface).
-  - `sr_impex/core/`: binary reading/writing, logging, profiling.
-  - `sr_impex/blender/`: Blender-specific operators/UI/helpers and material building.
-- Primary integration file: `sr_impex/utilities/drs_utility.py` (import/export, meshes, materials, collision, OBB tree helpers).
+### Scope and surfaces
+- Blender 4.x add-on that imports/exports DRS/BMG formats plus SKA animation data.
+- Core areas:
+  - `sr_impex/utilities/`: higher-level import/export flows and format helpers (biggest surface).
+  - `sr_impex/core/`: binary IO primitives, logging, profiling.
+  - `sr_impex/blender/`: Blender operators, UI, materials.
+- Primary integration point: `sr_impex/utilities/drs_utility.py` (meshes, materials, collision, OBB, packing helpers).
 
-### Key conventions (match exactly)
-- Collection naming used by the add-on:
-  - DRS model container collections: `DRSModel_<basename>`
-  - Meshes: `Meshes_Collection` under the model collection
-  - Collision: `CollisionShapes_Collection` with subcollections `Boxes_Collection`, `Spheres_Collection`, `Cylinders_Collection`
-  - Debug content: `Debug_Collection`
-  - Armature collections typically contain `Armature` in the name (see `sr_impex/utilities/ska_utility.py`).
-- Texture suffix conventions:
-  - Color: `_col`
-  - Normal: `_nor`
-  - Packed parameters: `_par` (metallic/roughness/emission/flu mask)
-  - Flu map: `_flu`
-  - See mapping/packing helpers in `sr_impex/utilities/drs_utility.py`.
-- Material/node discovery:
-  - The add-on relies on a custom “DRS Shader” node group and “find-by-label” logic.
-  - Keep node labels stable (examples: `Separate Metallic`, `Separate Roughness`, `Parameter Map (_par)`, `Flu Map Layer 1`).
-- Numeric IDs/constants in file formats matter. Don’t change texture record IDs/packing without confirming importer expectations.
+### Non-negotiable conventions
+- Collection names: `DRSModel_<basename>` root; `Meshes_Collection`; `CollisionShapes_Collection` with `Boxes_Collection`/`Spheres_Collection`/`Cylinders_Collection`; `Debug_Collection`; armature collections contain `Armature` (see `ska_utility`).
+- Texture suffixes: `_col` color, `_nor` normal, `_par` packed params (metal/roughness/emission/flu mask), `_flu` flu. Mapping helpers live in `drs_utility`.
+- Materials: relies on “DRS Shader” node group + label-based lookup. Keep labels like `Separate Metallic`, `Separate Roughness`, `Parameter Map (_par)`, `Flu Map Layer 1` unchanged.
+- File-format IDs/constants and texture packing layouts must stay stable unless explicitly approved.
 
-### Where things live (open these first)
-1. `sr_impex/utilities/drs_utility.py` — main import/export integration surface.
-2. `sr_impex/core/file_io.py` — binary parsing/serialization primitives.
-3. `sr_impex/blender/drs_material.py` — material node construction and conventions.
-4. `sr_impex/utilities/drs_resolvers.py` — resolver logic used by import/export.
-5. `sr_impex/utilities/ska_utility.py` — animation export/import helpers (SKA).
-6. `sr_impex/blender/editors/` — UI panels/editors/operators (debug tooling lives here too).
+### Key files to open first
+1. `sr_impex/utilities/drs_utility.py` — main import/export integration.
+2. `sr_impex/core/file_io.py` — binary read/write primitives.
+3. `sr_impex/blender/drs_material.py` — material graph construction.
+4. `sr_impex/utilities/drs_resolvers.py` — resolver logic for resources.
+5. `sr_impex/utilities/ska_utility.py` — SKA animation import/export.
+6. `sr_impex/blender/editors/` — UI panels/operators and debug helpers.
 
-### Developer workflow (Windows/Blender)
-- Run inside Blender (bpy is only available there). This repo is typically developed using the VS Code “Blender Development” extension.
-- Packaging/release assembly: `python.exe .\create_release_package.py`.
-- There are no conventional unit tests; validate changes by running Blender and exercising the UI/operators.
+### Workflow expectations
+- Develop/test inside Blender; `bpy` is not available in plain Python. VS Code “Blender Development” extension is typical.
+- Release packaging: `python.exe .\create_release_package.py`.
+- No automated tests; validate manually via Blender UI/operators.
 
-### Blender API gotchas (important)
-- Avoid `bpy.ops` in tight loops; prefer `bpy.data.*` + direct datablock edits for speed and stability.
-- Don’t mutate Blender datablocks inside property update callbacks in a way that reassigns the same property (can recurse/crash). If you must touch scene data from an update callback, defer with `bpy.app.timers.register`.
-- When iterating collections/objects that you also hide/link/unlink, collect targets first to avoid iterator invalidation.
+### Blender API hygiene
+- Avoid `bpy.ops` in hot paths; prefer `bpy.data` and direct datablock edits.
+- Do not reassign properties inside update callbacks; defer with `bpy.app.timers.register` if scene edits are needed.
+- When linking/unlinking or hiding objects/collections during iteration, collect targets first to avoid invalidation.
 
-### External dependencies / resources
-- Runs on Blender’s Python (`bpy`, `mathutils`). Some utilities use `numpy` (ensure it’s available in the Blender Python env when needed).
-- Large third-party helpers live in `sr_impex/resources/` (e.g. `vgmstream`). Treat as integration points; avoid renaming/moving.
+### External bits
+- Runs on Blender Python (`bpy`, `mathutils`); some paths use `numpy` (ensure availability in Blender env).
+- Third-party payloads under `sr_impex/resources/` (e.g., `vgmstream`); treat as fixed integration points—do not move/rename.
 
-### When to ask before changing
-- File-format identifiers, texture packing, on-disk layouts, or shader graph conventions.
-- Anything that changes naming conventions for collections/objects/material nodes.
+### Ask before changing
+- File-format identifiers, binary layouts, texture packing or shader graph conventions.
+- Naming conventions for collections, objects, materials, or nodes.
