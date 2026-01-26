@@ -450,6 +450,7 @@ class DRS_WindPG(PropertyGroup):
         description="Wind response strength",
         default=0.0,
         min=0.0,
+        max=0.1,
         update=_update_wind_geometry_nodes,
     )  # type: ignore
     wind_height: FloatProperty(

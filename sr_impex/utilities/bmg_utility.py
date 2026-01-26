@@ -144,6 +144,8 @@ def import_debris_from_xml(xml_file_path: str, dir_name: str, base_name: str, co
     return debris_collection
 
 
+# region Import BMG
+
 def create_meshset_structure(
     parent_collection: bpy.types.Collection,
     meshset_index: int,
@@ -267,9 +269,6 @@ def create_meshset_structure(
     switch_meshset_state(meshset_col, "S0")
 
     return meshset_col, active_marker
-
-
-# region Import BMG
 
 
 def persist_meshgrid_blob_on_collection(
