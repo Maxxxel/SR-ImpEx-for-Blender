@@ -31,8 +31,8 @@ class DRSMaterial:
         # --- Exposed Texture Nodes for Importer ---
         self.color_tex_node = None
         self.param_tex_node = None
-        self.flu_tex_node_L1 = None
-        self.flu_tex_node_L2 = None
+        self.flu_tex_node_layer_1 = None
+        self.flu_tex_node_layer_2 = None
         self.normal_tex_node = None
         self.refraction_tex_node = None
 
@@ -120,7 +120,7 @@ class DRSMaterial:
         def_in(tree, "Normal Map", SOCKET_VECTOR)
         def_in(tree, "Refraction Map", SOCKET_COLOR, (0.0, 0.0, 0.0, 0.0))
         def_in(tree, "Refraction Color", SOCKET_COLOR, (1.0, 1.0, 1.0, 1.0))
-        
+
 
         # Flow Parameters
         def_in(tree, "MinSpeed", SOCKET_VECTOR)
@@ -212,7 +212,7 @@ class DRSMaterial:
         # map_range_ref.inputs['To Min'].default_value = 1.0
         # map_range_ref.inputs['To Max'].default_value = 0.96
         # links.new(inp.outputs["Refraction Map"], map_range_ref.inputs['Value'])
-        
+
         # refraction_bsdf = nodes.new("ShaderNodeBsdfGlass")
         # refraction_bsdf.label = "Refraction BSDF"
         # refraction_bsdf.location = (-1200, 900)
@@ -221,7 +221,7 @@ class DRSMaterial:
         # links.new(inp.outputs["Refraction Color"], refraction_bsdf.inputs["Color"])
         # links.new(map_range_ref.outputs['Result'], refraction_bsdf.inputs["IOR"])
         # links.new(refraction_bsdf.outputs['BSDF'], outp.inputs["Refraction BSDF"])
-        
+
         # Refraction BSDF by Maxxxel
         refraction_bsdf = nodes.new("ShaderNodeBsdfGlass")
         refraction_bsdf.location = (-1200, 900)
@@ -414,35 +414,43 @@ class DRSMaterial:
 
         self.color_tex_node = nodes.new("ShaderNodeTexImage")
         self.color_tex_node.label = "Color Map (_col)"
-        self.color_tex_node.location = (base_x, curr_y); curr_y -= 350
+        self.color_tex_node.location = (base_x, curr_y)
+        curr_y -= 350
 
         self.param_tex_node = nodes.new("ShaderNodeTexImage")
         self.param_tex_node.label = "Parameter Map (_par)"
-        self.param_tex_node.location = (base_x, curr_y); curr_y -= 350
+        self.param_tex_node.location = (base_x, curr_y)
+        curr_y -= 350
 
         self.sep_metallic_tex_node = nodes.new("ShaderNodeTexImage")
         self.sep_metallic_tex_node.label = "Separate Metallic"
-        self.sep_metallic_tex_node.location = (base_x, curr_y); curr_y -= 300
+        self.sep_metallic_tex_node.location = (base_x, curr_y)
+        curr_y -= 300
 
         self.sep_roughness_tex_node = nodes.new("ShaderNodeTexImage")
         self.sep_roughness_tex_node.label = "Separate Roughness"
-        self.sep_roughness_tex_node.location = (base_x, curr_y); curr_y -= 300
+        self.sep_roughness_tex_node.location = (base_x, curr_y)
+        curr_y -= 300
 
         self.sep_emission_tex_node = nodes.new("ShaderNodeTexImage")
         self.sep_emission_tex_node.label = "Separate Emission"
-        self.sep_emission_tex_node.location = (base_x, curr_y); curr_y -= 300
+        self.sep_emission_tex_node.location = (base_x, curr_y)
+        curr_y -= 300
 
         self.sep_flu_mask_tex_node = nodes.new("ShaderNodeTexImage")
         self.sep_flu_mask_tex_node.label = "Separate Flu Mask"
-        self.sep_flu_mask_tex_node.location = (base_x, curr_y); curr_y -= 350
+        self.sep_flu_mask_tex_node.location = (base_x, curr_y)
+        curr_y -= 350
 
         self.normal_tex_node = nodes.new("ShaderNodeTexImage")
         self.normal_tex_node.label = "Normal Map (_nor)"
-        self.normal_tex_node.location = (base_x, curr_y); curr_y -= 350
+        self.normal_tex_node.location = (base_x, curr_y)
+        curr_y -= 350
 
         self.refraction_tex_node = nodes.new("ShaderNodeTexImage")
         self.refraction_tex_node.label = "Refraction Map (_ref)"
-        self.refraction_tex_node.location = (base_x, curr_y); curr_y -= 300
+        self.refraction_tex_node.location = (base_x, curr_y)
+        curr_y -= 300
 
         self.refraction_color_node = nodes.new("ShaderNodeRGB")
         self.refraction_color_node.label = "Refraction Color"
@@ -450,17 +458,17 @@ class DRSMaterial:
         self.refraction_color_node.outputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
 
         # --- Create Fluid Nodes ---
-        self.flu_tex_node_L1 = nodes.new("ShaderNodeTexImage")
-        self.flu_tex_node_L1.label = "Flu Map Layer 1"
-        self.flu_tex_node_L1.location = (0, -300)
-        self.flu_tex_node_L1.extension = 'REPEAT'
-        self.flu_tex_node_L1.projection = 'SPHERE'
+        self.flu_tex_node_layer_1 = nodes.new("ShaderNodeTexImage")
+        self.flu_tex_node_layer_1.label = "Flu Map Layer 1"
+        self.flu_tex_node_layer_1.location = (0, -300)
+        self.flu_tex_node_layer_1.extension = 'REPEAT'
+        self.flu_tex_node_layer_1.projection = 'SPHERE'
 
-        self.flu_tex_node_L2 = nodes.new("ShaderNodeTexImage")
-        self.flu_tex_node_L2.label = "Flu Map Layer 2"
-        self.flu_tex_node_L2.location = (0, -500)
-        self.flu_tex_node_L2.extension = 'REPEAT'
-        self.flu_tex_node_L2.projection = 'SPHERE'
+        self.flu_tex_node_layer_2 = nodes.new("ShaderNodeTexImage")
+        self.flu_tex_node_layer_2.label = "Flu Map Layer 2"
+        self.flu_tex_node_layer_2.location = (0, -500)
+        self.flu_tex_node_layer_2.extension = 'REPEAT'
+        self.flu_tex_node_layer_2.projection = 'SPHERE'
 
     def _link_material_nodes(self) -> None:
         """Links all the external nodes to the Engine group and BSDF."""
@@ -505,13 +513,13 @@ class DRSMaterial:
         mix_color_flu.hide = True
 
         # Link Engine -> Fluid Textures
-        links.new(self.group_node.outputs["Flu Offset (Layer 1)"], self.flu_tex_node_L1.inputs["Vector"])
-        links.new(self.group_node.outputs["Flu Offset (Layer 2)"], self.flu_tex_node_L2.inputs["Vector"])
+        links.new(self.group_node.outputs["Flu Offset (Layer 1)"], self.flu_tex_node_layer_1.inputs["Vector"])
+        links.new(self.group_node.outputs["Flu Offset (Layer 2)"], self.flu_tex_node_layer_2.inputs["Vector"])
 
         # Link Engine & Textures -> Mixers
         links.new(self.group_node.outputs["Flu Crossfade"], mix_flu_layers.inputs[0]) # Fac
-        links.new(self.flu_tex_node_L1.outputs["Color"], mix_flu_layers.inputs[6]) # A
-        links.new(self.flu_tex_node_L2.outputs["Color"], mix_flu_layers.inputs[7]) # B
+        links.new(self.flu_tex_node_layer_1.outputs["Color"], mix_flu_layers.inputs[6]) # A
+        links.new(self.flu_tex_node_layer_2.outputs["Color"], mix_flu_layers.inputs[7]) # B
 
         links.new(self.group_node.outputs["Flu Mask"], mix_color_flu.inputs[0]) # Fac
         links.new(self.color_tex_node.outputs["Color"], mix_color_flu.inputs[6]) # A
@@ -562,36 +570,36 @@ class DRSMaterial:
         if "_par" in self.modules:
             frame_flu = nodes.new("NodeFrame")
             frame_flu.label = "Flu Animation Textures"
-            self.flu_tex_node_L1.parent = frame_flu
-            self.flu_tex_node_L2.parent = frame_flu
+            self.flu_tex_node_layer_1.parent = frame_flu
+            self.flu_tex_node_layer_2.parent = frame_flu
 
         for node in nodes:
             if node.type == 'FRAME':
                 node.shrink = True
 
-    def _def_socket_in(self, tree, name, type, default=None):
+    def _def_socket_in(self, tree, name, _type, default=None):
         """Helper to create an input socket (BlB 3.x / 4.x compatible)."""
         if bpy.app.version[0] >= 4:
-            sock = tree.interface.new_socket(name=name, in_out="INPUT", socket_type=type)
+            sock = tree.interface.new_socket(name=name, in_out="INPUT", socket_type=_type)
             if default is not None:
-                if type == SOCKET_VECTOR and isinstance(default, (tuple, list)):
+                if _type == SOCKET_VECTOR and isinstance(default, (tuple, list)):
                     sock.default_value[0] = default[0]
                     sock.default_value[1] = default[1]
                     sock.default_value[2] = default[2]
                 else:
                     sock.default_value = default
         else:
-            sock = tree.inputs.new(type, name)
+            sock = tree.inputs.new(_type, name)
             if default is not None:
                 sock.default_value = default
         return sock
 
-    def _def_socket_out(self, tree, name, type):
+    def _def_socket_out(self, tree, name, _type):
         """Helper to create an output socket (BlB 3.x / 4.x compatible)."""
         if bpy.app.version[0] >= 4:
-            return tree.interface.new_socket(name=name, in_out="OUTPUT", socket_type=type)
+            return tree.interface.new_socket(name=name, in_out="OUTPUT", socket_type=_type)
         else:
-            return tree.outputs.new(type, name)
+            return tree.outputs.new(_type, name)
 
     # --- Public Methods for Importer ---
 
@@ -660,8 +668,8 @@ class DRSMaterial:
         img = self.load_image(texture_name, dir_path)
         if img:
             img.colorspace_settings.name = "sRGB"
-            self.flu_tex_node_L1.image = img
-            self.flu_tex_node_L2.image = img
+            self.flu_tex_node_layer_1.image = img
+            self.flu_tex_node_layer_2.image = img
 
     def create_wind_nodes(self, mesh_object: bpy.types.Object) -> None:
         """

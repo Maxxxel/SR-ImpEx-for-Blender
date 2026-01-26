@@ -8,9 +8,7 @@ import uuid
 import hashlib
 import subprocess
 from struct import pack
-from collections import defaultdict
 from typing import Tuple, List, Dict, Optional, Union
-import xml.etree.ElementTree as ET
 from mathutils import Matrix, Vector
 from mathutils.kdtree import KDTree
 import bpy
@@ -22,78 +20,32 @@ from bmesh.ops import (
     create_cone,
 )
 import bmesh
-
-# pylint: disable=import-error
 import numpy as np
 
-from sr_impex.core.profiler import profile
-from sr_impex.definitions.drs_definitions import (
-    DRS,
-    BoneMatrix,
-    CDspMeshFile,
-    CylinderShape,
-    Face,
-    BattleforgeMesh,
-    DRSBone,
-    CSkSkeleton,
-    Bone,
-    BoneVertex,
-    BoxShape,
-    ModeAnimationKey,
-    SLocator,
-    SphereShape,
-    CGeoCylinder,
-    CSkSkinInfo,
-    CGeoAABox,
-    CGeoMesh,
-    BoneWeight,
-    CGeoOBBTree,
-    OBBNode,
-    CMatCoordinateSystem,
-    CDspJointMap,
-    MeshData,
-    Vertex,
-    LevelOfDetail,
-    EmptyString,
-    Flow,
-    Textures,
-    Texture,
-    Refraction,
-    Materials,
-    DrwResourceMeta,
-    JointGroup,
-    Vector3,
-    Vector4,
-    InformationIndices,
-    CollisionShape,
-    AnimationSet,
-    AnimationTimings,
-    VertexData,
-    AnimationSetVariant,
-    CGeoSphere,
-    CDrwLocatorList,
-    AnimationMarkerSet,
-    AnimationMarker,
-    EffectSet,
-    IKAtlas,
-    Constraint,
-    AnimationTiming,
-    TimingVariant,
-    Timing,
-)
-from sr_impex.definitions.base_types import Matrix3x3
-from sr_impex.definitions.bmg_definitions import BMS, BMG, StateBasedMeshSet
-from sr_impex.blender.drs_material import DRSMaterial
+from sr_impex.core.message_logger import MessageLogger
+
+from sr_impex.definitions.animation_definitions import AnimationSet, IKAtlas, AnimationTimings, AnimationTiming, TimingVariant, Timing, AnimationMarkerSet, ModeAnimationKey, AnimationSetVariant, AnimationMarker
+from sr_impex.definitions.skeleton_definitions import BoneMatrix, DRSBone, JointGroup, CSkSkeleton, CSkSkinInfo, BoneWeight, CDspJointMap, Bone, BoneVertex
+from sr_impex.definitions.base_types import Matrix3x3, Vector3, Face, CMatCoordinateSystem, Vector4
+from sr_impex.definitions.locator_definitions import SLocator, CDrwLocatorList
+from sr_impex.definitions.effect_definitions import EffectSet
+from sr_impex.definitions.mesh_definitions import BattleforgeMesh, CDspMeshFile, CGeoMesh, MeshData, Vertex, Texture, LevelOfDetail, EmptyString, Refraction, Flow, Textures, VertexData, Materials
+from sr_impex.definitions.collision_definitions import CollisionShape, BoxShape, SphereShape, CylinderShape, CGeoAABox, CGeoSphere, CGeoCylinder
+from sr_impex.definitions.obb_definitions import CGeoOBBTree, OBBNode
+from sr_impex.definitions.resource_definitions import Constraint, DrwResourceMeta
+from sr_impex.definitions.enums import InformationIndices
+from sr_impex.definitions.drs_definitions import DRS
+from sr_impex.definitions.bmg_definitions import BMS
 from sr_impex.definitions.ska_definitions import SKA
-from sr_impex.utilities.ska_utility import get_actions, export_ska
+
 from sr_impex.blender.transform_utils import (
     ensure_mode,
     parent_under_game_axes,
     create_empty,
 )
+from sr_impex.blender.drs_material import DRSMaterial
 from sr_impex.blender.bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
 from sr_impex.blender.animation_utils import import_ska_animation
-from sr_impex.core.message_logger import MessageLogger
 from sr_impex.blender.editors.locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
 from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
 from sr_impex.blender.editors.effect_set_editor import (
@@ -101,10 +53,10 @@ from sr_impex.blender.editors.effect_set_editor import (
     blob_to_effectset as _blob_to_effectset,
     EFFECT_BLOB_KEY,
 )
-from sr_impex.blender.editors.bmg_state_editor import MESHGRID_BLOB_KEY, switch_meshset_state
 from sr_impex.blender.editors.material_flow_editor import _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
 
-from sr_impex.utilities.helpers import get_collection, verify_collections, abort, copy, build_ska_export_name_map
+from sr_impex.utilities.ska_utility import get_actions, export_ska
+from sr_impex.utilities.helpers import get_collection, verify_collections, abort, copy, build_ska_export_name_map, find_or_create_collection, _norm_ska_key, _resolve_action_from_blob_name
 
 try:
     # when installed as a Blender add-on package
@@ -112,6 +64,11 @@ try:
 except Exception:
     # fallback when running the files as loose scripts (no package)
     from sr_impex.definitions.drs_definitions import ExportError
+
+TOL_DIGITS = 6  # ~1e-6 (your original rounding)
+KD_TOL = 1e-5  # tolerant fallback for welded/shifted verts
+MIN_TRIS = 12
+MAX_DEPTH = 32
 
 logger = MessageLogger()
 resource_dir = dirname(dirname(realpath(__file__))) + "/resources"
@@ -148,36 +105,6 @@ def persist_effect_blob_on_collection(
         return None
     blob = _effectset_to_blob(eff)
     source_collection[EFFECT_BLOB_KEY] = json.dumps(
-        blob, separators=(",", ":"), ensure_ascii=False
-    )
-    return blob
-
-
-def persist_meshgrid_blob_on_collection(
-    source_collection: bpy.types.Collection, bmg_file: "BMG"
-) -> dict | None:
-    """Create and store a minimal MeshSetGrid blob on the model collection."""
-    grid = getattr(bmg_file, "mesh_set_grid", None)
-    if grid is None:
-        return None
-
-    cells = []
-    for m in grid.mesh_modules or []:
-        cells.append({
-            "has_mesh_set": int(getattr(m, "has_mesh_set", 0) or 0),
-            "mesh_object_name": ""  # Will be filled during mesh creation
-        })
-
-    blob = {
-        "grid_width": int(getattr(grid, "grid_width", 0) or 0),
-        "grid_height": int(getattr(grid, "grid_height", 0) or 0),
-        "module_distance": float(getattr(grid, "module_distance", 2.0) or 2.0),
-        "is_center_pivoted": int(getattr(grid, "is_center_pivoted", 0) or 0),
-        "grid_rotation": int(getattr(grid, "grid_rotation", 0) or 0),
-        "cells": cells,  # row-major, same order as MeshSetGrid.read
-    }
-
-    source_collection[MESHGRID_BLOB_KEY] = json.dumps(
         blob, separators=(",", ":"), ensure_ascii=False
     )
     return blob
@@ -471,17 +398,6 @@ def persist_animset_blob_on_collection(
         blob, separators=(",", ":"), ensure_ascii=False
     )
     return blob
-
-
-def find_or_create_collection(
-    source_collection: bpy.types.Collection, collection_name: str
-) -> bpy.types.Collection:
-    collection = source_collection.children.get(collection_name)
-    if collection is None:
-        collection = bpy.data.collections.new(collection_name)
-        source_collection.children.link(collection)
-
-    return collection
 
 
 def triangulate(meshes_collection: bpy.types.Collection) -> None:
@@ -960,222 +876,6 @@ def process_slocator_import(
         locator_object.rotation_quaternion = world_rot.to_quaternion()
 
 
-def process_debris_import(state_based_mesh_set, source_collection, dir_name, base_name):
-    for destruction_state in state_based_mesh_set.destruction_states:
-        state_collection_name = f"Destruction_State_{destruction_state.state_num}"
-        state_collection = find_or_create_collection(
-            source_collection, state_collection_name
-        )
-
-        # Load and parse the XML file.
-        xml_file_path = os.path.join(dir_name, destruction_state.file_name)
-        with open(xml_file_path, "r", encoding="utf-8") as file:
-            xml_file = file.read()
-        xml_root = ET.fromstring(xml_file)
-
-        # Loop through PhysicObject elements and create meshes.
-        for element in xml_root.findall(".//Element[@type='PhysicObject']"):
-            resource = element.attrib.get("resource")
-            name = element.attrib.get("name")
-            if resource and name:
-                debris_drs_file = DRS().read(os.path.join(dir_name, "meshes", resource))
-                for mesh_index in range(debris_drs_file.cdsp_mesh_file.mesh_count):
-                    # Create the mesh data and object.
-                    mesh_data = create_static_mesh(
-                        debris_drs_file.cdsp_mesh_file, mesh_index
-                    )
-                    mesh_object = bpy.data.objects.new(
-                        f"CDspMeshFile_{name}", mesh_data
-                    )
-
-                    # Create and assign the material.
-                    material = create_material(
-                        dir_name,
-                        mesh_index,
-                        debris_drs_file.cdsp_mesh_file.meshes[mesh_index],
-                        f"{base_name}_{name}",
-                    )
-                    mesh_data.materials.append(material)
-
-                    # Link the debris mesh object to the collection.
-                    state_collection.objects.link(mesh_object)
-
-
-def import_debris_from_xml(xml_file_path: str, dir_name: str, base_name: str, collection_name: str) -> bpy.types.Collection:
-    """
-    Import debris models from an XML file and return a collection containing them.
-
-    Args:
-        xml_file_path: Path to the XML file defining debris
-        dir_name: Directory containing the mesh files
-        base_name: Base name for material naming
-        collection_name: Name for the debris collection
-
-    Returns:
-        Collection containing all debris meshes from the XML
-    """
-    debris_collection = bpy.data.collections.new(collection_name)
-
-    # Load and parse the XML file
-    with open(xml_file_path, "r", encoding="utf-8") as file:
-        xml_file = file.read()
-    xml_root = ET.fromstring(xml_file)
-
-    # Loop through PhysicObject elements and create meshes
-    for element in xml_root.findall(".//Element[@type='PhysicObject']"):
-        resource = element.attrib.get("resource")
-        name = element.attrib.get("name")
-        if resource and name:
-            debris_drs_file = DRS().read(os.path.join(dir_name, "meshes", resource))
-            for mesh_index in range(debris_drs_file.cdsp_mesh_file.mesh_count):
-                # Create the mesh data and object
-                mesh_data = create_static_mesh(
-                    debris_drs_file.cdsp_mesh_file, mesh_index
-                )
-                mesh_object = bpy.data.objects.new(
-                    f"CDspMeshFile_{name}", mesh_data
-                )
-
-                # Create and assign the material
-                material = create_material(
-                    dir_name,
-                    mesh_index,
-                    debris_drs_file.cdsp_mesh_file.meshes[mesh_index],
-                    f"{base_name}_{name}",
-                )
-                mesh_data.materials.append(material)
-
-                # Link the debris mesh object to the collection
-                debris_collection.objects.link(mesh_object)
-
-    return debris_collection
-
-
-def create_meshset_structure(
-    parent_collection: bpy.types.Collection,
-    meshset_index: int,
-    mesh_states: list,
-    destruction_states: list,
-    dir_name: str,
-    base_name: str,
-    armature_object: bpy.types.Object = None,
-    import_collision_shape: bool = False,
-    import_s0_collision_shapes: bool = False,
-) -> tuple[bpy.types.Collection, bpy.types.Object]:
-    """
-    Create organized hierarchical structure for a single MeshSet with all states.
-
-    Structure:
-        MeshSet_N
-        ├── States_Collection (hidden by default)
-        │   ├── S0_Undamaged
-        │   ├── S2_Damaged
-        │   └── Debris_Collection
-        │       ├── S2_Debris (hidden)
-        │       └── S3_Debris (hidden)
-        └── Active_State (empty marker)
-
-    Args:
-        parent_collection: Parent collection to link the MeshSet to
-        meshset_index: Index of this MeshSet
-        mesh_states: List of MeshState objects from StateBasedMeshSet
-        destruction_states: List of DestructionState objects
-        dir_name: Directory containing files
-        base_name: Base name for materials
-        armature_object: Armature to parent meshes to
-        import_collision_shape: Whether to import collision shapes for S2 states
-        import_s0_collision_shapes: Whether to import collision shapes for S0 states (BMG-level shapes apply to all S0)
-
-    Returns:
-        (meshset_collection, active_marker) tuple
-    """
-    # Create MeshSet container
-    meshset_col = bpy.data.collections.new(f"MeshSet_{meshset_index}")
-    parent_collection.children.link(meshset_col)
-
-    # Create States subcollection (hidden by default) with unique name
-    states_col = bpy.data.collections.new(f"States_Collection_{meshset_index}")
-    meshset_col.children.link(states_col)
-    states_col.hide_viewport = True
-    states_col.hide_render = True
-
-    # Import each mesh state (S0, S2, etc.)
-    for mesh_state in mesh_states:
-        if mesh_state.has_files:
-            state_name = f"S{mesh_state.state_num}_{'Undamaged' if mesh_state.state_num == 0 else 'Damaged'}"
-            state_col = bpy.data.collections.new(state_name)
-            state_col["state_type"] = f"S{mesh_state.state_num}"
-            state_col["mesh_set_index"] = meshset_index
-            states_col.children.link(state_col)
-
-            # Create Meshes subcollection
-            meshes_col = bpy.data.collections.new("Meshes_Collection")
-            state_col.children.link(meshes_col)
-
-            # Load DRS file
-            drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
-
-            # Import collision shapes if present
-            # S0 (undamaged): only import if import_s0_collision_shapes is True (BMG-level shapes apply to all S0)
-            # S2+ (damaged): always import as they differ from S0 due to damage
-            should_import_collision = False
-            if drs_file.collision_shape is not None and import_collision_shape:
-                if mesh_state.state_num == 0:
-                    should_import_collision = import_s0_collision_shapes
-                else:
-                    should_import_collision = True
-
-            if should_import_collision:
-                import_collision_shapes(state_col, drs_file)
-
-            # Import meshes
-            for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-                mesh_object, _ = create_mesh_object(
-                    drs_file,
-                    mesh_index,
-                    dir_name,
-                    base_name,
-                    armature_object,
-                )
-                setup_material_parameters(mesh_object, drs_file, mesh_index)
-                meshes_col.objects.link(mesh_object)
-
-    # Create Debris subcollection
-    if destruction_states and len(destruction_states) > 0:
-        debris_col = bpy.data.collections.new("Debris_Collection")
-        states_col.children.link(debris_col)
-        debris_col.hide_viewport = True
-        debris_col.hide_render = True
-
-        # Import debris from each destruction state XML
-        for destruction_state in destruction_states:
-            xml_file_path = os.path.join(dir_name, destruction_state.file_name)
-            if os.path.exists(xml_file_path):
-                debris_state_name = f"S{destruction_state.state_num}_Debris"
-                debris_state_col = import_debris_from_xml(
-                    xml_file_path,
-                    dir_name,
-                    base_name,
-                    debris_state_name
-                )
-                debris_state_col["state_type"] = f"S{destruction_state.state_num}_debris"
-                debris_state_col["mesh_set_index"] = meshset_index
-                debris_col.children.link(debris_state_col)
-
-    # Create active state marker (empty object)
-    active_marker = bpy.data.objects.new(f"Active_State_MeshSet_{meshset_index}", None)
-    active_marker.empty_display_type = 'CUBE'
-    active_marker.empty_display_size = 0.5
-    active_marker["active_state"] = "S0"  # Default to undamaged
-    active_marker["mesh_set_index"] = meshset_index
-    meshset_col.objects.link(active_marker)
-
-    # Initially show S0 (undamaged) state
-    switch_meshset_state(meshset_col, "S0")
-
-    return meshset_col, active_marker
-
-
 def export_meshset_state(meshset_collection: bpy.types.Collection, state_type: str = "S0") -> bpy.types.Collection:
     """
     Get the collection for a specific state from a MeshSet for export.
@@ -1479,7 +1179,6 @@ def collect_ik_atlases_from_blender(
     bone_map: Dict[str, Dict[str, Optional[int]]],
     *,
     constraint_name: str = "_LimitRotation",
-    accept_custom_prop: str = "drs_ik",   # optional custom marker
     default_purpose_flags: int = 3,
 ) -> list[IKAtlas]:
     """
@@ -1702,20 +1401,20 @@ def create_bone_tree(armature_data: bpy.types.Armature,bone_list: list[DRSBone],
     eb = armature_data.edit_bones.new(bone_data.name)
     armature_data.display_type = "STICK"
 
-    M = bone_data.bone_matrix
-    R = M.to_3x3()
+    m = bone_data.bone_matrix
+    r = m.to_3x3()
 
     # exact head from bind pose
-    eb.head = M @ Vector((0, 0, 0))
+    eb.head = m @ Vector((0, 0, 0))
 
     # make tail along local +Y of the bind pose, fixed short length
-    y_dir = (R @ Vector((0, 1, 0))).normalized()
+    y_dir = (r @ Vector((0, 1, 0))).normalized()
     if y_dir.length < 1e-8:
         y_dir = Vector((0, 1, 0))  # extremely defensive
     eb.tail = eb.head + y_dir * bone_len
 
     # roll from bind pose Z axis
-    eb.align_roll(R @ Vector((0, 0, 1)))
+    eb.align_roll(r @ Vector((0, 0, 1)))
 
     # never force connection for coincident heads
     if bone_data.parent != -1:
@@ -1821,9 +1520,9 @@ def _find_layer_collection(root: bpy.types.LayerCollection, col: bpy.types.Colle
     if root.collection == col:
         return root
     for ch in root.children:
-        f = _find_layer_collection(ch, col)
-        if f:
-            return f
+        flc = _find_layer_collection(ch, col)
+        if flc:
+            return flc
     return None
 
 
@@ -1918,7 +1617,6 @@ def create_bone_weights(
         )
 
     return bone_weights
-
 
 
 def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Mesh:
@@ -2038,34 +1736,34 @@ def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh
             _update_flu_apply_mask_state(mesh_object)
         # flow
         if hasattr(mesh_object, "drs_flow") and mesh_object.drs_flow:
-            f = bf_mesh.flow
+            fl = bf_mesh.flow
             # flow.length==4 indicates it is present in -86061050 branch
-            use = int(getattr(f, "length", 0) or 0) == 4
+            use = int(getattr(fl, "length", 0) or 0) == 4
             mesh_object.drs_flow.use_flow = use
             if use:
                 mesh_object.drs_flow.max_flow_speed = (
-                    f.max_flow_speed.x,
-                    f.max_flow_speed.y,
-                    f.max_flow_speed.z,
-                    f.max_flow_speed.w,
+                    fl.max_flow_speed.x,
+                    fl.max_flow_speed.y,
+                    fl.max_flow_speed.z,
+                    fl.max_flow_speed.w,
                 )
                 mesh_object.drs_flow.min_flow_speed = (
-                    f.min_flow_speed.x,
-                    f.min_flow_speed.y,
-                    f.min_flow_speed.z,
-                    f.min_flow_speed.w,
+                    fl.min_flow_speed.x,
+                    fl.min_flow_speed.y,
+                    fl.min_flow_speed.z,
+                    fl.min_flow_speed.w,
                 )
                 mesh_object.drs_flow.flow_speed_change = (
-                    f.flow_speed_change.x,
-                    f.flow_speed_change.y,
-                    f.flow_speed_change.z,
-                    f.flow_speed_change.w,
+                    fl.flow_speed_change.x,
+                    fl.flow_speed_change.y,
+                    fl.flow_speed_change.z,
+                    fl.flow_speed_change.w,
                 )
                 mesh_object.drs_flow.flow_scale = (
-                    f.flow_scale.x,
-                    f.flow_scale.y,
-                    f.flow_scale.z,
-                    f.flow_scale.w,
+                    fl.flow_scale.x,
+                    fl.flow_scale.y,
+                    fl.flow_scale.z,
+                    fl.flow_scale.w,
                 )
 
             _update_flow_nodes(mesh_object.drs_flow)
@@ -2577,7 +2275,6 @@ def import_bounding_box(
     logger.log(f"AABB Bounding Box creation took {end_time - start_time:.2f} seconds.")
 
 
-
 def load_drs(
     context: bpy.types.Context,
     filepath="",
@@ -2735,517 +2432,6 @@ def load_drs(
     return {"FINISHED"}
 
 
-def import_state_based_mesh_set(
-    state_based_mesh_set: StateBasedMeshSet,
-    source_collection: bpy.types.Collection,
-    armature_object: bpy.types.Object,
-    bone_list: list[DRSBone],
-    dir_name: str,
-    bmg_file: DRS,
-    import_animation: bool,
-    smooth_animation,
-    import_debris: bool,
-    import_collision_shape: bool,
-    import_s0_collision_shapes: bool,
-    import_ik_atlas: bool,
-    base_name: str,
-    slocator: SLocator = None,
-    prefix: str = "",
-) -> bpy.types.Object:
-    # Get individual mesh states
-    # Create a Mesh Collection to store the Mesh Objects
-    mesh_collection: bpy.types.Collection = bpy.data.collections.new(
-        "Meshes_Collection"
-    )
-    source_collection.children.link(mesh_collection)
-    for mesh_set in state_based_mesh_set.mesh_states:
-        if mesh_set.has_files:
-            # Create a new Collection for the State
-            state_collection_name = f"{prefix}Mesh_State_{mesh_set.state_num}"
-            state_collection = find_or_create_collection(
-                mesh_collection, state_collection_name
-            )
-            # Load the DRS Files
-            drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_set.drs_file))
-
-            if not armature_object:
-                armature_object, bone_list = setup_armature(source_collection, drs_file)
-
-            if drs_file.collision_shape is not None and import_collision_shape:
-                import_collision_shapes(state_collection, drs_file)
-
-            for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-                # Create the Mesh Data
-                mesh_data = create_static_mesh(drs_file.cdsp_mesh_file, mesh_index)
-                # Create the Mesh Object and add the Mesh Data to it
-                mesh_object: bpy.types.Object = bpy.data.objects.new(
-                    f"CDspMeshFile_{mesh_index}", mesh_data
-                )
-
-                # Check if the Mesh has a Skeleton and modify the Mesh Object accordingly
-                if drs_file.csk_skeleton is not None:
-                    # Set the Armature Object as the Parent of the Mesh Object
-                    mesh_object.parent = armature_object
-                    # Add the Armature Modifier to the Mesh Object
-                    modifier = mesh_object.modifiers.new(
-                        type="ARMATURE", name="Armature"
-                    )
-                    modifier.object = armature_object
-                if slocator is not None:
-                    location = (
-                        slocator.cmat_coordinate_system.position.x,
-                        slocator.cmat_coordinate_system.position.y,
-                        slocator.cmat_coordinate_system.position.z,
-                    )
-                    rotation = slocator.cmat_coordinate_system.matrix.matrix
-                    rotation_matrix = [
-                        list(rotation[i : i + 3]) for i in range(0, len(rotation), 3)
-                    ]
-                    transposed_rotation = Matrix(rotation_matrix).transposed()
-                    # Create a new Matrix with the Location and Rotation
-                    local_matrix = (
-                        Matrix.Translation(location) @ transposed_rotation.to_4x4()
-                    )
-                    mesh_object.matrix_world = local_matrix
-                # Create the Material Data
-                material_data = create_material(
-                    dir_name,
-                    mesh_index,
-                    drs_file.cdsp_mesh_file.meshes[mesh_index],
-                    base_name
-                )
-                # Assign the Material to the Mesh
-                mesh_data.materials.append(material_data)
-                # Link the Mesh Object to the Source Collection
-                state_collection.objects.link(mesh_object)
-            if (
-                bmg_file.animation_set is not None
-                and armature_object is not None
-                and import_animation
-            ):
-                # POSE MODE is only for Armature Objects, so we need to ensure we're in the right context
-                if armature_object:
-                    bpy.context.view_layer.objects.active = armature_object
-                with ensure_mode("POSE"):
-                    for animation_key in bmg_file.animation_set.mode_animation_keys:
-                        for variant in animation_key.animation_set_variants:
-                            ska_file: SKA = SKA().read(
-                                os.path.join(dir_name, variant.file)
-                            )
-                            import_ska_animation(
-                                ska_file,
-                                armature_object,
-                                bone_list,
-                                variant.file,
-                                smooth_animation,
-                                base_name,
-                                map_collection=source_collection,
-                            )
-
-            if (
-                import_ik_atlas
-                and armature_object is not None
-                and import_animation
-                and drs_file.animation_set is not None
-                and bone_list is not None
-            ):
-                import_animation_ik_atlas(
-                    armature_object, drs_file.animation_set, bone_list
-                )
-
-    # Get individual desctruction States
-    if import_debris:
-        destruction_collection: bpy.types.Collection = bpy.data.collections.new(
-            "Destruction_State_Collection"
-        )
-        source_collection.children.link(destruction_collection)
-        process_debris_import(
-            state_based_mesh_set, destruction_collection, dir_name, base_name
-        )
-
-    return armature_object
-
-
-def import_mesh_set_grid(
-    bmg_file: BMG,
-    source_collection: bpy.types.Collection,
-    armature_object: bpy.types.Object,
-    dir_name: str,
-    base_name: str,
-    import_debris: bool,
-    import_collision_shape: bool,
-    import_s0_collision_shapes: bool,
-    import_ik_atlas: bool,
-):
-    """
-    Import a MeshSetGrid using the new hierarchical collection structure.
-
-    Creates a cleaner hierarchy:
-        MeshSetGrid_0
-        ├── MeshSet_0
-        │   ├── States_Collection (hidden)
-        │   │   ├── S0_Undamaged
-        │   │   ├── S2_Damaged
-        │   │   └── Debris_Collection (hidden)
-        │   └── Active_State (marker)
-        └── MeshSet_1
-            └── ...
-    """
-    # Create MeshSetGrid Collection to organize all MeshSets
-    mesh_set_grid_collection: bpy.types.Collection = bpy.data.collections.new(
-        "MeshSetGrid_0"
-    )
-    source_collection.children.link(mesh_set_grid_collection)
-    bone_list = None
-
-    # Track mesh objects per module index for grid mapping
-    module_mesh_map = {}
-    module_index = 0
-
-    for module in bmg_file.mesh_set_grid.mesh_modules:
-        if module.has_mesh_set:
-            # Setup armature if needed (shared across all modules)
-            if armature_object is None:
-                # Try to get skeleton from first available mesh state
-                for mesh_state in module.state_based_mesh_set.mesh_states:
-                    if mesh_state.has_files:
-                        file_path = os.path.join(dir_name, mesh_state.drs_file)
-                        drs_file = DRS().read(file_path)
-                        if drs_file.csk_skeleton is not None:
-                            armature_object, bone_list = setup_armature(
-                                source_collection, drs_file
-                            )
-                            break
-
-            # Create structured MeshSet with all states organized hierarchically
-            meshset_col, active_marker = create_meshset_structure(
-                parent_collection=mesh_set_grid_collection,
-                meshset_index=module_index,
-                mesh_states=module.state_based_mesh_set.mesh_states,
-                destruction_states=module.state_based_mesh_set.destruction_states if import_debris else [],
-                dir_name=dir_name,
-                base_name=base_name,
-                armature_object=armature_object,
-                import_collision_shape=import_collision_shape,
-                import_s0_collision_shapes=import_s0_collision_shapes,
-            )
-
-            # Store reference to first mesh object for grid mapping
-            states_col = None
-            for child in meshset_col.children:
-                if child.name.startswith("States_Collection"):
-                    states_col = child
-                    break
-
-            if states_col:
-                # Get first mesh from S0 state
-                s0_col = None
-                for child in states_col.children:
-                    if child.name.startswith("S0_Undamaged"):
-                        s0_col = child
-                        break
-
-                if s0_col:
-                    meshes_col = None
-                    for child in s0_col.children:
-                        if child.name.startswith("Meshes_Collection"):
-                            meshes_col = child
-                            break
-
-                    if meshes_col and len(meshes_col.objects) > 0:
-                        first_mesh = meshes_col.objects[0]
-                        module_mesh_map[module_index] = first_mesh.name
-                        first_mesh["grid_cell_index"] = module_index
-
-            # Handle IK atlas if needed
-            if import_ik_atlas and armature_object is not None and bone_list is not None:
-                for mesh_state in module.state_based_mesh_set.mesh_states:
-                    if mesh_state.has_files:
-                        file_path = os.path.join(dir_name, mesh_state.drs_file)
-                        drs_file = DRS().read(file_path)
-                        if (
-                            drs_file.csk_skeleton is not None
-                            and drs_file.animation_set is not None
-                        ):
-                            import_animation_ik_atlas(
-                                armature_object, drs_file.animation_set, bone_list
-                            )
-                            break  # Only need to do this once per module
-
-        # Increment module index for each module (even if no mesh)
-        module_index += 1
-
-    return armature_object, bone_list, module_mesh_map
-
-
-
-def load_bmg(
-    context: bpy.types.Context,
-    filepath="",
-    apply_transform=True,
-    import_collision_shape=False,
-    import_s0_collision_shapes=False,
-    import_animation=True,
-    smooth_animation=True,
-    import_ik_atlas=False,
-    use_control_rig=False,
-    import_debris=True,
-    import_construction=True,
-    import_geomesh=False,
-    import_obbtree=False,
-    limit_obb_depth=5,
-    import_bb=False,
-):
-    start_time = time.time()
-    dir_name = os.path.dirname(filepath)
-    base_name = os.path.basename(filepath).split(".")[0]
-    source_collection: bpy.types.Collection = bpy.data.collections.new(
-        "DRSModel_" + base_name
-    )
-    context.collection.children.link(source_collection)
-    bmg_file: BMG = BMG().read(filepath)
-
-    # persist_locator_blob_on_collection(source_collection, bmg_file)
-    persist_animset_blob_on_collection(source_collection, bmg_file)
-    persist_meshgrid_blob_on_collection(source_collection, bmg_file)
-
-    # Models share the same Skeleton Files, so we only need to create one Armature and share it across all sub-modules!
-    armature_object = None
-    bone_list = None
-
-    # Ground Decal
-    if bmg_file.mesh_set_grid.ground_decal is not None:
-        # Decal Collection
-        ground_decal_collection: bpy.types.Collection = bpy.data.collections.new(
-            "GroundDecal_Collection"
-        )
-        source_collection.children.link(ground_decal_collection)
-        # Load the DRS Files
-        ground_decal: DRS = DRS().read(
-            os.path.join(dir_name, bmg_file.mesh_set_grid.ground_decal)
-        )
-        # Load the Meshes
-        for mesh_index in range(ground_decal.cdsp_mesh_file.mesh_count):
-            # Create the Mesh Data
-            mesh_data = create_static_mesh(ground_decal.cdsp_mesh_file, mesh_index)
-            # Create the Mesh Object and add the Mesh Data to it
-            mesh_object: bpy.types.Object = bpy.data.objects.new(
-                f"GroundDecal{mesh_index}", mesh_data
-            )
-            # Create the Material Data
-            material_data = create_material(
-                dir_name,
-                mesh_index,
-                ground_decal.cdsp_mesh_file.meshes[mesh_index],
-                "GroundDecal",
-            )
-            # Assign the Material to the Mesh
-            mesh_data.materials.append(material_data)
-            # Material Parameters
-            setup_material_parameters(mesh_object, ground_decal, mesh_index)
-            # Link the Mesh Object to the Source Collection
-            ground_decal_collection.objects.link(mesh_object)
-
-    # Collision Shape
-    if bmg_file.collision_shape is not None and import_collision_shape:
-        # Create a Collision Shape Collection to store the Collision Shape Objects
-        collision_shape_collection: bpy.types.Collection = bpy.data.collections.new(
-            "CollisionShapes_Collection"
-        )
-        source_collection.children.link(collision_shape_collection)
-        # Create a Box Collection to store the Box Objects
-        box_collection: bpy.types.Collection = bpy.data.collections.new(
-            "Boxes_Collection"
-        )
-        collision_shape_collection.children.link(box_collection)
-        for _ in range(bmg_file.collision_shape.box_count):
-            box_object = create_collision_shape_box_object(
-                bmg_file.collision_shape.boxes[_], _
-            )
-            box_collection.objects.link(box_object)
-            # TODO: WORKAROUND: Make the Box's Z-Location negative to flip the Axis
-            box_object.location = (
-                box_object.location.x,
-                box_object.location.y,
-                -box_object.location.z,
-            )
-
-        # Create a Sphere Collection to store the Sphere Objects
-        sphere_collection: bpy.types.Collection = bpy.data.collections.new(
-            "Spheres_Collection"
-        )
-        collision_shape_collection.children.link(sphere_collection)
-        for _ in range(bmg_file.collision_shape.sphere_count):
-            sphere_object = create_collision_shape_sphere_object(
-                bmg_file.collision_shape.spheres[_], _
-            )
-            sphere_collection.objects.link(sphere_object)
-
-        # Create a Cylinder Collection to store the Cylinder Objects
-        cylinder_collection: bpy.types.Collection = bpy.data.collections.new(
-            "Cylinders_Collection"
-        )
-        collision_shape_collection.children.link(cylinder_collection)
-        for _ in range(bmg_file.collision_shape.cylinder_count):
-            cylinder_object = create_collision_shape_cylinder_object(
-                bmg_file.collision_shape.cylinders[_], _
-            )
-            cylinder_collection.objects.link(cylinder_object)
-
-    # Import Mesh Set Grid
-    if bmg_file.mesh_set_grid is not None:
-        armature_object, bone_list, module_mesh_map = import_mesh_set_grid(
-            bmg_file,
-            source_collection,
-            armature_object,
-            dir_name,
-            base_name,
-            import_debris,
-            import_collision_shape,
-            import_s0_collision_shapes,
-            import_ik_atlas,
-        )
-
-        # Update blob with mesh object names
-        if module_mesh_map:
-            import json
-            blob_data = source_collection.get(MESHGRID_BLOB_KEY)
-            if blob_data:
-                try:
-                    blob = json.loads(blob_data)
-                    cells = blob.get("cells", [])
-                    for idx, mesh_name in module_mesh_map.items():
-                        if idx < len(cells):
-                            cells[idx]["mesh_object_name"] = mesh_name
-                    source_collection[MESHGRID_BLOB_KEY] = json.dumps(blob, separators=(",", ":"), ensure_ascii=False)
-                except Exception as e:
-                    print(f"Warning: Failed to update mesh grid blob with mesh names: {e}")
-
-    # Import Construction
-    if import_construction:
-        slocator_collection: bpy.types.Collection = bpy.data.collections.new(
-            "SLocators_Collection"
-        )
-        source_collection.children.link(slocator_collection)
-        for slocator in bmg_file.mesh_set_grid.cdrw_locator_list.slocators:
-            if slocator.file_name_length > 0 and slocator.class_type == "Construction":
-                location = (
-                    slocator.cmat_coordinate_system.position.x,
-                    slocator.cmat_coordinate_system.position.y,
-                    slocator.cmat_coordinate_system.position.z,
-                )
-                rotation = (
-                    slocator.cmat_coordinate_system.matrix.matrix
-                )  # Tuple ((float, float, float), (float, float, float), (float, float, float))
-                rotation_matrix = [
-                    list(rotation[i : i + 3]) for i in range(0, len(rotation), 3)
-                ]
-                transposed_rotation = Matrix(rotation_matrix).transposed()
-                # Create a new Matrix with the Location and Rotation
-                local_matrix = (
-                    Matrix.Translation(location) @ transposed_rotation.to_4x4()
-                )
-                # We need to move two directory up to find the construction folder
-                construction_dir = os.path.join(dir_name, "..", "..", "construction")
-                # Check for file ending (DRS or BMS)
-
-                if slocator.file_name.endswith(".bms"):
-                    bms_file: BMS = BMS().read(
-                        os.path.join(construction_dir, slocator.file_name)
-                    )
-                    module_name = slocator.class_type + "_" + str(slocator.bone_id)
-                    import_state_based_mesh_set(
-                        bms_file.state_based_mesh_set,
-                        slocator_collection,
-                        armature_object,
-                        bone_list,
-                        construction_dir,
-                        bms_file,
-                        import_animation,
-                        smooth_animation,
-                        import_debris,
-                        import_collision_shape,
-                        import_s0_collision_shapes,
-                        import_ik_atlas,
-                        module_name,
-                        slocator,
-                        "Construction_",
-                    )
-                elif slocator.file_name.endswith(".drs"):
-                    drs_file: DRS = DRS().read(
-                        os.path.join(construction_dir, slocator.file_name)
-                    )
-                    for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
-                        # Create the Mesh Data
-                        mesh_data = create_static_mesh(
-                            drs_file.cdsp_mesh_file, mesh_index
-                        )
-                        # Create the Mesh Object and add the Mesh Data to it
-                        mesh_object: bpy.types.Object = bpy.data.objects.new(
-                            f"CDspMeshFile_{slocator.class_type}", mesh_data
-                        )
-                        # Create the Material Data
-                        material_data = create_material(
-                            construction_dir,
-                            mesh_index,
-                            drs_file.cdsp_mesh_file.meshes[mesh_index],
-                            base_name + "_Construction_" + str(mesh_index),
-                        )
-                        # Assign the Material to the Mesh
-                        mesh_data.materials.append(material_data)
-                        # Apply the Transformations to the Mesh Object
-                        mesh_object.matrix_world = local_matrix
-                        # Link the Mesh Object to the Source Collection
-                        slocator_collection.objects.link(mesh_object)
-                else:
-                    logger.log(
-                        f"Construction file {slocator.file_name} has an unsupported file ending.",
-                        "Error",
-                        "ERROR",
-                    )
-            elif slocator.file_name_length > 0:
-                logger.log(
-                    f"Slocator {slocator.file_name} is not a Construction file (but {slocator.class_type}). Skipping it.",
-                    "Error",
-                    "ERROR",
-                )
-
-    # Import Animation
-    if (
-        bmg_file.animation_set is not None
-        and armature_object is not None
-        and bones_list is not None
-        and import_animation
-    ):
-        with ensure_mode("POSE"):
-            for animation_key in bmg_file.animation_set.mode_animation_keys:
-                for variant in animation_key.animation_set_variants:
-                    ska_file: SKA = SKA().read(os.path.join(dir_name, variant.file))
-                    # Create the Animation
-                    import_ska_animation(
-                        ska_file,
-                        armature_object,
-                        bone_list,
-                        variant.file,
-                        smooth_animation,
-                        filepath,
-                        map_collection=source_collection,
-                    )
-
-    # Apply the Transformations to the Source Collection
-    parent_under_game_axes(source_collection, apply_transform)
-
-    # Print the Time Measurement
-    logger.log(
-        f"Imported {base_name} in {time.time() - start_time:.2f} seconds.",
-        "Import Time",
-        "INFO",
-    )
-    logger.display()
-
-    return {"FINISHED"}
-
-
 # endregion
 
 # region Export Blender Model to DRS
@@ -3325,31 +2511,31 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
 
     tri_centroids = verts[tris].mean(axis=1)
 
-    def volume_from_axes(points: np.ndarray, A: np.ndarray):
-        P = points @ A
-        mn = P.min(axis=0)
-        mx = P.max(axis=0)
+    def volume_from_axes(points: np.ndarray, aaaaa: np.ndarray):
+        pp = points @ aaaaa
+        mn = pp.min(axis=0)
+        mx = pp.max(axis=0)
         e = 0.5 * (mx - mn)
         return float(8.0 * e[0] * e[1] * e[2])
 
     def pca_axes(points: np.ndarray):
         c = points.mean(axis=0)
-        X = points - c
-        _U, _S, Vt = np.linalg.svd(X, full_matrices=False)
-        A = Vt.T
-        if np.linalg.det(A) < 0:
-            A[:, 2] *= -1.0
-        return A
+        xx = points - c
+        _uu, _ss, vt = np.linalg.svd(xx, full_matrices=False)
+        aa = vt.T
+        if np.linalg.det(aa) < 0:
+            aa[:, 2] *= -1.0
+        return aa
 
     def rodrigues(w):
         t = np.linalg.norm(w)
         if t < 1e-12:
             return np.eye(3)
         k = w / t
-        K = np.array(
+        kk = np.array(
             [[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]], dtype=np.float64
         )
-        return np.eye(3) + np.sin(t) * K + (1 - np.cos(t)) * (K @ K)
+        return np.eye(3) + np.sin(t) * kk + (1 - np.cos(t)) * (kk @ kk)
 
     def nm_simplex(func, x0, step, iters):
         x = np.array(
@@ -3396,7 +2582,7 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
         bm.verts.ensure_lookup_table()
         bm.edges.ensure_lookup_table()
         bm.faces.ensure_lookup_table()
-        H = np.array([v.co[:] for v in bm.verts], dtype=np.float64)
+        hh = np.array([v.co[:] for v in bm.verts], dtype=np.float64)
         normals = [
             np.array(f.normal[:], dtype=np.float64)
             for f in bm.faces
@@ -3404,7 +2590,7 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
         ]
         edges = []
         for e in bm.edges:
-            d = H[e.verts[1].index] - H[e.verts[0].index]
+            d = hh[e.verts[1].index] - hh[e.verts[0].index]
             n = np.linalg.norm(d)
             if n > 1e-9:
                 edges.append(d / n)
@@ -3430,56 +2616,55 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
                     v = np.cross(z, u)
                     seeds.append(np.column_stack([u, v, z]))
 
-        best_A = seeds[0]
-        best_V = volume_from_axes(points, best_A)
+        best_a = seeds[0]
+        best_v = volume_from_axes(points, best_a)
         step = 0.15  # ~8.6°
         iters = 10
 
-        for A0 in seeds:
-
+        for a0 in seeds:
             def func(w):
-                R = rodrigues(w)
-                A = A0 @ R
-                if np.linalg.det(A) < 0:
-                    A[:, 2] = np.cross(A[:, 0], A[:, 1])
-                return volume_from_axes(points, A)
+                rrr = rodrigues(w)
+                aaa = a0 @ rrr
+                if np.linalg.det(aaa) < 0:
+                    aaa[:, 2] = np.cross(aaa[:, 0], aaa[:, 1])
+                return volume_from_axes(points, aaa)
 
             w_best, v_best = nm_simplex(func, np.zeros(3), step, iters)
-            if v_best < best_V:
-                R = rodrigues(w_best)
-                best_A = A0 @ R
-                if np.linalg.det(best_A) < 0:
-                    best_A[:, 2] = np.cross(best_A[:, 0], best_A[:, 1])
-                best_V = v_best
+            if v_best < best_v:
+                rrr = rodrigues(w_best)
+                best_a = a0 @ rrr
+                if np.linalg.det(best_a) < 0:
+                    best_a[:, 2] = np.cross(best_a[:, 0], best_a[:, 1])
+                best_v = v_best
 
-        P = points @ best_A
-        mn = P.min(axis=0)
-        mx = P.max(axis=0)
+        ppp = points @ best_a
+        mn = ppp.min(axis=0)
+        mx = ppp.max(axis=0)
         e = 0.5 * (mx - mn)
         mid = 0.5 * (mx + mn)
-        c = mid @ best_A.T
-        return c, best_A, np.maximum(e + 1e-6, 1e-9)
+        c = mid @ best_a.T
+        return c, best_a, np.maximum(e + 1e-6, 1e-9)
 
     def build(face_idx: np.ndarray, depth: int, nodes: list) -> int:
         uniq = np.unique(tris[face_idx].reshape(-1))
         pts = verts[uniq]
-        c, A, E = hybbrid_orientation(pts)
+        c, aaaa, eeee = hybbrid_orientation(pts)
 
         cs = CMatCoordinateSystem()
         cs.position = Vector3(x=float(c[0]), y=float(c[1]), z=float(c[2]))
-        scaled = A * E[None, :]
-        M_store = scaled.T  # store rows; importer does one transpose
+        scaled = aaaa * eeee[None, :]
+        m_store = scaled.T  # store rows; importer does one transpose
         cs.matrix = Matrix3x3(
             matrix=[
-                float(M_store[0, 0]),
-                float(M_store[0, 1]),
-                float(M_store[0, 2]),
-                float(M_store[1, 0]),
-                float(M_store[1, 1]),
-                float(M_store[1, 2]),
-                float(M_store[2, 0]),
-                float(M_store[2, 1]),
-                float(M_store[2, 2]),
+                float(m_store[0, 0]),
+                float(m_store[0, 1]),
+                float(m_store[0, 2]),
+                float(m_store[1, 0]),
+                float(m_store[1, 1]),
+                float(m_store[1, 2]),
+                float(m_store[2, 0]),
+                float(m_store[2, 1]),
+                float(m_store[2, 2]),
             ]
         )
 
@@ -3495,13 +2680,11 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
         my = len(nodes)
         nodes.append(node)
 
-        MIN_TRIS = 12
-        MAX_DEPTH = 32
         if len(face_idx) <= MIN_TRIS or depth >= MAX_DEPTH:
             return my
 
-        axis_id = int(np.argmax(E))
-        dir_world = A[:, axis_id] / (np.linalg.norm(A[:, axis_id]) + 1e-30)
+        axis_id = int(np.argmax(eeee))
+        dir_world = aaaa[:, axis_id] / (np.linalg.norm(aaaa[:, axis_id]) + 1e-30)
         vals = (tri_centroids[face_idx] - c) @ dir_world
         med = np.median(vals)
         left_mask = vals <= med
@@ -3595,14 +2778,14 @@ def set_color_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path) -
     return True
 
 
-def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path) -> int:
+def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path):
     img = None
     if hasattr(sock_or_node, "links"):
         img = _first_image_upstream(sock_or_node, 16, "_nor")
     elif getattr(sock_or_node, "type", "") == 'TEX_IMAGE':
         img = getattr(sock_or_node, "image", None)
     if not img:
-        return bool_param_bit_flag
+        return
     new_mesh.textures.length += 1
     t = Texture()
     t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_nor", dxt_format="DXT1", extra_args=["-at","0.0"])
@@ -3635,7 +2818,6 @@ def set_metallic_roughness_emission_map(
     unique_ids = {id(i) for i in provided}
     if len(unique_ids) not in (1, len(provided)):
         # Mixed case detected
-        names = [f"R:{getattr(img_r,'name',None)} G:{getattr(img_g,'name',None)} B:{getattr(img_b,'name',None)} A:{getattr(img_a,'name',None)}"]
         logger.log(
             "Inconsistent parameter map sources: some channels reference the same image while others reference different images.\n"
             f"Found sources -> R: {getattr(img_r,'name',None)}, G: {getattr(img_g,'name',None)}, B: {getattr(img_b,'name',None)}, A: {getattr(img_a,'name',None)}\n"
@@ -3943,13 +3125,6 @@ def create_mesh(
         new_mesh.bounding_box_upper_right_corner,
     ) = get_bb(mesh)
     new_mesh.material_id = 25702
-    # Node Group for Access the Data
-    mesh_material = mesh.material_slots[0].material
-    material_nodes = mesh_material.node_tree.nodes
-    # Find the DRS Node
-    flu_map = None
-    skip_normal_map = True
-    skip_param_map = True
 
     # Gather user flags
     user_flags = 0
@@ -3961,7 +3136,7 @@ def create_mesh(
         user_flags = 0
 
     def _bit(i: int) -> bool:
-        return (user_flags >> i) & 1
+        return ((user_flags >> i) & 1) != 0
 
     mat = mesh.active_material if hasattr(mesh, "active_material") else None
     bsdf = _find_drs_bsdf(mat)  # Principled named "DRS Shader" (created in material builder) :contentReference[oaicite:1]{index=1}
@@ -3974,9 +3149,6 @@ def create_mesh(
 
     # BSDF inputs we care about (these are stable names)
     base_color_in = bsdf.inputs.get("Base Color")   if bsdf else None
-    metallic_in   = bsdf.inputs.get("Metallic")     if bsdf else None
-    roughness_in  = bsdf.inputs.get("Roughness")    if bsdf else None
-    alpha_in      = bsdf.inputs.get("Alpha")        if bsdf else None
     normal_in     = bsdf.inputs.get("Normal")       if bsdf else None
 
     # Flu map images live in labeled nodes created by the material builder
@@ -4178,7 +3350,7 @@ def create_cdsp_mesh_file(
                     add_skin_mesh,
                 )
                 if _mesh is None:
-                    return
+                    return None, None
                 _cdsp_meshfile.meshes.append(_mesh)
                 _cdsp_meshfile.mesh_count += 1
                 mesh_bone_data.append(_per_mesh_bone_data)
@@ -4438,9 +3610,6 @@ def create_skin_info(
     bone_map: Dict[str, Dict[str, int]],
 ) -> CSkSkinInfo:
     """Create CSkSkinInfo by matching world-space vertices to the unified mesh."""
-    TOL_DIGITS = 6  # ~1e-6 (your original rounding)
-    KD_TOL = 1e-5  # tolerant fallback for welded/shifted verts
-
     skin_info = CSkSkinInfo()
     skin_info.vertex_count = len(unified_mesh.vertices)
 
@@ -4507,8 +3676,8 @@ def create_skin_info(
                 if g.weight <= 0.0:
                     continue
                 bone_name = vgroups[g.group].name
-                bone_info = bone_map.get(bone_name, -1)
-                if bone_info == -1:
+                bone_info = bone_map.get(bone_name)
+                if bone_info is None:
                     logger.log(
                         f"Bone {bone_name} not in bone map for vertex {v.index}",
                         "Error",
@@ -4669,22 +3838,6 @@ def create_animation_set(model_name: str, armature_object: bpy.types.Object, bon
     Anything not present in the blob falls back to defaults.
     Reads from the provided collection (export copy) if given.
     """
-
-    def _active_top_drsmodel() -> bpy.types.Collection | None:
-        alc = (
-            bpy.context.view_layer.active_layer_collection.collection
-            if bpy.context and bpy.context.view_layer
-            else None
-        )
-        if not isinstance(alc, bpy.types.Collection):
-            return None
-        if not alc.name.startswith("DRSModel_"):
-            return None
-        for top in bpy.context.scene.collection.children:
-            if top == alc:
-                return alc
-        return None
-
     def _read_blob(col: bpy.types.Collection) -> dict:
         data = col.get(ANIM_BLOB_KEY)
         if not data:
@@ -4766,22 +3919,22 @@ def create_animation_set(model_name: str, armature_object: bpy.types.Object, bon
 
             for vd in mkd.get("variants", []) or []:
                 # skip empty variants
-                f = (vd.get("file") or "").strip()
-                if not f or f == "NONE":
+                fil = (vd.get("file") or "").strip()
+                if not fil or fil == "NONE":
                     continue
                 # Ensure the file ends with .ska
-                if not f.endswith(".ska"):
-                    f += ".ska"
+                if not fil.endswith(".ska"):
+                    fil += ".ska"
 
                 var = AnimationSetVariant()
                 var.version = 7
                 var.weight = int(vd.get("weight", 100) or 0)
                 var.start = float(vd.get("start", 0.0) or 0.0)
                 var.end = float(vd.get("end", 1.0) or 1.0)
-                var.length = len(f)
+                var.length = len(fil)
                 var.allows_ik = int(vd.get("allows_ik", 1))
                 var.force_no_blend = bool(int(vd.get("force_no_blend", 0)))
-                var.file = f
+                var.file = fil
 
                 mk.animation_set_variants.append(var)
 
@@ -4904,14 +4057,14 @@ def create_animation_set(model_name: str, armature_object: bpy.types.Object, bon
             mk.unknown4 = 0
             mk.animation_set_variants = []
             for a in available_action:
-                f = a if a.endswith(".ska") else (a + ".ska")
+                fil = a if a.endswith(".ska") else (a + ".ska")
                 var = AnimationSetVariant()
                 var.version = 4
                 var.weight = 100 // max(1, len(available_action))
                 var.start = 0.0
                 var.end = 1.0
-                var.length = len(f)
-                var.file = f
+                var.length = len(fil)
+                var.file = fil
                 var.allows_ik = 1
                 mk.animation_set_variants.append(var)
             mk.variant_count = len(mk.animation_set_variants)
@@ -5054,7 +4207,7 @@ def create_cdrw_locator_list(source_collection: bpy.types.Collection) -> CDrwLoc
             return cdrw
 
     logger.log(
-        f"Failed to read CDrwLocatorList blob from collection {source_collection.name}: {e}. Returning empty locator list!!!",
+        f"Failed to read CDrwLocatorList blob from collection {source_collection.name}. Returning empty locator list!!!",
         "Warning",
         "WARNING",
     )
@@ -5100,12 +4253,12 @@ def _ska_names_from_blob(col: bpy.types.Collection) -> list[str]:
     names: list[str] = []
     for mk in b.get("mode_keys", []) or []:
         for v in mk.get("variants", []) or []:
-            f = (v.get("file") or "").strip()
-            if not f:
+            fil = (v.get("file") or "").strip()
+            if not fil:
                 continue
-            if f.lower().endswith(".ska"):
-                f = f[:-4]
-            names.append(f)
+            if fil.lower().endswith(".ska"):
+                fil = fil[:-4]
+            names.append(fil)
 
     seen, out = set(), []
     for n in names:

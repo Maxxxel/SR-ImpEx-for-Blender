@@ -1,19 +1,14 @@
 SR-ImpEx-for-Blender License
-=============================
+============================
 
 Copyright (c) 2025 Maxxxel
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to use
-the Software, subject to the following conditions:
+You are granted a personal, non-transferable, non-exclusive right to use this software and its documentation (the "Software") under the terms below.
 
-1. The Software may not be modified without the express permission of the author.
-2. The Software may be used for personal, educational, or commercial purposes.
+1. Non-commercial use only. You may use the Software solely for personal or educational purposes. Commercial use of the Software or any output created with it is prohibited without the author's prior written consent.
+2. No modifications or derivative works. You may not modify, fork, adapt, translate, or create derivative works of the Software without the author's prior written consent.
+3. Redistribution. You may redistribute unmodified copies of the Software provided this license remains intact and accompanying notices are preserved. Redistribution for commercial purposes is not allowed.
+4. Reverse-engineered formats and third-party rights. The DRS/SKA and related formats were reverse engineered to enable interoperability. All rights in game assets, data, and formats belong to their respective rights holders. You are responsible for ensuring you have the necessary rights to any files you process.
+5. No affiliation. This project is not affiliated with, endorsed by, or sponsored by Phenomic, Electronic Arts, or any other rights holder.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

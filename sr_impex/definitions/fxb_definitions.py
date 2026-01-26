@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from struct import pack, unpack
 from typing import BinaryIO, List, Optional, Tuple, Union
 
-from sr_impex.definitions.drs_definitions import Vector3
+from sr_impex.definitions.base_types import Vector3
 
 
 @dataclass(eq=False, repr=False)

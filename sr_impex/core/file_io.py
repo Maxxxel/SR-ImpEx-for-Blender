@@ -13,7 +13,7 @@ class FileReader:
 
     def tell(self):
         return self.file.tell()
-    
+
     def peek(self, size: int):
         current_pos = self.file.tell()
         data = self.file.read(size)

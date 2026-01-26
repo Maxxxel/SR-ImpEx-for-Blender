@@ -45,8 +45,8 @@ def create_empty(
     if not apply_transform:
         return empty
 
-    M = get_conversion_matrix(invert=False)
-    empty.matrix_world = M
+    cm = get_conversion_matrix(invert=False)
+    empty.matrix_world = cm
     return empty
 
 

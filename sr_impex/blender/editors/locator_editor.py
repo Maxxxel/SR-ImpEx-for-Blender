@@ -23,15 +23,13 @@ from mathutils import Matrix, Vector
 
 # ---- Imports from your DRS definitions --------------------------------------
 
-from sr_impex.definitions.drs_definitions import (
+from sr_impex.definitions.locator_definitions import (
     CDrwLocatorList,
     SLocator,
     CMatCoordinateSystem,
-    Vector3,
-    LocatorClass,
 )
-
-from sr_impex.definitions.base_types import Matrix3x3
+from sr_impex.definitions.enums import LocatorClass
+from sr_impex.definitions.base_types import Matrix3x3, Vector3
 
 # ---- Constants ---------------------------------------------------------------
 
@@ -300,7 +298,7 @@ def apply_blob_to_scene(root: bpy.types.Collection) -> None:
 def update_blob_from_scene(root: bpy.types.Collection, add_new: bool = True) -> None:
     """Capture scene back into blob. Match by UID. Optionally append new objects."""
     blob = _read_blob(root)
-    arm = _find_armature(root)
+    # arm = _find_armature(root)
     go = _find_game_orientation(root)
 
     by_uid: Dict[str, Dict] = {
@@ -475,7 +473,7 @@ class LocatorEditorState(bpy.types.PropertyGroup):
 
     def _on_active_index_changed(self, _ctx):
         try:
-            if not self.model or not (0 <= self.active_index < len(self.items)):
+            if not self.model or not 0 <= self.active_index < len(self.items):
                 return
             uid = self.items[self.active_index].uid
             if uid:
@@ -618,7 +616,7 @@ class DRS_OT_LocatorRemove(bpy.types.Operator):
 
     def execute(self, _context):
         st = _state()
-        if not (0 <= st.active_index < len(st.items)):
+        if not 0 <= st.active_index < len(st.items):
             return {"CANCELLED"}
         uid = st.items[st.active_index].uid
         remove_locator(st.model, uid, delete_object=True)
@@ -657,7 +655,7 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
     def execute(self, _context):
         st = _state()
         col = st.model
-        if not (0 <= self.idx < len(st.items)):
+        if not 0 <= self.idx < len(st.items):
             return {"CANCELLED"}
 
         it = st.items[self.idx]

@@ -5,12 +5,8 @@
 from __future__ import annotations
 import json
 import zlib
-import os
-import pathlib
 from os.path import dirname, realpath
-from pathlib import Path
-from typing import Dict, List, Optional
-from itertools import chain
+from typing import Dict, Optional
 
 import bpy
 from bpy.props import (
@@ -19,17 +15,7 @@ from bpy.props import (
 )
 
 # Import your current DRS defs (latest uploaded)
-from sr_impex.definitions.drs_definitions import (
-    EffectSet as DRS_EffectSet,
-    SkelEff as DRS_SkelEff,
-    Keyframe as DRS_Keyframe,
-    Variant as DRS_Variant,
-    SoundHeader,
-    SoundFile,
-    SoundContainer,
-    AdditionalSoundContainer,
-)
-
+from sr_impex.definitions.effect_definitions import EffectSet, SkelEff, Keyframe, Variant, SoundContainer, SoundHeader, SoundFile, AdditionalSoundContainer
 from sr_impex.utilities.drs_resolvers import resolve_action_from_blob_name
 
 EFFECT_BLOB_KEY = "EffectSetJSON"
@@ -322,7 +308,7 @@ def _state_to_blob(st: EffState) -> Dict:
 # DRS <-> Blob
 # -----------------------
 
-def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
+def effectset_to_blob(eff: EffectSet) -> Dict:
     blob = {
         "type": int(getattr(eff, "type", 12) or 12),
         "checksum_length": int(getattr(eff, "checksum_length", 0)),
@@ -384,7 +370,7 @@ def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
             ],
         }
         blob["impact_sounds"].append(sc)
-    
+
     for add_sound_container in getattr(eff, "additional_sounds", []) or []:
         asc = {
             "sound_header": {
@@ -434,22 +420,22 @@ def effectset_to_blob(eff: DRS_EffectSet) -> Dict:
     return blob
 
 
-def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
-    eff = DRS_EffectSet()
+def blob_to_effectset(blob: Dict) -> EffectSet:
+    eff = EffectSet()
     eff.type = int(blob.get("type", 12) or 12)
     eff.checksum = str(blob.get("checksum", ""))
     eff.checksum_length = len(eff.checksum)
 
     eff.skel_effekts = []
     for ed in (blob.get("effects") or []):
-        se = DRS_SkelEff()
+        se = SkelEff()
         ska = _norm_ska_name(ed.get("action", "") or "")
         se.name = ska
         se.length = len(se.name)
 
         se.keyframes = []
         for kd in (ed.get("keyframes") or []):
-            kf = DRS_Keyframe()
+            kf = Keyframe()
             kf.time = float(kd.get("time", 0.0))
             kf.keyframe_type = int(kd.get("keyframe_type", 1))
             kf.min_falloff = float(kd.get("min_falloff", 0.0))
@@ -468,7 +454,7 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
                 name = (vd.get("name") or "").strip()
                 if not name:
                     continue
-                v = DRS_Variant()
+                v = Variant()
                 v.weight = int(vd.get("weight", 100))
                 v.name = name
                 v.length = len(v.name)
@@ -483,7 +469,7 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
     eff.length = len(eff.skel_effekts)
 
     eff.impact_sounds = []
-    
+
     for scd in (blob.get("impact_sounds") or []):
         sc = SoundContainer()
         shd = scd.get("sound_header", {})
@@ -514,13 +500,13 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
             sf.sound_file_name_length = int(sfd.get("sound_file_name_length", 0))
             sf.sound_file_name = str(sfd.get("sound_file_name", "") or "")
             sc.sound_files.append(sf)
-        
+
         eff.impact_sounds.append(sc)
-    
+
     eff.number_impact_sounds = len(eff.impact_sounds)
 
     eff.additional_sounds = []
-    
+
     for ascd in (blob.get("additional_sounds") or []):
         asc = AdditionalSoundContainer()
         ashd = ascd.get("sound_header", {})
@@ -566,11 +552,11 @@ def blob_to_effectset(blob: Dict) -> DRS_EffectSet:
                 sf.sound_file_name_length = int(sfd.get("sound_file_name_length", 0))
                 sf.sound_file_name = str(sfd.get("sound_file_name", "") or "")
                 sc.sound_files.append(sf)
-            
+
             asc.sound_containers.append(sc)
-        
+
         eff.additional_sounds.append(asc)
-    
+
     eff.number_additional_Sounds = len(eff.additional_sounds)
     return eff
 
@@ -648,7 +634,7 @@ class DRS_OT_Keyframe_Add(bpy.types.Operator):
 
     def execute(self, _ctx):
         st = _state()
-        if not (0 <= st.active_index < len(st.items)):
+        if not 0 <= st.active_index < len(st.items):
             return {"CANCELLED"}
         it = st.items[st.active_index]
         k = it.keyframes.add()
@@ -670,7 +656,7 @@ class DRS_OT_Keyframe_Remove(bpy.types.Operator):
 
     def execute(self, _ctx):
         st = _state()
-        if not (0 <= st.active_index < len(st.items)):
+        if not 0 <= st.active_index < len(st.items):
             return {"CANCELLED"}
         it = st.items[st.active_index]
         i = it.active_keyframe
@@ -687,10 +673,10 @@ class DRS_OT_Variant_Add(bpy.types.Operator):
 
     def execute(self, _ctx):
         st = _state()
-        if not (0 <= st.active_index < len(st.items)):
+        if not 0 <= st.active_index < len(st.items):
             return {"CANCELLED"}
         it = st.items[st.active_index]
-        if not (0 <= it.active_keyframe < len(it.keyframes)):
+        if not 0 <= it.active_keyframe < len(it.keyframes):
             return {"CANCELLED"}
         k = it.keyframes[it.active_keyframe]
         v = k.variants.add()
@@ -707,10 +693,10 @@ class DRS_OT_Variant_Remove(bpy.types.Operator):
 
     def execute(self, _ctx):
         st = _state()
-        if not (0 <= st.active_index < len(st.items)):
+        if not 0 <= st.active_index < len(st.items):
             return {"CANCELLED"}
         it = st.items[st.active_index]
-        if not (0 <= it.active_keyframe < len(it.keyframes)):
+        if not 0 <= it.active_keyframe < len(it.keyframes):
             return {"CANCELLED"}
         k = it.keyframes[it.active_keyframe]
         i = k.active_variant
@@ -761,14 +747,14 @@ class DRS_OT_Keyframe_Move(bpy.types.Operator):
 
     def execute(self, _ctx):
         st = _state()
-        if not (0 <= st.active_index < len(st.items)):
+        if not 0 <= st.active_index < len(st.items):
             return {"CANCELLED"}
         it = st.items[st.active_index]
         i = it.active_keyframe
-        if not (0 <= i < len(it.keyframes)):
+        if not 0 <= i < len(it.keyframes):
             return {"CANCELLED"}
         j = i - 1 if self.direction == "UP" else i + 1
-        if not (0 <= j < len(it.keyframes)):
+        if not 0 <= j < len(it.keyframes):
             return {"CANCELLED"}
         it.keyframes.move(i, j)
         it.active_keyframe = j
@@ -801,7 +787,7 @@ class DRS_OT_Effect_PlayAction(bpy.types.Operator):
         if not model:
             self.report({"ERROR"}, "Select a DRSModel_* collection.")
             return {"CANCELLED"}
-        
+
         arm = _find_armature(model)
         if not arm:
             self.report({"ERROR"}, "No Armature found in active DRSModel_* collection.")
@@ -856,7 +842,7 @@ def _draw_effectset_ui(layout, context):
         box.use_property_split = True
         box.use_property_decorate = False
         box.prop(it, "action", text="Action")
-        
+
         # Keyframes
         kbox = box.box()
         head = kbox.row(align=True)
@@ -901,7 +887,7 @@ def _draw_effectset_ui(layout, context):
             head.operator("drs.effect_variant_add", text="", icon="ADD")
             head.operator("drs.effect_variant_remove", text="", icon="REMOVE")
             vbox.template_list("DRS_UL_EffectVariants", "", k, "variants", k, "active_variant", rows=3)
-            
+
             if 0 <= k.active_variant < len(k.variants):
                 v = k.variants[k.active_variant]
                 det = vbox.box()

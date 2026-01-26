@@ -1,15 +1,10 @@
 import time
+import traceback
 import bpy
 from bpy.props import IntProperty
 
-from sr_impex.utilities.drs_utility import (
-    create_cgeo_obb_tree,
-    create_unified_mesh,
-    find_or_create_collection,
-    get_collection,
-    import_obb_tree,
-    logger,
-)
+from sr_impex.utilities.helpers import logger, get_collection, find_or_create_collection
+from sr_impex.utilities.drs_utility import create_unified_mesh, create_cgeo_obb_tree, import_obb_tree
 
 
 def _get_child_collection(parent: bpy.types.Collection | None, name: str) -> bpy.types.Collection | None:
@@ -64,7 +59,7 @@ def update_obb_debug_visibility(context: bpy.types.Context | None, target_depth:
                 return None
 
         clamped_depth = max(1, int(target_depth))
-        
+
         # Collect all collections and objects first to avoid iterator invalidation
         collections_to_update = []
         for child in _iter_children_recursive(obb_root):
@@ -72,16 +67,16 @@ def update_obb_debug_visibility(context: bpy.types.Context | None, target_depth:
             if not child or child.name not in bpy.data.collections:
                 continue
             depth = parse_depth(child.name)
-            
+
             # Collections: show if depth is None (root/special) or <= target depth
             # This keeps the hierarchy visible down to the target
             show_collection = depth is None or depth <= clamped_depth
-            
+
             # Objects: show only if depth matches target or is the root (depth 0)
             show_objects = depth is None or depth == clamped_depth
-            
+
             collections_to_update.append((child, show_collection, show_objects))
-        
+
         # Now apply visibility changes
         for col, show_collection, show_objects in collections_to_update:
             try:
@@ -97,11 +92,10 @@ def update_obb_debug_visibility(context: bpy.types.Context | None, target_depth:
             except (ReferenceError, AttributeError):
                 # Skip invalid references
                 continue
-                
+
     except Exception as e:
         # Log errors for debugging but don't crash
         print(f"OBB visibility update error: {e}")
-        import traceback
         traceback.print_exc()
 
 
@@ -114,7 +108,7 @@ def register_obb_debug_properties() -> None:
         # Only update if it actually changed to avoid recursion
         if self.drs_obb_depth_max != current_max:
             self.drs_obb_depth_max = current_max
-        
+
         # Ensure view depth doesn't exceed max depth
         if hasattr(self, "drs_obb_depth_view"):
             current_view = int(self.drs_obb_depth_view)

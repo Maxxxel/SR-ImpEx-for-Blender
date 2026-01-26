@@ -20,13 +20,15 @@ AnimatedMeshMaterial, WaterDecal, SfpSystem, SfpEmitter, SfpForceField
 from __future__ import annotations
 import os
 from typing import Optional, Dict, Any, List
-from mathutils import Vector
+import traceback
+import math
 import bpy
 
 from bpy_extras.image_utils import load_image
-from sr_impex.definitions.drs_definitions import DRS, TrackType, FloatKeyframe, Vector3Keyframe
-from sr_impex.definitions.fxb_definitions import FxMaster, Element, Emitter, Track
-from .core.message_logger import MessageLogger
+from sr_impex.definitions.drs_definitions import DRS
+from sr_impex.definitions.fxb_definitions import FxMaster, Element, Emitter, Track, FloatKeyframe, Vector3Keyframe
+from sr_impex.definitions.enums import TrackType
+from sr_impex.core.message_logger import MessageLogger
 
 logger = MessageLogger()
 
@@ -37,13 +39,13 @@ logger = MessageLogger()
 
 class FXTypeHandler:
     """Base class for FX type handlers."""
-    
+
     fx_type: str = "Unknown"
-    
+
     def can_handle(self, element: Element) -> bool:
         """Check if this handler can process the given Element."""
         return False
-    
+
     def create_visual(
         self,
         element: Element,
@@ -52,12 +54,12 @@ class FXTypeHandler:
     ) -> Optional[bpy.types.Object]:
         """
         Create a visual representation of this Element in Blender.
-        
+
         Args:
             element: Element from FXB special_effect.children
             parent_object: The parent empty/object to attach to
             context: Additional context (effects_dir, effect_name, etc.)
-            
+
         Returns:
             Created Blender object or None
         """
@@ -66,10 +68,10 @@ class FXTypeHandler:
 
 class FXRegistry:
     """Registry for FX type handlers."""
-    
+
     def __init__(self):
         self._handlers: list[FXTypeHandler] = []
-    
+
     def register(self, handler: FXTypeHandler):
         """Register a new FX type handler."""
         self._handlers.append(handler)
@@ -78,14 +80,14 @@ class FXRegistry:
             "Info",
             "INFO"
         )
-    
+
     def get_handler(self, element: Element) -> Optional[FXTypeHandler]:
         """Find a handler that can process the given Element."""
         for handler in self._handlers:
             if handler.can_handle(element):
                 return handler
         return None
-    
+
     def list_supported_types(self) -> list[str]:
         """Return list of supported FX types."""
         return [h.fx_type for h in self._handlers]
@@ -101,13 +103,13 @@ _fx_registry = FXRegistry()
 
 class EmitterHandler(FXTypeHandler):
     """Handler for particle emitter effects."""
-    
+
     fx_type = "Emitter"
-    
+
     def can_handle(self, element: Element) -> bool:
         """Check if element has an emitter."""
         return hasattr(element, 'emitter') and element.emitter is not None
-    
+
     @staticmethod
     def _get_track_by_name(tracks: List[Track], track_type_name: str) -> Optional[Track]:
         """
@@ -119,15 +121,15 @@ class EmitterHandler(FXTypeHandler):
             if tname.strip() == track_type_name.strip():
                 track_type_id = tid
                 break
-        
+
         if track_type_id is None:
             return None
-        
+
         for track in tracks:
             if track.track_type == track_type_id:
                 return track
         return None
-    
+
     @staticmethod
     def _get_track_first_value(track: Optional[Track]) -> Any:
         """
@@ -135,14 +137,14 @@ class EmitterHandler(FXTypeHandler):
         """
         if not track or not track.entries or len(track.entries) == 0:
             return None
-        
+
         first_entry = track.entries[0]
         if isinstance(first_entry, FloatKeyframe):
             return first_entry.data
         elif isinstance(first_entry, Vector3Keyframe):
-            return (first_entry.data[0], first_entry.data[1], first_entry.data[2])
+            return (first_entry.data.x, first_entry.data.y, first_entry.data.z)
         return None
-    
+
     def create_visual(
         self,
         element: Element,
@@ -154,18 +156,18 @@ class EmitterHandler(FXTypeHandler):
         """
         emitter: Emitter = element.emitter
         effect_name = context.get('effect_name', 'Effect')
-        
+
         # Extract texture from Element (stored in emitter.emitter_file or element name)
         texture_file = emitter.emitter_file if emitter.emitter_file else None
         if not texture_file and '.' in element.name:
             # Sometimes texture is in element name like "Color_Particles.dds"
             texture_file = element.name
-        
+
         # Create mesh emitter object (point for geometry nodes)
         bpy.ops.mesh.primitive_plane_add(size=0.5, location=parent_object.location)
         emitter_obj = bpy.context.object
         emitter_obj.name = f"{effect_name}_{element.name}_Emitter"
-        
+
         parent_collection = (
             parent_object.users_collection[0]
             if parent_object.users_collection
@@ -178,21 +180,21 @@ class EmitterHandler(FXTypeHandler):
             for col in list(emitter_obj.users_collection):
                 col.objects.unlink(emitter_obj)
             parent_collection.objects.link(emitter_obj)
-        
+
         emitter_obj.parent = parent_object
         emitter_obj.matrix_parent_inverse.identity()
-        
+
         # Store emitter metadata
         emitter_obj['fx_type'] = 'Emitter'
         emitter_obj['fx_element_name'] = element.name
         emitter_obj['particle_count'] = emitter.particle_count
-        
+
         # Extract track data
         particle_count = 100
         particle_size = 1.0
         speed_factor = 1.0
-        emitter_scale = (1.5, 0, 1.5)  # Default volume
-        
+        # emitter_scale = (1.5, 0, 1.5)  # Default volume
+
         if element.tracks:
             particles_track = self._get_track_by_name(element.tracks, "Particles")
             if particles_track:
@@ -200,21 +202,21 @@ class EmitterHandler(FXTypeHandler):
                 if particles_val:
                     particle_count = int(particles_val)
                     emitter_obj['particles'] = particle_count
-            
+
             start_size_track = self._get_track_by_name(element.tracks, "Start Size")
             if start_size_track:
                 size_val = self._get_track_first_value(start_size_track)
                 if size_val:
                     particle_size = size_val
                     emitter_obj['start_size'] = particle_size
-            
+
             speed_factor_track = self._get_track_by_name(element.tracks, "Speed Factor")
             if speed_factor_track:
                 speed = self._get_track_first_value(speed_factor_track)
                 if speed:
                     speed_factor = speed
                     emitter_obj['speed_factor'] = speed_factor
-            
+
             emitter_geom_track = self._get_track_by_name(element.tracks, "Emitter Geometry")
             if emitter_geom_track:
                 geom = self._get_track_first_value(emitter_geom_track)
@@ -222,7 +224,7 @@ class EmitterHandler(FXTypeHandler):
                     emitter_scale = geom
                     emitter_obj.scale = geom
                     emitter_obj['emitter_geometry'] = geom
-        
+
         # --------------------------------------------------------------------
         # Geometry Nodes particle system (FIXED)
         # --------------------------------------------------------------------
@@ -257,7 +259,6 @@ class EmitterHandler(FXTypeHandler):
 
         # Use Distance Min instead of Density for more predictable counts
         # Calculate spacing to approximate desired particle count
-        import math
         plane_area = 0.5 * 0.5  # Size from primitive_plane_add
         spacing = math.sqrt(plane_area / max(particle_count, 1)) * 0.8
         distribute_node.inputs['Distance Min'].default_value = spacing
@@ -369,9 +370,9 @@ class EmitterHandler(FXTypeHandler):
             texture_path = os.path.join(effects_dir, 'textures', texture_file)
             emitter_obj['texture_file'] = texture_file
             emitter_obj['texture_path'] = texture_path
-            
+
             logger.log(f"Looking for texture at: {texture_path}", "Info", "INFO")
-            
+
             if os.path.exists(texture_path):
                 # Create material with sprite sheet support
                 mat = bpy.data.materials.new(name=f"{effect_name}_ParticleMat")
@@ -381,27 +382,27 @@ class EmitterHandler(FXTypeHandler):
                 if bpy.app.version < (4, 3):
                     mat.shadow_method = "NONE"
                 mat_nodes.clear()
-                
+
                 # Output
                 output = mat_nodes.new('ShaderNodeOutputMaterial')
                 output.location = (600, 0)
-                
+
                 add_shader = mat_nodes.new('ShaderNodeAddShader')
                 add_shader.location = (400, 0)
-                
+
                 # Emission for glow
                 emission = mat_nodes.new('ShaderNodeEmission')
                 emission.location = (200, 100)
                 emission.inputs['Strength'].default_value = 2.0
-                
+
                 # Transparent
                 transparent = mat_nodes.new('ShaderNodeBsdfTransparent')
                 transparent.location = (200, -100)
-                
+
                 # UV Map for sprite sheet (2nd row = Y offset 0.25-0.5 in 4x4 grid)
                 tex_coord = mat_nodes.new('ShaderNodeTexCoord')
                 tex_coord.location = (-600, -200)
-                
+
                 # Mapping to select 2nd row of 4x4 sprite sheet
                 mapping = mat_nodes.new('ShaderNodeMapping')
                 mapping.location = (-400, -200)
@@ -409,12 +410,12 @@ class EmitterHandler(FXTypeHandler):
                 mapping.inputs['Scale'].default_value = (4.0, 4.0, 1.0)
                 # Offset Y by -0.25 to show 2nd row (rows from top: 0, -0.25, -0.5, -0.75)
                 mapping.inputs['Location'].default_value = (0.0, -0.25, 0.0)
-                
+
                 # Image texture
                 tex_image = mat_nodes.new('ShaderNodeTexImage')
                 tex_image.location = (-200, 0)
                 tex_image.interpolation = 'Linear'
-                
+
                 # Load texture
                 try:
                     img = load_image(
@@ -485,22 +486,22 @@ class EmitterHandler(FXTypeHandler):
                 mat_links.new(emission.outputs['Emission'], add_shader.inputs[0])
                 mat_links.new(transparent.outputs['BSDF'], add_shader.inputs[1])
                 mat_links.new(add_shader.outputs['Shader'], output.inputs['Surface'])
-                
+
                 # Assign material to geometry nodes
                 set_material_node.inputs['Material'].default_value = mat
-                
-                logger.log(f"Created geometry nodes particle system with sprite sheet texture (row 2)", "Info", "INFO")
+
+                logger.log("Created geometry nodes particle system with sprite sheet texture (row 2)", "Info", "INFO")
             else:
                 logger.log(f"Texture file not found: {texture_path}", "Warning", "WARNING")
         else:
             logger.log(f"No texture file specified for element: {element.name}", "Warning", "WARNING")
-        
+
         logger.log(
             f"Created emitter '{element.name}' with {particle_count} particles using Geometry Nodes",
             "Info",
             "INFO"
         )
-        
+
         return emitter_obj
 
 
@@ -510,14 +511,14 @@ class EmitterHandler(FXTypeHandler):
 
 class PlaceholderHandler(FXTypeHandler):
     """Generic placeholder for unsupported FX types."""
-    
+
     def __init__(self, fx_type: str):
         self.fx_type = fx_type
-    
+
     def can_handle(self, element: Element) -> bool:
         """Placeholder - never handles anything."""
         return False
-    
+
     def create_visual(
         self,
         element: Element,
@@ -544,21 +545,21 @@ def load_fxb_effect(
 ) -> Optional[bpy.types.Object]:
     """
     Load an FXB effect file and create a visual representation in Blender.
-    
+
     FXB files are DRS format with FxMaster root containing:
     - .special_effect.children: List of Element objects
     - Each Element may have .emitter, .light, etc. sub-FX types
     - Elements have .tracks with animated parameters
-    
+
     Args:
         fxb_file_path: Full path to the .fxb file
         parent_object: Parent object (usually a locator) to attach the effect to
         effect_name: Optional name for the effect (defaults to filename)
-        
+
     Returns:
         The root empty object representing the effect, or None on failure
     """
-    
+
     if not os.path.exists(fxb_file_path):
         logger.log(
             f"FXB file not found: {fxb_file_path}",
@@ -566,15 +567,15 @@ def load_fxb_effect(
             "WARNING"
         )
         return None
-    
+
     # Default effect name from filename
     if not effect_name:
         effect_name = os.path.splitext(os.path.basename(fxb_file_path))[0]
-    
+
     try:
         # Load the DRS file (FXB files are DRS format)
         fxb_drs: DRS = DRS().read(fxb_file_path)
-        
+
         # FXB files have FxMaster structure
         if not hasattr(fxb_drs, 'fx_master') or not fxb_drs.fx_master:
             logger.log(
@@ -583,9 +584,9 @@ def load_fxb_effect(
                 "WARNING"
             )
             return None
-        
+
         fx_master: FxMaster = fxb_drs.fx_master
-        
+
         # Create root effect empty
         effect_root = bpy.data.objects.new(f"Effect_{effect_name}", None)
         effect_root.empty_display_type = 'CUBE'
@@ -593,15 +594,15 @@ def load_fxb_effect(
         effect_root['fx_file'] = os.path.basename(fxb_file_path)
         effect_root['fx_length'] = fx_master.length
         effect_root['fx_play_length'] = fx_master.play_length
-        
+
         # Link to parent's collection
         parent_collection = parent_object.users_collection[0] if parent_object.users_collection else bpy.context.scene.collection
         parent_collection.objects.link(effect_root)
-        
+
         # Parent to locator
         effect_root.parent = parent_object
         effect_root.matrix_parent_inverse.identity()
-        
+
         # Build context for handlers
         effects_dir = os.path.dirname(fxb_file_path)
         context = {
@@ -609,10 +610,10 @@ def load_fxb_effect(
             'effects_dir': effects_dir,
             'fx_master': fx_master,
         }
-        
+
         # Extract child elements from special_effect
         elements = _extract_fx_elements(fx_master)
-        
+
         if not elements:
             logger.log(
                 f"No FX elements found in {fxb_file_path}",
@@ -620,11 +621,11 @@ def load_fxb_effect(
                 "INFO"
             )
             return effect_root
-        
+
         created_count = 0
         for element in elements:
             handler = _fx_registry.get_handler(element)
-            
+
             if handler:
                 obj = handler.create_visual(element, effect_root, context)
                 if obj:
@@ -632,22 +633,21 @@ def load_fxb_effect(
             else:
                 # Unknown FX type - create a simple marker
                 _create_unknown_fx_marker(element, effect_root)
-        
+
         logger.log(
             f"Loaded effect '{effect_name}' with {created_count} components from {len(elements)} elements",
             "Info",
             "INFO"
         )
-        
+
         return effect_root
-        
+
     except Exception as e:
         logger.log(
             f"Failed to load FXB effect {fxb_file_path}: {e}",
             "Error",
             "ERROR"
         )
-        import traceback
         traceback.print_exc()
         return None
 
@@ -655,19 +655,19 @@ def load_fxb_effect(
 def _extract_fx_elements(fx_master: FxMaster) -> List[Element]:
     """
     Extract FX elements from FxMaster.special_effect.children.
-    
+
     Args:
         fx_master: FxMaster instance from DRS
-        
+
     Returns:
         List of Element objects
     """
     elements = []
-    
+
     try:
         if hasattr(fx_master, 'special_effect') and fx_master.special_effect:
             special_effect = fx_master.special_effect
-            
+
             if hasattr(special_effect, 'children') and special_effect.children:
                 elements.extend(special_effect.children)
                 logger.log(
@@ -681,7 +681,7 @@ def _extract_fx_elements(fx_master: FxMaster) -> List[Element]:
             "Warning",
             "WARNING"
         )
-    
+
     return elements
 
 
@@ -692,24 +692,24 @@ def _create_unknown_fx_marker(element: Element, parent_object: bpy.types.Object)
         marker = bpy.data.objects.new(marker_name, None)
         marker.empty_display_type = 'PLAIN_AXES'
         marker.empty_display_size = 0.1
-        
+
         parent_collection = parent_object.users_collection[0] if parent_object.users_collection else bpy.context.scene.collection
         parent_collection.objects.link(marker)
-        
+
         marker.parent = parent_object
         marker.matrix_parent_inverse.identity()
-        
+
         # Store element name and type
         marker['fx_element_name'] = element.name
         marker['fx_element_type'] = hex(element.element_type_header) if hasattr(element, 'element_type_header') else 'unknown'
         marker['fx_track_count'] = len(element.tracks) if hasattr(element, 'tracks') and element.tracks else 0
-        
+
         logger.log(
             f"Created marker for unsupported element: {element.name}",
             "Info",
             "INFO"
         )
-        
+
     except Exception as e:
         logger.log(
             f"Failed to create unknown FX marker: {e}",
@@ -724,10 +724,10 @@ def _create_unknown_fx_marker(element: Element, parent_object: bpy.types.Object)
 
 def initialize_fx_handlers():
     """Register all FX type handlers."""
-    
+
     # Register implemented handlers
     _fx_registry.register(EmitterHandler())
-    
+
     # Register placeholders for future types
     # (These won't handle anything yet but document what's planned)
     future_types = [
@@ -737,10 +737,10 @@ def initialize_fx_handlers():
         'AnimatedMeshMaterial', 'WaterDecal', 'SfpSystem',
         'SfpEmitter', 'SfpForceField'
     ]
-    
+
     # Don't register placeholders to registry to keep it clean
     # Just document them here for future reference
-    
+
     logger.log(
         f"FXB loader initialized. Supported types: {', '.join(_fx_registry.list_supported_types())}",
         "Info",
