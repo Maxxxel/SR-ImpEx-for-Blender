@@ -113,7 +113,13 @@ def get_user_preferences(context=None):
         context = bpy.context
     prefs = None
     if hasattr(context, "preferences"):
-        prefs = context.preferences.addons.get(__package__, None)
+        base_package = __package__.split(".", 1)[0]
+        prefs = context.preferences.addons.get(base_package, None)
+        # Check preferences.addons
+        for addon in context.preferences.addons:
+            if addon.module == base_package:
+                prefs = addon
+                break
     if prefs:
         return prefs.preferences
     # To make the addon stable and non-exception prone, return None
