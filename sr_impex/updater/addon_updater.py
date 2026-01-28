@@ -108,9 +108,12 @@ class SingletonUpdater:
         self.skip_tag = None
 
         # Get data from the running blender module (addon).
-        self._addon = __package__.lower()
-        self._addon_package = __package__  # Must not change.
-        self._addon_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+        base_package = __package__.split(".", 1)[0]
+        self._addon = base_package.lower()
+        self._addon_package = base_package  # Must not change.
+        self._addon_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), os.pardir)
+        )
         self._updater_path = os.path.join(self._addon_root, self._addon + "_updater")
         self._json = dict()
         self._error = None
@@ -889,11 +892,12 @@ class SingletonUpdater:
 
         # Clear the existing source folder in case previous files remain.
         outdir = os.path.join(self._updater_path, "source")
-        try:
-            shutil.rmtree(outdir)
-            self.print_verbose("Source folder cleared")
-        except:
-            self.print_trace()
+        if os.path.isdir(outdir):
+            try:
+                shutil.rmtree(outdir)
+                self.print_verbose("Source folder cleared")
+            except:
+                self.print_trace()
 
         # Create parent directories if needed, would not be relevant unless
         # installing addon into another location or via an addon manager.
