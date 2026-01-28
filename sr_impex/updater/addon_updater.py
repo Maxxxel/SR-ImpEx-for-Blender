@@ -110,10 +110,8 @@ class SingletonUpdater:
         # Get data from the running blender module (addon).
         self._addon = __package__.lower()
         self._addon_package = __package__  # Must not change.
-        self._updater_path = os.path.join(
-            os.path.dirname(__file__), self._addon + "_updater"
-        )
-        self._addon_root = os.path.dirname(__file__)
+        self._addon_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+        self._updater_path = os.path.join(self._addon_root, self._addon + "_updater")
         self._json = dict()
         self._error = None
         self._error_msg = None
