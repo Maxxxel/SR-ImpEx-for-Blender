@@ -185,6 +185,37 @@ def invert_bezier_hermite_for_axis_any(fc: bpy.types.FCurve, i: int, total_frame
     return invert_bezier_hermite_for_axis(fc, i, total_frames)
 
 
+def _hermite_tangent_from_sampled_series(
+    samples: list[tuple], times: list[float], i: int, component: int
+) -> float:
+    """Compute Hermite tangent from sampled values in normalized time-space.
+
+    `times` are normalized to [0..1], so this returns dv/dt.
+    """
+    n = len(samples)
+    if n < 2 or i < 0 or i >= n or len(times) != n:
+        return 0.0
+
+    def _safe_div(dv: float, dt: float) -> float:
+        if abs(dt) < 1e-12:
+            return 0.0
+        return dv / dt
+
+    if i == 0:
+        dv = float(samples[1][component]) - float(samples[0][component])
+        dt = float(times[1]) - float(times[0])
+        return _safe_div(dv, dt)
+
+    if i == n - 1:
+        dv = float(samples[i][component]) - float(samples[i - 1][component])
+        dt = float(times[i]) - float(times[i - 1])
+        return _safe_div(dv, dt)
+
+    dv = float(samples[i + 1][component]) - float(samples[i - 1][component])
+    dt = float(times[i + 1]) - float(times[i - 1])
+    return _safe_div(dv, dt)
+
+
 def export_ska(context: bpy.types.Context, filepath: str, action_name: str, export_tangents: bool = False) -> None:
     """Export the current scene to a .ska file."""
     # Find the Animation Data by the given action name in the current context
@@ -409,17 +440,29 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                     loc_keyframe.w = 1.0
                     loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
                     # Note: zero-valued keys may also require smoothing.
-                    # Check if we can compute tangents (need all axes and not the last keyframe)
-                    can_compute_tangents = (
-                        len(data["loc_per_time"]["vec"]) >= 2
-                        and all(axis in loc_fcs for axis in range(3))
-                    )
+                    # Compute tangents in sampled-frame space to avoid key index mismatches.
+                    can_compute_tangents = len(data["loc_per_time"]["vec"]) >= 2
 
                     if export_tangents and can_compute_tangents:
                         m_local = Vector((
-                            invert_bezier_hermite_for_axis_any(loc_fcs[0], i, total_frames),
-                            invert_bezier_hermite_for_axis_any(loc_fcs[1], i, total_frames),
-                            invert_bezier_hermite_for_axis_any(loc_fcs[2], i, total_frames)
+                            _hermite_tangent_from_sampled_series(
+                                data["loc_per_time"]["vec"],
+                                data["loc_per_time"]["times"],
+                                i,
+                                0,
+                            ),
+                            _hermite_tangent_from_sampled_series(
+                                data["loc_per_time"]["vec"],
+                                data["loc_per_time"]["times"],
+                                i,
+                                1,
+                            ),
+                            _hermite_tangent_from_sampled_series(
+                                data["loc_per_time"]["vec"],
+                                data["loc_per_time"]["times"],
+                                i,
+                                2,
+                            ),
                         ))
                         m_file = bind_rot @ m_local
                         loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = m_file[:]
@@ -455,18 +498,35 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                         original_quat.z,
                     )
 
-                    # Check if we can compute tangents (need all axes and not the last keyframe)
-                    can_compute_tangents = (
-                        len(data["rot_per_time"]["quat"]) >= 2
-                        and all(axis in rot_fcs for axis in range(4))
-                    )
+                    # Compute tangents in sampled-frame space to avoid key index mismatches.
+                    can_compute_tangents = len(data["rot_per_time"]["quat"]) >= 2
 
                     if export_tangents and can_compute_tangents:
                         local_q = Quaternion((
-                            invert_bezier_hermite_for_axis_any(rot_fcs[0], i, total_frames),
-                            invert_bezier_hermite_for_axis_any(rot_fcs[1], i, total_frames),
-                            invert_bezier_hermite_for_axis_any(rot_fcs[2], i, total_frames),
-                            invert_bezier_hermite_for_axis_any(rot_fcs[3], i, total_frames),
+                            _hermite_tangent_from_sampled_series(
+                                data["rot_per_time"]["quat"],
+                                data["rot_per_time"]["times"],
+                                i,
+                                0,
+                            ),
+                            _hermite_tangent_from_sampled_series(
+                                data["rot_per_time"]["quat"],
+                                data["rot_per_time"]["times"],
+                                i,
+                                1,
+                            ),
+                            _hermite_tangent_from_sampled_series(
+                                data["rot_per_time"]["quat"],
+                                data["rot_per_time"]["times"],
+                                i,
+                                2,
+                            ),
+                            _hermite_tangent_from_sampled_series(
+                                data["rot_per_time"]["quat"],
+                                data["rot_per_time"]["times"],
+                                i,
+                                3,
+                            ),
                         ))
                         file_q = bind_rot @ local_q
                         rot_keyframe.tan_w = -file_q.w
