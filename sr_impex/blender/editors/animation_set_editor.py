@@ -877,6 +877,20 @@ def _is_sle_role(role: str) -> bool:
     return r.endswith("start") or r.endswith("loop") or r.endswith("end")
 
 
+def _is_cast_resolve_role(role: str) -> bool:
+    r = (role or "").lower()
+    return "cast" in r or "resolve" in r
+
+
+def _cast_resolve_channel(role: str) -> str:
+    r = (role or "").lower()
+    if "air" in r:
+        return "air"
+    if "ground" in r:
+        return "ground"
+    return "neutral"
+
+
 def _find_variant_owner(st, variant: bpy.types.PropertyGroup) -> tuple[int, int] | None:
     """Return (mode_key_index, variant_index) for a variant PropertyGroup."""
     try:
@@ -950,6 +964,71 @@ def _propagate_sle_variant_file(st, src_mk_index: int, src_variant_index: int, n
             v.raw_ska = raw_ska
 
 
+def _propagate_cast_resolve_variant_file(st, src_mk_index: int, src_variant_index: int, new_file: str) -> None:
+    """For Cast/Resolve groups, keep the variant's action file in sync for the matching pair."""
+    if not 0 <= src_mk_index < len(st.mode_keys):
+        return
+
+    src_mk = st.mode_keys[src_mk_index]
+    src_role = getattr(src_mk, "role", "")
+    if not _is_cast_resolve_role(src_role):
+        return
+
+    try:
+        ab_name = _infer_ability_for_visjob(int(src_mk.vis_job), st)
+    except Exception:
+        ab_name = ""
+    sp = int(getattr(src_mk, "special_mode", 0))
+    src_channel = _cast_resolve_channel(src_role)
+
+    targets: list[ModeKeyPG] = []
+    for mk in st.mode_keys:
+        if int(getattr(mk, "special_mode", 0)) != sp:
+            continue
+        role = getattr(mk, "role", "")
+        if not _is_cast_resolve_role(role):
+            continue
+        try:
+            if _infer_ability_for_visjob(int(mk.vis_job), st) != ab_name:
+                continue
+        except Exception:
+            continue
+
+        channel = _cast_resolve_channel(role)
+        if src_channel == "air" and channel != "air":
+            continue
+        if src_channel in {"ground", "neutral"} and channel == "air":
+            continue
+        targets.append(mk)
+
+    if not targets:
+        return
+
+    raw_ska = _norm_ska_name(new_file) if new_file and new_file != "NONE" else ""
+    for mk in targets:
+        try:
+            if int(getattr(mk, "active_variant", 0)) != int(src_variant_index):
+                mk.active_variant = int(src_variant_index)
+        except Exception:
+            pass
+
+        while len(mk.variants) <= src_variant_index:
+            v = mk.variants.add()
+            v.weight = 100
+            v.start = 0.0
+            v.end = 1.0
+            v.allows_ik = True
+            v.force_no_blend = False
+            v.file = "NONE"
+            v.raw_ska = ""
+
+        v = mk.variants[src_variant_index]
+        if (v.file or "") != (new_file or ""):
+            v.file = new_file
+        if raw_ska and (getattr(v, "raw_ska", "") != raw_ska):
+            v.raw_ska = raw_ska
+
+
 def _on_variant_file_changed(self, _context):
     """When editing a Loop Set, keep Start/Loop/End action assignment in sync."""
     global _SLE_PROPAGATION_GUARD  # pylint: disable=global-statement
@@ -969,6 +1048,8 @@ def _on_variant_file_changed(self, _context):
                 return None
             mk_i, v_i = owner
             _propagate_sle_variant_file(st, mk_i, v_i, new_file)
+            _propagate_cast_resolve_variant_file(st, mk_i, v_i, new_file)
+            _recompute_all_timing_values(st)
             _redraw_ui()
         except Exception:
             pass
@@ -980,6 +1061,73 @@ def _on_variant_file_changed(self, _context):
         bpy.app.timers.register(_apply, first_interval=0.0)
     except Exception:
         # best-effort: if timers aren't available, do nothing (avoid crashes)
+        return
+
+
+def _recompute_timing_for_variant(st, mk_index: int, variant_index: int) -> None:
+    if not 0 <= mk_index < len(st.mode_keys):
+        return
+    mk = st.mode_keys[mk_index]
+    if not 0 <= variant_index < len(mk.variants):
+        return
+
+    try:
+        vj = int(mk.vis_job)
+    except Exception:
+        vj = 0
+
+    spec = _visjob_timing_spec(vj, mk.role or "")
+    if not spec:
+        return
+
+    v = mk.variants[variant_index]
+    v.timing_has = True
+    v.timing_type = str(spec["animation_type"])
+    v.timing_tag_id = int(spec["tag_id"])
+    v.timing_is_enter = int(spec["is_enter_mode"])
+    v.timing_variant_index = int(variant_index)
+
+    fps = bpy.context.scene.render.fps if bpy.context.scene else 30
+    act_name = (v.file or "").strip()
+    resolve_ms = 0
+    if act_name and act_name != "NONE":
+        act = bpy.data.actions.get(act_name)
+        if act:
+            resolve_ms = int(round((_action_span_frames(act) / fps) * 1000.0))
+
+    v.resolve_ms = int(resolve_ms)
+
+    if getattr(v, "marker_has", False):
+        frac = 1.0 - float(getattr(v, "marker_time", 0.0) or 0.0)
+    else:
+        frac = 1.0 - float(getattr(mk, "cast_to_resolve", 0.0) or 0.0)
+    frac = max(0.0, min(1.0, frac))
+    v.timing_cast_ms = int(round(resolve_ms * frac))
+
+
+def _recompute_all_timing_values(st) -> None:
+    for mk_i, mk in enumerate(st.mode_keys):
+        for v_i in range(len(mk.variants)):
+            _recompute_timing_for_variant(st, mk_i, v_i)
+
+
+def _on_variant_marker_time_changed(self, _context):
+    def _apply():
+        try:
+            st = _state()
+            owner = _find_variant_owner(st, self)
+            if owner is None:
+                return None
+            mk_i, v_i = owner
+            _recompute_timing_for_variant(st, mk_i, v_i)
+            _redraw_ui()
+        except Exception:
+            pass
+        return None
+
+    try:
+        bpy.app.timers.register(_apply, first_interval=0.0)
+    except Exception:
         return
 
 
@@ -995,7 +1143,7 @@ class AnimVariantPG(bpy.types.PropertyGroup):
     # --- marker fields (attached per-variant) ---
     marker_has: BoolProperty(name="Has Marker", default=False, options={"HIDDEN"})  # type: ignore
     marker_is_spawn: BoolProperty(name="Is Spawn Animation", default=False)  # type: ignore
-    marker_time: FloatProperty(name="Time (0..1)", default=0.0, min=0.0, max=1.0, precision=3)  # type: ignore
+    marker_time: FloatProperty(name="Time (0..1)", default=0.0, min=0.0, max=1.0, precision=3, update=_on_variant_marker_time_changed)  # type: ignore
     marker_pos: FloatVectorProperty(name="Position", size=3, default=(0.0, 0.0, 0.0), subtype="TRANSLATION")  # type: ignore
     marker_dir: FloatVectorProperty(name="Direction", size=3, default=(0.0, 0.0, 1.0), subtype="DIRECTION")  # type: ignore
     # --- timing fields (attached per-variant) ---
@@ -1014,6 +1162,20 @@ def _update_cast_to_resolve(self, _ctx):
     val = max(0.0, min(1.0, float(self.cast_to_resolve)))
     for v in self.variants:
         v.end = val
+
+    def _apply():
+        try:
+            st = _state()
+            _recompute_all_timing_values(st)
+            _redraw_ui()
+        except Exception:
+            pass
+        return None
+
+    try:
+        bpy.app.timers.register(_apply, first_interval=0.0)
+    except Exception:
+        pass
 
 
 class ModeKeyPG(bpy.types.PropertyGroup):
@@ -1531,8 +1693,24 @@ def _write_state_to_blob(col: bpy.types.Collection):
         except Exception:
             return 0
 
-    def _cast_ms_for_export(mk, v) -> int:
+    def _resolve_ms_for_export(v) -> int:
         dur = int(getattr(v, "resolve_ms", 0) or 0)
+        if dur > 0:
+            return dur
+
+        act_name = (getattr(v, "file", "") or "").strip()
+        if not act_name or act_name == "NONE":
+            return 0
+
+        act = bpy.data.actions.get(act_name)
+        if not act:
+            return 0
+
+        fps = bpy.context.scene.render.fps if bpy.context.scene else 30
+        return int(round((_action_span_frames(act) / fps) * 1000.0))
+
+    def _cast_ms_for_export(mk, v) -> int:
+        dur = _resolve_ms_for_export(v)
         # prefer marker_time; fallback to mk.cast_to_resolve if marker absent
         if getattr(v, "marker_has", False):
             frac = 1.0 - float(getattr(v, "marker_time", 0.0) or 0.0)
@@ -1551,11 +1729,12 @@ def _write_state_to_blob(col: bpy.types.Collection):
                 if tkey not in groups:
                     groups[tkey] = {}
                 if idx not in groups[tkey]:
+                    resolve_ms = _resolve_ms_for_export(v)
                     groups[tkey][idx] = {
                         "variant_index": int(idx),
                         "weight": int(v.weight),
                         "cast_ms": _cast_ms_for_export(mk, v),
-                        "resolve_ms": int(v.resolve_ms),
+                        "resolve_ms": int(resolve_ms),
                         "direction": [
                             float(x) for x in (v.timing_dir or [0.0, 0.0, 1.0])
                         ],
