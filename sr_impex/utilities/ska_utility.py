@@ -118,8 +118,8 @@ def get_actions(current_collection: bpy.types.Collection = None) -> List[str]:
             short = base
             if "-" in short:
                 short = short.rsplit("-", 1)[-1]
-            if "_" in short:
-                short = short.rsplit("_", 1)[-1]
+            if short.startswith("skel_") and short.count("_") >= 2:
+                short = short.split("_", 2)[2]
             short = short or base or raw
             try:
                 act["ui_name"] = short

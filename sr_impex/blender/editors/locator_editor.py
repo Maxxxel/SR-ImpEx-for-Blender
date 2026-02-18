@@ -18,6 +18,7 @@ from bpy.props import (
     CollectionProperty,
     PointerProperty,
     EnumProperty,
+    BoolProperty,
 )
 from mathutils import Matrix, Vector
 
@@ -198,6 +199,9 @@ def _draw_editor_body(layout: bpy.types.UILayout):
         box.prop(it, "file", text="File")
         if arm:
             box.prop_search(it, "parent_bone", arm.data, "bones", text="Parent")
+            # Show checkbox only when no parent bone is selected
+            if not it.parent_bone:
+                box.prop(it, "use_parent_minus_two")
         else:
             row = box.row()
             row.alert = True
@@ -344,7 +348,9 @@ def update_blob_from_scene(root: bpy.types.Collection, add_new: bool = True) -> 
             entry["rot3x3"] = _flatten_m3(obj.matrix_basis.to_3x3())
         else:
             # Non-bone -> store WORLD IN GAME SPACE
-            entry["bone_id"] = -1
+            # Preserve use_parent_minus_two setting when syncing from scene
+            use_minus_two = entry.get("use_parent_minus_two", False)
+            entry["bone_id"] = -2 if use_minus_two else -1
             if go and obj.parent == go:
                 # Remove GO rotation: game_mw = GO^-1 * world
                 mw_game = go.matrix_world.inverted() @ obj.matrix_world
@@ -429,6 +435,7 @@ class LocatorItemPG(bpy.types.PropertyGroup):
     parent_bone: StringProperty(name="Parent", default="")  # type: ignore
     bone_id: IntProperty(name="Bone ID", default=-1)  # type: ignore
     pos: FloatVectorProperty(name="Position", size=3, default=(0.0, 0.0, 0.0), subtype="TRANSLATION")  # type: ignore
+    use_parent_minus_two: BoolProperty(name="If None set Parent to -2", default=False, description="When enabled, sets bone parent to -2 instead of -1 if no parent bone is specified. This allows attachment to any bone specified in an Effect")  # type: ignore
 
     def to_dict(self) -> Dict:
         return {
@@ -438,6 +445,7 @@ class LocatorItemPG(bpy.types.PropertyGroup):
             "file": self.file or "",
             "bone_id": int(self.bone_id),
             "pos": list(self.pos),
+            "use_parent_minus_two": bool(self.use_parent_minus_two),
         }
 
     def from_dict(self, d: Dict, arm: Optional[bpy.types.Object]):
@@ -466,6 +474,13 @@ class LocatorItemPG(bpy.types.PropertyGroup):
 
         uk_raw = d.get("uk_int", -1)
         self.uk_int = int(-1 if uk_raw is None else uk_raw)
+
+        # Load the use_parent_minus_two property; detect from bone_id == -2
+        if self.bone_id == -2:
+            self.use_parent_minus_two = True
+            self.bone_id = -1  # Display as -1 in UI since no parent bone
+        else:
+            self.use_parent_minus_two = bool(d.get("use_parent_minus_two", False))
 
 
 class LocatorEditorState(bpy.types.PropertyGroup):
@@ -557,6 +572,9 @@ class DRS_OT_OpenLocatorEditor(bpy.types.Operator):
             right.prop(it, "file", text="File")
             if arm:
                 right.prop_search(it, "parent_bone", arm.data, "bones", text="Parent")
+                # Show checkbox only when no parent bone is selected
+                if not it.parent_bone:
+                    right.prop(it, "use_parent_minus_two")
             else:
                 right.label(text="No armature in this model", icon="INFO")
             right.prop(it, "pos", text="Position (view)")
@@ -674,6 +692,8 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
                 # update type/file
                 e["class_id"] = int(it.type) if it.type.isdigit() else int(it.class_id)
                 e["file"] = it.file or ""
+                # Store the use_parent_minus_two property
+                e["use_parent_minus_two"] = bool(it.use_parent_minus_two)
 
                 if bone_idx >= 0:
                     # Switching to a bone: ALWAYS reset local transform (ignore previous world/GO transform)
@@ -682,7 +702,8 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
                     e["rot3x3"] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
                 else:
                     # Clearing bone: reset to origin in GAME space (will appear at GO origin in scene)
-                    e["bone_id"] = -1
+                    # Use -2 if the checkbox is enabled, otherwise -1
+                    e["bone_id"] = -2 if it.use_parent_minus_two else -1
                     e["pos"] = [0.0, 0.0, 0.0]
                     e["rot3x3"] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
                 break

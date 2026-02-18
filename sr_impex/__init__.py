@@ -32,7 +32,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 5, 0),
-    "version": (3, 6, 12),
+    "version": (3, 6, 13),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -459,9 +459,9 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
 
         result = save_drs(context, **keywords)
         if result == {"FINISHED"}:
-            self.report({"INFO"}, "Export erfolgreich.")
+            self.report({"INFO"}, "Export successfull.")
         else:
-            self.report({"ERROR"}, "Export fehlgeschlagen. Details im Popup.")
+            self.report({"ERROR"}, "Export failed. Check details in the Log..")
             
         print_profiling_report()
 
@@ -596,9 +596,9 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
 
         result = save_bmg(context, **keywords)
         if result == {"FINISHED"}:
-            self.report({"INFO"}, "Export erfolgreich.")
+            self.report({"INFO"}, "Export successfull.")
         else:
-            self.report({"ERROR"}, "Export fehlgeschlagen. Details im Popup.")
+            self.report({"ERROR"}, "Export failed. Check details in the Log..")
             
         print_profiling_report()
 
