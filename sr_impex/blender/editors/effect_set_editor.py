@@ -49,24 +49,22 @@ def _ensure_action_name_props(act: bpy.types.Action) -> str:
         except Exception:
             pass
 
-    try:
-        ui = act.get("ui_name", None)
-    except Exception:
-        ui = None
-    if ui:
-        return str(ui)
+    def _derive_ui_name(src: str) -> str:
+        base = (src or "").strip()
+        if base.lower().endswith(".ska"):
+            base = base[:-4]
 
-    base = raw
-    if base.lower().endswith(".ska"):
-        base = base[:-4]
+        short = base
+        if "-" in short:
+            short = short.rsplit("-", 1)[-1]
+        if short.startswith("skel_") and short.count("_") >= 2:
+            short = short.split("_", 2)[2]
 
-    short = base
-    if "-" in short:
-        short = short.rsplit("-", 1)[-1]
-    if "_" in short:
-        short = short.rsplit("_", 1)[-1]
+        return short or base or (src or "")
 
-    short = short or base or raw
+    short_from_raw = _derive_ui_name(raw)
+    short_from_name = _derive_ui_name(act.name or "")
+    short = short_from_name or short_from_raw
 
     try:
         act["ui_name"] = short

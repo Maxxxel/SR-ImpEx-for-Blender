@@ -2,8 +2,10 @@ import bpy
 
 
 class MessageLogger:
+    _shared_messages = []
+
     def __init__(self):
-        self.messages = []
+        self.messages = MessageLogger._shared_messages
 
     def log(self, message: str, title: str = "Message Box", icon: str = "INFO") -> None:
         if message:
@@ -23,4 +25,4 @@ class MessageLogger:
 
     def clear(self) -> None:
         """Clear all logged messages."""
-        self.messages = []
+        self.messages.clear()

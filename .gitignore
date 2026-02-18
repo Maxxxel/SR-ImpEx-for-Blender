@@ -4,6 +4,7 @@
 /env
 /archive
 /sr_impex/sr_impex_updater*
+/sr_impex/sr_impex.updater_updater
 /sr_impex/__pycache__
 /sr_impex/debug*
 /sr_impex/resources/temp

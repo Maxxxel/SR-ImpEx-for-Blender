@@ -68,27 +68,27 @@ def _ensure_action_name_props(act: bpy.types.Action) -> str:
         except Exception:
             pass
 
-    # Falls bereits vorhanden, direkt zurückgeben
-    try:
-        ui = act.get("ui_name", None)
-    except Exception:
-        ui = None
-    if ui:
-        return str(ui)
+    def _derive_ui_name(src: str) -> str:
+        base = (src or "").strip()
+        if base.lower().endswith(".ska"):
+            base = base[:-4]
 
-    # UI-Name aus raw_name ableiten
-    base = raw
-    if base.lower().endswith(".ska"):
-        base = base[:-4]
+        short = base
+        if "-" in short:
+            short = short.rsplit("-", 1)[-1]
 
-    # erst nach '-', dann nach '_'
-    short = base
-    if "-" in short:
-        short = short.rsplit("-", 1)[-1]
-    if "_" in short:
-        short = short.rsplit("_", 1)[-1]
+        # häufiges Muster: skel_<race>_<ability...> -> <ability...>
+        if short.startswith("skel_") and short.count("_") >= 2:
+            short = short.split("_", 2)[2]
 
-    short = short or base or raw
+        return short or base or (src or "")
+
+    short_from_raw = _derive_ui_name(raw)
+    short_from_name = _derive_ui_name(act.name or "")
+
+    # Dropdown label should follow live Action datablock rename by artists.
+    # raw_name is only a fallback for imported data.
+    short = short_from_name or short_from_raw
 
     try:
         act["ui_name"] = short
@@ -1833,14 +1833,22 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         if bpy.context.screen and bpy.context.screen.is_animation_playing:
             bpy.ops.screen.animation_play()
 
-        start_range_float = self.start * original_frame_length
-        end_range_float = self.end * original_frame_length
+        span = float(_action_span_frames(act))
+        f0 = int(act.frame_range[0])
+
+        start_clamped = max(0.0, min(float(self.start), 1.0))
+        end_clamped = max(0.0, min(float(self.end), 1.0))
+        if end_clamped <= start_clamped:
+            end_clamped = min(1.0, start_clamped + (1.0 / max(1.0, span)))
+
+        start_range_float = start_clamped * original_frame_length
+        end_range_float = end_clamped * original_frame_length
 
         start_sub_frame = start_range_float - int(start_range_float)
         end_sub_frame = end_range_float - int(end_range_float)
 
-        start_frame = int(round(self.start * original_frame_length))
-        end_frame = int(round(self.end * original_frame_length))
+        start_frame = int(round(f0 + start_clamped * span))
+        end_frame = int(round(f0 + end_clamped * span))
 
         # Enable Show Subframes
         context.scene.show_subframe = True
