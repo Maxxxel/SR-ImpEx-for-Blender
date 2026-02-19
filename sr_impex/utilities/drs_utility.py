@@ -1382,22 +1382,38 @@ def add_skin_weights_to_mesh(
 
 
 def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> None:
-    # Record bind pose transform to parent space
-    # Used to set pose bones for animation
+    # Record bind pose transform to parent space using the original bone_matrix,
+    # so that tail repositioning for artist ergonomics does not affect animation data.
     for bone_data in bone_list:
-        armature_bone: bpy.types.Bone = armature.bones[bone_data.name]
-        matrix_local = armature_bone.matrix_local
+        if bone_data.parent != -1:
+            parent_matrix = bone_list[bone_data.parent].bone_matrix
+            local_matrix = parent_matrix.inverted_safe() @ bone_data.bone_matrix
+        else:
+            local_matrix = bone_data.bone_matrix
 
-        if armature_bone.parent:
-            matrix_local = (
-                armature_bone.parent.matrix_local.inverted_safe() @ matrix_local
-            )
-
-        bone_data.bind_loc = matrix_local.to_translation()
-        bone_data.bind_rot = matrix_local.to_quaternion()
+        bone_data.bind_loc = local_matrix.to_translation()
+        bone_data.bind_rot = local_matrix.to_quaternion()
 
 
-def create_bone_tree(armature_data: bpy.types.Armature,bone_list: list[DRSBone],bone_data: DRSBone,bone_len: float = 0.1):
+def _build_children_map(bone_list: list[DRSBone]) -> dict:
+    """Build a identifier→children lookup once to avoid repeated O(n) scans."""
+    children_map: dict[int, list[DRSBone]] = {}
+    for b in bone_list:
+        if b.parent != -1:
+            children_map.setdefault(b.parent, []).append(b)
+    return children_map
+
+
+def create_bone_tree(
+    armature_data: bpy.types.Armature,
+    bone_list: list[DRSBone],
+    bone_data: DRSBone,
+    bone_len: float = 0.1,
+    children_map: dict = None,
+):
+    if children_map is None:
+        children_map = _build_children_map(bone_list)
+
     eb = armature_data.edit_bones.new(bone_data.name)
     armature_data.display_type = "STICK"
 
@@ -1407,26 +1423,54 @@ def create_bone_tree(armature_data: bpy.types.Armature,bone_list: list[DRSBone],
     # exact head from bind pose
     eb.head = m @ Vector((0, 0, 0))
 
-    # make tail along local +Y of the bind pose, fixed short length
-    y_dir = (r @ Vector((0, 1, 0))).normalized()
-    if y_dir.length < 1e-8:
-        y_dir = Vector((0, 1, 0))  # extremely defensive
-    eb.tail = eb.head + y_dir * bone_len
+    # Guess tail from children for a more artist-friendly rig
+    children = children_map.get(bone_data.identifier, [])
+    if len(children) == 1:
+        # Single child: aim tail directly at child's head
+        child_head = children[0].bone_matrix @ Vector((0, 0, 0))
+        tail_vec = child_head - eb.head
+        if tail_vec.length > 1e-8:
+            eb.tail = child_head
+        else:
+            y_dir = (r @ Vector((0, 1, 0))).normalized()
+            eb.tail = eb.head + y_dir * bone_len
+    elif len(children) > 1:
+        # Multiple children: aim toward average of children's heads
+        avg = Vector((0.0, 0.0, 0.0))
+        for child in children:
+            avg += child.bone_matrix @ Vector((0, 0, 0))
+        avg /= len(children)
+        tail_vec = avg - eb.head
+        if tail_vec.length >= bone_len:
+            # Average is far enough: place tail exactly at the average position
+            eb.tail = avg
+        elif tail_vec.length > 1e-8:
+            # Average is very close but non-zero: keep direction, use minimum length
+            eb.tail = eb.head + tail_vec.normalized() * bone_len
+        else:
+            y_dir = (r @ Vector((0, 1, 0))).normalized()
+            eb.tail = eb.head + y_dir * bone_len
+    else:
+        # Leaf bone: fixed length along local +Y
+        y_dir = (r @ Vector((0, 1, 0))).normalized()
+        if y_dir.length < 1e-8:
+            y_dir = Vector((0, 1, 0))
+        eb.tail = eb.head + y_dir * bone_len
 
     # roll from bind pose Z axis
     eb.align_roll(r @ Vector((0, 0, 1)))
 
-    # never force connection for coincident heads
+    # Parent and connect where the child head sits exactly at the parent tail
     if bone_data.parent != -1:
         parent_name = bone_list[bone_data.parent].name
         parent_bone = armature_data.edit_bones.get(parent_name)
         if parent_bone:
             eb.parent = parent_bone
-            eb.use_connect = False  # critical: OFFSET parenting, no merging
+            eb.use_connect = (eb.head - parent_bone.tail).length < 1e-4
 
     # recurse
-    for child in [b for b in bone_list if b.parent == bone_data.identifier]:
-        create_bone_tree(armature_data, bone_list, child, bone_len)
+    for child in children:
+        create_bone_tree(armature_data, bone_list, child, bone_len, children_map)
 
 
 def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
@@ -1577,7 +1621,7 @@ def import_csk_skeleton(
         # Parent the bones using the parent_index from the DRSBone objects
         edit_bones = armature_data.edit_bones
 
-        # Old Approach, working but ugly
+        # Ensure all bones are parented (handles any bones not reached by create_bone_tree)
         for _, bone_data in enumerate(bone_list):
             if bone_data.parent != -1:  # Root bones have a parent_index of -1
                 child_bone = edit_bones.get(bone_data.name)
@@ -1587,6 +1631,7 @@ def import_csk_skeleton(
 
                 if child_bone and parent_bone:
                     child_bone.parent = parent_bone
+                    child_bone.use_connect = (child_bone.head - parent_bone.tail).length < 1e-4
 
     # Your bind pose recording function is correct and should be called at the end.
     record_bind_pose(bone_list, armature_data)
