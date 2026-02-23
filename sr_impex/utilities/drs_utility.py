@@ -1429,39 +1429,16 @@ def create_bone_tree(
     # exact head from bind pose
     eb.head = m @ Vector((0, 0, 0))
 
-    # Guess tail from children for a more artist-friendly rig
-    children = children_map.get(bone_data.identifier, [])
-    if len(children) == 1:
-        # Single child: aim tail directly at child's head
-        child_head = children[0].bone_matrix @ Vector((0, 0, 0))
-        tail_vec = child_head - eb.head
-        if tail_vec.length > 1e-8:
-            eb.tail = child_head
-        else:
-            y_dir = (r @ Vector((0, 1, 0))).normalized()
-            eb.tail = eb.head + y_dir * bone_len
-    elif len(children) > 1:
-        # Multiple children: aim toward average of children's heads
-        avg = Vector((0.0, 0.0, 0.0))
-        for child in children:
-            avg += child.bone_matrix @ Vector((0, 0, 0))
-        avg /= len(children)
-        tail_vec = avg - eb.head
-        if tail_vec.length >= bone_len:
-            # Average is far enough: place tail exactly at the average position
-            eb.tail = avg
-        elif tail_vec.length > 1e-8:
-            # Average is very close but non-zero: keep direction, use minimum length
-            eb.tail = eb.head + tail_vec.normalized() * bone_len
-        else:
-            y_dir = (r @ Vector((0, 1, 0))).normalized()
-            eb.tail = eb.head + y_dir * bone_len
-    else:
-        # Leaf bone: fixed length along local +Y
-        y_dir = (r @ Vector((0, 1, 0))).normalized()
-        if y_dir.length < 1e-8:
-            y_dir = Vector((0, 1, 0))
-        eb.tail = eb.head + y_dir * bone_len
+    # Tail along the bone's own local +Y axis (the game's bind-pose orientation).
+    # This keeps Blender's matrix_local identical to bone_matrix, which is required
+    # for animation extraction: bind_rot/bind_loc are derived from matrix_local, and
+    # game keyframes were baked against the game's parent-local frame.  Pointing tails
+    # in any other direction shifts that parent-local frame, causing both location and
+    # rotation keyframes to be wrong for every child of the repositioned bone.
+    y_dir = (r @ Vector((0, 1, 0))).normalized()
+    if y_dir.length < 1e-8:
+        y_dir = Vector((0, 1, 0))
+    eb.tail = eb.head + y_dir * bone_len
 
     # roll from bind pose Z axis
     eb.align_roll(r @ Vector((0, 0, 1)))
@@ -1476,8 +1453,8 @@ def create_bone_tree(
             eb.parent = parent_bone
             eb.use_connect = False
 
-    # recurse
-    for child in children:
+    # recurse using the pre-computed children map (O(n) total, not O(n^2))
+    for child in children_map.get(bone_data.identifier, []):
         create_bone_tree(armature_data, bone_list, child, bone_len, children_map)
 
 
