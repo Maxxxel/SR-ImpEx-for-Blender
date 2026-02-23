@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import re
 from typing import Dict, Optional, Tuple
 
 import random
@@ -878,15 +879,28 @@ def _is_sle_role(role: str) -> bool:
 
 
 def _is_cast_resolve_role(role: str) -> bool:
-    r = (role or "").lower()
-    return "cast" in r or "resolve" in r
+    tokens = _role_tokens(role)
+    return "cast" in tokens or "resolve" in tokens
+
+
+def _role_tokens(role: str) -> set[str]:
+    """Split role names into lowercase semantic tokens (supports CamelCase, snake_case, kebab-case)."""
+    raw = (role or "").strip()
+    if not raw:
+        return set()
+
+    # Convert separators to spaces and split camel-case boundaries
+    spaced = re.sub(r"[_\-]+", " ", raw)
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", spaced)
+    tokens = re.findall(r"[A-Za-z0-9]+", spaced)
+    return {t.lower() for t in tokens}
 
 
 def _cast_resolve_channel(role: str) -> str:
-    r = (role or "").lower()
-    if "air" in r:
+    tokens = _role_tokens(role)
+    if "air" in tokens:
         return "air"
-    if "ground" in r:
+    if "ground" in tokens:
         return "ground"
     return "neutral"
 
