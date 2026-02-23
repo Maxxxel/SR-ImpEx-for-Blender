@@ -1382,17 +1382,23 @@ def add_skin_weights_to_mesh(
 
 
 def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> None:
-    # Record bind pose transform to parent space using the original bone_matrix,
-    # so that tail repositioning for artist ergonomics does not affect animation data.
+    # Record bind pose transform to parent space.
+    # Must use armature_bone.matrix_local so that bind_rot matches Blender's actual
+    # bone orientation (head/tail/roll). Animation extraction does:
+    #   blender_rot = bind_rot.conjugated() @ game_rot
+    # and Blender then applies that on top of matrix_local, which only cancels
+    # correctly when bind_rot was derived from matrix_local.
     for bone_data in bone_list:
-        if bone_data.parent != -1:
-            parent_matrix = bone_list[bone_data.parent].bone_matrix
-            local_matrix = parent_matrix.inverted_safe() @ bone_data.bone_matrix
-        else:
-            local_matrix = bone_data.bone_matrix
+        armature_bone: bpy.types.Bone = armature.bones[bone_data.name]
+        matrix_local = armature_bone.matrix_local
 
-        bone_data.bind_loc = local_matrix.to_translation()
-        bone_data.bind_rot = local_matrix.to_quaternion()
+        if armature_bone.parent:
+            matrix_local = (
+                armature_bone.parent.matrix_local.inverted_safe() @ matrix_local
+            )
+
+        bone_data.bind_loc = matrix_local.to_translation()
+        bone_data.bind_rot = matrix_local.to_quaternion()
 
 
 def _build_children_map(bone_list: list[DRSBone]) -> dict:
@@ -1460,13 +1466,15 @@ def create_bone_tree(
     # roll from bind pose Z axis
     eb.align_roll(r @ Vector((0, 0, 1)))
 
-    # Parent and connect where the child head sits exactly at the parent tail
+    # Set parent; never connect -- game animations use location keyframes on most
+    # bones, and use_connect = True suppresses them (Blender locks the head to
+    # the parent tail), causing direction inversions such as burrow -> jump.
     if bone_data.parent != -1:
         parent_name = bone_list[bone_data.parent].name
         parent_bone = armature_data.edit_bones.get(parent_name)
         if parent_bone:
             eb.parent = parent_bone
-            eb.use_connect = (eb.head - parent_bone.tail).length < 1e-4
+            eb.use_connect = False
 
     # recurse
     for child in children:
@@ -1631,7 +1639,7 @@ def import_csk_skeleton(
 
                 if child_bone and parent_bone:
                     child_bone.parent = parent_bone
-                    child_bone.use_connect = (child_bone.head - parent_bone.tail).length < 1e-4
+                    child_bone.use_connect = False
 
     # Your bind pose recording function is correct and should be called at the end.
     record_bind_pose(bone_list, armature_data)
