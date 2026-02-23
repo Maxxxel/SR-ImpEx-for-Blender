@@ -28,7 +28,6 @@ from sr_impex.blender.editors.effect_set_editor import (
     EFFECT_BLOB_KEY,
 )
 from sr_impex.blender.editors.bmg_state_editor import MESHGRID_BLOB_KEY, switch_meshset_state
-from sr_impex.blender.control_rig import apply_joint_display, build_control_rig
 from sr_impex.utilities.helpers import verify_collections, abort, copy, build_ska_export_name_map
 
 # Import required functions from drs_utility
@@ -807,22 +806,6 @@ def load_bmg(
 
     # Apply the Transformations to the Source Collection
     parent_under_game_axes(source_collection, apply_transform)
-
-    # Visual rig enhancements (mirrors drs_utility behaviour)
-    if armature_object:
-        if use_control_rig and bone_list is not None:
-            armature_collection = None
-            for child in source_collection.children:
-                if "Armature" in child.name:
-                    armature_collection = child
-                    break
-            build_control_rig(
-                deform_armature=armature_object,
-                bone_list=bone_list,
-                parent_collection=armature_collection or source_collection,
-            )
-        else:
-            apply_joint_display(armature_object)
 
     # Print the Time Measurement
     logger.log(

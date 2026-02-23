@@ -20,6 +20,7 @@ from .utilities.drs_utility import (
 )
 from .utilities.bmg_utility import load_bmg, save_bmg
 from .utilities.ska_utility import export_ska, get_actions
+from .blender.control_rig import bake_control_rig_action
 from .updater import addon_updater_ops
 from .blender.editors import locator_editor
 from .blender.editors import animation_set_editor
@@ -243,8 +244,8 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         default=False,
     )  # type: ignore
     use_control_rig: BoolProperty(
-        name="Use Control Rig",
-        description="Build a separate Maya-style control rig with node & wire display. The deform rig is hidden and driven via COPY_TRANSFORMS constraints.",
+        name="Use Control Rig for IK",
+        description="Use a separate Control Rig for IK handling",
         default=False,
     )  # type: ignore
 
@@ -770,6 +771,135 @@ class ShowMessagesOperator(bpy.types.Operator):
             col.label(text=message)
 
 
+class DRS_OT_bake_control_rig(bpy.types.Operator):
+    """Bake the active action from the control rig onto the deform armature.
+
+    Animators work on the control rig, then press this button to bake
+    the visual result (including COPY_TRANSFORMS) to plain keyframes on
+    the deform rig.  The baked action can then be exported as a .ska file.
+    """
+
+    bl_idname = "drs.bake_control_rig"
+    bl_label = "Bake Control Rig → Deform"
+    bl_description = (
+        "Bake the current action from the control rig to the hidden deform "
+        "armature so it can be exported as a .ska animation"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    clean_curves: BoolProperty(  # type: ignore
+        name="Clean Redundant Keys",
+        description="Remove keyframes whose values match a simple linear interpolation",
+        default=True,
+    )
+
+    def execute(self, context):
+        # Find the control rig and deform rig inside the active DRS collection
+        active_layer_coll = context.view_layer.active_layer_collection
+        root_coll = (
+            active_layer_coll.collection
+            if active_layer_coll and active_layer_coll != context.scene.collection
+            else None
+        )
+        if root_coll is None:
+            self.report({"ERROR"}, "Select a DRS model collection in the Outliner first.")
+            return {"CANCELLED"}
+
+        ctrl_rig = None
+        deform_rig = None
+        for obj in root_coll.all_objects:
+            if obj.type != "ARMATURE":
+                continue
+            if "Control_Rig_" in obj.name:
+                ctrl_rig = obj
+            else:
+                # Identify the deform rig by its Control_Rig_Driver constraint
+                for pb in obj.pose.bones:
+                    for ct in pb.constraints:
+                        if ct.type == "COPY_TRANSFORMS" and ct.name == "Control_Rig_Driver":
+                            deform_rig = obj
+                            break
+                    if deform_rig:
+                        break
+
+        if ctrl_rig is None or deform_rig is None:
+            self.report(
+                {"ERROR"},
+                "Could not find a control rig / deform rig pair. "
+                "Import a model with 'Use Control Rig' enabled first.",
+            )
+            return {"CANCELLED"}
+
+        if ctrl_rig.animation_data is None or ctrl_rig.animation_data.action is None:
+            self.report(
+                {"ERROR"},
+                "The control rig has no active action. "
+                "Create or select an action on the control rig in the Action Editor first.",
+            )
+            return {"CANCELLED"}
+
+        src_name = ctrl_rig.animation_data.action.name
+        baked = bake_control_rig_action(
+            ctrl_rig,
+            deform_rig,
+            clean_curves=self.clean_curves,
+        )
+        if baked is None:
+            self.report({"ERROR"}, "Baking failed – see the System Console for details.")
+            return {"CANCELLED"}
+
+        self.report({"INFO"}, f"Baked '{src_name}' → '{baked.name}' on deform armature.")
+        return {"FINISHED"}
+
+    def draw(self, context):
+        self.layout.prop(self, "clean_curves")
+
+
+class DRS_PT_rigging_tools(bpy.types.Panel):
+    """Control rig and action baking tools in the DRS Editor N-panel."""
+
+    bl_label = "Rigging Tools"
+    bl_idname = "DRS_PT_rigging_tools"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "DRS Editor"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        layer_col = context.view_layer.active_layer_collection
+        if not layer_col or layer_col == context.scene.collection:
+            return False
+        col = layer_col.collection
+        return bool(col and col.name.startswith("DRSModel_"))
+
+    def draw(self, context):
+        layout = self.layout
+        box = layout.box()
+        box.label(text="Control Rig", icon="ARMATURE_DATA")
+
+        # Show whether a control rig pair exists in the active collection
+        active_layer_coll = context.view_layer.active_layer_collection
+        root_coll = active_layer_coll.collection if active_layer_coll else None
+        has_ctrl = any(
+            obj.type == "ARMATURE" and "Control_Rig_" in obj.name
+            for obj in (root_coll.all_objects if root_coll else [])
+        )
+        if has_ctrl:
+            box.operator(
+                DRS_OT_bake_control_rig.bl_idname,
+                text="Bake → Deform Rig",
+                icon="ANIM_DATA",
+            )
+            box.label(
+                text="Animate on the control rig, then bake here before exporting .ska.",
+                icon="INFO",
+            )
+        else:
+            box.label(text="No control rig found.", icon="INFO")
+            box.label(text="Re-import with 'Use Control Rig' enabled.")
+
+
 def menu_func_import(self, _context):
     self.layout.operator(
         ImportBFModel.bl_idname,
@@ -843,6 +973,8 @@ def register():
     bpy.utils.register_class(MyAddonPreferences)
     bpy.utils.register_class(DRS_OT_debug_obb_tree)
     bpy.utils.register_class(DRS_PT_debug_tools)
+    bpy.utils.register_class(DRS_OT_bake_control_rig)
+    bpy.utils.register_class(DRS_PT_rigging_tools)
     register_obb_debug_properties()
     locator_editor.register()
     material_flow_editor.register()
@@ -863,6 +995,8 @@ def unregister():
     bpy.utils.unregister_class(MyAddonPreferences)
     bpy.utils.unregister_class(DRS_PT_debug_tools)
     bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
+    bpy.utils.unregister_class(DRS_PT_rigging_tools)
+    bpy.utils.unregister_class(DRS_OT_bake_control_rig)
     unregister_obb_debug_properties()
     locator_editor.unregister()
     material_flow_editor.unregister()

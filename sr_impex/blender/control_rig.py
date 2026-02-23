@@ -453,8 +453,100 @@ def build_control_rig(
 
 
 # ---------------------------------------------------------------------------
-# Internals
+# 3.  bake_control_rig_action  –  native Blender action baking
 # ---------------------------------------------------------------------------
+
+
+def bake_control_rig_action(
+    ctrl_obj: bpy.types.Object,
+    deform_armature: bpy.types.Object,
+    *,
+    clean_curves: bool = True,
+) -> Optional[bpy.types.Action]:
+    """Bake the active action from *ctrl_obj* onto *deform_armature*.
+
+    Uses Blender's built-in NLA bake (``bpy.ops.nla.bake``) with
+    ``visual_keying=True`` so the COPY_TRANSFORMS result is baked into
+    plain keyframes.  The resulting action is named after the source action
+    with a ``_baked`` suffix, and all SKA metadata (``frame_length``,
+    ``original_fps``, ``repeat``, ``prefix``) is copied across.
+
+    Parameters
+    ----------
+    ctrl_obj : bpy.types.Object
+        The control rig armature that has the action to bake.
+    deform_armature : bpy.types.Object
+        The deform rig that receives the baked keyframes.
+    clean_curves : bool
+        Remove redundant keyframes from the baked result.
+
+    Returns
+    -------
+    bpy.types.Action or None
+        The baked action, or None if baking failed.
+    """
+    if ctrl_obj is None or deform_armature is None:
+        return None
+    if ctrl_obj.animation_data is None or ctrl_obj.animation_data.action is None:
+        return None
+
+    src_action = ctrl_obj.animation_data.action
+    frame_start = int(src_action.frame_range[0])
+    frame_end = int(src_action.frame_range[1])
+
+    # Temporarily unhide the deform rig so the operator can select it
+    was_hidden = deform_armature.hide_get()
+    deform_armature.hide_set(False)
+
+    # Ensure deform rig is the active object
+    prev_active = bpy.context.view_layer.objects.active
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = deform_armature
+    deform_armature.select_set(True)
+
+    try:
+        bpy.ops.nla.bake(
+            frame_start=frame_start,
+            frame_end=frame_end,
+            step=1,
+            only_selected=False,
+            visual_keying=True,
+            clear_constraints=False,
+            clear_parents=False,
+            use_current_action=False,
+            clean_curves=clean_curves,
+            bake_types={"POSE"},
+        )
+    except Exception as exc:
+        import traceback
+        print(f"[SR-ImpEx] bake_control_rig_action failed: {exc}")
+        traceback.print_exc()
+        deform_armature.hide_set(was_hidden)
+        if prev_active is not None:
+            bpy.context.view_layer.objects.active = prev_active
+        return None
+
+    # Restore visibility / active object
+    deform_armature.hide_set(was_hidden)
+    if prev_active is not None:
+        bpy.context.view_layer.objects.active = prev_active
+
+    if deform_armature.animation_data is None or deform_armature.animation_data.action is None:
+        return None
+
+    baked = deform_armature.animation_data.action
+
+    # Rename and copy metadata from the source action
+    baked_name = src_action.name
+    if not baked_name.endswith("_baked"):
+        baked_name += "_baked"
+    baked.name = baked_name
+
+    for key in ("frame_length", "original_fps", "repeat", "prefix"):
+        if key in src_action:
+            baked[key] = src_action[key]
+
+    return baked
 
 
 def _fallback_tail(
