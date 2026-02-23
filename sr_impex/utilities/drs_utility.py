@@ -46,6 +46,7 @@ from sr_impex.blender.transform_utils import (
 from sr_impex.blender.drs_material import DRSMaterial
 from sr_impex.blender.bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
 from sr_impex.blender.animation_utils import import_ska_animation
+from sr_impex.blender.control_rig import apply_joint_display, build_control_rig
 from sr_impex.blender.editors.locator_editor import BLOB_KEY, UID_KEY, blob_to_cdrw
 from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
 from sr_impex.blender.editors.effect_set_editor import (
@@ -2392,34 +2393,24 @@ def load_drs(
     # Apply the Transformations to the Source Collection
     parent_under_game_axes(source_collection, apply_transform)
 
-    # Create a duplicate of the armature and call it control_rig
-    if use_control_rig and armature_object:
-        # Select the armature object
-        bpy.ops.object.select_all(action='DESELECT')
-        armature_object.select_set(True)
-        bpy.context.view_layer.objects.active = armature_object
-        # Duplicate the armature
-        bpy.ops.object.duplicate()
-        control_rig = bpy.context.view_layer.objects.active
-        control_rig.name = f"{armature_object.name}_Control_Rig"
-
-        # Now we need to set constraints on the original armature to copy transforms from the control rig
-        with ensure_mode('POSE'):
-            for bone in armature_object.pose.bones:
-                # Add a Copy Transforms constraint
-                constraint = bone.constraints.new(type='COPY_TRANSFORMS')
-                constraint.target_space = "WORLD"
-                constraint.owner_space = "WORLD"
-                constraint.target = control_rig
-                constraint.subtarget = bone.name
-        with ensure_mode('EDIT'):
-            for bone in control_rig.data.edit_bones:
-                bone.use_deform = False  # Disable deformation on the original armature
-
-        # Link the both Rigs to the GRT_Action_Bakery_Global_Settings if available
-        if hasattr(bpy.context.scene, "GRT_Action_Bakery_Global_Settings"):
-            bpy.context.scene.GRT_Action_Bakery_Global_Settings.Target_Armature = armature_object
-            bpy.context.scene.GRT_Action_Bakery_Global_Settings.Source_Armature = control_rig
+    # Visual rig enhancements
+    if armature_object:
+        if use_control_rig:
+            # Build a re-oriented "node & wire" control rig; the deform rig
+            # is hidden and driven via world-space COPY_TRANSFORMS.
+            armature_collection = None
+            for child in source_collection.children:
+                if "Armature" in child.name:
+                    armature_collection = child
+                    break
+            build_control_rig(
+                deform_armature=armature_object,
+                bone_list=bone_list,
+                parent_collection=armature_collection or source_collection,
+            )
+        else:
+            # Apply Maya-style joint spheres to the deform rig itself
+            apply_joint_display(armature_object)
 
 
     # Print the Time Measurement
