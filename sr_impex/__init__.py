@@ -243,8 +243,8 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         default=False,
     )  # type: ignore
     use_control_rig: BoolProperty(
-        name="Use Control Rig for IK",
-        description="Use a separate Control Rig for IK handling",
+        name="Use Control Rig",
+        description="Build a separate Maya-style control rig with node & wire display. The deform rig is hidden and driven via COPY_TRANSFORMS constraints.",
         default=False,
     )  # type: ignore
 

@@ -12,8 +12,9 @@ Provides two main features:
    true "node & wire" display.  The deform rig receives world-space
    COPY_TRANSFORMS constraints so it follows the control rig exactly.
 
-Both leverage Blender 5.0 custom-shape features (per-bone wire overlay,
-shape-independent scaling, and the custom-shape pivot options when available).
+Both leverage Blender 4.0+ custom-shape features (per-bone wire overlay,
+shape-independent scaling, and per-bone color themes) which allow a Maya-style
+"node & wire" rig display inside Blender.
 """
 
 from __future__ import annotations
@@ -28,6 +29,26 @@ from sr_impex.blender.transform_utils import ensure_mode
 
 if TYPE_CHECKING:
     from sr_impex.definitions.skeleton_definitions import DRSBone
+
+# ---------------------------------------------------------------------------
+# Bone color themes (Blender 4.0+)
+# ---------------------------------------------------------------------------
+
+# Root bone:   yellow  (THEME07)
+# Branch bone: green   (THEME03)
+# Leaf bone:   blue    (THEME02)
+_BONE_COLOR_ROOT = "THEME07"
+_BONE_COLOR_BRANCH = "THEME03"
+_BONE_COLOR_LEAF = "THEME02"
+
+
+def _apply_bone_color(pose_bone: "bpy.types.PoseBone", palette: str) -> None:
+    """Assign a color theme to a pose bone if the API is available (Blender 4.0+)."""
+    try:
+        pose_bone.color.palette = palette
+    except AttributeError:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Shared custom-shape helpers
@@ -193,6 +214,14 @@ def apply_joint_display(
             bone.show_wire = True
 
             pb.rotation_mode = "QUATERNION"
+
+            # Per-bone color theme (Blender 4.0+): root=yellow, branch=green, leaf=blue
+            if bone.parent is None:
+                _apply_bone_color(pb, _BONE_COLOR_ROOT)
+            elif child_names:
+                _apply_bone_color(pb, _BONE_COLOR_BRANCH)
+            else:
+                _apply_bone_color(pb, _BONE_COLOR_LEAF)
 
             # Lock scale — the game format has no per-bone scale channel
             pb.lock_scale = (True, True, True)
@@ -365,6 +394,12 @@ def build_control_rig(
     # ── POSE mode: custom shapes & wire overlay ──
     joint_shape = get_joint_shape(radius=1.0)
 
+    # Build a quick children map for color classification
+    _ctrl_children: dict[str, list[str]] = {b.name: [] for b in ctrl_arm.bones}
+    for b in ctrl_arm.bones:
+        if b.parent is not None:
+            _ctrl_children[b.parent.name].append(b.name)
+
     with ensure_mode("POSE"):
         for pb in ctrl_obj.pose.bones:
             pb.rotation_mode = "QUATERNION"
@@ -374,6 +409,15 @@ def build_control_rig(
 
             # Wire overlay alongside the shape → "node & wire"
             pb.bone.show_wire = True
+
+            # Per-bone color theme (Blender 4.0+): root=yellow, branch=green, leaf=blue
+            _children = _ctrl_children.get(pb.name, [])
+            if pb.bone.parent is None:
+                _apply_bone_color(pb, _BONE_COLOR_ROOT)
+            elif _children:
+                _apply_bone_color(pb, _BONE_COLOR_BRANCH)
+            else:
+                _apply_bone_color(pb, _BONE_COLOR_LEAF)
 
             # Lock scale — the game format has no per-bone scale channel
             pb.lock_scale = (True, True, True)
