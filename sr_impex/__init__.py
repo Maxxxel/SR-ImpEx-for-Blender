@@ -32,7 +32,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 5, 0),
-    "version": (3, 6, 15),
+    "version": (3, 6, 16),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -404,6 +404,11 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
         description="Automatically fix quad faces that may cause issues in Battleforge",
         default=True,
     )  # type: ignore
+    export_tangents: BoolProperty(
+        name="[DEBUG] Export SKA Tangents",
+        description="Export Hermite tangents for smooth interpolation. Disable for flat/stepped curves (debugging)",
+        default=True,
+    )  # type: ignore
 
     def draw(self, context):
         layout = self.layout
@@ -418,6 +423,7 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
         layout.label(text="SKA Export Settings", icon="ANIM_DATA")
         layout.prop(self, "export_all_ska_actions")
         layout.prop(self, "set_model_name_prefix")
+        layout.prop(self, "export_tangents")
         layout.separator()
         layout.label(text="MISC Settings", icon="PREFERENCES")
         layout.prop(self, "keep_debug_collections")
@@ -448,6 +454,7 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
         keywords["export_all_ska_actions"] = self.export_all_ska_actions
         keywords["set_model_name_prefix"] = self.set_model_name_prefix
         keywords["auto_fix_quad_faces"] = self.auto_fix_quad_faces
+        keywords["export_tangents"] = self.export_tangents
 
         # update model_name by file_path
         model_name = os.path.basename(self.filepath)

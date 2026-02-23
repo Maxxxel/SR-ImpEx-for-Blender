@@ -4264,6 +4264,7 @@ def export_ska_actions_all(
     current_collection: bpy.types.Collection,
     context: bpy.types.Context,
     ska_name_map: dict[str, str] | None = None,
+    export_tangents: bool = True,
 ):
     """
     Exportiere alle SKA-Dateien, die im Animation-Blob referenziert werden.
@@ -4298,7 +4299,7 @@ def export_ska_actions_all(
         mapped_name = (ska_name_map or {}).get(export_key)
         final_base = mapped_name or base
 
-        export_ska(context, os.path.join(folder_path, final_base), act_name)
+        export_ska(context, os.path.join(folder_path, final_base), act_name, export_tangents=export_tangents)
 
 
 def save_drs(
@@ -4312,6 +4313,7 @@ def save_drs(
     export_all_ska_actions: bool,
     set_model_name_prefix: str,
     auto_fix_quad_faces: bool,
+    export_tangents: bool = True,
 ):
     """Save the DRS file."""
     global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref  # pylint: disable=global-statement
@@ -4636,7 +4638,7 @@ def save_drs(
             "AnimatedUnit",
         ]:
             # Namen & Prefix kommen jetzt ausschließlich aus dem Blob
-            export_ska_actions_all(folder_path, source_collection_copy, context, ska_name_map)
+            export_ska_actions_all(folder_path, source_collection_copy, context, ska_name_map, export_tangents=export_tangents)
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Error exporting SKA actions: {e}", "SKA Export Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
