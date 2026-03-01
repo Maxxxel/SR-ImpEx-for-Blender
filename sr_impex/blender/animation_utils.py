@@ -317,4 +317,7 @@ def import_ska_animation(
     action["original_fps"] = original_fps
     action["frame_length"] = ska_file.frame_length
     action["repeat"] = ska_file.repeat
+    action["stutter_mode"] = ska_file.stutter_mode
+    if ska_file.type == 7:
+        action["unused1"] = ska_file.unused1
     action["prefix"] = parent_folder

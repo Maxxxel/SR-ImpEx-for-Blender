@@ -216,6 +216,32 @@ def _hermite_tangent_from_sampled_series(
     return _safe_div(dv, dt)
 
 
+def _hermite_tangent_from_fcurve(
+    fcurve: bpy.types.FCurve | None, frame: float, total_frames: float, eps: float = 0.5
+) -> float:
+    """Compute Hermite tangent of an fcurve at *frame* from actual Bézier handles.
+
+    If *frame* matches a keyframe, the exact handle-based tangent is extracted.
+    Otherwise, the numerical derivative of the evaluated curve is used.
+    Returns dv/dt in normalized-time space (matching SKA file convention).
+    """
+    if fcurve is None:
+        return 0.0
+    kps = fcurve.keyframe_points
+    if not kps:
+        return 0.0
+
+    # Check if frame matches an existing keyframe (within half-frame tolerance)
+    for idx, kp in enumerate(kps):
+        if abs(kp.co.x - frame) < 0.5:
+            return invert_bezier_hermite_for_axis_any(fcurve, idx, total_frames)
+
+    # No keyframe match — compute numerical derivative
+    v_plus = fcurve.evaluate(frame + eps)
+    v_minus = fcurve.evaluate(frame - eps)
+    return (v_plus - v_minus) * total_frames / (2.0 * eps)
+
+
 def export_ska(context: bpy.types.Context, filepath: str, action_name: str, export_tangents: bool = False) -> None:
     """Export the current scene to a .ska file."""
     # Find the Animation Data by the given action name in the current context
@@ -266,8 +292,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
     bone_lib: dict[str, dict] = {}
     for b in armature.data.bones:
         bone_lib[b.name] = {
-            "loc_per_time": {"vec": [], "times": []},
-            "rot_per_time": {"quat": [], "times": []},
+            "loc_per_time": {"vec": [], "times": [], "frames": []},
+            "rot_per_time": {"quat": [], "times": [], "frames": []},
         }
 
     # Iterate over all location_fcurves and extract the location
@@ -277,8 +303,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
             bone_name = data_path.split('"')[1]
             if bone_name not in bone_lib:
                 bone_lib[bone_name] = {
-                    "loc_per_time": {"vec": [], "times": []},
-                    "rot_per_time": {"quat": [], "times": []},
+                    "loc_per_time": {"vec": [], "times": [], "frames": []},
+                    "rot_per_time": {"quat": [], "times": [], "frames": []},
                 }
 
             # Collect all unique frame times from all axes
@@ -301,6 +327,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                 assert fps > 0, "FPS is zero"
                 t = (frame / fps) / duration
                 bone_lib[bone_name]["loc_per_time"]["times"].append(t)
+                bone_lib[bone_name]["loc_per_time"]["frames"].append(frame)
 
                 for axis_index in range(3):
                     if axis_index in fcurves_by_axis:
@@ -323,8 +350,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
             # Create bone entry if it doesn't exist (in case there are only rotation keyframes)
             if bone_name not in bone_lib:
                 bone_lib[bone_name] = {
-                    "loc_per_time": {"vec": [], "times": []},
-                    "rot_per_time": {"quat": [], "times": []},
+                    "loc_per_time": {"vec": [], "times": [], "frames": []},
+                    "rot_per_time": {"quat": [], "times": [], "frames": []},
                 }
 
             # Collect all unique frame times from all axes
@@ -345,6 +372,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
             for frame in sorted_frames:
                 t = (frame / fps) / duration
                 bone_lib[bone_name]["rot_per_time"]["times"].append(t)
+                bone_lib[bone_name]["rot_per_time"]["frames"].append(frame)
 
                 for axis_index in range(4):
                     if axis_index in fcurves_by_axis:
@@ -369,11 +397,13 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
         # If location is missing, add a single keyframe at t=0 with zero location
         if len(data["loc_per_time"]["vec"]) == 0:
             data["loc_per_time"]["times"].append(0.0)
+            data["loc_per_time"]["frames"].append(0.0)
             data["loc_per_time"]["vec"].append((0.0, 0.0, 0.0))
 
         # If rotation is missing, add a single keyframe at t=0 with identity quaternion
         if len(data["rot_per_time"]["quat"]) == 0:
             data["rot_per_time"]["times"].append(0.0)
+            data["rot_per_time"]["frames"].append(0.0)
             data["rot_per_time"]["quat"].append((1.0, 0.0, 0.0, 0.0))
 
     # Create Header, Time and Keyframes
@@ -439,30 +469,14 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                     loc_keyframe = SKAKeyframe()
                     loc_keyframe.w = 1.0
                     loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
-                    # Note: zero-valued keys may also require smoothing.
-                    # Compute tangents in sampled-frame space to avoid key index mismatches.
                     can_compute_tangents = len(data["loc_per_time"]["vec"]) >= 2
 
                     if export_tangents and can_compute_tangents:
+                        frame = data["loc_per_time"]["frames"][i]
                         m_local = Vector((
-                            _hermite_tangent_from_sampled_series(
-                                data["loc_per_time"]["vec"],
-                                data["loc_per_time"]["times"],
-                                i,
-                                0,
-                            ),
-                            _hermite_tangent_from_sampled_series(
-                                data["loc_per_time"]["vec"],
-                                data["loc_per_time"]["times"],
-                                i,
-                                1,
-                            ),
-                            _hermite_tangent_from_sampled_series(
-                                data["loc_per_time"]["vec"],
-                                data["loc_per_time"]["times"],
-                                i,
-                                2,
-                            ),
+                            _hermite_tangent_from_fcurve(loc_fcs.get(0), frame, total_frames),
+                            _hermite_tangent_from_fcurve(loc_fcs.get(1), frame, total_frames),
+                            _hermite_tangent_from_fcurve(loc_fcs.get(2), frame, total_frames),
                         ))
                         m_file = bind_rot @ m_local
                         loc_keyframe.tan_x, loc_keyframe.tan_y, loc_keyframe.tan_z = m_file[:]
@@ -498,35 +512,19 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                         original_quat.z,
                     )
 
-                    # Compute tangents in sampled-frame space to avoid key index mismatches.
                     can_compute_tangents = len(data["rot_per_time"]["quat"]) >= 2
 
                     if export_tangents and can_compute_tangents:
+                        frame = data["rot_per_time"]["frames"][i]
+                        # Extract per-component Hermite tangents from actual Bézier handles.
+                        # Quaternion left-multiplication by a constant is linear in
+                        # the right operand, so using it to transform 4D derivative
+                        # vectors is mathematically correct.
                         local_q = Quaternion((
-                            _hermite_tangent_from_sampled_series(
-                                data["rot_per_time"]["quat"],
-                                data["rot_per_time"]["times"],
-                                i,
-                                0,
-                            ),
-                            _hermite_tangent_from_sampled_series(
-                                data["rot_per_time"]["quat"],
-                                data["rot_per_time"]["times"],
-                                i,
-                                1,
-                            ),
-                            _hermite_tangent_from_sampled_series(
-                                data["rot_per_time"]["quat"],
-                                data["rot_per_time"]["times"],
-                                i,
-                                2,
-                            ),
-                            _hermite_tangent_from_sampled_series(
-                                data["rot_per_time"]["quat"],
-                                data["rot_per_time"]["times"],
-                                i,
-                                3,
-                            ),
+                            _hermite_tangent_from_fcurve(rot_fcs.get(0), frame, total_frames),
+                            _hermite_tangent_from_fcurve(rot_fcs.get(1), frame, total_frames),
+                            _hermite_tangent_from_fcurve(rot_fcs.get(2), frame, total_frames),
+                            _hermite_tangent_from_fcurve(rot_fcs.get(3), frame, total_frames),
                         ))
                         file_q = bind_rot @ local_q
                         rot_keyframe.tan_w = -file_q.w
@@ -536,7 +534,6 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                             file_q.z,
                         )
                     else:
-                        # Note: zero-valued keys may also require smoothing.
                         rot_keyframe.tan_x = 0.0
                         rot_keyframe.tan_y = 0.0
                         rot_keyframe.tan_z = 0.0
@@ -552,7 +549,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
     ska_file.type = 7
     ska_file.duration = duration
     ska_file.repeat = action["repeat"] if "repeat" in action else 0
-    ska_file.stutter_mode = 2  # smooth animation
+    ska_file.stutter_mode = action.get("stutter_mode", 2)
+    ska_file.unused1 = action.get("unused1", 0)
     ska_file.zeroes = [0, 0, 0]
     ska_file.header_count = len(headers)
     ska_file.headers = headers
