@@ -216,6 +216,49 @@ def _hermite_tangent_from_sampled_series(
     return _safe_div(dv, dt)
 
 
+def _ensure_quaternion_continuity(quats: list[tuple]) -> tuple[list[tuple], list[bool]]:
+    """Ensure quaternion sign continuity across a keyframe sequence.
+
+    q and -q represent the same rotation, but Hermite interpolation between
+    quaternions of opposite sign takes the "long path" through 4D space,
+    producing non-unit-length intermediate values that the game renders as
+    scale distortion.  This flips signs so dot(q[i], q[i+1]) >= 0.
+
+    Returns (corrected_quats, flip_mask) where flip_mask[i] is True if
+    that keyframe was negated.
+    """
+    if not quats:
+        return quats, []
+
+    result = []
+    flipped = []
+
+    # Normalize and keep first quaternion as-is
+    q0 = Quaternion(quats[0])
+    if q0.magnitude > 1e-8:
+        q0.normalize()
+    result.append((q0.w, q0.x, q0.y, q0.z))
+    flipped.append(False)
+
+    for i in range(1, len(quats)):
+        prev = Quaternion(result[i - 1])
+        curr = Quaternion(quats[i])
+        if curr.magnitude > 1e-8:
+            curr.normalize()
+
+        # Dot product in 4D — negative means opposite hemispheres
+        dot = prev.w * curr.w + prev.x * curr.x + prev.y * curr.y + prev.z * curr.z
+        if dot < 0:
+            curr = Quaternion((-curr.w, -curr.x, -curr.y, -curr.z))
+            flipped.append(True)
+        else:
+            flipped.append(False)
+
+        result.append((curr.w, curr.x, curr.y, curr.z))
+
+    return result, flipped
+
+
 def _hermite_tangent_from_fcurve(
     fcurve: bpy.types.FCurve | None, frame: float, total_frames: float, eps: float = 0.5
 ) -> float:
@@ -501,8 +544,15 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
 
             try:
                 rot_fcs = rot_fcc_map.get(bone_name, {})
-                for i, quat in enumerate(data["rot_per_time"]["quat"]):
-                    stored_quat = Quaternion(quat)  # Assuming quat is in (w, x, y, z) order
+                # Fix quaternion sign continuity before export.
+                # q and -q are the same rotation, but opposite signs cause
+                # Hermite interpolation to produce non-unit quaternions
+                # which the game renders as scale distortion (squishing).
+                quats_fixed, flip_mask = _ensure_quaternion_continuity(
+                    data["rot_per_time"]["quat"]
+                )
+                for i, quat in enumerate(quats_fixed):
+                    stored_quat = Quaternion(quat)  # (w, x, y, z) order, sign-fixed
                     original_quat = bind_rot @ stored_quat
                     rot_keyframe = SKAKeyframe()
                     rot_keyframe.w, rot_keyframe.x, rot_keyframe.y, rot_keyframe.z = (
@@ -512,20 +562,22 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                         original_quat.z,
                     )
 
-                    can_compute_tangents = len(data["rot_per_time"]["quat"]) >= 2
+                    can_compute_tangents = len(quats_fixed) >= 2
 
                     if export_tangents and can_compute_tangents:
                         frame = data["rot_per_time"]["frames"][i]
-                        # Extract per-component Hermite tangents from actual Bézier handles.
-                        # Quaternion left-multiplication by a constant is linear in
-                        # the right operand, so using it to transform 4D derivative
-                        # vectors is mathematically correct.
-                        local_q = Quaternion((
-                            _hermite_tangent_from_fcurve(rot_fcs.get(0), frame, total_frames),
-                            _hermite_tangent_from_fcurve(rot_fcs.get(1), frame, total_frames),
-                            _hermite_tangent_from_fcurve(rot_fcs.get(2), frame, total_frames),
-                            _hermite_tangent_from_fcurve(rot_fcs.get(3), frame, total_frames),
-                        ))
+                        # Extract per-component Hermite tangents from Bézier handles.
+                        tan_w = _hermite_tangent_from_fcurve(rot_fcs.get(0), frame, total_frames)
+                        tan_x = _hermite_tangent_from_fcurve(rot_fcs.get(1), frame, total_frames)
+                        tan_y = _hermite_tangent_from_fcurve(rot_fcs.get(2), frame, total_frames)
+                        tan_z = _hermite_tangent_from_fcurve(rot_fcs.get(3), frame, total_frames)
+
+                        # If this keyframe was sign-flipped for continuity,
+                        # negate the tangent to match (derivative of -q is -dq/dt).
+                        if flip_mask[i]:
+                            tan_w, tan_x, tan_y, tan_z = -tan_w, -tan_x, -tan_y, -tan_z
+
+                        local_q = Quaternion((tan_w, tan_x, tan_y, tan_z))
                         file_q = bind_rot @ local_q
                         rot_keyframe.tan_w = -file_q.w
                         rot_keyframe.tan_x, rot_keyframe.tan_y, rot_keyframe.tan_z = (
