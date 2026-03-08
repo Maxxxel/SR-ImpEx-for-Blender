@@ -2,9 +2,8 @@
   <img src="/sr_impex/docs/assets/images/favicon.png" alt="Favicon">
 </p>
 
-# Battleforge Model Importer/Exporter for Blender
-
-A Blender add-on for working with BattleForge assets (`.drs`, `.bmg`, `.ska`). Import meshes, materials, collisions, skeletons, animations, tweak game metadata via custom editors, and export back to engine formats without leaving Blender.
+# BattleForge / Skylords Reborn Blender Add-on for 3D Model Import & Export
+SR-ImpEx is a Blender add-on for importing and exporting BattleForge and Skylords Reborn 3D models, animations, skeletons, materials, and collision data in .drs, .bmg, and .ska formats.
 
 ---
 
