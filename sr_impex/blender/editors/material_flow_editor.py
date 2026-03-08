@@ -294,6 +294,17 @@ def _update_flu_apply_mask_state(obj):
     except Exception:
         pass
 
+def _get_wind_height_extent(obj: bpy.types.Object) -> float:
+    """Return the local span used by the wind height falloff."""
+    if not obj or obj.type != 'MESH' or not obj.bound_box:
+        return 1.0
+
+    y_values = [corner[1] for corner in obj.bound_box]
+    min_y = min(y_values)
+    max_y = max(y_values)
+    extent = max_y - min_y
+    return extent if extent > 0 else 1.0
+
 def _update_wind_nodes_logic(drs_wind_pg):
     """
     Finds the GN modifier and updates the named nodes
@@ -310,6 +321,10 @@ def _update_wind_nodes_logic(drs_wind_pg):
     # Get the values from the property group
     wind_response = drs_wind_pg.wind_response
     wind_height = drs_wind_pg.wind_height
+
+    # Recompute the local mesh height so the wind fade range stays in sync
+    # after the user edits the mesh and then changes the wind settings.
+    max_height = _get_wind_height_extent(obj)
 
     # Find the GN modifier
     geo_mod = None
@@ -332,8 +347,19 @@ def _update_wind_nodes_logic(drs_wind_pg):
     # Find the named "Wind Height" node and set its value
     height_node = node_tree.nodes.get("Wind Height")
     if height_node and "From Min" in height_node.inputs:
-        # 'wind_height' from DRS is the minimum height for the effect
+        # 'wind_height' from DRS is the minimum height for the effect.
         height_node.inputs["From Min"].default_value = wind_height
+        if "From Max" in height_node.inputs:
+            height_node.inputs["From Max"].default_value = max_height
+        if "Value" in height_node.inputs:
+            incoming_links = list(height_node.inputs["Value"].links)
+            for link in incoming_links:
+                from_node = link.from_node
+                if from_node and from_node.type == 'SEPXYZ' and "Y" in from_node.outputs:
+                    if link.from_socket.name != "Y":
+                        node_tree.links.remove(link)
+                        node_tree.links.new(from_node.outputs["Y"], height_node.inputs["Value"])
+                    break
 
 def _update_wind_geometry_nodes(self, _ctx):
     """This is the update callback for the UI properties."""
@@ -558,14 +584,8 @@ def _create_wind_modifier(obj: bpy.types.Object) -> bool:
     map_range.data_type = 'FLOAT'
     map_range.clamp = True
 
-    min_y, max_y = 0.0, 1.0
-    if obj.bound_box:
-        y_values = [corner[1] for corner in obj.bound_box]
-        min_y = min(y_values)
-        max_y = max(y_values)
-
     map_range.inputs["From Min"].default_value = 0.0
-    map_range.inputs["From Max"].default_value = max_y - min_y if (max_y - min_y) > 0 else 1.0
+    map_range.inputs["From Max"].default_value = _get_wind_height_extent(obj)
     map_range.inputs["To Min"].default_value = 0.0
     map_range.inputs["To Max"].default_value = 1.0
     links.new(sep_y.outputs["Y"], map_range.inputs["Value"])
