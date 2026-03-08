@@ -1,7 +1,7 @@
 # sr_impex/material_flow_editor_blender.py
 import bpy
 from bpy.props import IntProperty, BoolProperty, FloatVectorProperty, PointerProperty, FloatProperty
-from bpy.types import Panel, PropertyGroup
+from bpy.types import Panel, PropertyGroup, Operator
 
 # Same labels you used in the PyQt material editor (so users see familiar names)
 KNOWN_MATERIAL_FLAGS = {
@@ -480,6 +480,145 @@ def _active_mesh(ctx) -> bpy.types.Object | None:
         return o
     return None
 
+def _find_wind_modifier(obj: bpy.types.Object) -> bpy.types.Modifier | None:
+    if not obj or obj.type != 'MESH':
+        return None
+    for mod in obj.modifiers:
+        if mod.type == 'NODES' and "WindEffect" in mod.name:
+            return mod
+    return None
+
+def _create_wind_modifier(obj: bpy.types.Object) -> bool:
+    """Create the WindEffect geometry-nodes modifier on a mesh if it does not exist."""
+    if not obj or obj.type != 'MESH':
+        return False
+    if _find_wind_modifier(obj):
+        return False
+
+    modifier = obj.modifiers.new(name="WindEffect", type="NODES")
+    node_group = bpy.data.node_groups.new("WindEffectTree", "GeometryNodeTree")
+
+    if bpy.app.version[0] >= 4:
+        node_group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+        node_group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    else:
+        node_group.inputs.new("NodeSocketGeometry", "Geometry")
+        node_group.outputs.new("NodeSocketGeometry", "Geometry")
+
+    modifier.node_group = node_group
+    links = node_group.links
+
+    inp = node_group.nodes.new("NodeGroupInput")
+    inp.location = (0, 0)
+
+    outp = node_group.nodes.new("NodeGroupOutput")
+    outp.location = (1350, -300)
+
+    scene_time = node_group.nodes.new("GeometryNodeInputSceneTime")
+    scene_time.location = (0, -300)
+
+    mult_node = node_group.nodes.new("ShaderNodeMath")
+    mult_node.name = "Wind Response"
+    mult_node.label = "Wind Response"
+    mult_node.location = (150, -300)
+    mult_node.operation = "MULTIPLY"
+    mult_node.inputs[1].default_value = 0.0
+    links.new(scene_time.outputs["Seconds"], mult_node.inputs[0])
+
+    noise = node_group.nodes.new("ShaderNodeTexNoise")
+    noise.location = (300, -300)
+    noise.noise_dimensions = '1D'
+    links.new(mult_node.outputs["Value"], noise.inputs["W"])
+
+    subtract = node_group.nodes.new("ShaderNodeVectorMath")
+    subtract.location = (450, -300)
+    subtract.operation = "SUBTRACT"
+    subtract.inputs[1].default_value = (0.5, 0.5, 0.5)
+    links.new(noise.outputs["Color"], subtract.inputs[0])
+
+    sep_xyz = node_group.nodes.new("ShaderNodeSeparateXYZ")
+    sep_xyz.location = (600, -300)
+    links.new(subtract.outputs["Vector"], sep_xyz.inputs["Vector"])
+
+    comb_xyz = node_group.nodes.new("ShaderNodeCombineXYZ")
+    comb_xyz.location = (750, -300)
+    links.new(sep_xyz.outputs["X"], comb_xyz.inputs["X"])
+
+    pos_node = node_group.nodes.new("GeometryNodeInputPosition")
+    pos_node.location = (450, 0)
+
+    sep_y = node_group.nodes.new("ShaderNodeSeparateXYZ")
+    sep_y.location = (600, 0)
+    links.new(pos_node.outputs["Position"], sep_y.inputs["Vector"])
+
+    map_range = node_group.nodes.new("ShaderNodeMapRange")
+    map_range.name = "Wind Height"
+    map_range.label = "Wind Height"
+    map_range.location = (750, 0)
+    map_range.data_type = 'FLOAT'
+    map_range.clamp = True
+
+    min_y, max_y = 0.0, 1.0
+    if obj.bound_box:
+        y_values = [corner[1] for corner in obj.bound_box]
+        min_y = min(y_values)
+        max_y = max(y_values)
+
+    map_range.inputs["From Min"].default_value = 0.0
+    map_range.inputs["From Max"].default_value = max_y - min_y if (max_y - min_y) > 0 else 1.0
+    map_range.inputs["To Min"].default_value = 0.0
+    map_range.inputs["To Max"].default_value = 1.0
+    links.new(sep_y.outputs["Y"], map_range.inputs["Value"])
+
+    scale_node = node_group.nodes.new("ShaderNodeVectorMath")
+    scale_node.location = (900, -300)
+    scale_node.operation = "SCALE"
+    links.new(comb_xyz.outputs["Vector"], scale_node.inputs[0])
+    links.new(map_range.outputs["Result"], scale_node.inputs['Scale'])
+
+    strength_scale = node_group.nodes.new("ShaderNodeVectorMath")
+    strength_scale.location = (1050, -300)
+    strength_scale.operation = "SCALE"
+    strength_scale.inputs[1].default_value = (1.0, 1.0, 1.0)
+    links.new(scale_node.outputs[0], strength_scale.inputs[0])
+
+    set_pos = node_group.nodes.new("GeometryNodeSetPosition")
+    set_pos.location = (1200, -300)
+    links.new(inp.outputs[0], set_pos.inputs["Geometry"])
+    links.new(strength_scale.outputs[0], set_pos.inputs["Offset"])
+    links.new(set_pos.outputs["Geometry"], outp.inputs[0])
+
+    return True
+
+
+class DRS_OT_AddWindModifier(Operator):
+    bl_idname = "drs.add_wind_modifier"
+    bl_label = "Add Wind Modifier"
+    bl_description = "Adds the WindEffect Geometry Nodes modifier to the active DRS mesh"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        o = _active_mesh(context)
+        return o is not None and _find_wind_modifier(o) is None
+
+    def execute(self, context):
+        o = _active_mesh(context)
+        if o is None:
+            self.report({'WARNING'}, "Select a mesh inside 'Meshes_Collection' or 'GroundDecal_Collection'.")
+            return {'CANCELLED'}
+
+        created = _create_wind_modifier(o)
+        if not created:
+            self.report({'INFO'}, "Wind modifier already exists on the selected mesh.")
+            return {'CANCELLED'}
+
+        if hasattr(o, "drs_wind") and o.drs_wind:
+            _update_wind_nodes(o.drs_wind)
+
+        self.report({'INFO'}, "Wind modifier added.")
+        return {'FINISHED'}
+
 # --- Panels -------------------------------------------------------------------
 class DRS_PT_Material(Panel):
     bl_label = "Material"
@@ -579,16 +718,25 @@ class DRS_PT_Wind(Panel):
             return
 
         w = o.drs_wind
+        has_wind_modifier = _find_wind_modifier(o) is not None
+
+        row = layout.row()
+        row.enabled = not has_wind_modifier
+        row.operator("drs.add_wind_modifier", icon="GEOMETRY_NODES")
+
         layout.use_property_split = True
         layout.use_property_decorate = False
-        layout.prop(w, "wind_response")
-        layout.prop(w, "wind_height")
+        value_col = layout.column()
+        value_col.enabled = has_wind_modifier
+        value_col.prop(w, "wind_response")
+        value_col.prop(w, "wind_height")
 
 # --- Register -----------------------------------------------------------------
 classes = (
     DRS_MaterialFlagsPG,
     DRS_FlowPG,
     DRS_WindPG,
+    DRS_OT_AddWindModifier,
     DRS_PT_Material,
     DRS_PT_MaterialFlags,
     DRS_PT_Flow,
