@@ -2,70 +2,74 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/glossary/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/animationset/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/animationtimings/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cdrwlocatorlist/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cdspjointmap/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cdspmeshfile/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cgeomesh/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cgeoobbtree/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cgeoprimitivecontainer/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/collisionshape/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/common/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cskskeleton/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cskskininfo/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/drwresourcemeta/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/effectset/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/header/</loc>
-         <lastmod>2025-10-28</lastmod>
+         <lastmod>2026-03-08</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/object_creation_guide/</loc>
+         <lastmod>2026-03-08</lastmod>
     </url>
 </urlset>
