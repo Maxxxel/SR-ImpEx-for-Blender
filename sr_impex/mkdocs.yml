@@ -43,6 +43,8 @@ theme:
 
 nav:
   - Overview: index.md
+  - Plugin Guides:
+      - Object Creation Guide: plugin/object_creation_guide.md
   - DRS Structures:
       - Header: drs/header.md
       - Common: drs/common.md
