@@ -34,8 +34,8 @@ The locator controls work as follows:
 
 - `Add/Remove`: add or remove locators
 - `Sync from Scene`: refresh the UI after moving locators in the 3D view
-- `Type`: see advanced locators guide for more details
-- `File`: see advanced locators guide for more details
+- `Type`: see the [Advanced Locators Guide](advanced_locators_guide.md) for more details
+- `File`: see the [Advanced Locators Guide](advanced_locators_guide.md) for more details
 - `Parent`: binds a locator to a bone so it moves with the bone; if left empty, the locator stays relative to the model
 - `Update Parent and remove transformations`: use this after binding a locator to a bone and moving it in space to save the result correctly
 
@@ -108,7 +108,7 @@ Often this ends up being the same position as the `ProjectileSpawn` locator.
 
 ![Marker position example](https://i.gyazo.com/760291a354e81c46101851736776d15f.png)
 
-For more animation types such as spell casting or ranged attacks, check the advanced abilities guide.
+For more animation types such as spell casting or ranged attacks, check the [Advanced Abilities Guide](advanced_abilities_guide.md).
 
 ## 5. Configure Basic Unit Settings
 
@@ -120,7 +120,7 @@ Some of these values still need further investigation.
 
 ## 6. Add Audio and Effects
 
-`EffectSet` is used for sounds and effects. There is a separate tutorial for the full system.
+`EffectSet` is used for sounds and effects. There is a separate [Advanced Effects Guide](advanced_effects_guide.md) for the full system.
 
 For the basic workflow, it is enough to look at audio for `Attack` and `Spawn`.
 
@@ -128,7 +128,7 @@ For the basic workflow, it is enough to look at audio for `Attack` and `Spawn`.
 
 The time value uses a normalized range. This lets you place sounds to match important animation moments. For example, a hit sound can be placed at the same normalized time as the hit marker.
 
-For the remaining values, refer to the advanced effects tutorial.
+For the remaining values, refer to the [Advanced Effects Guide](advanced_effects_guide.md).
 
 ## 7. Export the Unit
 

@@ -76,7 +76,7 @@ You can set up:
 - Refraction
 - Fluid map
 
-For more advanced setups, refer to the advanced shading tutorial.
+For more advanced setups, refer to the [Advanced Shading Guide](advanced_shading_guide.md).
 
 ![Texture setup in the shader editor](https://i.gyazo.com/4631e2b1bec4bcf3521a9698a083b32a.png)
 
