@@ -12,13 +12,13 @@
         <meta name="author" content="Maxxxel">
       
       
-        <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/cdrwlocatorlist/">
+        <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/unit_creation_buide/">
       
       
-        <link rel="prev" href="../cdspjointmap/">
+        <link rel="prev" href="../object_creation_guide/">
       
       
-        <link rel="next" href="../animationset/">
+        <link rel="next" href="../../drs/header/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -26,7 +26,7 @@
     
     
       
-        <title>CDrwLocatorList - Battleforge Blender Plugin & DRS Format Documentation</title>
+        <title>Unit Creation Guide - Battleforge Blender Plugin & DRS Format Documentation</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cdrwlocatorlist" class="md-skip">
+        <a href="#unit-creation-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -115,7 +115,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CDrwLocatorList
+              Unit Creation Guide
             
           </span>
         </div>
@@ -283,8 +283,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -301,13 +303,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -323,7 +323,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Plugin Guides
@@ -337,7 +337,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../plugin/object_creation_guide/" class="md-nav__link">
+      <a href="../object_creation_guide/" class="md-nav__link">
         
   
   
@@ -357,10 +357,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../plugin/unit_creation_buide/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Unit Creation Guide
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -371,6 +393,107 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Before You Start
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-set-up-the-required-locators" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Set Up the Required Locators
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-understand-units-vs-animated-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Understand Units vs. Animated Objects
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-add-animation-variants" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Add Animation Variants
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-add-markers-for-important-animations" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Add Markers for Important Animations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-configure-basic-unit-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Configure Basic Unit Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-add-audio-and-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Add Audio and Effects
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-export-the-unit" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Export the Unit
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-final-export-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Final Export Result
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -441,7 +564,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../header/" class="md-nav__link">
+      <a href="../../drs/header/" class="md-nav__link">
         
   
   
@@ -464,7 +587,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../common/" class="md-nav__link">
+      <a href="../../drs/common/" class="md-nav__link">
         
   
   
@@ -551,7 +674,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cgeomesh/" class="md-nav__link">
+      <a href="../../drs/cgeomesh/" class="md-nav__link">
         
   
   
@@ -574,7 +697,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cgeoprimitivecontainer/" class="md-nav__link">
+      <a href="../../drs/cgeoprimitivecontainer/" class="md-nav__link">
         
   
   
@@ -597,7 +720,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cgeoobbtree/" class="md-nav__link">
+      <a href="../../drs/cgeoobbtree/" class="md-nav__link">
         
   
   
@@ -620,7 +743,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../collisionshape/" class="md-nav__link">
+      <a href="../../drs/collisionshape/" class="md-nav__link">
         
   
   
@@ -643,7 +766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cdspmeshfile/" class="md-nav__link">
+      <a href="../../drs/cdspmeshfile/" class="md-nav__link">
         
   
   
@@ -670,10 +793,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -700,11 +821,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -720,7 +843,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Animation & Effects
@@ -734,7 +857,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cskskininfo/" class="md-nav__link">
+      <a href="../../drs/cskskininfo/" class="md-nav__link">
         
   
   
@@ -757,7 +880,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cskskeleton/" class="md-nav__link">
+      <a href="../../drs/cskskeleton/" class="md-nav__link">
         
   
   
@@ -780,7 +903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cdspjointmap/" class="md-nav__link">
+      <a href="../../drs/cdspjointmap/" class="md-nav__link">
         
   
   
@@ -800,32 +923,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    CDrwLocatorList
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../drs/cdrwlocatorlist/" class="md-nav__link">
         
   
   
@@ -836,89 +937,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      Overview
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      Structure
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#slocator" class="md-nav__link">
-    <span class="md-ellipsis">
-      SLocator
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#authoring-in-game-behavior" class="md-nav__link">
-    <span class="md-ellipsis">
-      Authoring &amp; In-Game Behavior
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#validation-rules" class="md-nav__link">
-    <span class="md-ellipsis">
-      Validation Rules
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cross-references" class="md-nav__link">
-    <span class="md-ellipsis">
-      Cross-References
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#nice-to-know" class="md-nav__link">
-    <span class="md-ellipsis">
-      Nice to know
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -931,7 +949,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../animationset/" class="md-nav__link">
+      <a href="../../drs/animationset/" class="md-nav__link">
         
   
   
@@ -954,7 +972,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../animationtimings/" class="md-nav__link">
+      <a href="../../drs/animationtimings/" class="md-nav__link">
         
   
   
@@ -977,7 +995,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../effectset/" class="md-nav__link">
+      <a href="../../drs/effectset/" class="md-nav__link">
         
   
   
@@ -1056,7 +1074,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../drwresourcemeta/" class="md-nav__link">
+      <a href="../../drs/drwresourcemeta/" class="md-nav__link">
         
   
   
@@ -1177,164 +1195,115 @@
   
 
 
-<h1 id="cdrwlocatorlist">CDrwLocatorList<a id="cdrwlocatorlist"></a><a class="headerlink" href="#cdrwlocatorlist" title="Permanent link">&para;</a></h1>
-<p>Stores a list of <strong>locators</strong>, which are points of interest on a model used for attaching effects, modules, or defining gameplay-relevant positions (like health bars or projectile origins). 📍</p>
-<hr />
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<h1 id="unit-creation-guide">Unit Creation Guide<a class="headerlink" href="#unit-creation-guide" title="Permanent link">&para;</a></h1>
+<p>This guide walks through the basic setup for creating a unit or animated object with the SR-ImpEx Blender plugin.</p>
+<p>Before starting the unit-specific setup, first complete the shared base scene and mesh setup from the <a href="../object_creation_guide/">Object Creation Guide</a>. After that, continue here with the unit-specific steps.</p>
+<h2 id="before-you-start">Before You Start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
+<p>A unit or animated object needs:</p>
 <ul>
-<li><strong>Purpose:</strong> Defines attachment points and functional locations on animated units or buildings.</li>
-<li><strong>Where it appears:</strong> Primarily used in <code>AnimatedUnit</code> models (<code>WriteOrder</code>). Static and simpler animated objects usually don't have this block.</li>
-<li><strong>Engine impact:</strong> Used at runtime to spawn effects (<code>.fxb</code> files), attach other models (like turrets or destructible parts via <code>.module</code> files), position UI elements (health bars), and define interaction points (hit locations, projectile spawns).</li>
+<li>an armature in Blender</li>
+<li>a skeleton</li>
+<li>a skin with bone weights</li>
 </ul>
-<hr />
-<h2 id="structure">Structure<a id="cdrwlocatorlist-struct"></a><a class="headerlink" href="#structure" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">Field</th>
-<th style="text-align: left;">Type</th>
-<th style="text-align: left;">Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><code>magic</code></td>
-<td style="text-align: left;"><code>int32</code></td>
-<td style="text-align: left;">Internal block identifier, should be <code>281702437</code>.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>version</code></td>
-<td style="text-align: left;"><code>int32</code></td>
-<td style="text-align: left;">Format version (e.g., <code>5</code>). Determines if <code>uk_int</code> in <code>SLocator</code> exists.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>length</code></td>
-<td style="text-align: left;"><code>int32</code></td>
-<td style="text-align: left;">Number of locators in the list.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>slocators</code></td>
-<td style="text-align: left;"><code>List[SLocator]</code></td>
-<td style="text-align: left;">The actual list of locator entries. See <a href="#slocator">SLocator</a>.</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="slocator">SLocator<a id="slocator"></a><a class="headerlink" href="#slocator" title="Permanent link">&para;</a></h2>
-<p>Defines a single locator point.</p>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">Field</th>
-<th style="text-align: left;">Type</th>
-<th style="text-align: left;">Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><code>cmat_coordinate_system</code></td>
-<td style="text-align: left;"><code>CMatCoordinateSystem</code></td>
-<td style="text-align: left;">Local transformation (rotation + position) relative to its parent (world or bone). See <a href="../common/#cmatcoordinatesystem">CMatCoordinateSystem</a>.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>class_id</code></td>
-<td style="text-align: left;"><code>int32</code></td>
-<td style="text-align: left;">Type identifier determining the locator's function (e.g., <code>0</code> for HealthBar, <code>3</code> for Turret, <code>8</code> for DynamicPerm effects). See <a href="../../glossary/#locatorclass">LocatorClass</a> dictionary for full list.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>bone_id</code></td>
-<td style="text-align: left;"><code>int32</code></td>
-<td style="text-align: left;">Identifier of the bone this locator is attached to (from <code>CSkSkeleton</code>). If <code>-1</code>, it's attached to the object's root (world space relative to the model origin).</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>file_name_length</code></td>
-<td style="text-align: left;"><code>int32</code></td>
-<td style="text-align: left;">Length of the <code>file_name</code> string.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>file_name</code></td>
-<td style="text-align: left;"><code>string</code></td>
-<td style="text-align: left;">Associated file path (e.g., an effect <code>.fxb</code> or module <code>.module</code>/<code>.bms</code>/<code>.drs</code>) used by this locator, if applicable. Can be empty.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>uk_int</code></td>
-<td style="text-align: left;"><code>int32</code></td>
-<td style="text-align: left;">Unknown integer, present only if <code>CDrwLocatorList.version</code> is <code>5</code> or higher. Often <code>-1</code>.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>class_type</code></td>
-<td style="text-align: left;"><code>string</code> (derived)</td>
-<td style="text-align: left;">Human-readable type derived from <code>class_id</code> during import/export (e.g., "HealthBar", "Turret"). Not stored in the file.</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="authoring-in-game-behavior">Authoring &amp; In-Game Behavior<a class="headerlink" href="#authoring-in-game-behavior" title="Permanent link">&para;</a></h2>
+<p>Bone weights are stored through vertex groups, and each vertex can use up to <code>4</code> bone influences.</p>
+<p><img alt="Armature, skeleton, and skin overview" src="https://i.gyazo.com/883689b7da73bc1a30636faf6d42d121.png" /></p>
+<h2 id="1-set-up-the-required-locators">1. Set Up the Required Locators<a class="headerlink" href="#1-set-up-the-required-locators" title="Permanent link">&para;</a></h2>
+<p>A unit also uses locators.</p>
+<p><img alt="Locator overview" src="https://i.gyazo.com/5c17e19a5660a258d9ae6a575e3e11ff.png" /></p>
+<p>At minimum, a unit needs the following three locators, which can be added through the <code>CDrwLocatorList Editor</code> in the <code>DRS Editor</code> side panel:</p>
 <ul>
-<li><strong>Blender Workflow:</strong><ul>
-<li><strong>Representation:</strong> Locators are typically represented as <strong>Empty</strong> objects in Blender. Their name often reflects their type (e.g., <code>Locator_HealthBar</code>, <code>Locator_Turret</code>).</li>
-<li><strong>Locator Editor:</strong> The addon provides a dedicated <strong>Locator Editor</strong> UI. This editor stores the locator data (type, bone attachment, file name) in a <strong>JSON blob</strong> (<code>BLOB_KEY</code>) attached to the main model collection. This blob is the <strong>authoritative source</strong> during export.</li>
-<li><strong>Export (<code>create_cdrw_locator_list</code>):</strong> The exporter reads the JSON blob from the collection. If the blob is missing or invalid, it tries to reconstruct locators by scanning for Empty objects named <code>Locator_*</code> or objects with a <code>UID_KEY</code> custom property.</li>
-<li><strong>Transformation:</strong><ul>
-<li>If a locator is parented to a <strong>Bone</strong> in Blender (<code>parent_type == 'BONE'</code>), its local transform relative to that bone is stored. <code>SLocator.bone_id</code> is set to the bone's identifier from <code>CSkSkeleton</code>.</li>
-<li>If not parented to a bone, its <strong>world space transform</strong> (relative to the <code>GameOrientation</code> empty, if present, otherwise relative to the Blender world origin) is stored, and <code>SLocator.bone_id</code> is set to <code>-1</code>.</li>
+<li><code>HealthBar</code>: position of the in-game health bar, usually not bound to any bone</li>
+<li><code>Hit</code>: used for enemy-to-unit hit calculations, usually bound to a bone</li>
+<li><code>ProjectileSpawn</code>: used for melee hit origin or as the spawn point for projectiles and effects, usually bound to a bone</li>
 </ul>
-</li>
-<li><strong>Import (<code>process_slocator_import</code>):</strong> The importer creates Blender Empties (or loads linked models for types like <code>DestructiblePart</code>, <code>Wheel</code>) based on the <code>SLocator</code> data. If <code>bone_id</code> is valid, it parents the Empty to the corresponding bone in the Armature. Otherwise, it places the Empty in world space. A unique ID (<code>UID_KEY</code>) is stored on the created objects to link them back to the editor data.</li>
-</ul>
-</li>
-<li><strong>In-Game Function:</strong> The <code>class_id</code> tells the game engine what to do at the locator's position and orientation. For example, attach a turret model, spawn a projectile effect, or place the unit's health bar offset.</li>
-</ul>
-<hr />
-<h2 id="validation-rules">Validation Rules<a class="headerlink" href="#validation-rules" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">Rule</th>
-<th style="text-align: left;">Why</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><code>magic == 281702437</code></td>
-<td style="text-align: left;">Confirms correct block type.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>version</code> is supported (e.g., 5)</td>
-<td style="text-align: left;">Ensures correct reading of <code>SLocator</code> fields like <code>uk_int</code>.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>length == len(slocators)</code></td>
-<td style="text-align: left;">Internal consistency.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>bone_id</code> is valid (<code>-1</code> or exists in <code>CSkSkeleton</code>)</td>
-<td style="text-align: left;">Prevents attaching locators to non-existent bones.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>file_name_length</code> matches actual string length</td>
-<td style="text-align: left;">Prevents read errors.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>cmat_coordinate_system</code> is valid (orthonormal rotation)</td>
-<td style="text-align: left;">Ensures correct orientation in-game.</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="cross-references">Cross-References<a class="headerlink" href="#cross-references" title="Permanent link">&para;</a></h2>
+<p><img alt="Minimum locator setup" src="https://i.gyazo.com/24af20064e578abefbfbf9a788a30873.png" /></p>
+<p>The locator controls work as follows:</p>
 <ul>
-<li><strong>Header / Nodes:</strong> Referenced via <code>NodeInformation</code> in the DRS header. See <a href="../header/#nodeinformation">Header</a>.</li>
-<li><strong>Skeleton:</strong> Uses <code>bone_id</code> values which are identifiers defined in <code>CSkSkeleton</code>. See <a href="../cskskeleton/">CSkSkeleton</a>.</li>
-<li><strong>Common Structures:</strong> Uses <code>CMatCoordinateSystem</code>. See <a href="../common/#cmatcoordinatesystem">Common Structures</a>.</li>
-<li><strong>Locator Classes:</strong> See <a href="../../glossary/#locatorclass">LocatorClass</a> dictionary for full list. </li>
-<li><strong>Locator Editor:</strong> Interacts with the JSON blob managed by the Locator Editor panel.</li>
+<li><code>Add/Remove</code>: add or remove locators</li>
+<li><code>Sync from Scene</code>: refresh the UI after moving locators in the 3D view</li>
+<li><code>Type</code>: see advanced locators guide for more details</li>
+<li><code>File</code>: see advanced locators guide for more details</li>
+<li><code>Parent</code>: binds a locator to a bone so it moves with the bone; if left empty, the locator stays relative to the model</li>
+<li><code>Update Parent and remove transformations</code>: use this after binding a locator to a bone and moving it in space to save the result correctly</li>
 </ul>
-<hr />
-<h2 id="nice-to-know">Nice to know<a class="headerlink" href="#nice-to-know" title="Permanent link">&para;</a></h2>
+<h2 id="2-understand-units-vs-animated-objects">2. Understand Units vs. Animated Objects<a class="headerlink" href="#2-understand-units-vs-animated-objects" title="Permanent link">&para;</a></h2>
+<p>A unit usually has multiple animations. An animated object usually only has one animation, typically an idle animation with one or more variants.</p>
+<p>The minimum useful animation setup for a unit usually includes:</p>
 <ul>
-<li><strong>Magic Value:</strong> <code>CDrwLocatorList = 735146985</code> (0x2BD8B3E9). See <a href="../../glossary/#magicvalues">Glossary → MagicValues</a>.</li>
-<li><strong>Editor is Key:</strong> For reliable export, always use the Locator Editor UI panel to manage locators rather than relying solely on Blender object naming and parenting, as the JSON blob takes precedence.</li>
+<li><code>Idle</code></li>
+<li><code>Walk</code></li>
+<li><code>Run</code></li>
+<li><code>Spawn</code></li>
+<li><code>HitFromBack</code></li>
+<li><code>Cheer/Emote</code></li>
+<li><code>HitFromFront</code></li>
+<li><code>Die</code></li>
+<li><code>HitFromLeft</code></li>
+<li><code>HitFromRight</code></li>
+<li><code>PushBackStandUp (Loop)</code></li>
+</ul>
+<p>Loop animations have three parts: start, loop, and end. The loop section should be the repeated part. A good example is a unit being pushed back continuously by wind and staying inside the same repeated motion.</p>
+<p>There are many more animation types available. For the full list, check the <code>AnimationSet Editor</code>.</p>
+<p><img alt="AnimationSet Editor" src="https://i.gyazo.com/973918d3bf7244dfcfdc5057d3266531.png" /></p>
+<h2 id="3-add-animation-variants">3. Add Animation Variants<a class="headerlink" href="#3-add-animation-variants" title="Permanent link">&para;</a></h2>
+<p>You can create multiple variants for the same animation and assign a weight to each one.</p>
+<p>For example, if you want two idle animations and one should play most of the time, you can assign weights like this:</p>
+<ul>
+<li>default idle: <code>80</code></li>
+<li>special idle: <code>20</code></li>
+</ul>
+<p>The weights should add up to <code>100</code>.</p>
+<p>Other important settings:</p>
+<ul>
+<li><code>Allows IK</code>: usually left enabled</li>
+<li><code>Force no blend</code>: usually left disabled</li>
+</ul>
+<p>For a melee unit, the minimum additional animation requirement is an <code>Attack</code> animation.</p>
+<h2 id="4-add-markers-for-important-animations">4. Add Markers for Important Animations<a class="headerlink" href="#4-add-markers-for-important-animations" title="Permanent link">&para;</a></h2>
+<p>Some animations, especially <code>Spawn</code> and <code>Attack</code>, need a marker.</p>
+<p>The marker determines when the important gameplay event happens:</p>
+<ul>
+<li>for <code>Spawn</code>, it marks when the unit becomes controllable</li>
+<li>for <code>Attack</code>, it marks when the hit should begin calculating</li>
+</ul>
+<p>Everything after that point is usually just recovery, follow-through, or visual polish.</p>
+<p>For example, if a spawn animation lasts <code>5</code> seconds, you probably do not want the player to wait the full <code>5</code> seconds before the unit can be controlled. In that case, the marker could be set to something like <code>0.6</code>.</p>
+<p><img alt="Marker timing example" src="https://i.gyazo.com/4d53b0c5410240c9561d1979442662d0.png" /></p>
+<p>Useful marker tools:</p>
+<ul>
+<li><code>Display Marker</code>: previews the animation at the selected marker time</li>
+<li><code>Play Marker</code>: plays the animation until the marker time so you can fine-tune the timing</li>
+<li><code>XYZ</code>: sets the exact 3D marker position</li>
+</ul>
+<p>The marker position is where hits, effects, or other gameplay events begin. Good positions are the tip of a sword, the middle of an axe blade, or the hand itself.</p>
+<p>Often this ends up being the same position as the <code>ProjectileSpawn</code> locator.</p>
+<p><img alt="Marker position example" src="https://i.gyazo.com/760291a354e81c46101851736776d15f.png" /></p>
+<p>For more animation types such as spell casting or ranged attacks, check the advanced abilities guide.</p>
+<h2 id="5-configure-basic-unit-settings">5. Configure Basic Unit Settings<a class="headerlink" href="#5-configure-basic-unit-settings" title="Permanent link">&para;</a></h2>
+<p>In the upper section of the unit editor, you can configure basic values such as walk speed, run speed, and additional settings for flying units.</p>
+<p>Some of these values still need further investigation.</p>
+<p><img alt="Basic unit settings" src="https://i.gyazo.com/2d4d14f733d4b6047f402bdb4e0a6c2d.png" /></p>
+<h2 id="6-add-audio-and-effects">6. Add Audio and Effects<a class="headerlink" href="#6-add-audio-and-effects" title="Permanent link">&para;</a></h2>
+<p><code>EffectSet</code> is used for sounds and effects. There is a separate tutorial for the full system.</p>
+<p>For the basic workflow, it is enough to look at audio for <code>Attack</code> and <code>Spawn</code>.</p>
+<p><img alt="EffectSet audio example" src="https://i.gyazo.com/e66241d71fc57b9eae110f21753d8c31.png" /></p>
+<p>The time value uses a normalized range. This lets you place sounds to match important animation moments. For example, a hit sound can be placed at the same normalized time as the hit marker.</p>
+<p>For the remaining values, refer to the advanced effects tutorial.</p>
+<h2 id="7-export-the-unit">7. Export the Unit<a class="headerlink" href="#7-export-the-unit" title="Permanent link">&para;</a></h2>
+<p>For export, choose either <code>Animated Object</code> or <code>Animated Unit</code>.</p>
+<p>Recommended export settings:</p>
+<ul>
+<li>enable <code>Export all SKA Actions</code></li>
+<li>enable tangent export for smooth animations</li>
+<li>use the default naming convention, which is usually <code>model name prefix</code></li>
+</ul>
+<p><img alt="Animated export settings" src="https://i.gyazo.com/0c0baa604baf8b688dba0920f478c1af.png" /></p>
+<h2 id="8-final-export-result">8. Final Export Result<a class="headerlink" href="#8-final-export-result" title="Permanent link">&para;</a></h2>
+<p>After exporting, you will find the following files in your export folder:</p>
+<ul>
+<li><code>.drs</code></li>
+<li><code>.dds</code></li>
+<li><code>.ska</code></li>
 </ul>
 
 
@@ -1358,7 +1327,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 29, 2025 07:38:49 UTC">October 29, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 10, 2026 15:49:29 UTC">March 10, 2026</span>
   </span>
 
     
@@ -1368,7 +1337,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 29, 2025 07:38:49 UTC">October 29, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 10, 2026 15:49:29 UTC">March 10, 2026</span>
   </span>
 
     
