@@ -2440,7 +2440,7 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
             bm_tmp = bmesh.new()
             bm_tmp.from_mesh(obj.data)
             # Apply object->world transform (includes parents like GameOrientation)
-            bm_tmp.transform(obj.matrix_world)
+            # bm_tmp.transform(obj.matrix_world)
 
             # Pipe into the output BMesh
             tmp_me = bpy.data.meshes.new(name="__tmp__")
