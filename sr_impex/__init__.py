@@ -32,7 +32,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 5, 0),
-    "version": (3, 6, 21),
+    "version": (3, 7, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -197,6 +197,11 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
     import_animation: BoolProperty(
         name="Import Animation", description="Import animation", default=True
     )  # type: ignore
+    import_all_supported_animations: BoolProperty(
+        name="Import all supported Animations",
+        description="Import all supported animation files in the same folder as the model",
+        default=False,
+    )  # type: ignore
     smooth_animation: BoolProperty(
         name="Import Animation Smoothing",
         description="Import animation smoothing",
@@ -260,6 +265,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         # Create an Animation Section
         layout.label(text="Animation Settings", icon="ANIM_DATA")
         layout.prop(self, "import_animation")
+        layout.prop(self, "import_all_supported_animations")
         layout.prop(self, "smooth_animation")
         layout.prop(self, "import_ik_atlas")
         layout.prop(self, "use_control_rig")
@@ -296,6 +302,9 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         keywords["import_collision_shape"] = self.import_collision_shape
         keywords["import_s0_collision_shapes"] = self.import_s0_collision_shapes
         keywords["import_animation"] = self.import_animation
+        keywords["import_all_supported_animations"] = (
+            self.import_all_supported_animations
+        )
         keywords["smooth_animation"] = self.smooth_animation
         keywords["import_ik_atlas"] = self.import_ik_atlas
         keywords["use_control_rig"] = self.use_control_rig
@@ -324,6 +333,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
             print_profiling_report()
             return {"FINISHED"}
         elif self.filepath.endswith(".bmg"):
+            keywords.pop("import_all_supported_animations")
             keywords.pop("import_modules")
             load_bmg(context, **keywords)
             print_profiling_report()
