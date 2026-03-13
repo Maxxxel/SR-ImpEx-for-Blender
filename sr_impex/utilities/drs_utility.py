@@ -2282,6 +2282,7 @@ def load_drs(
     apply_transform=True,
     import_collision_shape=False,
     import_animation=True,
+    import_all_supported_animations=False,
     smooth_animation=True,
     import_ik_atlas=False,
     use_control_rig=False,
@@ -2327,9 +2328,13 @@ def load_drs(
         and armature_object is not None
         and import_animation
     ):
+        referenced_animation_files: set[str] = set()
         with ensure_mode("POSE"):
             for animation_key in drs_file.animation_set.mode_animation_keys:
                 for variant in animation_key.animation_set_variants:
+                    variant_dir = os.path.dirname(variant.file)
+                    if variant_dir in ("", "."):
+                        referenced_animation_files.add(variant.file.lower())
                     # Ensure file exists
                     if not os.path.exists(os.path.join(dir_name, variant.file)):
                         logger.log(
@@ -2348,6 +2353,57 @@ def load_drs(
                         smooth_animation,
                         filepath,
                         map_collection=source_collection,
+                    )
+
+            if import_all_supported_animations:
+                additional_loaded: list[str] = []
+                try:
+                    ska_candidates = [
+                        file_name
+                        for file_name in os.listdir(dir_name)
+                        if file_name.lower().endswith(".ska")
+                    ]
+                except OSError as exc:
+                    logger.log(
+                        f"Failed to read animation folder {dir_name}: {exc}",
+                        "Warning",
+                        "WARNING",
+                    )
+                    ska_candidates = []
+
+                for file_name in sorted(ska_candidates, key=str.lower):
+                    if file_name.lower() in referenced_animation_files:
+                        continue
+
+                    full_path = os.path.join(dir_name, file_name)
+                    if not os.path.isfile(full_path):
+                        continue
+
+                    try:
+                        ska_file = SKA().read(full_path)
+                        import_ska_animation(
+                            ska_file,
+                            armature_object,
+                            bone_list,
+                            file_name,
+                            smooth_animation,
+                            filepath,
+                            map_collection=source_collection,
+                        )
+                        additional_loaded.append(file_name)
+                    except Exception as exc:
+                        logger.log(
+                            f"Failed to import additional animation {file_name}: {exc}",
+                            "Warning",
+                            "WARNING",
+                        )
+
+                if additional_loaded:
+                    logger.log(
+                        "Additionally loaded animations: "
+                        + ", ".join(additional_loaded),
+                        "Animation Import",
+                        "INFO",
                     )
 
     if (
