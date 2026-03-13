@@ -1,0 +1,39 @@
+What a building needs:
+- GameOrientation Empty
+-- GroundDecal_Collection (not mandatory)
+--- GroundDecal (Mesh + Material)
+-- CollisionShapes_Collection
+--- Boxes, Spheres, Cylinder Collections with Meshes (like object)
+-- SLocators (not mandatory)
+--- Locator used for construction (Mesh + Material)
+-- Armature (if animated, just like animated objects, but instead they can have multiple animations:
+- LifeLink
+- GlobalBuffChannel
+- DeathCounter
+- VersatileAirSpecial
+- Attack:MeleeAttack
+- Cast (Ground & Air):CastAir
+- Cast (Ground & Air):CastGround
+- Cast (Ground & Air):CastResolve
+- Cast (Ground & Air):CastResolveAir
+- Cast (Ground Only):CastGround
+- Cast (Ground Only):CastResolve
+- Idle
+- MindControl:MindControlCast
+- MindControl:MindControlResolve
+- ModeSwitch (Not yet Supported):SwitchToNormal
+- ModeSwitch (Not yet Supported):SwitchToSpecial
+- PVECast
+- PVECast:PVEResolve
+- PVEChannel:PVEChannelEnd
+- PVEChannel:PVEChannelLoop
+- PVEChannel:PVEChannelStart
+- Spawn
+- Special Melee Attack Air:SpecialMeleeAttackAir
+- Special Melee Attack Ground:SpecialMeleeAttack
+- Turret Fire To Front:TurretFireToFrontCast
+- Turret Fire To Front:TurretFireToFrontResolve
+- Walk (used for rotations)
+)
+-- MeshSetGrid (auto generated, use BMG Editor to generate/see/change values)
+--- StatesCollection: S0_Undamaged, S2_Damaged, Debris_Collection

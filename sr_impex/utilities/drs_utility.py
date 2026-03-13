@@ -2436,11 +2436,10 @@ def create_unified_mesh(meshes_collection: bpy.types.Collection) -> bpy.types.Me
             if obj.type != "MESH":
                 continue
 
-            # Build a temporary BMesh from the object's RAW mesh (rest pose)
+            # Build a temporary BMesh from the object's raw mesh in object-local space.
             bm_tmp = bmesh.new()
             bm_tmp.from_mesh(obj.data)
-            # Apply object->world transform (includes parents like GameOrientation)
-            # bm_tmp.transform(obj.matrix_world)
+            # Intentionally do not apply obj.matrix_world here.
 
             # Pipe into the output BMesh
             tmp_me = bpy.data.meshes.new(name="__tmp__")
@@ -3600,11 +3599,12 @@ def create_skin_info(
     meshes_collection: bpy.types.Collection,
     bone_map: Dict[str, Dict[str, int]],
 ) -> CSkSkinInfo:
-    """Create CSkSkinInfo by matching world-space vertices to the unified mesh."""
+    """Create CSkSkinInfo by matching vertices in the same space as unified_mesh."""
     skin_info = CSkSkinInfo()
     skin_info.vertex_count = len(unified_mesh.vertices)
 
-    # Build coordinate -> index hashtable (fast path). The unified mesh is already in WORLD space.
+    # Build coordinate -> index hashtable (fast path).
+    # unified_mesh currently stores object-local coordinates, so matching must stay local too.
     unified_hashtable: dict[tuple[float, float, float], int] = {}
     for v in unified_mesh.vertices:
         key = (
@@ -3634,25 +3634,23 @@ def create_skin_info(
     for obj in meshes_collection.objects:
         if obj.type != "MESH":
             continue
-        mw = obj.matrix_world.copy()
         vgroups = obj.vertex_groups
 
         for v in obj.data.vertices:
-            wco = mw @ v.co
             key = (
-                round(wco.x, TOL_DIGITS),
-                round(wco.y, TOL_DIGITS),
-                round(wco.z, TOL_DIGITS),
+                round(v.co.x, TOL_DIGITS),
+                round(v.co.y, TOL_DIGITS),
+                round(v.co.z, TOL_DIGITS),
             )
 
             idx = unified_hashtable.get(key)
             if idx is None:
                 # KD fallback
-                _pos, kd_idx, dist = kd.find(wco)
+                _pos, kd_idx, dist = kd.find(v.co)
                 if kd_idx is None or dist > KD_TOL:
                     if misses < 20:  # avoid spam
                         logger.log(
-                            f"Vertex {v.index} not found in unified mesh (ws: {wco})",
+                            f"Vertex {v.index} not found in unified mesh (local: {v.co})",
                             "Warning",
                             "WARNING",
                         )
