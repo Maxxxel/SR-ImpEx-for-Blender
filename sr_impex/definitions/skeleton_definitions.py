@@ -51,10 +51,21 @@ class Bone:
         )
         # Bone Name Fixes
         self.name = self.name.replace("building_bandits_air_defense_launcher_", "")
-        self.name = self.name.replace("building_nature_versatile_tower_", "")
+        self.name = self.name.replace("building_frost_fortress_", "")
+        self.name = self.name.replace("building_twilight_XL_spawn_shell_", "")
+        
+        if self.name.startswith("building_nature_versatile_tower_"):
+            self.name = self.name.replace("building_nature_versatile_tower_", "")
+            if "|" in self.name:
+                # Check if the name contains "_jnt1"
+                contains_jnt1 = "_jnt1" in self.name
+                self.name = self.name.split("|")[-1]
+                if contains_jnt1:
+                    self.name = self.name.replace("_jnt", "_end")
+
         if len(self.name) > 63:
+            print(f"Falling back to hashed bone name for bone {self.name} due to length > 63")
             self.name = str(hash(self.name))
-            # print(f"Hashed Bone Name: {self.name}")
         self.child_count = unpack("i", file.read(4))[0]
         self.children = list(
             unpack(f"{self.child_count}i", file.read(calcsize(f"{self.child_count}i")))

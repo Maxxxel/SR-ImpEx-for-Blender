@@ -1310,6 +1310,36 @@ additional_abilities: Dict[str, Dict[str, Any]] = {
             }
         ],
     },
+    "LifeLink": {
+        "description": "An animation for units that link their life force.",
+        "components": [
+            {"role": "LifeLinkStart", "vis_job_id": 252},
+            {"role": "LifeLinkLoop", "vis_job_id": 253},
+            {"role": "LifeLinkEnd", "vis_job_id": 254},
+        ],
+    },
+    "GlobalBuffChannel": {
+        "description": "A channeling animation for units that provide a global buff.",
+        "components": [
+            {"role": "GlobalBuffChannelStart", "vis_job_id": 318},
+            {"role": "GlobalBuffChannelLoop", "vis_job_id": 319},
+            {"role": "GlobalBuffChannelEnd", "vis_job_id": 320},
+        ],
+    },
+    "DeathCounter": {
+        "description": "An animation for units that count deaths.",
+        "components": [
+            {"role": "DeathCounterCast", "vis_job_id": 297},
+            {"role": "DeathCounterResolve", "vis_job_id": 298},
+        ],
+    },
+    "VersatileAirSpecial": {
+        "description": "A versatile animation for various air special attacks.",
+        "components": [
+            {"role": "VersatileAirSpecialCast", "vis_job_id": 302},
+            {"role": "VersatileAirSpecialResolve", "vis_job_id": 303},
+        ],
+    },
     "Harpoon": {
         "description": "An animation for units that throw a harpoon.",
         "components": [

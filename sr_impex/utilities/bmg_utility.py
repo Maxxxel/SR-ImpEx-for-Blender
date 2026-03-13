@@ -587,7 +587,7 @@ def load_bmg(
     bone_list = None
 
     # Ground Decal
-    if bmg_file.mesh_set_grid.ground_decal is not None:
+    if bmg_file.mesh_set_grid.ground_decal is not None and bmg_file.mesh_set_grid.ground_decal != "" and bmg_file.mesh_set_grid.ground_decal_length > 0:
         # Decal Collection
         ground_decal_collection: bpy.types.Collection = bpy.data.collections.new(
             "GroundDecal_Collection"
