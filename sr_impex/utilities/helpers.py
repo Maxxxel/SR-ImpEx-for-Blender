@@ -367,6 +367,12 @@ def build_ska_export_name_map(
     used: set[str] = set()
     name_map: dict[str, str] = {}
     seen_keys: set[str] = set()
+    # Track action name -> already-assigned export basename to avoid giving the
+    # same Blender action a different (deduplicated) name when it is referenced
+    # from both the AnimationSet blob (possibly using the short Blender action
+    # name, e.g. "die") and the EffectSet blob (which may still carry the
+    # original long SKA filename, e.g. "skel_giant_hammer_die.ska").
+    action_to_final: dict[str, str] = {}
 
     for blob_name, original in refs:
         key = _norm_ska_key(blob_name)
@@ -375,6 +381,20 @@ def build_ska_export_name_map(
         seen_keys.add(key)
 
         act = _determine_action_for_blob_name(current_collection, blob_name)
+        act_id = act.name if act else None
+
+        # If we already assigned a name to this Blender action, reuse it so
+        # that references from the EffectSet and AnimationSet that resolve to
+        # the same action get consistent SKA filenames (no spurious _02 suffix).
+        if act_id and act_id in action_to_final:
+            final_base = action_to_final[act_id]
+            name_map[key] = final_base
+            orig_key = _norm_ska_key(original)
+            if orig_key and orig_key not in name_map:
+                name_map[orig_key] = final_base
+                seen_keys.add(orig_key)
+            continue
+
         short = _derive_action_short_name(act, key)
         eff_prefix = _effective_prefix_for_action(act, export_prefix)
 
@@ -391,9 +411,13 @@ def build_ska_export_name_map(
         final_base = _make_unique_export_basename(base, used)
         name_map[key] = final_base
 
+        if act_id:
+            action_to_final[act_id] = final_base
+
         # also map the original reference if present
         orig_key = _norm_ska_key(original)
         if orig_key and orig_key not in name_map:
             name_map[orig_key] = final_base
+            seen_keys.add(orig_key)
 
     return name_map
