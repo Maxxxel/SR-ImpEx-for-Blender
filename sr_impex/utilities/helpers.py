@@ -367,6 +367,11 @@ def build_ska_export_name_map(
     used: set[str] = set()
     name_map: dict[str, str] = {}
     seen_keys: set[str] = set()
+    # Track action-name -> final_base so that different blob keys referring to the
+    # same Blender Action (e.g. "unit_die.ska" and "unit_die.001.ska") always
+    # receive the same exported filename instead of triggering the uniqueness
+    # suffix logic and generating a spurious "unit_die_02".
+    action_to_final_base: dict[str, str] = {}
 
     for blob_name, original in refs:
         key = _norm_ska_key(blob_name)
@@ -375,6 +380,17 @@ def build_ska_export_name_map(
         seen_keys.add(key)
 
         act = _determine_action_for_blob_name(current_collection, blob_name)
+
+        # If this exact Blender Action was already assigned a final basename under a
+        # different blob key, reuse it to keep AnimationSet and EffectSet consistent.
+        if act and act.name in action_to_final_base:
+            final_base = action_to_final_base[act.name]
+            name_map[key] = final_base
+            orig_key = _norm_ska_key(original)
+            if orig_key and orig_key not in name_map:
+                name_map[orig_key] = final_base
+            continue
+
         short = _derive_action_short_name(act, key)
         eff_prefix = _effective_prefix_for_action(act, export_prefix)
 
@@ -390,6 +406,9 @@ def build_ska_export_name_map(
 
         final_base = _make_unique_export_basename(base, used)
         name_map[key] = final_base
+
+        if act:
+            action_to_final_base[act.name] = final_base
 
         # also map the original reference if present
         orig_key = _norm_ska_key(original)
