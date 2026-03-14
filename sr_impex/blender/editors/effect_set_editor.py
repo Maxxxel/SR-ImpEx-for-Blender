@@ -257,7 +257,17 @@ class EffEntryPG(bpy.types.PropertyGroup):
     active_keyframe: IntProperty(default=0)  # type: ignore
 
     def to_dict(self) -> Dict:
-        ska = self.raw_ska or _norm_ska_name(self.action if self.action and self.action != "NONE" else "")
+        if self.raw_ska:
+            ska = self.raw_ska
+        else:
+            act_name = self.action if self.action and self.action != "NONE" else ""
+            # Strip Blender's auto-generated numeric suffixes (e.g. "unit_die.001" ->
+            # "unit_die") so the blob always stores the canonical SKA filename.
+            if act_name and "." in act_name:
+                base, suffix = act_name.rsplit(".", 1)
+                if suffix.isdigit() and bpy.data.actions.get(base) is not None:
+                    act_name = base
+            ska = _norm_ska_name(act_name)
         return {"action": ska, "keyframes": [k.to_dict() for k in self.keyframes]}
 
     def from_dict(self, d: dict):
