@@ -367,6 +367,9 @@ def build_ska_export_name_map(
     used: set[str] = set()
     name_map: dict[str, str] = {}
     seen_keys: set[str] = set()
+    # Multiple blob aliases can resolve to the same Blender Action
+    # (e.g. AnimationSet file vs EffectSet action). Keep one exported basename.
+    action_to_export_base: dict[str, str] = {}
 
     for blob_name, original in refs:
         key = _norm_ska_key(blob_name)
@@ -375,6 +378,20 @@ def build_ska_export_name_map(
         seen_keys.add(key)
 
         act = _determine_action_for_blob_name(current_collection, blob_name)
+
+        # Reuse the already chosen exported basename when this key resolves to
+        # an Action we already processed via another alias.
+        if act:
+            act_key = (act.name or "").strip().lower()
+            if act_key in action_to_export_base:
+                final_base = action_to_export_base[act_key]
+                name_map[key] = final_base
+
+                orig_key = _norm_ska_key(original)
+                if orig_key and orig_key not in name_map:
+                    name_map[orig_key] = final_base
+                continue
+
         short = _derive_action_short_name(act, key)
         eff_prefix = _effective_prefix_for_action(act, export_prefix)
 
@@ -390,6 +407,11 @@ def build_ska_export_name_map(
 
         final_base = _make_unique_export_basename(base, used)
         name_map[key] = final_base
+
+        if act:
+            act_key = (act.name or "").strip().lower()
+            if act_key:
+                action_to_export_base[act_key] = final_base
 
         # also map the original reference if present
         orig_key = _norm_ska_key(original)

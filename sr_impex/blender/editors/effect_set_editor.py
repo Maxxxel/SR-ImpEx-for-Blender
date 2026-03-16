@@ -872,7 +872,7 @@ def _draw_effectset_ui(layout, context):
             fld.prop(k, "key_type", text="Type")
             fld.prop(k, "min_falloff")
             fld.prop(k, "max_falloff")
-            # fld.prop(k, "volume") # Use 3D audio volume
+            fld.prop(k, "volume") # Use 3D audio volume
             fld.prop(k, "pitch_min")
             fld.prop(k, "pitch_max")
             fld.prop(k, "offset")

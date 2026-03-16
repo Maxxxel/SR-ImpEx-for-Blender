@@ -16,6 +16,43 @@ with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
 
 
+def _iter_action_fcurves(action: bpy.types.Action):
+    """Yield FCurves for both legacy and layered Action APIs (Blender 4.4+/5.x)."""
+    # Legacy API path
+    if hasattr(action, "fcurves"):
+        for fc in action.fcurves:
+            yield fc
+        return
+
+    # Layered API path
+    layers = getattr(action, "layers", None)
+    if not layers:
+        return
+
+    seen = set()
+    for layer in layers:
+        strips = getattr(layer, "strips", None)
+        if not strips:
+            continue
+
+        for strip in strips:
+            channelbags = getattr(strip, "channelbags", None)
+            if not channelbags:
+                continue
+
+            for bag in channelbags:
+                fcurves = getattr(bag, "fcurves", None)
+                if not fcurves:
+                    continue
+
+                for fc in fcurves:
+                    key = (getattr(fc, "data_path", ""), int(getattr(fc, "array_index", 0)))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    yield fc
+
+
 def get_current_collection() -> bpy.types.Collection:
     """Returns the active collection or none."""
     return bpy.context.view_layer.active_layer_collection.collection
@@ -77,7 +114,7 @@ def get_actions(current_collection: bpy.types.Collection = None) -> List[str]:
             if "Control_Rig" in action.name:
                 continue
 
-            for fcurve in action.fcurves:
+            for fcurve in _iter_action_fcurves(action):
                 # Check if the action references this object's properties or pose bones
                 if fcurve.data_path.startswith(("location", "rotation", "scale")):
                     relevant_actions.add(action.name)
@@ -296,11 +333,6 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
         frame_length = action["frame_length"]
     except Exception:
         frame_length = None
-        print(f"Warning: Action {action_name} missing 'frame_length' property. Using frame range instead.")
-
-    if frame_length is None:
-        # Maybe we have a Animation created from scratch and not imported, then it doesent have this value, so we create it from the Action
-        frame_length = action.frame_range[1] - action.frame_range[0]
 
     try:
         fps = action["original_fps"]
@@ -308,7 +340,33 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
         fps = None
         print(f"Warning: Action {action_name} missing 'original_fps' property. Using current scene fps.")
 
-    fps = context.scene.render.fps = int(fps)
+    if fps is None:
+        scene_fps = float(context.scene.render.fps or 30.0)
+        scene_fps_base = float(context.scene.render.fps_base or 1.0)
+        fps = scene_fps / max(1e-8, scene_fps_base)
+    else:
+        fps = float(fps)
+
+    if fps <= 1e-6:
+        fps = 30.0
+
+    # Prefer importer metadata for frame length. If missing, reconstruct from
+    # original duration + fps before falling back to current action frame range.
+    if frame_length is None:
+        try:
+            original_duration = action["original_duration"]
+            if original_duration is not None:
+                frame_length = int(round(float(original_duration) * float(fps)))
+        except Exception:
+            frame_length = None
+
+    if frame_length is None:
+        print(
+            f"Warning: Action {action_name} missing 'frame_length' and 'original_duration'. Using frame range instead."
+        )
+        frame_length = action.frame_range[1] - action.frame_range[0]
+
+    frame_length = int(max(1, round(float(frame_length))))
 
     duration = frame_length / fps
 
@@ -320,7 +378,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
     location_fcurves: dict[str, list[bpy.types.FCurve]] = defaultdict(list)
     rotation_fcurves: dict[str, list[bpy.types.FCurve]] = defaultdict(list)
     # Print Number of Curves
-    for fcurve in action.fcurves:
+    for fcurve in _iter_action_fcurves(action):
         if fcurve.data_path.endswith("location"):
             location_fcurves[fcurve.data_path].append(fcurve)
         elif fcurve.data_path.endswith("rotation_quaternion"):
