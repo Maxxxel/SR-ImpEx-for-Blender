@@ -566,6 +566,43 @@ def _action_span_frames(act: bpy.types.Action) -> int:
     return int(max(1, round(f1 - f0)))
 
 
+def _scene_effective_fps(scene: bpy.types.Scene | None = None) -> float:
+    scene = scene or bpy.context.scene
+    if not scene:
+        return 30.0
+
+    fps = float(getattr(scene.render, "fps", 30) or 30.0)
+    fps_base = float(getattr(scene.render, "fps_base", 1.0) or 1.0)
+    if fps_base <= 1e-8:
+        fps_base = 1.0
+
+    effective = fps / fps_base
+    return effective if effective > 1e-6 else 30.0
+
+
+def _action_effective_fps(act: bpy.types.Action | None) -> float:
+    if act:
+        try:
+            v = act.get("original_fps", None)
+            if v is not None:
+                fps = float(v)
+                if fps > 1e-6:
+                    return fps
+        except Exception:
+            pass
+    return _scene_effective_fps()
+
+
+def _set_scene_effective_fps(scene: bpy.types.Scene, effective_fps: float) -> None:
+    eff = max(1e-6, float(effective_fps or 0.0))
+    target_fps = max(1, min(120, int(round(eff))))
+    fps_base = target_fps / eff
+    fps_base = max(0.1, min(100.0, float(fps_base)))
+
+    scene.render.fps = target_fps
+    scene.render.fps_base = fps_base
+
+
 # --- Marker objects management ----------------------------------------------
 _DRS_MARKERS_NAME = "DRSMarkers"
 
@@ -1101,20 +1138,20 @@ def _recompute_timing_for_variant(st, mk_index: int, variant_index: int) -> None
     v.timing_is_enter = int(spec["is_enter_mode"])
     v.timing_variant_index = int(variant_index)
 
-    fps = bpy.context.scene.render.fps if bpy.context.scene else 30
     act_name = (v.file or "").strip()
+    act = bpy.data.actions.get(act_name) if act_name and act_name != "NONE" else None
+    fps = _action_effective_fps(act)
+    v.used_fps = float(fps)
     resolve_ms = 0
-    if act_name and act_name != "NONE":
-        act = bpy.data.actions.get(act_name)
-        if act:
-            resolve_ms = int(round((_action_span_frames(act) / fps) * 1000.0))
+    if act:
+        resolve_ms = int(round((_action_span_frames(act) / fps) * 1000.0))
 
     v.resolve_ms = int(resolve_ms)
 
     if getattr(v, "marker_has", False):
-        frac = 1.0 - float(getattr(v, "marker_time", 0.0) or 0.0)
+        frac = float(getattr(v, "marker_time", 0.0) or 0.0)
     else:
-        frac = 1.0 - float(getattr(mk, "cast_to_resolve", 0.0) or 0.0)
+        frac = float(getattr(mk, "cast_to_resolve", 0.0) or 0.0)
     frac = max(0.0, min(1.0, frac))
     v.timing_cast_ms = int(round(resolve_ms * frac))
 
@@ -1168,6 +1205,7 @@ class AnimVariantPG(bpy.types.PropertyGroup):
     timing_variant_index: IntProperty(name="VariantIndex", default=0, options={"HIDDEN"})  # type: ignore
     timing_cast_ms: IntProperty(name="Cast (ms)", default=0)  # type: ignore
     resolve_ms: IntProperty(name="Duration (ms)", default=0)  # type: ignore
+    used_fps: FloatProperty(name="Used FPS", default=0.0, precision=4)  # type: ignore
     timing_marker_id: StringProperty(name="MarkerID", default="")  # type: ignore  # CHANGED
     timing_dir: FloatVectorProperty(name="Direction", size=3, default=(0.0, 0.0, 1.0), subtype="DIRECTION")  # type: ignore
 
@@ -1442,7 +1480,7 @@ def _refresh_state_from_blob(col: bpy.types.Collection):
         if not act:
             return 0
         frames = _action_span_frames(act)
-        fps = bpy.context.scene.render.fps if bpy.context.scene else 30
+        fps = _action_effective_fps(act)
         return int(round((frames / fps) * 1000.0))
 
     # consume candidates from the pool (so they aren't reused elsewhere)
@@ -1720,16 +1758,16 @@ def _write_state_to_blob(col: bpy.types.Collection):
         if not act:
             return 0
 
-        fps = bpy.context.scene.render.fps if bpy.context.scene else 30
+        fps = _action_effective_fps(act)
         return int(round((_action_span_frames(act) / fps) * 1000.0))
 
     def _cast_ms_for_export(mk, v) -> int:
         dur = _resolve_ms_for_export(v)
-        # prefer marker_time; fallback to mk.cast_to_resolve if marker absent
+        # cast_ms is a direct time proportion of total duration
         if getattr(v, "marker_has", False):
-            frac = 1.0 - float(getattr(v, "marker_time", 0.0) or 0.0)
+            frac = float(getattr(v, "marker_time", 0.0) or 0.0)
         else:
-            frac = 1.0 - float(getattr(mk, "cast_to_resolve", 0.0) or 0.0)
+            frac = float(getattr(mk, "cast_to_resolve", 0.0) or 0.0)
         frac = max(0.0, min(1.0, frac))
         return int(round(dur * frac))
 
@@ -2009,7 +2047,7 @@ class DRS_OT_PlayRange(bpy.types.Operator):
 
         if original_fps:
             # Set the scene fps to the original fps of the animation
-            context.scene.render.fps = int(original_fps)
+            _set_scene_effective_fps(context.scene, float(original_fps))
 
         # Reset any existing playback state
         _playback["end"] = None
@@ -2111,7 +2149,7 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
 
         if original_fps:
             # Set the scene fps to the original fps of the animation
-            context.scene.render.fps = int(original_fps)
+            _set_scene_effective_fps(context.scene, float(original_fps))
 
         # Enable Show Subframes
         context.scene.show_subframe = True
@@ -2138,6 +2176,148 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
         if ska:
             _show_marker(model, vj, ska, v.marker_pos, v.marker_dir)
 
+        return {"FINISHED"}
+
+
+class DRS_OT_VariantSetActionFps(bpy.types.Operator):
+    bl_idname = "drs.variant_set_action_fps"
+    bl_label = "Edit Action Clip Timing"
+    bl_options = {"INTERNAL", "UNDO"}
+
+    mode_key_index: IntProperty(default=-1)  # type: ignore
+    variant_index: IntProperty(default=-1)  # type: ignore
+    mode: EnumProperty(  # type: ignore
+        name="Mode",
+        items=[
+            (
+                "RETIME_BY_FPS",
+                "Set FPS (Retime Duration)",
+                "Keep frame length fixed and recompute duration",
+            ),
+            (
+                "SET_DURATION_KEEP_FRAMES",
+                "Set Duration (Recompute FPS)",
+                "Keep frame length fixed and recompute FPS",
+            ),
+            (
+                "SET_FPS_KEEP_DURATION",
+                "Set FPS + Keep Duration (Adjust Frames)",
+                "Keep duration fixed and recompute integer frame length",
+            ),
+            (
+                "RESET_TO_SCENE",
+                "Reset To Scene Fallback",
+                "Remove per-action timing metadata and use scene FPS fallback on export",
+            ),
+        ],
+        default="RETIME_BY_FPS",
+    )
+    fps: FloatProperty(name="FPS", default=24.0, min=0.001, precision=6)  # type: ignore
+    duration: FloatProperty(name="Duration (s)", default=1.0, min=0.0001, precision=6)  # type: ignore
+
+    def _resolve_action(self):
+        st = _state()
+        if not 0 <= self.mode_key_index < len(st.mode_keys):
+            return None
+        mk = st.mode_keys[self.mode_key_index]
+        if not 0 <= self.variant_index < len(mk.variants):
+            return None
+        v = mk.variants[self.variant_index]
+        act_name = (v.file or "").strip()
+        if not act_name or act_name == "NONE":
+            return None
+        return bpy.data.actions.get(act_name)
+
+    def _current_values(self, act: bpy.types.Action) -> tuple[int, float, float]:
+        frame_length = _action_span_frames(act)
+        fps = _action_effective_fps(act)
+        try:
+            raw = act.get("original_duration", None)
+            duration = float(raw) if raw is not None else (frame_length / max(1e-6, fps))
+        except Exception:
+            duration = frame_length / max(1e-6, fps)
+        return int(max(1, round(frame_length))), float(fps), float(duration)
+
+    def invoke(self, context, _event):
+        act = self._resolve_action()
+        if act:
+            _frames, fps, duration = self._current_values(act)
+            self.fps = fps
+            self.duration = duration
+        return context.window_manager.invoke_props_dialog(self, width=520)
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.prop(self, "mode")
+        if self.mode in {"RETIME_BY_FPS", "SET_FPS_KEEP_DURATION"}:
+            layout.prop(self, "fps")
+        if self.mode in {"SET_DURATION_KEEP_FRAMES", "SET_FPS_KEEP_DURATION"}:
+            layout.prop(self, "duration")
+
+        box = layout.box()
+        box.label(text="Rules", icon="INFO")
+        box.label(text="FrameLength is integer.")
+        box.label(text="FPS = FrameLength / Duration.")
+        box.label(text="Changing FPS with fixed FrameLength changes Duration.")
+
+    def execute(self, context):
+        act = self._resolve_action()
+        if not act:
+            self.report({"ERROR"}, "No valid Action selected")
+            return {"CANCELLED"}
+
+        frame_length, _cur_fps, _cur_duration = self._current_values(act)
+
+        if self.mode == "RESET_TO_SCENE":
+            for key in ("original_fps", "original_duration", "frame_length"):
+                try:
+                    if key in act:
+                        del act[key]
+                except Exception:
+                    pass
+
+            st = _state()
+            _recompute_all_timing_values(st)
+            _redraw_ui()
+            self.report({"INFO"}, "Action timing metadata cleared (scene fallback active)")
+            return {"FINISHED"}
+
+        if self.mode == "RETIME_BY_FPS":
+            fps = float(self.fps)
+            if fps <= 1e-6:
+                self.report({"ERROR"}, "FPS must be greater than zero")
+                return {"CANCELLED"}
+            duration = frame_length / fps
+        elif self.mode == "SET_DURATION_KEEP_FRAMES":
+            duration = float(self.duration)
+            if duration <= 1e-8:
+                self.report({"ERROR"}, "Duration must be greater than zero")
+                return {"CANCELLED"}
+            fps = frame_length / duration
+        else:  # SET_FPS_KEEP_DURATION
+            fps = float(self.fps)
+            duration = float(self.duration)
+            if fps <= 1e-6 or duration <= 1e-8:
+                self.report({"ERROR"}, "FPS and Duration must be greater than zero")
+                return {"CANCELLED"}
+            frame_length = int(max(1, round(duration * fps)))
+
+        try:
+            act["frame_length"] = int(frame_length)
+            act["original_fps"] = fps
+            act["original_duration"] = float(duration)
+        except Exception:
+            self.report({"ERROR"}, "Failed to write action timing metadata")
+            return {"CANCELLED"}
+
+        _set_scene_effective_fps(context.scene, fps)
+        st = _state()
+        _recompute_all_timing_values(st)
+        _redraw_ui()
+        self.report(
+            {"INFO"},
+            f"{act.name}: {int(frame_length)} fr | {float(duration):.6f}s | {float(fps):.6f} fps",
+        )
         return {"FINISHED"}
 
 
@@ -2241,6 +2421,22 @@ def _draw_variant_editor(
         det.use_property_split = True
         det.use_property_decorate = False
         det.prop(v, "file", text="Action")
+        r_fps = det.row(align=True)
+        op_fps = r_fps.operator("drs.variant_set_action_fps", text="Clip Timing...", icon="TIME")
+        op_fps.mode_key_index = mk_index
+        op_fps.variant_index = mk.active_variant
+        act_for_fps = bpy.data.actions.get((v.file or "").strip()) if v.file and v.file != "NONE" else None
+        if act_for_fps:
+            fl = _action_span_frames(act_for_fps)
+            efps = _action_effective_fps(act_for_fps)
+            try:
+                dur_raw = act_for_fps.get("original_duration", None)
+                dur = float(dur_raw) if dur_raw is not None else (fl / max(1e-6, efps))
+            except Exception:
+                dur = fl / max(1e-6, efps)
+            r_fps.label(text=f"{efps:.3f} fps | {int(fl)} fr | {dur:.4f}s")
+        else:
+            r_fps.label(text=f"Scene fallback: {_scene_effective_fps():.3f} fps")
         det.prop(v, "weight")
         det.prop(v, "allows_ik")
         det.prop(v, "force_no_blend")
@@ -2314,20 +2510,7 @@ def _draw_variant_editor(
             v.timing_tag_id = int(spec["tag_id"])
             v.timing_is_enter = int(spec["is_enter_mode"])
             v.timing_variant_index = mk.active_variant
-            fps = bpy.context.scene.render.fps if bpy.context.scene else 30
-            act_name = (v.file or "").strip()
-            frames_ms = (
-                int(
-                    round(
-                        (_action_span_frames(bpy.data.actions.get(act_name)) / fps)
-                        * 1000.0
-                    )
-                )
-                if act_name and act_name != "NONE"
-                else 0
-            )
-            v.resolve_ms = frames_ms
-            v.timing_cast_ms = int(round(float(mk.cast_to_resolve) * frames_ms))
+            _recompute_timing_for_variant(_state(), mk_index, mk.active_variant)
             v.timing_dir = list(getattr(v, "marker_dir", (0.0, 0.0, 1.0)))
             v.timing_marker_id = str(_new_uint10())  # string
 
@@ -2350,6 +2533,9 @@ def _draw_variant_editor(
         row = tbox.row()
         row.enabled = False
         row.prop(v, "resolve_ms", text="Duration (ms)")
+        row = tbox.row()
+        row.enabled = False
+        row.prop(v, "used_fps", text="Used FPS")
         row = tbox.row()
         row.enabled = False
         row.prop(v, "timing_marker_id", text="MarkerID")
@@ -2614,6 +2800,7 @@ _classes = (
     DRS_OT_ModeKey_Remove,
     DRS_OT_PlayRange,
     DRS_OT_ShowMarker,
+    DRS_OT_VariantSetActionFps,
     DRS_UL_Variants,
     DRS_OT_VariantAdd,
     DRS_OT_VariantRemove,
