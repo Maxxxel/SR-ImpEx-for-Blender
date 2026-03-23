@@ -32,7 +32,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 5, 0),
-    "version": (3, 7, 1),
+    "version": (3, 8, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -61,6 +61,31 @@ def available_actions(_self, _context):
 
     # Otherwise, dynamically construct the EnumProperty items
     return [(act, act, "") for act in actions]
+
+
+MIP_MAP_ITEMS = [
+    (
+        "auto",
+        "Auto",
+        "Use texconv default mip generation (-m 0, full chain per texture)",
+    ),
+    (
+        "none",
+        "None",
+        "Disable mip maps (-m 1, only top level)",
+    ),
+]
+for _level in range(1, 21):
+    MIP_MAP_ITEMS.append(
+        (
+            str(_level),
+            f"Max {_level}",
+            (
+                f"Generate up to {_level} levels. Final value is clamped per image size "
+                "(for example 256x256 allows up to 9 levels down to 1x1)."
+            ),
+        )
+    )
 
 
 _MENUES_ATTACHED = False
@@ -419,6 +444,15 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
         description="Export Hermite tangents for smooth interpolation. Disable for flat/stepped curves (debugging)",
         default=True,
     )  # type: ignore
+    mip_maps: EnumProperty(
+        name="Mip Maps",
+        description=(
+            "Mips are generated per image. Numeric modes are treated as a per-texture maximum "
+            "and clamped to what that image can support down to 1x1"
+        ),
+        items=MIP_MAP_ITEMS,
+        default="auto",
+    )  # type: ignore
 
     def draw(self, context):
         layout = self.layout
@@ -429,6 +463,7 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
         layout.prop(self, "split_mesh_by_uv_islands")
         layout.prop(self, "flip_normals")
         layout.prop(self, "auto_fix_quad_faces")
+        layout.prop(self, "mip_maps")
         layout.separator()
         layout.label(text="SKA Export Settings", icon="ANIM_DATA")
         layout.prop(self, "export_all_ska_actions")
@@ -465,6 +500,7 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
         keywords["set_model_name_prefix"] = self.set_model_name_prefix
         keywords["auto_fix_quad_faces"] = self.auto_fix_quad_faces
         keywords["export_tangents"] = self.export_tangents
+        keywords["mip_maps"] = self.mip_maps
 
         # update model_name by file_path
         model_name = os.path.basename(self.filepath)
@@ -558,6 +594,15 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
         description="Automatically fix quad faces that may cause issues in Battleforge",
         default=True,
     )  # type: ignore
+    mip_maps: EnumProperty(
+        name="Mip Maps",
+        description=(
+            "Mips are generated per image. Numeric modes are treated as a per-texture maximum "
+            "and clamped to what that image can support down to 1x1"
+        ),
+        items=MIP_MAP_ITEMS,
+        default="auto",
+    )  # type: ignore
 
     def draw(self, context):
         layout = self.layout
@@ -568,6 +613,7 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
         layout.prop(self, "split_mesh_by_uv_islands")
         layout.prop(self, "flip_normals")
         layout.prop(self, "auto_fix_quad_faces")
+        layout.prop(self, "mip_maps")
         layout.separator()
         layout.label(text="SKA Export Settings", icon="ANIM_DATA")
         layout.prop(self, "export_all_ska_actions")
@@ -602,6 +648,7 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
         keywords["export_all_ska_actions"] = self.export_all_ska_actions
         keywords["set_model_name_prefix"] = self.set_model_name_prefix
         keywords["auto_fix_quad_faces"] = self.auto_fix_quad_faces
+        keywords["mip_maps"] = self.mip_maps
 
         # update model_name by file_path
         model_name = os.path.basename(self.filepath)

@@ -75,7 +75,7 @@ class Keyframe:
         self.variants = [Variant().read(file) for _ in range(self.variant_count)]
         return self
 
-    def write(self, file: BinaryIO) -> None:
+    def write(self, file: BinaryIO, _type: int) -> None:
         file.write(
             pack(
                 "fifffff",
@@ -91,16 +91,16 @@ class Keyframe:
         file.write(pack("3f", *self.offset))
         file.write(pack("B", self.interruptable))
 
-        if self.keyframe_type not in [10, 11]:
+        if _type not in [10, 11]:
             file.write(pack("b", self.condition))
 
         file.write(pack("i", self.variant_count))
         for variant in self.variants:
             variant.write(file)
 
-    def size(self) -> int:
+    def size(self, _type: int) -> int:
         size = 28 + 12 + 1
-        if self.keyframe_type not in [10, 11]:
+        if _type not in [10, 11]:
             size += 1
         size += 4
         for variant in self.variants:
@@ -124,17 +124,17 @@ class SkelEff:
         ]
         return self
 
-    def write(self, file: BinaryIO) -> None:
+    def write(self, file: BinaryIO, _type: int) -> None:
         file.write(pack("i", self.length))
         file.write(self.name.encode("utf-8"))
         file.write(pack("i", self.keyframe_count))
         for keyframe in self.keyframes:
-            keyframe.write(file)
+            keyframe.write(file, _type)
 
-    def size(self) -> int:
+    def size(self, _type: int) -> int:
         base = 8 + self.length
         for keyframe in self.keyframes:
-            base += keyframe.size()
+            base += keyframe.size(_type)
         return base
 
 
@@ -326,7 +326,7 @@ class EffectSet:
                 file.write(pack("5f", *self.unknown))
             file.write(pack("i", self.length))
             for skel_eff in self.skel_effekts:
-                skel_eff.write(file)
+                skel_eff.write(file, self.type)
             file.write(pack("h", self.number_impact_sounds))
             for impact_sound in self.impact_sounds:
                 impact_sound.write(file)
@@ -341,7 +341,7 @@ class EffectSet:
                 base += 20
             base += 4
             for skel_eff in self.skel_effekts:
-                base += skel_eff.size()
+                base += skel_eff.size(self.type)
             base += 2
             for impact_sound in self.impact_sounds:
                 base += impact_sound.size()
