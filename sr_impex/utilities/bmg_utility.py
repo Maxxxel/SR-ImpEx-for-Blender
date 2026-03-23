@@ -855,6 +855,7 @@ def save_bmg(
     export_all_ska_actions: bool,
     set_model_name_prefix: str,
     auto_fix_quad_faces: bool,
+    mip_maps: str = "auto",
 ):
     """
     Save the current Blender scene as a BMG (Building Mesh Grid) file.

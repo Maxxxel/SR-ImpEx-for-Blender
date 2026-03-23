@@ -993,6 +993,7 @@ def convert_image_to_dds(
     dxt_format: str = "DXT5",
     extra_args: list[str] = None,
     file_ending: str = None,
+    mip_maps: str = "auto",
 ):
     # Create a temporary PNG file in the system temporary directory
     # temp_dir = tempfile.gettempdir()
@@ -1001,6 +1002,24 @@ def convert_image_to_dds(
     temp_filename = output_filename + ".png"
     temp_filename = temp_filename.strip('"').strip("'")
     temp_path = os.path.join(temp_dir, temp_filename)
+    
+    # texconv -m semantics:
+    # - auto -> 0 (all levels),
+    # - none -> 1 (top level only),
+    # - numeric -> clamp per image to avoid requesting more levels than possible.
+    mip_setting = str(mip_maps or "auto").strip().lower()
+    if mip_setting == "none":
+        mip_arg = "1"
+    elif mip_setting == "auto":
+        mip_arg = "0"
+    elif mip_setting.isdigit():
+        selected_max = max(1, int(mip_setting))
+        width, height = getattr(img, "size", (0, 0))
+        max_dim = max(int(width), int(height))
+        possible_levels = max_dim.bit_length() if max_dim > 0 else 1
+        mip_arg = str(min(selected_max, possible_levels))
+    else:
+        mip_arg = "0"
 
     try:
         save_image_copy_as_png(img, temp_path, file_ending)
@@ -1014,7 +1033,9 @@ def convert_image_to_dds(
 
     # Build the argument list for texconv.exe
     texconv_exe = os.path.join(resource_dir, "texconv.exe")
-    args = [texconv_exe, "-ft", "dds", "-f", dxt_format, "-m", "0", "-if", "FANT", "-dx9", "-pow2"]
+
+
+    args = [texconv_exe, "-ft", "dds", "-f", dxt_format, "-m", mip_arg, "-if", "FANT", "-dx9", "-pow2"]
 
     if extra_args:
         args.extend(extra_args)
@@ -1118,6 +1139,7 @@ def get_converted_texture(
     file_ending: str = "_col",
     dxt_format: str = "DXT5",
     extra_args: list[str] = None,
+    mip_maps: str = "auto",
 ):
     # Select the appropriate cache based on the file ending.
     cache = get_cache_for_type(file_ending)
@@ -1139,7 +1161,7 @@ def get_converted_texture(
     # Call your conversion function (make sure convert_image_to_dds is defined and available)
     try:
         ret_code, _, stderr = convert_image_to_dds(
-            img, texture_name, folder_path, dxt_format, extra_args, file_ending
+            img, texture_name, folder_path, dxt_format, extra_args, file_ending, mip_maps
         )
         if ret_code != 0:
             logger.log(
@@ -2805,7 +2827,7 @@ def create_cdsp_joint_map(
     return _joint_map
 
 
-def set_color_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path) -> bool:
+def set_color_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path, mip_maps: str = "auto") -> bool:
     # resolve image
     img = None
     if hasattr(sock_or_node, "links"):         # socket
@@ -2817,14 +2839,14 @@ def set_color_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path) -
         return False
     new_mesh.textures.length += 1
     t = Texture()
-    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_col", dxt_format="DXT5", extra_args=["-bc","u"])
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_col", dxt_format="DXT5", extra_args=["-bc","u"], mip_maps=mip_maps)
     t.length = len(t.name)
     t.identifier = 1684432499
     new_mesh.textures.textures.append(t)
     return True
 
 
-def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path):
+def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path, mip_maps: str = "auto"):
     img = None
     if hasattr(sock_or_node, "links"):
         img = _first_image_upstream(sock_or_node, 16, "_nor")
@@ -2834,7 +2856,7 @@ def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path):
         return
     new_mesh.textures.length += 1
     t = Texture()
-    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_nor", dxt_format="DXT1", extra_args=["-at","0.0", "-bc","u"])
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_nor", dxt_format="DXT1", extra_args=["-at","0.0", "-bc","u"], mip_maps=mip_maps)
     t.length = len(t.name)
     t.identifier = 1852992883
     new_mesh.textures.textures.append(t)
@@ -2842,7 +2864,7 @@ def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path):
 
 def set_metallic_roughness_emission_map(
     metallic_src, roughness_src, emission_src, flu_mask_src,   # NEW: flu_mask_src
-    new_mesh, mesh_index, model_name, folder_path):
+    new_mesh, mesh_index, model_name, folder_path, mip_maps: str = "auto"):
     # resolve images from sockets/nodes
     img_r = _first_image_upstream(metallic_src, 16, "_par")  if hasattr(metallic_src, "links")  else (metallic_src.image  if metallic_src else None)
     img_g = _first_image_upstream(roughness_src, 16, "_par") if hasattr(roughness_src, "links") else (roughness_src.image if roughness_src else None)
@@ -2977,7 +2999,7 @@ def set_metallic_roughness_emission_map(
 
     new_mesh.textures.length += 1
     t = Texture()
-    t.name = get_converted_texture(new_img, model_name, mesh_index, folder_path, file_ending="_par", dxt_format="DXT5", extra_args=["-bc","u", "-sepalpha"])
+    t.name = get_converted_texture(new_img, model_name, mesh_index, folder_path, file_ending="_par", dxt_format="DXT5", extra_args=["-bc","u", "-sepalpha"], mip_maps=mip_maps)
     t.length = len(t.name)
     t.identifier = 1936745324
     new_mesh.textures.textures.append(t)
@@ -2987,7 +3009,8 @@ def set_flu_map_from_material(mat: bpy.types.Material,
                               new_mesh,
                               mesh_index: int,
                               model_name: str,
-                              folder_path: str) -> bool:
+                              folder_path: str,
+                              mip_maps: str = "auto") -> bool:
     """
     Export the Flu tile map (_flu) if present in the material.
     Looks for 'Flu Map Layer 1' or 'Flu Map Layer 2' image nodes created by DRSMaterial.
@@ -3017,7 +3040,8 @@ def set_flu_map_from_material(mat: bpy.types.Material,
         mesh_index,
         folder_path,
         file_ending="_flu",
-        dxt_format="DXT5"
+        dxt_format="DXT5",
+        mip_maps=mip_maps
     )
     t.length = len(t.name)
     t.identifier = 1668510770  # Flu identifier used by importer to call set_flumap(...)
@@ -3025,7 +3049,7 @@ def set_flu_map_from_material(mat: bpy.types.Material,
     return True
 
 
-def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new_mesh, mesh_index, model_name, folder_path) -> List[float]:
+def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new_mesh, mesh_index, model_name, folder_path, mip_maps: str = "auto") -> List[float]:
     # default color
     rgb = [0.0, 0.0, 0.0]
     # get color
@@ -3045,7 +3069,7 @@ def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new
 
     new_mesh.textures.length += 1
     t = Texture()
-    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_ref", dxt_format="DXT5", extra_args=["-bc","u"])
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_ref", dxt_format="DXT5", extra_args=["-bc","u"], mip_maps=mip_maps)
     t.length = len(t.name)
     t.identifier = 1919116143
     new_mesh.textures.textures.append(t)
@@ -3059,6 +3083,7 @@ def create_mesh(
     folder_path: str,
     flip_normals: bool,
     add_skin_mesh: bool = False,
+    mip_maps: str = "auto",
 ) -> Tuple[Union[BattleforgeMesh, None], Dict[str, int]]:
     """Create a Battleforge Mesh from a Blender Mesh Object."""
     if flip_normals:
@@ -3260,7 +3285,7 @@ def create_mesh(
     # --- COLOR / ALPHA from BSDF chain ---
     # Color map is required → resolve from BSDF.Base Color chain (falls back to the labeled image)
     color_src = base_color_in if (base_color_in and base_color_in.is_linked) else color_img_node
-    if not set_color_map(color_src, new_mesh, mesh_index, model_name, folder_path):
+    if not set_color_map(color_src, new_mesh, mesh_index, model_name, folder_path, mip_maps):
         print(f"Failed to set color map for mesh {mesh.name}. Aborting mesh export.")
         return None, per_mesh_bone_data
 
@@ -3270,7 +3295,7 @@ def create_mesh(
         if normal_src is None:
             logger.log(f"Normal map is enabled in bit 17, but no normal map found for mesh {mesh.name}.", "Warning", "WARNING")
         set_normal_map(
-            normal_src, new_mesh, mesh_index, model_name, folder_path
+            normal_src, new_mesh, mesh_index, model_name, folder_path, mip_maps
         )
 
     # --- PARAM (_par) from artist images (bit 16) ---
@@ -3283,14 +3308,14 @@ def create_mesh(
 
         set_metallic_roughness_emission_map(
             mr_src_r, mr_src_g, mr_src_a, mr_src_b,
-            new_mesh, mesh_index, model_name, folder_path
+            new_mesh, mesh_index, model_name, folder_path, mip_maps
         )
 
         # --- FLU map image (behind bit 16, same enable as the par system) ---
         if flu_tex_l1 and getattr(flu_tex_l1, "image", None):
             new_mesh.textures.length += 1
             t = Texture()
-            t.name = get_converted_texture(flu_tex_l1.image, model_name, mesh_index, folder_path, file_ending="_flu", dxt_format="DXT5")
+            t.name = get_converted_texture(flu_tex_l1.image, model_name, mesh_index, folder_path, file_ending="_flu", dxt_format="DXT5", mip_maps=mip_maps)
             t.length = len(t.name)
             t.identifier = 1668510770
             new_mesh.textures.textures.append(t)
@@ -3341,7 +3366,7 @@ def create_mesh(
         refraction_src = ref_img_node if ref_img_node else None
         refraction_color = ref_col_node if ref_col_node else None
         refraction.rgb = set_refraction_color_and_map(
-            refraction_color, refraction_src, new_mesh, mesh_index, model_name, folder_path
+            refraction_color, refraction_src, new_mesh, mesh_index, model_name, folder_path, mip_maps
         )
     else:
         refraction.rgb = [0.0, 0.0, 0.0]
@@ -3377,6 +3402,7 @@ def create_cdsp_mesh_file(
     filepath: str,
     flip_normals: bool,
     add_skin_mesh: bool = False,
+    mip_maps: str = "auto",
 ):
     """Create a CDspMeshFile from a Collection of Meshes."""
     _cdsp_meshfile = CDspMeshFile()
@@ -3394,6 +3420,7 @@ def create_cdsp_mesh_file(
                     filepath,
                     flip_normals,
                     add_skin_mesh,
+                    mip_maps,
                 )
                 if _mesh is None:
                     return None, None
@@ -4368,6 +4395,7 @@ def save_drs(
     set_model_name_prefix: str,
     auto_fix_quad_faces: bool,
     export_tangents: bool = True,
+    mip_maps: str = "auto",
 ):
     """Save the DRS file."""
     global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref  # pylint: disable=global-statement
@@ -4527,6 +4555,7 @@ def save_drs(
             folder_path,
             flip_normals,
             add_skin_mesh,
+            mip_maps,
         )
         if cdsp_mesh_file is None:
             logger.log("Failed to create CDspMeshFile.", "Mesh File Error", "ERROR")
