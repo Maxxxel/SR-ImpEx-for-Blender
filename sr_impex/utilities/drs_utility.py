@@ -1014,7 +1014,7 @@ def convert_image_to_dds(
 
     # Build the argument list for texconv.exe
     texconv_exe = os.path.join(resource_dir, "texconv.exe")
-    args = [texconv_exe, "-ft", "dds", "-f", dxt_format, "-dx9", "-pow2", "-srgb"]
+    args = [texconv_exe, "-ft", "dds", "-f", dxt_format, "-m", "0", "-if", "FANT", "-dx9", "-pow2"]
 
     if extra_args:
         args.extend(extra_args)
@@ -2817,7 +2817,7 @@ def set_color_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path) -
         return False
     new_mesh.textures.length += 1
     t = Texture()
-    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_col", dxt_format="DXT5")
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_col", dxt_format="DXT5", extra_args=["-bc","u"])
     t.length = len(t.name)
     t.identifier = 1684432499
     new_mesh.textures.textures.append(t)
@@ -2834,7 +2834,7 @@ def set_normal_map(sock_or_node, new_mesh, mesh_index, model_name, folder_path):
         return
     new_mesh.textures.length += 1
     t = Texture()
-    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_nor", dxt_format="DXT1", extra_args=["-at","0.0"])
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_nor", dxt_format="DXT1", extra_args=["-at","0.0", "-bc","u"])
     t.length = len(t.name)
     t.identifier = 1852992883
     new_mesh.textures.textures.append(t)
@@ -2977,7 +2977,7 @@ def set_metallic_roughness_emission_map(
 
     new_mesh.textures.length += 1
     t = Texture()
-    t.name = get_converted_texture(new_img, model_name, mesh_index, folder_path, file_ending="_par", dxt_format="DXT5", extra_args=["-bc","d"])
+    t.name = get_converted_texture(new_img, model_name, mesh_index, folder_path, file_ending="_par", dxt_format="DXT5", extra_args=["-bc","u", "-sepalpha"])
     t.length = len(t.name)
     t.identifier = 1936745324
     new_mesh.textures.textures.append(t)
@@ -3045,7 +3045,7 @@ def set_refraction_color_and_map(refraction_color_node, refraction_map_node, new
 
     new_mesh.textures.length += 1
     t = Texture()
-    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_ref", dxt_format="DXT5")
+    t.name = get_converted_texture(img, model_name, mesh_index, folder_path, file_ending="_ref", dxt_format="DXT5", extra_args=["-bc","u"])
     t.length = len(t.name)
     t.identifier = 1919116143
     new_mesh.textures.textures.append(t)
