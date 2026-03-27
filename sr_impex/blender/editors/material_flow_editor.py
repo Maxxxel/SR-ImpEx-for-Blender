@@ -1,7 +1,11 @@
 # sr_impex/material_flow_editor_blender.py
 import bpy
-from bpy.props import IntProperty, BoolProperty, FloatVectorProperty, PointerProperty, FloatProperty
+from bpy.props import IntProperty, BoolProperty, FloatVectorProperty, PointerProperty, FloatProperty, StringProperty
 from bpy.types import Panel, PropertyGroup, Operator
+
+ENV_HELPER_COLLECTION_NAME = "Environment_Collection"
+ENV_HELPER_OBJECT_NAME = "Environment_Cubemap"
+ENV_CUBEMAP_NODE_LABEL = "Environment Cubemap (_env)"
 
 # Same labels you used in the PyQt material editor (so users see familiar names)
 KNOWN_MATERIAL_FLAGS = {
@@ -9,15 +13,29 @@ KNOWN_MATERIAL_FLAGS = {
     1: "Decal Mode",
     16: "Use Parameter Map",
     17: "Use Normal Map",
-    18: "Use Refraction Map",
+    18: "Use Refraction / Env Map Flag",
     20: "Disable Receive Shadows",
     21: "Enable SH Lighting",
     # Unknowns are auto-filled as "Unknown Bitflag #N"
 }
 _MAX_BITS = 32
+_REF_ENV_DEBUG = False
 
 # --- Material flags PG --------------------------------------------------------
 _UPDATING_FLAGS = False  # guard to avoid recursive updates
+
+def _debug_ref_env(message: str) -> None:
+    if _REF_ENV_DEBUG:
+        print(f"[DRS RefEnv] {message}")
+
+def _resolve_owner_object(flags_pg: bpy.types.PropertyGroup, ctx: bpy.types.Context | None = None) -> bpy.types.Object | None:
+    obj = getattr(flags_pg, "id_data", None)
+    if obj is not None and getattr(obj, "type", None) == "MESH":
+        return obj
+    obj = ctx.object if (ctx is not None and hasattr(ctx, "object")) else None
+    if obj is not None and getattr(obj, "type", None) == "MESH":
+        return obj
+    return None
 
 # In material_flow_editor.py
 
@@ -230,6 +248,18 @@ def _update_refraction_connection(obj):
     mat = obj.active_material
     nt = mat.node_tree
 
+    material_flags = getattr(obj, "drs_material", None)
+    if material_flags is None:
+        return
+
+    use_refraction = bool(
+        getattr(material_flags, 'use_ref_map', getattr(material_flags, 'bit_18', False))
+    )
+    has_refraction_image = _has_refraction_map_for_object(obj)
+    if use_refraction and not has_refraction_image:
+        # Keep branch muted when refraction toggle is on but no _ref image exists.
+        use_refraction = False
+
     # Core nodes created by DRSMaterial when _ref is present:
     mix_refraction = None
 
@@ -239,10 +269,7 @@ def _update_refraction_connection(obj):
             mix_refraction = node
 
     if not mix_refraction:
-        print("Mix Refraction Shader node not found.")
         return
-
-    use_refraction = getattr(obj.drs_material, 'bit_18', False)
 
     if use_refraction:
         try:
@@ -386,14 +413,19 @@ def _on_raw_changed(self, _ctx):
     _UPDATING_FLAGS = True
     v = int(self.bool_parameter) & 0xFFFFFFFF
     old_bit_0 = getattr(self, 'bit_0', False)
+    old_bit_18 = getattr(self, 'bit_18', False)
     for i in range(_MAX_BITS):
         setattr(self, f"bit_{i}", bool((v >> i) & 1))
     _UPDATING_FLAGS = False
     # Update alpha connection if bit 0 changed
     new_bit_0 = getattr(self, 'bit_0', False)
+    obj = _ctx.object if hasattr(_ctx, 'object') else None
     if old_bit_0 != new_bit_0:
-        obj = _ctx.object if hasattr(_ctx, 'object') else None
         _update_alpha_connection(obj)
+    if obj is not None and old_bit_18 != getattr(self, 'bit_18', False):
+        _update_refraction_connection(obj)
+    elif obj is not None:
+        _update_refraction_connection(obj)
 
 def _on_bit_changed(self, _ctx):
     global _UPDATING_FLAGS
@@ -430,9 +462,251 @@ def _on_bit_17_changed(self, ctx):
     obj = ctx.object if hasattr(ctx, 'object') else None
     _update_normal_connection(obj)
 
+def _sync_effective_bit_18(flags_pg: bpy.types.PropertyGroup) -> None:
+    use_ref = bool(getattr(flags_pg, "use_ref_map", False))
+    use_env = bool(getattr(flags_pg, "use_env_map", False))
+    _set_bit_state(flags_pg, 18, use_ref or use_env)
+
+def _set_ref_env_notice(flags_pg: bpy.types.PropertyGroup, text: str) -> None:
+    if flags_pg is None:
+        return
+    try:
+        flags_pg.ref_env_notice = text
+    except Exception:
+        pass
+
 def _on_bit_18_changed(self, ctx):
+    if _UPDATING_FLAGS:
+        return
+
     _on_bit_changed(self, ctx)
-    obj = ctx.object if hasattr(ctx, 'object') else None
+    obj = _resolve_owner_object(self, ctx)
+
+    if bool(getattr(self, "bit_18", False)):
+        has_refraction_image = _has_refraction_map_for_object(obj)
+        if not has_refraction_image:
+            _set_bit_state(self, 18, False)
+            _set_ref_env_notice(self, "Enable Refraction Map requires a loaded Refraction Map (_ref) image.")
+        else:
+            _set_ref_env_notice(self, "")
+    else:
+        _set_ref_env_notice(self, "")
+
+    _update_refraction_connection(obj)
+
+def _on_use_ref_map_changed(self, ctx):
+    if _UPDATING_FLAGS:
+        return
+
+    obj = _resolve_owner_object(self, ctx)
+
+    if bool(getattr(self, "use_ref_map", False)) and not _has_refraction_map_for_object(obj):
+        _debug_ref_env(
+            f"_on_use_ref_map_changed: rejected enable for mesh='{getattr(obj, 'name', '<none>')}' because no refraction image was detected"
+        )
+        self.use_ref_map = False
+        _set_ref_env_notice(self, "Enable Refraction Map requires a loaded Refraction Map (_ref) image.")
+        _sync_effective_bit_18(self)
+        _update_refraction_connection(obj)
+        return
+
+    _set_ref_env_notice(self, "")
+    _sync_effective_bit_18(self)
+    _update_refraction_connection(obj)
+
+def _find_parent_collection(root: bpy.types.Collection, target: bpy.types.Collection) -> bpy.types.Collection | None:
+    for child in root.children:
+        if child == target:
+            return root
+        found = _find_parent_collection(child, target)
+        if found is not None:
+            return found
+    return None
+
+def _find_drs_model_collection_for_object(obj: bpy.types.Object, scene: bpy.types.Scene) -> bpy.types.Collection | None:
+    if obj is None or obj.type != "MESH" or scene is None:
+        return None
+
+    for start_col in getattr(obj, "users_collection", []) or []:
+        col = start_col
+        for _ in range(32):
+            if col is None:
+                break
+            if col.name.startswith("DRSModel_"):
+                return col
+            col = _find_parent_collection(scene.collection, col)
+    return None
+
+def _has_refraction_map_for_object(obj: bpy.types.Object) -> bool:
+    if obj is None or obj.type != 'MESH':
+        return False
+    mat = obj.active_material
+    if mat is None or not mat.use_nodes:
+        return False
+
+    refraction_tex_node = _find_node_by_label_or_name(mat.node_tree, 'TEX_IMAGE', 'Refraction Map (_ref)') or \
+                          _find_node_by_label_or_name(mat.node_tree, 'TEX_IMAGE', 'Refraction Map')
+    return bool(refraction_tex_node and getattr(refraction_tex_node, 'image', None))
+
+def _get_env_cubemap_object_for_object(obj: bpy.types.Object, ctx: bpy.types.Context | None = None) -> bpy.types.Object | None:
+    scene = None
+    if ctx is not None:
+        scene = ctx.scene
+    elif bpy.context is not None:
+        scene = bpy.context.scene
+
+    source_collection = _find_drs_model_collection_for_object(obj, scene)
+    if source_collection is None:
+        return None
+
+    env_collection = source_collection.children.get(ENV_HELPER_COLLECTION_NAME)
+    if env_collection is None:
+        return None
+
+    env_obj = env_collection.objects.get(ENV_HELPER_OBJECT_NAME)
+    if env_obj is None or env_obj.type != "MESH":
+        return None
+
+    return env_obj
+
+def _has_env_cubemap_for_object(obj: bpy.types.Object, ctx: bpy.types.Context | None = None) -> bool:
+    env_obj = _get_env_cubemap_object_for_object(obj, ctx)
+    if env_obj is None:
+        _debug_ref_env(f"_has_env_cubemap_for_object: no env helper object for mesh '{getattr(obj, 'name', '<none>')}'")
+        return False
+
+    mat = env_obj.active_material
+    if mat is None and getattr(env_obj.data, "materials", None):
+        mat = env_obj.data.materials[0]
+        _debug_ref_env(
+            f"_has_env_cubemap_for_object: using first material slot fallback for env helper '{env_obj.name}'"
+        )
+    if mat is None or not mat.use_nodes:
+        _debug_ref_env(
+            f"_has_env_cubemap_for_object: material missing or no nodes on env helper '{env_obj.name}'"
+        )
+        return False
+
+    for node in mat.node_tree.nodes:
+        if node.type == "TEX_IMAGE" and (node.label == ENV_CUBEMAP_NODE_LABEL or node.name == ENV_CUBEMAP_NODE_LABEL):
+            has_image = bool(getattr(node, "image", None))
+            _debug_ref_env(
+                f"_has_env_cubemap_for_object: env image node found on '{env_obj.name}', has_image={has_image}"
+            )
+            return has_image
+    _debug_ref_env(
+        f"_has_env_cubemap_for_object: env image node '{ENV_CUBEMAP_NODE_LABEL}' not found on '{env_obj.name}'"
+    )
+    return False
+
+def _set_env_cubemap_visibility_for_object(obj: bpy.types.Object, visible: bool, ctx: bpy.types.Context | None = None) -> None:
+    env_obj = _get_env_cubemap_object_for_object(obj, ctx)
+    if env_obj is None:
+        return
+
+    try:
+        env_obj.hide_viewport = not visible
+        env_obj.hide_render = not visible
+        env_obj.hide_set(not visible)
+    except Exception:
+        pass
+
+def _set_bit_state(flags_pg: bpy.types.PropertyGroup, idx: int, enabled: bool) -> None:
+    global _UPDATING_FLAGS
+    if flags_pg is None:
+        return
+
+    # Build raw value from the current checkbox states to avoid stale raw-property races.
+    current_raw = 0
+    for i in range(_MAX_BITS):
+        if bool(getattr(flags_pg, f"bit_{i}", False)):
+            current_raw |= 1 << i
+
+    mask = 1 << idx
+    target_raw = (current_raw | mask) if enabled else (current_raw & ~mask)
+    current_bit = bool(getattr(flags_pg, f"bit_{idx}", False))
+    if current_raw == target_raw and current_bit == enabled:
+        return
+
+    if _UPDATING_FLAGS:
+        return
+
+    _UPDATING_FLAGS = True
+    try:
+        flags_pg.bool_parameter = target_raw
+        for i in range(_MAX_BITS):
+            setattr(flags_pg, f"bit_{i}", bool((target_raw >> i) & 1))
+    finally:
+        _UPDATING_FLAGS = False
+
+def _initialize_ref_env_toggles_from_import(obj: bpy.types.Object, ctx: bpy.types.Context | None = None) -> None:
+    global _UPDATING_FLAGS
+    if obj is None or obj.type != 'MESH' or not hasattr(obj, "drs_material") or obj.drs_material is None:
+        return
+
+    flags = obj.drs_material
+    imported_raw = int(obj.get("_drs_imported_bool_parameter", int(getattr(flags, "bool_parameter", 0))))
+    imported_bit_18 = bool((imported_raw >> 18) & 1)
+
+    has_refraction_image = _has_refraction_map_for_object(obj)
+    has_env_cubemap = _has_env_cubemap_for_object(obj, ctx)
+
+    target_ref_toggle = imported_bit_18 and has_refraction_image
+    target_env_toggle = imported_bit_18 and has_env_cubemap
+
+    _debug_ref_env(
+        f"_initialize_ref_env_toggles_from_import: mesh='{obj.name}', imported_raw={imported_raw}, imported_bit18={imported_bit_18}, has_ref={has_refraction_image}, has_env={has_env_cubemap}, target_ref={target_ref_toggle}, target_env={target_env_toggle}"
+    )
+
+    _set_bit_state(flags, 18, target_ref_toggle)
+    prev_guard = _UPDATING_FLAGS
+    _UPDATING_FLAGS = True
+    try:
+        flags.use_ref_map = target_ref_toggle
+    finally:
+        _UPDATING_FLAGS = prev_guard
+
+    if bool(getattr(flags, "use_env_map", False)) != target_env_toggle:
+        prev_guard = _UPDATING_FLAGS
+        _UPDATING_FLAGS = True
+        try:
+            flags.use_env_map = target_env_toggle
+        finally:
+            _UPDATING_FLAGS = prev_guard
+
+    _sync_effective_bit_18(flags)
+
+    _set_ref_env_notice(flags, "")
+    _set_env_cubemap_visibility_for_object(obj, target_env_toggle, ctx)
+    _update_refraction_connection(obj)
+
+    _debug_ref_env(
+        f"_initialize_ref_env_toggles_from_import result: mesh='{obj.name}', bit_18={bool(getattr(flags, 'bit_18', False))}, use_ref_map={bool(getattr(flags, 'use_ref_map', False))}, use_env_map={bool(getattr(flags, 'use_env_map', False))}, raw={int(getattr(flags, 'bool_parameter', 0))}"
+    )
+
+def _on_use_env_map_changed(self, ctx):
+    if _UPDATING_FLAGS:
+        return
+
+    obj = _resolve_owner_object(self, ctx)
+    if bool(getattr(self, "use_env_map", False)) and not _has_env_cubemap_for_object(obj, ctx):
+        _debug_ref_env(
+            f"_on_use_env_map_changed: rejected enable for mesh='{getattr(obj, 'name', '<none>')}' because no env image was detected"
+        )
+        self.use_env_map = False
+        _set_ref_env_notice(self, "Enable Env/Cube Map requires a loaded Environment Cubemap (_env) image.")
+        _set_env_cubemap_visibility_for_object(obj, False, ctx)
+        _sync_effective_bit_18(self)
+        _update_refraction_connection(obj)
+        return
+
+    _debug_ref_env(
+        f"_on_use_env_map_changed: mesh='{getattr(obj, 'name', '<none>')}', use_env_map={bool(getattr(self, 'use_env_map', False))}"
+    )
+
+    _set_ref_env_notice(self, "")
+    _set_env_cubemap_visibility_for_object(obj, bool(getattr(self, "use_env_map", False)), ctx)
+    _sync_effective_bit_18(self)
     _update_refraction_connection(obj)
 
 def _bit_prop_factory(idx):
@@ -456,6 +730,23 @@ class DRS_MaterialFlagsPG(PropertyGroup):
         default=0,
         min=0,
         update=_on_raw_changed,
+    )  # type: ignore
+    use_env_map: BoolProperty(
+        name="Use Env/Cube Map",
+        description="Treat environment cubemap as refraction flag source on export when available",
+        default=False,
+        update=_on_use_env_map_changed,
+    )  # type: ignore
+    use_ref_map: BoolProperty(
+        name="Use Refraction Map",
+        description="Use Refraction Map (_ref) image as bit 18 source",
+        default=False,
+        update=_on_use_ref_map_changed,
+    )  # type: ignore
+    ref_env_notice: StringProperty(
+        name="Ref/Env Notice",
+        default="",
+        options={'HIDDEN'},
     )  # type: ignore
 
 # --- Flow PG ------------------------------------------------------------------
@@ -680,10 +971,32 @@ class DRS_PT_MaterialFlags(Panel):
         flags = o.drs_material
         layout.prop(flags, "bool_parameter")
 
+        has_env_cubemap = _has_env_cubemap_for_object(o, ctx)
+        has_refraction_map = _has_refraction_map_for_object(o)
+
+        notice_text = str(getattr(flags, "ref_env_notice", "") or "")
+        if notice_text:
+            notice_box = layout.box()
+            notice_box.alert = True
+            notice_box.label(text=notice_text, icon="ERROR")
+
+        if not (has_env_cubemap or has_refraction_map):
+            layout.label(text="Use Refraction Map / Use Env/Cube Map requires a Refraction Map (_ref) or Environment Cubemap (_env) with an image.", icon="INFO")
+
         # max_known = max(KNOWN_MATERIAL_FLAGS.keys()) if KNOWN_MATERIAL_FLAGS else 0
 
         col = layout.column(align=True)
         for i in range(_MAX_BITS):
+            if i == 18:
+                col.prop(flags, "use_ref_map", text="Use Refraction Map (Bit 18)")
+                if not has_refraction_map:
+                    col.label(text="Ref toggle needs Refraction Map (_ref) image.", icon="INFO")
+                env_row = col.row()
+                env_row.enabled = True
+                env_row.prop(flags, "use_env_map", text="Use Env/Cube Map (Bit 18)")
+                if not has_env_cubemap:
+                    col.label(text="Env toggle needs Environment Cubemap (_env) image.", icon="INFO")
+                continue
             label = KNOWN_MATERIAL_FLAGS.get(i, f"Unknown Bitflag #{i+1}")
             col.prop(flags, f"bit_{i}", text=f"{label} (Bit {i})")
 

@@ -42,6 +42,7 @@ from sr_impex.blender.transform_utils import (
     ensure_mode,
     parent_under_game_axes,
     create_empty,
+    get_conversion_matrix,
 )
 from sr_impex.blender.drs_material import DRSMaterial
 from sr_impex.blender.bmesh_utils import new_bmesh_from_object, edit_bmesh_from_object, new_bmesh
@@ -54,7 +55,7 @@ from sr_impex.blender.editors.effect_set_editor import (
     blob_to_effectset as _blob_to_effectset,
     EFFECT_BLOB_KEY,
 )
-from sr_impex.blender.editors.material_flow_editor import _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state
+from sr_impex.blender.editors.material_flow_editor import _update_alpha_connection, _update_wind_nodes, _update_flow_nodes, _update_parameter_connection, _update_refraction_connection, _update_flu_apply_mask_state, _initialize_ref_env_toggles_from_import
 
 from sr_impex.utilities.ska_utility import get_actions, export_ska
 from sr_impex.utilities.helpers import get_collection, verify_collections, abort, copy, build_ska_export_name_map, find_or_create_collection, _norm_ska_key, _resolve_action_from_blob_name
@@ -78,6 +79,14 @@ texture_cache_nor = {}
 texture_cache_par = {}
 texture_cache_flu = {}
 texture_cache_ref = {}
+texture_cache_env = {}
+
+ENV_TEXTURE_IDENTIFIER = 1701738100
+ENV_TEXTURE_SUFFIX = "_env"
+ENV_HELPER_COLLECTION_NAME = "Environment_Collection"
+ENV_HELPER_OBJECT_NAME = "Environment_Cubemap"
+ENV_HELPER_MATERIAL_NAME = "Environment_Cubemap_Material"
+ENV_HELPER_IMAGE_NODE_LABEL = "Environment Cubemap (_env)"
 
 with open(resource_dir + "/bone_versions.json", "r", encoding="utf-8") as f:
     bones_list = json.load(f)
@@ -924,6 +933,7 @@ def save_image_copy_as_png(img: bpy.types.Image, output_path: str, file_ending: 
         pass
 
 
+    created_temp_image = False
     if file_ending == "_par":
         new_img = img # we already have a copy
     else:
@@ -945,6 +955,7 @@ def save_image_copy_as_png(img: bpy.types.Image, output_path: str, file_ending: 
             alpha=True,        # keep alpha; PNG supports it and RGBA buffer expects it
             float_buffer=False # 8-bit per channel
         )
+        created_temp_image = True
 
     try:
         if file_ending != "_par":
@@ -980,10 +991,214 @@ def save_image_copy_as_png(img: bpy.types.Image, output_path: str, file_ending: 
             raise RuntimeError("PNG not created or empty after save().")
     finally:
         # Clean up the temporary datablock
+        if created_temp_image:
+            try:
+                bpy.data.images.remove(new_img, do_unlink=True)
+            except Exception:
+                pass
+
+
+def _extract_cubemap_faces_to_pngs(
+    img: bpy.types.Image, temp_dir: str, base_tag: str
+) -> dict[str, str]:
+    width, height = int(img.size[0]), int(img.size[1])
+    if width <= 0 or height <= 0:
+        raise RuntimeError("Invalid cubemap source image size.")
+
+    face_size = 0
+    layout = None
+
+    # Canonical game face order (Y-up convention):
+    # +X, -X, +Y, -Y, +Z, -Z
+    canonical_face_order = ("posx", "negx", "posy", "negy", "posz", "negz")
+
+    # Blender typically exposes cubemap DDS as a 2D strip. Accept both:
+    # - top->down (1x6): +X, -X, +Y, -Y, +Z, -Z
+    # - left->right (6x1): +X, -X, +Y, -Y, +Z, -Z
+    if width == height * 6:
+        face_size = height
+        layout = "left_to_right"
+    elif height == width * 6:
+        face_size = width
+        layout = "top_to_down"
+    elif width % 4 == 0 and height % 3 == 0 and (width // 4) == (height // 3):
+        face_size = width // 4
+        layout = "cross_4x3"
+    else:
+        raise RuntimeError(
+            "Unsupported cubemap layout. Expected 6x1 strip, 1x6 strip, or 4x3 cross."
+        )
+
+    pixel_count = width * height * 4
+    src = np.empty(pixel_count, dtype=np.float32)
+    img.pixels.foreach_get(src)
+    src = src.reshape((height, width, 4))
+
+    # texassemble face order: +X -X +Y -Y +Z -Z
+    face_positions: dict[str, tuple[int, int]] = {}
+    if layout == "left_to_right":
+        face_positions = {
+            face: (idx, 0)
+            for idx, face in enumerate(canonical_face_order)
+        }
+    elif layout == "top_to_down":
+        face_positions = {
+            face: (0, idx)
+            for idx, face in enumerate(canonical_face_order)
+        }
+    else:
+        # Cross layout (top-left origin):
+        #        +Y
+        #   -X   +Z   +X   -Z
+        #        -Y
+        face_positions = {
+            "posx": (2, 1),
+            "negx": (0, 1),
+            "posy": (1, 0),
+            "negy": (1, 2),
+            "posz": (1, 1),
+            "negz": (3, 1),
+        }
+
+    os.makedirs(temp_dir, exist_ok=True)
+    out_paths: dict[str, str] = {}
+
+    for face_name, (col, row_top) in face_positions.items():
+        x0 = col * face_size
+        # Blender pixel arrays are bottom-up; convert from top-origin row index.
+        y0 = height - (row_top + 1) * face_size
+        patch = src[y0 : y0 + face_size, x0 : x0 + face_size, :]
+
+        face_img = bpy.data.images.new(
+            name=f"__tmp_env_{face_name}_{base_tag}",
+            width=face_size,
+            height=face_size,
+            alpha=True,
+            float_buffer=False,
+        )
         try:
-            bpy.data.images.remove(new_img, do_unlink=True)
-        except Exception:
-            pass
+            face_img.alpha_mode = "STRAIGHT"
+            face_img.file_format = "PNG"
+            face_img.pixels.foreach_set(patch.reshape(-1))
+            face_img.update()
+
+            out_path = os.path.join(temp_dir, f"{base_tag}_{face_name}.png")
+            face_img.save(filepath=os.path.abspath(out_path))
+            out_paths[face_name] = out_path
+        finally:
+            try:
+                bpy.data.images.remove(face_img, do_unlink=True)
+            except Exception:
+                pass
+
+    return out_paths
+
+
+def _convert_cubemap_image_to_dds(
+    img: bpy.types.Image,
+    output_filename: str,
+    folder_path: str,
+    mip_arg: str,
+) -> tuple[int, str, str]:
+    temp_dir = os.path.join(resource_dir, "temp")
+    tag = f"{output_filename}_{uuid.uuid4().hex[:8]}"
+    final_output_path = os.path.join(folder_path, output_filename + ".dds")
+
+    face_files: list[str] = []
+    face_dds_files: list[str] = []
+    try:
+        faces = _extract_cubemap_faces_to_pngs(img, temp_dir, tag)
+        face_files = list(faces.values())
+
+        texassemble_exe = os.path.join(resource_dir, "texassemble.exe")
+        if not os.path.exists(texassemble_exe):
+            return (1, "", "texassemble.exe not found in resources folder.")
+
+        texconv_exe = os.path.join(resource_dir, "texconv.exe")
+        if not os.path.exists(texconv_exe):
+            return (1, "", "texconv.exe not found in resources folder.")
+
+        # Compress each face to DDS first. Assembling DDS faces directly keeps
+        # cubemap dimensionality and avoids flattening back into a 2D strip.
+        for face_name in ("posx", "negx", "posy", "negy", "posz", "negz"):
+            face_png = faces[face_name]
+            face_base = os.path.splitext(os.path.basename(face_png))[0]
+            face_dds = os.path.join(temp_dir, face_base + ".dds")
+
+            texconv_face_args = [
+                texconv_exe,
+                "-ft",
+                "dds",
+                "-f",
+                "DXT5",
+                "-m",
+                mip_arg,
+                "-if",
+                "FANT",
+                "-dx9",
+                "-y",
+                "-o",
+                temp_dir,
+                face_png,
+            ]
+
+            face_res = subprocess.run(
+                texconv_face_args,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                errors="replace",
+                shell=False,
+            )
+            if face_res.returncode != 0 or not os.path.exists(face_dds):
+                return (
+                    face_res.returncode,
+                    face_res.stdout,
+                    f"texconv face conversion failed ({face_name}): {face_res.stderr}",
+                )
+            face_dds_files.append(face_dds)
+
+        assemble_args = [
+            texassemble_exe,
+            "cube",
+            # texassemble rejects DDS inputs with mip chains unless explicitly stripped.
+            "-stripmips",
+            "-y",
+            "-o",
+            final_output_path,
+            *face_dds_files,
+        ]
+
+        assemble_res = subprocess.run(
+            assemble_args,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            shell=False,
+        )
+        if assemble_res.returncode != 0 or not os.path.exists(final_output_path):
+            return (
+                assemble_res.returncode,
+                assemble_res.stdout,
+                f"texassemble failed: {assemble_res.stderr}",
+            )
+        return (0, assemble_res.stdout, assemble_res.stderr)
+    finally:
+        for face_file in face_files:
+            try:
+                if os.path.exists(face_file):
+                    os.remove(face_file)
+            except Exception:
+                pass
+        for face_dds in face_dds_files:
+            try:
+                if os.path.exists(face_dds):
+                    os.remove(face_dds)
+            except Exception:
+                pass
 
 
 def convert_image_to_dds(
@@ -1020,6 +1235,9 @@ def convert_image_to_dds(
         mip_arg = str(min(selected_max, possible_levels))
     else:
         mip_arg = "0"
+
+    if file_ending == ENV_TEXTURE_SUFFIX:
+        return _convert_cubemap_image_to_dds(img, output_filename, folder_path, mip_arg)
 
     try:
         save_image_copy_as_png(img, temp_path, file_ending)
@@ -1121,6 +1339,8 @@ def get_cache_for_type(file_ending: str) -> dict:
         return texture_cache_ref
     elif file_ending == "_flu":
         return texture_cache_flu
+    elif file_ending == ENV_TEXTURE_SUFFIX:
+        return texture_cache_env
     else:
         # Fallback to a general cache if needed.
         logger.log(
@@ -1190,6 +1410,363 @@ def get_converted_texture(
         return None
     cache[key] = dds_path
     return dds_path
+
+
+def find_environment_texture_name_in_drs(drs_file: DRS) -> Optional[str]:
+    cdsp = getattr(drs_file, "cdsp_mesh_file", None)
+    if cdsp is None:
+        return None
+
+    for mesh in cdsp.meshes or []:
+        textures = getattr(getattr(mesh, "textures", None), "textures", []) or []
+        for texture in textures:
+            if int(getattr(texture, "identifier", 0)) == ENV_TEXTURE_IDENTIFIER:
+                name = (getattr(texture, "name", "") or "").strip()
+                if name:
+                    return name
+    return None
+
+
+def _resolve_env_texture_path(dir_name: str, texture_name: str) -> str:
+    base_name = (texture_name or "").strip()
+    if not base_name:
+        return os.path.join(dir_name, "")
+
+    names_to_try = [base_name]
+    if not os.path.splitext(base_name)[1]:
+        names_to_try.append(base_name + ".dds")
+
+    for name in names_to_try:
+        candidate = os.path.join(dir_name, name)
+        if os.path.exists(candidate):
+            return candidate
+
+    for name in names_to_try:
+        candidate = os.path.join(dir_name, os.path.basename(name))
+        if os.path.exists(candidate):
+            return candidate
+
+    # Return the most likely path so caller can log a useful warning.
+    return os.path.join(dir_name, names_to_try[-1])
+
+
+def _get_or_create_environment_material(image: Optional[bpy.types.Image] = None) -> bpy.types.Material:
+    material = bpy.data.materials.get(ENV_HELPER_MATERIAL_NAME)
+    if material is None:
+        material = bpy.data.materials.new(ENV_HELPER_MATERIAL_NAME)
+
+    material.use_nodes = True
+    nt = material.node_tree
+    nt.nodes.clear()
+
+    out_node = nt.nodes.new("ShaderNodeOutputMaterial")
+    out_node.location = (500, 0)
+    emission = nt.nodes.new("ShaderNodeEmission")
+    emission.location = (260, 0)
+    image_node = nt.nodes.new("ShaderNodeTexImage")
+    image_node.location = (-20, 0)
+    image_node.label = ENV_HELPER_IMAGE_NODE_LABEL
+    image_node.name = ENV_HELPER_IMAGE_NODE_LABEL
+    image_node.interpolation = "Linear"
+    image_node.extension = "EXTEND"
+    if image is not None:
+        image_node.image = image
+
+    nt.links.new(image_node.outputs["Color"], emission.inputs["Color"])
+    nt.links.new(emission.outputs["Emission"], out_node.inputs["Surface"])
+    material.use_backface_culling = False
+    return material
+
+
+def _compute_collection_world_bounds(
+    source_collection: bpy.types.Collection,
+) -> tuple[Optional[Vector], Optional[Vector]]:
+    min_corner: Optional[Vector] = None
+    max_corner: Optional[Vector] = None
+
+    for obj in source_collection.all_objects:
+        if obj.type != "MESH":
+            continue
+        for corner in obj.bound_box:
+            world_pos = obj.matrix_world @ Vector(corner)
+            if min_corner is None:
+                min_corner = world_pos.copy()
+                max_corner = world_pos.copy()
+            else:
+                min_corner.x = min(min_corner.x, world_pos.x)
+                min_corner.y = min(min_corner.y, world_pos.y)
+                min_corner.z = min(min_corner.z, world_pos.z)
+                max_corner.x = max(max_corner.x, world_pos.x)
+                max_corner.y = max(max_corner.y, world_pos.y)
+                max_corner.z = max(max_corner.z, world_pos.z)
+
+    return min_corner, max_corner
+
+
+def _ensure_environment_helper_collection(
+    source_collection: bpy.types.Collection,
+) -> bpy.types.Collection:
+    existing = get_collection(source_collection, ENV_HELPER_COLLECTION_NAME)
+    if existing is not None:
+        return existing
+    return find_or_create_collection(source_collection, ENV_HELPER_COLLECTION_NAME)
+
+
+def _apply_env_preview_uv_layout(
+    mesh_data: bpy.types.Mesh,
+    image: bpy.types.Image,
+) -> None:
+    if mesh_data is None or image is None:
+        return
+
+    width, height = int(image.size[0]), int(image.size[1])
+    if width <= 0 or height <= 0:
+        return
+
+    canonical_order = ("posx", "negx", "posy", "negy", "posz", "negz")
+    # Inward-facing cube winding changes loop order relative to our corner tuple,
+    # which can rotate each tile by 90 degrees in preview. Keep this explicit and
+    # face-key based so it can be tuned per face if needed.
+    uv_rotation_steps_by_face = {
+        "posx": 1,
+        "negx": 1,
+        "posy": 0,
+        "negy": 3,
+        "posz": 1,
+        "negz": 1,
+    }
+
+    # Resolve input strip layout from image dimensions.
+    layout = None
+    if width == height * 6:
+        layout = "left_to_right"
+    elif height == width * 6:
+        layout = "top_to_down"
+    else:
+        # Unsupported preview layout (e.g. cross); leave UVs untouched.
+        return
+
+    if not mesh_data.uv_layers:
+        mesh_data.uv_layers.new(name="EnvPreviewUV")
+
+    uv_layer = mesh_data.uv_layers.active.data
+    # Convert Blender-facing normals into game space before face-key selection,
+    # so preview mapping respects the Y-up game convention.
+    blender_to_game = get_conversion_matrix(invert=True).to_3x3()
+
+    def _face_key_from_direction(direction: Vector) -> str:
+        n = (blender_to_game @ direction).normalized()
+        abs_x, abs_y, abs_z = abs(n.x), abs(n.y), abs(n.z)
+        if abs_x >= abs_y and abs_x >= abs_z:
+            return "posx" if n.x >= 0.0 else "negx"
+        if abs_y >= abs_x and abs_y >= abs_z:
+            return "posy" if n.y >= 0.0 else "negy"
+        return "posz" if n.z >= 0.0 else "negz"
+
+    for poly in mesh_data.polygons:
+        face_dir = Vector(poly.center)
+        if face_dir.length <= 1e-8:
+            face_dir = poly.normal.copy()
+        face_key = _face_key_from_direction(face_dir)
+        idx = canonical_order.index(face_key)
+
+        if layout == "left_to_right":
+            u0 = idx / 6.0
+            u1 = (idx + 1) / 6.0
+            v0, v1 = 0.0, 1.0
+        else:
+            # Row index is top-to-down in canonical order. Convert to Blender V.
+            u0, u1 = 0.0, 1.0
+            v0 = 1.0 - ((idx + 1) / 6.0)
+            v1 = 1.0 - (idx / 6.0)
+
+        uv_corners = ((u0, v0), (u1, v0), (u1, v1), (u0, v1))
+        rot_steps = uv_rotation_steps_by_face.get(face_key, 0) % 4
+        if rot_steps:
+            uv_corners = uv_corners[rot_steps:] + uv_corners[:rot_steps]
+        for local_i, loop_idx in enumerate(poly.loop_indices):
+            uv_layer[loop_idx].uv = uv_corners[local_i % 4]
+
+    mesh_data.update()
+
+
+def remove_environment_cubemap_helper(source_collection: bpy.types.Collection) -> bool:
+    env_collection = get_collection(source_collection, ENV_HELPER_COLLECTION_NAME)
+    if env_collection is None:
+        return False
+
+    for obj in list(env_collection.objects):
+        try:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        except Exception:
+            pass
+
+    if env_collection.users <= 1:
+        try:
+            bpy.data.collections.remove(env_collection)
+        except Exception:
+            pass
+    return True
+
+
+def create_environment_cubemap_helper(
+    source_collection: bpy.types.Collection,
+    image_path: Optional[str] = None,
+    image: Optional[bpy.types.Image] = None,
+) -> Optional[bpy.types.Object]:
+    if source_collection is None:
+        return None
+
+    env_collection = _ensure_environment_helper_collection(source_collection)
+
+    helper_obj = env_collection.objects.get(ENV_HELPER_OBJECT_NAME)
+    if helper_obj is None:
+        mesh_data = bpy.data.meshes.new(ENV_HELPER_OBJECT_NAME + "_Mesh")
+        helper_obj = bpy.data.objects.new(ENV_HELPER_OBJECT_NAME, mesh_data)
+        env_collection.objects.link(helper_obj)
+
+        # Unit cube centered at origin; we scale it based on model bounds.
+        vertices = [
+            (-0.5, -0.5, -0.5),
+            (0.5, -0.5, -0.5),
+            (0.5, 0.5, -0.5),
+            (-0.5, 0.5, -0.5),
+            (-0.5, -0.5, 0.5),
+            (0.5, -0.5, 0.5),
+            (0.5, 0.5, 0.5),
+            (-0.5, 0.5, 0.5),
+        ]
+        faces = [
+            # Winding intentionally reversed so normals point inward for cubemap preview.
+            (0, 1, 2, 3),
+            (4, 7, 6, 5),
+            (0, 4, 5, 1),
+            (1, 5, 6, 2),
+            (2, 6, 7, 3),
+            (3, 7, 4, 0),
+        ]
+        mesh_data.from_pydata(vertices, [], faces)
+        mesh_data.update()
+
+    img = image
+    if img is None and image_path:
+        try:
+            img = bpy.data.images.load(image_path, check_existing=True)
+
+            try:
+                width, height = int(img.size[0]), int(img.size[1])
+                if height == width * 6:
+                    logger.log(
+                        f"Loaded env cubemap as top->down strip ({width}x{height}). Face order expected: +X, -X, +Y, -Y, +Z, -Z.",
+                        "Info",
+                        "INFO",
+                    )
+                elif width == height * 6:
+                    logger.log(
+                        f"Loaded env cubemap as left->right strip ({width}x{height}). Face order expected: +X, -X, +Y, -Y, +Z, -Z.",
+                        "Info",
+                        "INFO",
+                    )
+            except Exception:
+                pass
+        except Exception as e:
+            logger.log(
+                f"Failed to load cubemap texture '{image_path}': {e}",
+                "Warning",
+                "WARNING",
+            )
+
+    mat = _get_or_create_environment_material(img)
+
+    if img is not None:
+        try:
+            _apply_env_preview_uv_layout(helper_obj.data, img)
+        except Exception as e:
+            logger.log(
+                f"Failed to apply env preview UV layout: {e}",
+                "Warning",
+                "WARNING",
+            )
+
+    if not helper_obj.data.materials:
+        helper_obj.data.materials.append(mat)
+    else:
+        helper_obj.data.materials[0] = mat
+
+    min_corner, max_corner = _compute_collection_world_bounds(source_collection)
+    if min_corner is not None and max_corner is not None:
+        center = (min_corner + max_corner) * 0.5
+        extent = max_corner - min_corner
+        max_dim = max(extent.x, extent.y, extent.z)
+        size = max(4.0, max_dim * 6.0)
+        helper_obj.location = center
+        helper_obj.scale = (size, size, size)
+    else:
+        helper_obj.location = (0.0, 0.0, 0.0)
+        helper_obj.scale = (40.0, 40.0, 40.0)
+
+    helper_obj.parent = None
+    helper_obj.display_type = "TEXTURED"
+    return helper_obj
+
+
+def get_environment_cubemap_image(
+    source_collection: bpy.types.Collection,
+) -> Optional[bpy.types.Image]:
+    if source_collection is None:
+        return None
+
+    env_collection = get_collection(source_collection, ENV_HELPER_COLLECTION_NAME)
+    if env_collection is None:
+        return None
+
+    for obj in env_collection.objects:
+        if obj.type != "MESH":
+            continue
+        mat = obj.active_material
+        if mat is None and getattr(obj.data, "materials", None):
+            mat = obj.data.materials[0]
+        if not mat or not mat.use_nodes or not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type == "TEX_IMAGE" and (
+                node.label == ENV_HELPER_IMAGE_NODE_LABEL
+                or node.name == ENV_HELPER_IMAGE_NODE_LABEL
+            ):
+                return getattr(node, "image", None)
+    return None
+
+
+def set_environment_map(
+    env_image: bpy.types.Image,
+    new_mesh: BattleforgeMesh,
+    mesh_index: int,
+    model_name: str,
+    folder_path: str,
+    mip_maps: str = "auto",
+) -> bool:
+    if not env_image:
+        return False
+
+    texture_name = get_converted_texture(
+        env_image,
+        model_name,
+        mesh_index,
+        folder_path,
+        file_ending=ENV_TEXTURE_SUFFIX,
+        dxt_format="DXT5",
+        mip_maps=mip_maps,
+    )
+    if not texture_name:
+        return False
+
+    new_mesh.textures.length += 1
+    t = Texture()
+    t.name = texture_name
+    t.length = len(t.name)
+    t.identifier = ENV_TEXTURE_IDENTIFIER
+    new_mesh.textures.textures.append(t)
+    return True
 
 
 def clean_vector(vec, tol=1e-6):
@@ -1753,10 +2330,12 @@ def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh
         # bool_parameter
         if hasattr(mesh_object, "drs_material") and mesh_object.drs_material:
             mesh_object.drs_material.bool_parameter = int(bf_mesh.bool_parameter)
+            mesh_object["_drs_imported_bool_parameter"] = int(bf_mesh.bool_parameter)
             _update_alpha_connection(mesh_object)
             _update_parameter_connection(mesh_object)
             _update_refraction_connection(mesh_object)
             _update_flu_apply_mask_state(mesh_object)
+            _initialize_ref_env_toggles_from_import(mesh_object)
         # flow
         if hasattr(mesh_object, "drs_flow") and mesh_object.drs_flow:
             fl = bf_mesh.flow
@@ -2313,6 +2892,7 @@ def load_drs(
     import_obbtree=False,
     limit_obb_depth=5,
     import_bb=False,
+    import_environment_cubemap=True,
 ):
     start_time = time.time()
     base_name = os.path.basename(filepath).split(".")[0]
@@ -2334,6 +2914,7 @@ def load_drs(
         "Meshes_Collection"
     )
     source_collection.children.link(mesh_collection)
+    imported_mesh_objects: List[bpy.types.Object] = []
 
     for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
         mesh_object, _ = create_mesh_object(
@@ -2341,6 +2922,7 @@ def load_drs(
         )
         setup_material_parameters(mesh_object, drs_file, mesh_index)
         mesh_collection.objects.link(mesh_object)
+        imported_mesh_objects.append(mesh_object)
 
     if drs_file.collision_shape is not None and import_collision_shape:
         import_collision_shapes(source_collection, drs_file)
@@ -2470,6 +3052,35 @@ def load_drs(
 
     # Apply the Transformations to the Source Collection
     parent_under_game_axes(source_collection, apply_transform)
+
+    if import_environment_cubemap:
+        try:
+            env_texture_name = find_environment_texture_name_in_drs(drs_file)
+            if env_texture_name:
+                env_texture_path = _resolve_env_texture_path(dir_name, env_texture_name)
+                if os.path.exists(env_texture_path):
+                    create_environment_cubemap_helper(
+                        source_collection,
+                        image_path=env_texture_path,
+                    )
+                else:
+                    logger.log(
+                        f"Environment cubemap not found on disk: {env_texture_path}",
+                        "Warning",
+                        "WARNING",
+                    )
+        except Exception as e:  # pylint: disable=broad-except
+            logger.log(
+                f"Failed to import environment cubemap helper: {e}",
+                "Warning",
+                "WARNING",
+            )
+
+    for mesh_object in imported_mesh_objects:
+        try:
+            _initialize_ref_env_toggles_from_import(mesh_object, context)
+        except Exception:
+            pass
 
     # Visual rig enhancements
     if armature_object:
@@ -3084,6 +3695,7 @@ def create_mesh(
     flip_normals: bool,
     add_skin_mesh: bool = False,
     mip_maps: str = "auto",
+    env_cubemap_image: Optional[bpy.types.Image] = None,
 ) -> Tuple[Union[BattleforgeMesh, None], Dict[str, int]]:
     """Create a Battleforge Mesh from a Blender Mesh Object."""
     if flip_normals:
@@ -3199,15 +3811,18 @@ def create_mesh(
 
     # Gather user flags
     user_flags = 0
+    use_env_map = False
+    use_ref_map = False
     try:
         mp = getattr(mesh, "drs_material", None)
         if mp:
             user_flags = int(mp.bool_parameter)
+            use_env_map = bool(getattr(mp, "use_env_map", False))
+            use_ref_map = bool(getattr(mp, "use_ref_map", ((user_flags >> 18) & 1) != 0))
     except Exception:
         user_flags = 0
-
-    def _bit(i: int) -> bool:
-        return ((user_flags >> i) & 1) != 0
+        use_env_map = False
+        use_ref_map = False
 
     mat = mesh.active_material if hasattr(mesh, "active_material") else None
     bsdf = _find_drs_bsdf(mat)  # Principled named "DRS Shader" (created in material builder) :contentReference[oaicite:1]{index=1}
@@ -3261,6 +3876,34 @@ def create_mesh(
     if ref_img_node and not getattr(ref_img_node, "image", None):
         ref_img_node = None
 
+    use_refraction_map = use_ref_map
+    has_refraction_map = ref_img_node is not None
+    has_env_cubemap = env_cubemap_image is not None
+    effective_bit_18 = (use_refraction_map and has_refraction_map) or (use_env_map and has_env_cubemap)
+
+    if use_refraction_map and not has_refraction_map:
+        logger.log(
+            f"Use Refraction Map is enabled for mesh {mesh.name}, but no refraction map image is available. Bit 18 will not be set from the refraction path.",
+            "Warning",
+            "WARNING",
+        )
+
+    if use_env_map and not has_env_cubemap:
+        logger.log(
+            f"Use Env Map is enabled for mesh {mesh.name}, but no environment cubemap is available. Bit 18 will not be set from the env path.",
+            "Warning",
+            "WARNING",
+        )
+
+    effective_flags = user_flags
+    if effective_bit_18:
+        effective_flags |= (1 << 18)
+    else:
+        effective_flags &= ~(1 << 18)
+
+    def _bit(i: int) -> bool:
+        return ((effective_flags >> i) & 1) != 0
+
     # -86061055: Bool, Textures, Refraction, Materials
     # -86061054: Bool, Textures, Refraction, Materials, LOD
     # -86061053: Bool, Textures, Refraction, Materials, LOD, Empty String
@@ -3278,7 +3921,7 @@ def create_mesh(
     new_mesh.flow = Flow() # Added for Hex 0xFADED006 onwards
 
     # Individual Material Parameters depending on the MaterialID:
-    new_mesh.bool_parameter = user_flags  # from UI
+    new_mesh.bool_parameter = effective_flags
     # Textures
     new_mesh.textures = Textures()
 
@@ -3288,6 +3931,27 @@ def create_mesh(
     if not set_color_map(color_src, new_mesh, mesh_index, model_name, folder_path, mip_maps):
         print(f"Failed to set color map for mesh {mesh.name}. Aborting mesh export.")
         return None, per_mesh_bone_data
+
+    env_texture_written = False
+    if use_env_map and env_cubemap_image is not None:
+        env_texture_written = set_environment_map(
+            env_cubemap_image,
+            new_mesh,
+            mesh_index,
+            model_name,
+            folder_path,
+            mip_maps,
+        )
+        if not env_texture_written:
+            logger.log(
+                f"Use Env Map is enabled for mesh {mesh.name}, but exporting the environment cubemap failed. _env texture was not written.",
+                "Warning",
+                "WARNING",
+            )
+
+    # Keep bool bit 18 aligned with what could actually be exported.
+    if use_env_map and has_env_cubemap and not env_texture_written and not (use_refraction_map and has_refraction_map):
+        new_mesh.bool_parameter &= ~(1 << 18)
 
     # --- NORMAL from BSDF chain (bit 17) ---
     if _bit(17):
@@ -3403,6 +4067,7 @@ def create_cdsp_mesh_file(
     flip_normals: bool,
     add_skin_mesh: bool = False,
     mip_maps: str = "auto",
+    env_cubemap_image: Optional[bpy.types.Image] = None,
 ):
     """Create a CDspMeshFile from a Collection of Meshes."""
     _cdsp_meshfile = CDspMeshFile()
@@ -3421,6 +4086,7 @@ def create_cdsp_mesh_file(
                     flip_normals,
                     add_skin_mesh,
                     mip_maps,
+                    env_cubemap_image,
                 )
                 if _mesh is None:
                     return None, None
@@ -4398,7 +5064,7 @@ def save_drs(
     mip_maps: str = "auto",
 ):
     """Save the DRS file."""
-    global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref  # pylint: disable=global-statement
+    global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref, texture_cache_flu, texture_cache_env  # pylint: disable=global-statement
     # === PRE-VALIDITY CHECKS =================================================
     # Ensure active collection is valid
     source_collection = bpy.context.view_layer.active_layer_collection.collection
@@ -4539,6 +5205,7 @@ def save_drs(
 
     # === CREATE DRS STRUCTURE =================================================
     folder_path = os.path.dirname(filepath)
+    env_cubemap_image = get_environment_cubemap_image(source_collection_copy)
 
     new_drs_file: DRS = DRS(model_type=model_type)
     try:
@@ -4556,6 +5223,7 @@ def save_drs(
             flip_normals,
             add_skin_mesh,
             mip_maps,
+            env_cubemap_image,
         )
         if cdsp_mesh_file is None:
             logger.log("Failed to create CDspMeshFile.", "Mesh File Error", "ERROR")
@@ -4738,6 +5406,8 @@ def save_drs(
     texture_cache_nor = {}
     texture_cache_par = {}
     texture_cache_ref = {}
+    texture_cache_flu = {}
+    texture_cache_env = {}
     new_drs_file = None
     unified_mesh = None
     meshes_collection = None

@@ -26,13 +26,14 @@ from .blender.editors import animation_set_editor
 from .blender.editors import material_flow_editor
 from .blender.editors import effect_set_editor
 from .blender.editors import bmg_state_editor
+from .blender.editors import environment_cubemap_editor
 
 bl_info = {
     "name": "SR-ImpEx",
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 5, 0),
-    "version": (3, 8, 0),
+    "version": (3, 9, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -240,6 +241,11 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
     import_debris: BoolProperty(
         name="Import Debris", description="Import debris for bmg files", default=True
     )  # type: ignore
+    import_environment_cubemap: BoolProperty(
+        name="Import Environment Cubemap",
+        description="Create an environment helper cube when an _env texture is present",
+        default=True,
+    )  # type: ignore
     import_modules: BoolProperty(
         name="Import Modules/Locators",
         description="Import modules and locators for drs files",
@@ -303,6 +309,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         layout.prop(self, "import_modules")
         layout.prop(self, "import_construction")
         layout.prop(self, "import_debris")
+        layout.prop(self, "import_environment_cubemap")
         # Add a separator
         layout.separator()
         # Debug Section
@@ -336,6 +343,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         keywords["import_modules"] = self.import_modules
         keywords["import_construction"] = self.import_construction
         keywords["import_debris"] = self.import_debris
+        keywords["import_environment_cubemap"] = self.import_environment_cubemap
 
         if self.clear_scene:
             # Delete all collections
@@ -360,6 +368,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         elif self.filepath.endswith(".bmg"):
             keywords.pop("import_all_supported_animations")
             keywords.pop("import_modules")
+            keywords.pop("import_environment_cubemap")
             load_bmg(context, **keywords)
             print_profiling_report()
             return {"FINISHED"}
@@ -515,7 +524,7 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
             self.report({"INFO"}, "Export successfull.")
         else:
             self.report({"ERROR"}, "Export failed. Check details in the Log..")
-            
+
         print_profiling_report()
 
         # Purge unused data blocks
@@ -663,7 +672,7 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
             self.report({"INFO"}, "Export successfull.")
         else:
             self.report({"ERROR"}, "Export failed. Check details in the Log..")
-            
+
         print_profiling_report()
 
         # Purge unused data blocks
@@ -702,7 +711,7 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
         items=available_actions,  # Note: Pass the function, not the call result!
         update=update_filename,
     )  # type: ignore
-    
+
     export_tangents: BoolProperty(
         name="Export Tangents",
         description="Export tangents for the animation (if available)",
@@ -906,6 +915,7 @@ def register():
     animation_set_editor.register()
     effect_set_editor.register()
     bmg_state_editor.register()
+    environment_cubemap_editor.register()
 
 
 def unregister():
@@ -926,3 +936,4 @@ def unregister():
     animation_set_editor.unregister()
     effect_set_editor.unregister()
     bmg_state_editor.unregister()
+    environment_cubemap_editor.unregister()
