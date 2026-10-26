@@ -9,10 +9,16 @@ import json
 import math
 
 import bpy
+from mathutils import Matrix, Vector
 from bpy.types import Operator, Panel
 from bpy.props import BoolProperty, EnumProperty, FloatProperty
 
 MESHGRID_BLOB_KEY = "sr_impex_meshgrid_blob"
+MESHGRID_ROT_CTRL_TAG = "sr_impex_meshgrid_rotation_controller"
+MESHGRID_ROT_AXIS_INDEX = 2
+MESHGRID_FIXED_CELL_SIZE = 2.0
+
+_rotation_sync_state = {"locked": False}
 
 def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state: str):
     """
@@ -110,13 +116,344 @@ def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state:
             obj["active_state"] = target_state
 
 
+def _find_parent_collection(
+    root: bpy.types.Collection,
+    target: bpy.types.Collection,
+) -> bpy.types.Collection | None:
+    for child in root.children:
+        if child == target:
+            return root
+        found = _find_parent_collection(child, target)
+        if found is not None:
+            return found
+    return None
+
+
+def _find_drs_model_from_object(context: bpy.types.Context) -> bpy.types.Collection | None:
+    obj = context.active_object
+    if obj is None:
+        return None
+
+    for start_col in getattr(obj, "users_collection", []) or []:
+        col = start_col
+        for _ in range(32):
+            if col is None:
+                break
+            if col.name.startswith("DRSModel_"):
+                return col
+            col = _find_parent_collection(context.scene.collection, col)
+    return None
+
+
+def _find_active_drs_model_collection(context: bpy.types.Context) -> bpy.types.Collection | None:
+    from_active_object = _find_drs_model_from_object(context)
+    if from_active_object is not None:
+        return from_active_object
+
+    layer_col = context.view_layer.active_layer_collection
+    if not layer_col:
+        return None
+
+    active = layer_col.collection
+    if active and active.name.startswith("DRSModel_"):
+        return active
+
+    for top in context.scene.collection.children:
+        if not top.name.startswith("DRSModel_"):
+            continue
+        if top == active:
+            return top
+        try:
+            for sub in top.children_recursive:
+                if sub == active:
+                    return top
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+    return None
+
+
+def _active_or_first_bmg_model() -> bpy.types.Collection | None:
+    active = _find_active_drs_model_collection(bpy.context)
+    if active and active.name.startswith("DRSModel_"):
+        return active
+    for model in _iter_bmg_models():
+        return model
+    return None
+
+
+def _sanitize_grid_axis(value: int) -> int:
+    return max(0, min(127, int(value)))
+
+
+def _coerce_square_grid_axes(width: int, height: int) -> tuple[int, int]:
+    side = _sanitize_grid_axis(max(int(width), int(height)))
+    return side, side
+
+
+def _safe_float(value, fallback: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _safe_center_pivoted(value, fallback: int = 1) -> int:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"0", "false", "no", "off"}:
+            return 0
+        if normalized in {"1", "true", "yes", "on"}:
+            return 1
+    if value is None:
+        return 1 if fallback else 0
+    return 1 if bool(value) else 0
+
+
+def _build_default_cells(total_cells: int) -> list[dict]:
+    cells: list[dict] = []
+    for idx in range(total_cells):
+        cells.append(
+            {
+                "index": idx,
+                "has_mesh_set": 0,
+                "mesh_object_name": "",
+            }
+        )
+    return cells
+
+
+def _normalize_meshgrid_blob(blob: dict) -> dict:
+    width = _sanitize_grid_axis(int(blob.get("grid_width", blob.get("columns", 0)) or 0))
+    height = _sanitize_grid_axis(int(blob.get("grid_height", blob.get("rows", 0)) or 0))
+    width, height = _coerce_square_grid_axes(width, height)
+    module_distance = MESHGRID_FIXED_CELL_SIZE
+    rotation = _safe_float(blob.get("grid_rotation", blob.get("orientation", 0.0)), 0.0)
+    is_center_pivoted = _safe_center_pivoted(blob.get("is_center_pivoted", 1), 1)
+
+    total_cells = (width * 2 + 1) * (height * 2 + 1)
+    old_cells = blob.get("cells") if isinstance(blob.get("cells"), list) else []
+    cells = _build_default_cells(total_cells)
+    for idx in range(min(total_cells, len(old_cells))):
+        old = old_cells[idx] if isinstance(old_cells[idx], dict) else {}
+        cells[idx]["has_mesh_set"] = int(bool(old.get("has_mesh_set", 0)))
+        cells[idx]["mesh_object_name"] = str(old.get("mesh_object_name", "") or "")
+
+    blob["grid_width"] = width
+    blob["grid_height"] = height
+    blob["columns"] = width
+    blob["rows"] = height
+    blob["module_distance"] = module_distance
+    blob["grid_rotation"] = rotation
+    blob["orientation"] = rotation
+    blob["is_center_pivoted"] = is_center_pivoted
+    if is_center_pivoted:
+        blob["center_x"] = 0.0
+        center_y = 0.0
+    else:
+        blob["center_x"] = _safe_float(blob.get("center_x", 0.0), 0.0)
+        center_y = _safe_float(blob.get("center_y", blob.get("center_z", 0.0)), 0.0)
+    blob["center_y"] = center_y
+    blob["center_z"] = center_y
+    blob["ground_decal"] = str(blob.get("ground_decal", "") or "")
+    blob["cells"] = cells
+    return blob
+
+
+def _get_meshgrid_blob(model_collection: bpy.types.Collection) -> dict | None:
+    raw_blob = model_collection.get(MESHGRID_BLOB_KEY)
+    if not raw_blob:
+        return None
+    try:
+        blob = json.loads(raw_blob)
+    except Exception:  # pylint: disable=broad-exception-caught
+        return None
+    if not isinstance(blob, dict):
+        return None
+    return _normalize_meshgrid_blob(blob)
+
+
+def _set_meshgrid_blob(model_collection: bpy.types.Collection, blob: dict) -> None:
+    normalized = _normalize_meshgrid_blob(blob)
+    model_collection[MESHGRID_BLOB_KEY] = json.dumps(normalized, separators=(",", ":"), ensure_ascii=False)
+
+
+def _remove_meshgrid_blob(model_collection: bpy.types.Collection) -> None:
+    if MESHGRID_BLOB_KEY in model_collection:
+        del model_collection[MESHGRID_BLOB_KEY]
+
+
+def _collection_has_ancestor_prefix(
+    model_collection: bpy.types.Collection,
+    collection: bpy.types.Collection,
+    prefix: str,
+) -> bool:
+    current = collection
+    for _ in range(64):
+        if current.name.startswith(prefix):
+            return True
+        if current == model_collection:
+            break
+        parent = _find_parent_collection(model_collection, current)
+        if parent is None:
+            break
+        current = parent
+    return False
+
+
+def _iter_meshgrid_fit_mesh_objects(model_collection: bpy.types.Collection):
+    seen = set()
+    for obj in model_collection.all_objects:
+        if obj.type != "MESH":
+            continue
+        if obj.name in seen:
+            continue
+        if any(col.name.endswith("_GridVis") for col in getattr(obj, "users_collection", []) or []):
+            continue
+
+        in_s0_meshes_collection = False
+        for col in getattr(obj, "users_collection", []) or []:
+            if (
+                _collection_has_ancestor_prefix(model_collection, col, "S0_Undamaged")
+                and _collection_has_ancestor_prefix(model_collection, col, "Meshes_Collection")
+            ):
+                in_s0_meshes_collection = True
+                break
+        if not in_s0_meshes_collection:
+            continue
+
+        seen.add(obj.name)
+        yield obj
+
+
+def _compute_model_half_extents_xy(
+    model_collection: bpy.types.Collection,
+) -> tuple[float, float, float, float, float, float, float, int] | None:
+    center_x_sum = 0.0
+    center_z_sum = 0.0
+    size_x = 0.0
+    size_y = 0.0
+    size_z = 0.0
+    mesh_count = 0
+
+    game_orientation = _find_game_orientation(model_collection)
+    to_local = game_orientation.matrix_world.inverted() if game_orientation else None
+
+    for obj in _iter_meshgrid_fit_mesh_objects(model_collection):
+        mesh_count += 1
+        bbox_center_local = Vector((
+            sum(corner[0] for corner in obj.bound_box) / 8.0,
+            sum(corner[1] for corner in obj.bound_box) / 8.0,
+            sum(corner[2] for corner in obj.bound_box) / 8.0,
+        ))
+        center_world = obj.matrix_world @ bbox_center_local
+        center_local = to_local @ center_world if to_local else center_world
+        center_x_sum += float(center_local.x)
+        center_z_sum += float(center_local.z)
+
+        # Keep fit sizing simple and stable: read dimensions directly from Blender object data.
+        dims = obj.dimensions
+        size_x = max(size_x, float(dims.x))
+        size_y = max(size_y, float(dims.y))
+        size_z = max(size_z, float(dims.z))
+
+    if mesh_count == 0:
+        return None
+
+    center_x = center_x_sum / mesh_count
+    center_z = center_z_sum / mesh_count
+    half_x = max(0.0, size_x * 0.5)
+    half_z = max(0.0, size_z * 0.5)
+    return center_x, center_z, half_x, half_z, size_x, size_y, size_z, mesh_count
+
+
+def _debug_print_model_dimensions_before_grid(model_collection: bpy.types.Collection) -> None:
+    extents = _compute_model_half_extents_xy(model_collection)
+    if extents is None:
+        print(
+            f"[BMG MeshGrid] Model dimensions before create for '{model_collection.name}': "
+            "no S0 mesh bounds found (X=0.00, Y=0.00, Z=0.00)"
+        )
+        return
+
+    center_x, center_z, _, _, size_x, size_y, size_z, mesh_count = extents
+    print(
+        f"[BMG MeshGrid] Model dimensions before create for '{model_collection.name}': "
+        f"X={size_x:.2f}, Y={size_y:.2f}, Z={size_z:.2f}, meshes={mesh_count}, "
+        f"center_x={center_x:.2f}, center_z={center_z:.2f}"
+    )
+
+
+def _build_fitted_meshgrid_blob(
+    model_collection: bpy.types.Collection,
+    cell_size: float,
+    rotation_degrees: float = 0.0,
+    is_center_pivoted: bool = True,
+) -> dict:
+    _ = cell_size
+    safe_cell_size = MESHGRID_FIXED_CELL_SIZE
+    extents = _compute_model_half_extents_xy(model_collection)
+    if extents is None:
+        center_x = 0.0
+        center_z = 0.0
+        half_x = 0.0
+        half_z = 0.0
+        width = 0
+        height = 0
+        raw_width = 0
+        raw_height = 0
+    else:
+        center_x, center_z, half_x, half_z, _, _, _, _ = extents
+        raw_width = _sanitize_grid_axis(math.ceil(max(0.0, half_x - safe_cell_size * 0.5) / safe_cell_size))
+        raw_height = _sanitize_grid_axis(math.ceil(max(0.0, half_z - safe_cell_size * 0.5) / safe_cell_size))
+        width = raw_width
+        height = raw_height
+    width, height = _coerce_square_grid_axes(width, height)
+
+    total_cells = (width * 2 + 1) * (height * 2 + 1)
+
+    # Debug Print
+    print(f"[BMG MeshGrid] Fitting grid to model '{model_collection.name}' with cell size {cell_size}")
+    print(f"[BMG MeshGrid] Computed extents: center=({center_x:.2f}, {center_z:.2f}), half_x={half_x:.2f}, half_z={half_z:.2f}")
+    print(f"[BMG MeshGrid] Raw grid size: width={raw_width}, height={raw_height}")
+    print(f"[BMG MeshGrid] Final grid size: width={width}, height={height}")
+    print(f"[BMG MeshGrid] Total cells: {total_cells}")
+
+    return {
+        "grid_width": width,
+        "grid_height": height,
+        "columns": width,
+        "rows": height,
+        "module_distance": safe_cell_size,
+        "grid_rotation": float(rotation_degrees),
+        "orientation": float(rotation_degrees),
+        "is_center_pivoted": 1 if is_center_pivoted else 0,
+        "center_x": 0.0 if is_center_pivoted else float(center_x),
+        "center_y": 0.0 if is_center_pivoted else float(center_z),
+        "center_z": 0.0 if is_center_pivoted else float(center_z),
+        "ground_decal": "",
+        "cells": _build_default_cells(total_cells),
+    }
+
+
+def _resolve_meshgrid_center(
+    model_collection: bpy.types.Collection,
+    blob: dict,
+) -> tuple[float, float]:
+    _ = model_collection
+    if _safe_center_pivoted(blob.get("is_center_pivoted", 1), 1):
+        return 0.0, 0.0
+
+    center_x = _safe_float(blob.get("center_x", 0.0), 0.0)
+    center_y = _safe_float(blob.get("center_y", blob.get("center_z", 0.0)), 0.0)
+    return center_x, center_y
+
+
 def _iter_bmg_models():
-    """Yield DRSModel collections that contain MeshSetGrid children."""
+    """Yield all DRSModel collections in the scene."""
     for col in bpy.data.collections:
         if not col.name.startswith("DRSModel_"):
             continue
-        if any(child.name.startswith("MeshSetGrid_") for child in col.children_recursive):
-            yield col
+        yield col
 
 
 def _collect_child_collections(prefix: str) -> list[bpy.types.Collection]:
@@ -176,14 +513,159 @@ def _find_game_orientation(model_collection: bpy.types.Collection) -> bpy.types.
     return None
 
 
-def _ensure_meshgrid_collection(model_collection: bpy.types.Collection) -> tuple[bpy.types.Collection, str]:
-    """Find or create the visual grid collection, named alongside the real MeshSetGrid_* collection."""
-    base_grid_name = None
+def _ensure_meshgrid_anchor_collection(model_collection: bpy.types.Collection) -> bpy.types.Collection:
     for child in model_collection.children:
         if child.name.startswith("MeshSetGrid_"):
-            base_grid_name = child.name
-            break
-    base_grid_name = base_grid_name or "MeshSetGrid_0"
+            return child
+    anchor = bpy.data.collections.new("MeshSetGrid_0")
+    model_collection.children.link(anchor)
+    return anchor
+
+
+def _iter_rotation_targets(model_collection: bpy.types.Collection):
+    seen = set()
+    candidates: list[bpy.types.Object] = []
+    game_orientation = _find_game_orientation(model_collection)
+
+    for col in model_collection.children_recursive:
+        if not (
+            col.name.startswith("Meshes_Collection")
+            or col.name.startswith("CollisionShapes_Collection")
+        ):
+            continue
+        for obj in col.all_objects:
+            if obj.name in seen:
+                continue
+            seen.add(obj.name)
+            candidates.append(obj)
+
+    for obj in model_collection.all_objects:
+        if obj.type != "ARMATURE":
+            continue
+        if obj.name in seen:
+            continue
+        seen.add(obj.name)
+        candidates.append(obj)
+
+    candidate_ids = {obj.as_pointer() for obj in candidates}
+    for obj in candidates:
+        parent = obj.parent
+        if parent is None or parent == game_orientation or parent.get(MESHGRID_ROT_CTRL_TAG):
+            yield obj
+            continue
+        if parent.as_pointer() in candidate_ids:
+            continue
+
+
+def _target_rotation_radians_for_object(
+    _model_collection: bpy.types.Collection,
+    _obj: bpy.types.Object,
+    degrees_value: float,
+) -> tuple[int, float]:
+    return 1, -math.radians(degrees_value)
+
+
+def _find_rotation_controller(model_collection: bpy.types.Collection) -> bpy.types.Object | None:
+    for obj in model_collection.objects:
+        if obj.get(MESHGRID_ROT_CTRL_TAG):
+            return obj
+    return None
+
+
+def _matrices_close(a: Matrix, b: Matrix, epsilon: float = 1e-6) -> bool:
+    for row in range(4):
+        for col in range(4):
+            if abs(float(a[row][col]) - float(b[row][col])) > epsilon:
+                return False
+    return True
+
+
+def _align_rotation_controller_to_game_orientation(
+    model_collection: bpy.types.Collection,
+    controller: bpy.types.Object,
+) -> None:
+    game_orientation = _find_game_orientation(model_collection)
+    if game_orientation is None:
+        return
+
+    if controller.parent is not None:
+        controller.parent = None
+
+    target_matrix = game_orientation.matrix_world.copy()
+    if not _matrices_close(controller.matrix_world, target_matrix):
+        controller.matrix_world = target_matrix
+
+
+def _ensure_rotation_controller(
+    model_collection: bpy.types.Collection,
+    base_grid_name: str,
+) -> bpy.types.Object:
+    existing = _find_rotation_controller(model_collection)
+    if existing:
+        return existing
+
+    ctrl = bpy.data.objects.new(f"{base_grid_name}_RotCtrl", None)
+    ctrl.empty_display_type = "ARROWS"
+    ctrl.empty_display_size = 0.8
+    ctrl[MESHGRID_ROT_CTRL_TAG] = 1
+    model_collection.objects.link(ctrl)
+    _align_rotation_controller_to_game_orientation(model_collection, ctrl)
+    return ctrl
+
+
+def _remove_rotation_controller(model_collection: bpy.types.Collection) -> None:
+    ctrl = _find_rotation_controller(model_collection)
+    if ctrl is not None:
+        bpy.data.objects.remove(ctrl, do_unlink=True)
+
+
+def _set_model_rotation(
+    model_collection: bpy.types.Collection,
+    rotation_degrees: float,
+    rebuild_grid: bool,
+) -> None:
+    if _rotation_sync_state["locked"]:
+        return
+
+    blob = _get_meshgrid_blob(model_collection)
+    if blob is None:
+        return
+
+    _rotation_sync_state["locked"] = True
+    try:
+        blob["grid_rotation"] = float(rotation_degrees)
+        blob["orientation"] = float(rotation_degrees)
+        _set_meshgrid_blob(model_collection, blob)
+
+        _apply_rotation_to_targets(model_collection, float(rotation_degrees))
+
+        if rebuild_grid:
+            _build_meshgrid_display(model_collection)
+    finally:
+        _rotation_sync_state["locked"] = False
+
+
+def _apply_rotation_to_targets(
+    model_collection: bpy.types.Collection,
+    rotation_degrees: float,
+) -> None:
+    for target in _iter_rotation_targets(model_collection):
+        if target.get(MESHGRID_ROT_CTRL_TAG):
+            continue
+        if any(col.name.endswith("_GridVis") for col in getattr(target, "users_collection", []) or []):
+            continue
+        axis_index, target_rot = _target_rotation_radians_for_object(
+            model_collection,
+            target,
+            float(rotation_degrees),
+        )
+        if abs(target.rotation_euler[axis_index] - target_rot) > 1e-6:
+            target.rotation_euler[axis_index] = target_rot
+
+
+def _ensure_meshgrid_collection(model_collection: bpy.types.Collection) -> tuple[bpy.types.Collection, str]:
+    """Find or create the visual grid collection, named alongside the real MeshSetGrid_* collection."""
+    base_grid_name = _ensure_meshgrid_anchor_collection(model_collection).name
     vis_name = f"{base_grid_name}_GridVis"
 
     for child in model_collection.children:
@@ -213,12 +695,13 @@ def _get_grid_fill_material() -> bpy.types.Material:
         mat.use_nodes = False
         mat.diffuse_color = (0.12, 0.65, 0.25, 0.35)  # rgba
         mat.blend_method = "BLEND"
-        mat.shadow_method = "NONE"
+        if bpy.app.version < (4, 3):
+            mat.shadow_method = "NONE"
     return mat
 
 
 def _create_cell_mesh(name: str, size: float, height: float = 0.0) -> bpy.types.Object:
-    """Create a square cell mesh; if height>0, build a cube with that height."""
+    """Create a square cell on the XY plane; if height>0, build a Z-up box."""
     mesh = bpy.data.meshes.new(f"{name}_mesh")
     half = size * 0.5
     if height > 0:
@@ -261,14 +744,8 @@ def _create_cell_mesh(name: str, size: float, height: float = 0.0) -> bpy.types.
 
 def _build_meshgrid_display(model_collection: bpy.types.Collection) -> bpy.types.Collection | None:
     """Materialize the MeshSetGrid cells as wireframe meshes under the model collection."""
-    raw_blob = model_collection.get(MESHGRID_BLOB_KEY)
-    if not raw_blob:
-        return None
-
-    try:
-        blob = json.loads(raw_blob)
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        print(f"[BMG MeshGrid] Failed to parse mesh grid blob: {exc}")
+    blob = _get_meshgrid_blob(model_collection)
+    if not blob:
         return None
 
     # Blob can come from bmg_utility (rows/columns) or drs_utility (grid_width/grid_height)
@@ -281,26 +758,29 @@ def _build_meshgrid_display(model_collection: bpy.types.Collection) -> bpy.types
     if cols <= 0 or rows <= 0:
         return None
 
-    step = float(blob.get("module_distance", 2.0) or 2.0)
-    rotation = math.radians(float(blob.get("grid_rotation", blob.get("orientation", 0)) or 0)) + math.radians(180.0)
+    step = float(blob.get("module_distance", MESHGRID_FIXED_CELL_SIZE) or MESHGRID_FIXED_CELL_SIZE)
+    grid_rotation_degrees = float(blob.get("grid_rotation", blob.get("orientation", 0)) or 0)
+    center_x, center_y = _resolve_meshgrid_center(model_collection, blob)
     cells = blob.get("cells", [])
 
     grid_collection, base_grid_name = _ensure_meshgrid_collection(model_collection)
     _cleanup_grid_objects(grid_collection)
 
     game_orientation = _find_game_orientation(model_collection)
+    if game_orientation is None:
+        print(f"[BMG Grid] Missing GameOrientation in {model_collection.name}; skipping grid display build")
+        return None
 
     # Create a root empty so rotation is applied once to the whole grid (avoids overlapping rotated cells)
     root_name = f"{base_grid_name}_GridRoot"
     root_obj = bpy.data.objects.new(root_name, None)
     root_obj.empty_display_type = "PLAIN_AXES"
-    root_obj.rotation_euler[2] = rotation
-    if game_orientation:
-        root_obj.parent = game_orientation
-        root_obj.matrix_parent_inverse = game_orientation.matrix_world.inverted()
+    root_obj.rotation_euler[MESHGRID_ROT_AXIS_INDEX] = math.radians(180.0 + grid_rotation_degrees)
+    root_obj.parent = game_orientation
+    root_obj.matrix_parent_inverse = game_orientation.matrix_world.inverted()
     grid_collection.objects.link(root_obj)
-    base_x = -((cols - 1) * step) * 0.5
-    base_y = ((rows - 1) * step) * 0.5
+    base_x = center_x - ((cols - 1) * step) * 0.5
+    base_y = center_y + ((rows - 1) * step) * 0.5
 
     for idx in range(min(len(cells), rows * cols) if cells else rows * cols):
         col_idx = idx % cols
@@ -378,22 +858,19 @@ def _sync_grid_cell_mesh_visibility(_depsgraph):
 
 def _read_meshgrid_rotation_degrees() -> float | None:
     """Return the first available mesh grid rotation in degrees, if any."""
-    for model in _iter_bmg_models():
-        raw_blob = model.get(MESHGRID_BLOB_KEY)
-        if not raw_blob:
-            continue
-        try:
-            blob = json.loads(raw_blob)
-        except Exception:  # pylint: disable=broad-exception-caught
-            continue
-        rot_val = blob.get("grid_rotation", blob.get("orientation"))
-        if rot_val is None:
-            continue
-        try:
-            return float(rot_val)
-        except (TypeError, ValueError):
-            continue
-    return None
+    model = _active_or_first_bmg_model()
+    if not model:
+        return None
+    blob = _get_meshgrid_blob(model)
+    if not blob:
+        return None
+    rot_val = blob.get("grid_rotation", blob.get("orientation"))
+    if rot_val is None:
+        return None
+    try:
+        return float(rot_val)
+    except (TypeError, ValueError):
+        return None
 
 
 def _get_meshgrid_rotation(_self) -> float:
@@ -403,22 +880,23 @@ def _get_meshgrid_rotation(_self) -> float:
 
 def _set_meshgrid_rotation(_self, value: float) -> None:
     show_grid = getattr(getattr(bpy.context, "window_manager", None), "bmg_show_meshgrid", False)
-    for model in _iter_bmg_models():
-        raw_blob = model.get(MESHGRID_BLOB_KEY)
-        if not raw_blob:
-            continue
-        try:
-            blob = json.loads(raw_blob)
-        except Exception:  # pylint: disable=broad-exception-caught
-            continue
-        blob["grid_rotation"] = float(value)
-        blob["orientation"] = float(value)
-        model[MESHGRID_BLOB_KEY] = json.dumps(blob, separators=(",", ":"), ensure_ascii=False)
+    model = _active_or_first_bmg_model()
+    if not model:
+        return
+    if _get_meshgrid_blob(model) is None:
+        return
 
-        vis_col = _build_meshgrid_display(model)
-        if vis_col:
-            vis_col.hide_viewport = not show_grid
-            vis_col.hide_render = not show_grid
+    _set_model_rotation(model, float(value), rebuild_grid=bool(show_grid))
+
+    vis_col = None
+    if show_grid:
+        for child in model.children:
+            if child.name.endswith("_GridVis"):
+                vis_col = child
+                break
+    if vis_col:
+        vis_col.hide_viewport = not show_grid
+        vis_col.hide_render = not show_grid
     _tag_viewports()
 
 
@@ -427,6 +905,49 @@ def _get_show_meshgrid(_self) -> bool:
     if not cols:
         return False
     return any(not col.hide_viewport for col in cols)
+
+
+def _get_meshgrid_center_pivoted(_self) -> bool:
+    model = _active_or_first_bmg_model()
+    if not model:
+        return True
+    blob = _get_meshgrid_blob(model)
+    if not blob:
+        return True
+    return bool(_safe_center_pivoted(blob.get("is_center_pivoted", 1), 1))
+
+
+def _set_meshgrid_center_pivoted(_self, value: bool) -> None:
+    model = _active_or_first_bmg_model()
+    if not model:
+        return
+
+    blob = _get_meshgrid_blob(model)
+    if not blob:
+        return
+
+    blob["is_center_pivoted"] = 1 if value else 0
+    if value:
+        blob["center_x"] = 0.0
+        blob["center_y"] = 0.0
+        blob["center_z"] = 0.0
+    else:
+        extents = _compute_model_half_extents_xy(model)
+        if extents is not None:
+            center_x, center_z, _, _, _, _, _, _ = extents
+            blob["center_x"] = float(center_x)
+            blob["center_y"] = float(center_z)
+            blob["center_z"] = float(center_z)
+
+    _set_meshgrid_blob(model, blob)
+
+    show_grid = bool(getattr(getattr(bpy.context, "window_manager", None), "bmg_show_meshgrid", False))
+    if show_grid:
+        vis_col = _build_meshgrid_display(model)
+        if vis_col:
+            vis_col.hide_viewport = False
+            vis_col.hide_render = False
+    _tag_viewports()
 
 
 def _set_show_meshgrid(_self, value: bool) -> None:
@@ -438,6 +959,29 @@ def _set_show_meshgrid(_self, value: bool) -> None:
                 child.hide_viewport = not value
                 child.hide_render = not value
     _tag_viewports()
+
+
+def _sync_meshgrid_rotation_controller(_depsgraph):
+    if _rotation_sync_state["locked"]:
+        return
+
+    for model in _iter_bmg_models():
+        blob = _get_meshgrid_blob(model)
+        if blob is None:
+            continue
+
+        # Rotation controller is no longer used for grid parenting; remove stale empties.
+        _remove_rotation_controller(model)
+        blob_degrees = _safe_float(blob.get("grid_rotation", blob.get("orientation", 0.0)), 0.0)
+
+        for target in _iter_rotation_targets(model):
+            if target.get(MESHGRID_ROT_CTRL_TAG):
+                continue
+            if any(col.name.endswith("_GridVis") for col in getattr(target, "users_collection", []) or []):
+                continue
+            axis_index, target_radians = _target_rotation_radians_for_object(model, target, blob_degrees)
+            if abs(target.rotation_euler[axis_index] - target_radians) > 1e-6:
+                target.rotation_euler[axis_index] = target_radians
 
 class BMG_OT_SwitchMeshState(Operator):
     """Switch the visible state of a MeshSet"""
@@ -517,7 +1061,7 @@ class BMG_OT_SwitchAllMeshSetsState(Operator):
     )
 
     @classmethod
-    def poll(cls, context):
+    def poll(cls, _context):
         """Only enable if a DRSModel collection exists in the scene"""
         for col in bpy.data.collections:
             if col.name.startswith("DRSModel_"):
@@ -551,6 +1095,111 @@ class BMG_OT_SwitchAllMeshSetsState(Operator):
         return {'FINISHED'}
 
 
+class BMG_OT_CreateMeshGridForActiveModel(Operator):
+    """Create and fit a new mesh grid for the active DRS model"""
+    bl_idname = "bmg.create_meshgrid_active_model"
+    bl_label = "Create Mesh Grid"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        model = _find_active_drs_model_collection(context)
+        return bool(model and model.name.startswith("DRSModel_"))
+
+    def execute(self, context):
+        model = _find_active_drs_model_collection(context)
+        if not model:
+            self.report({'ERROR'}, "Select a DRSModel_* collection first")
+            return {'CANCELLED'}
+
+        wm = context.window_manager
+        cell_size = MESHGRID_FIXED_CELL_SIZE
+        use_origin_pivot = bool(getattr(wm, "bmg_meshgrid_center_pivoted", True))
+
+        # Normalize rotation before fitting so first create matches subsequent recreates.
+        _apply_rotation_to_targets(model, 0.0)
+        context.view_layer.update()
+
+        _debug_print_model_dimensions_before_grid(model)
+
+        blob = _build_fitted_meshgrid_blob(
+            model,
+            cell_size,
+            rotation_degrees=0.0,
+            is_center_pivoted=use_origin_pivot,
+        )
+        _set_meshgrid_blob(model, blob)
+
+        _set_model_rotation(model, 0.0, rebuild_grid=True)
+
+        show_grid = bool(getattr(wm, "bmg_show_meshgrid", True))
+        vis_col = _build_meshgrid_display(model)
+        if vis_col:
+            vis_col.hide_viewport = not show_grid
+            vis_col.hide_render = not show_grid
+
+        self.report(
+            {'INFO'},
+            f"Created mesh grid ({blob['grid_width'] * 2 + 1}x{blob['grid_height'] * 2 + 1}) for {model.name}",
+        )
+        _tag_viewports()
+        return {'FINISHED'}
+
+
+class BMG_OT_RemoveMeshGridForActiveModel(Operator):
+    """Remove mesh grid data and visualization from the active DRS model"""
+    bl_idname = "bmg.remove_meshgrid_active_model"
+    bl_label = "Remove Mesh Grid"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        model = _find_active_drs_model_collection(context)
+        return bool(model and model.name.startswith("DRSModel_"))
+
+    def execute(self, context):
+        model = _find_active_drs_model_collection(context)
+        if not model:
+            self.report({'ERROR'}, "Select a DRSModel_* collection first")
+            return {'CANCELLED'}
+
+        removed_any = MESHGRID_BLOB_KEY in model
+        _remove_meshgrid_blob(model)
+
+        for child in list(model.children):
+            if not child.name.endswith("_GridVis"):
+                continue
+            _cleanup_grid_objects(child)
+            try:
+                model.children.unlink(child)
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+            bpy.data.collections.remove(child)
+            removed_any = True
+
+        _remove_rotation_controller(model)
+
+        for child in list(model.children):
+            if not child.name.startswith("MeshSetGrid_"):
+                continue
+            if child.children or child.objects:
+                continue
+            try:
+                model.children.unlink(child)
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+            bpy.data.collections.remove(child)
+            removed_any = True
+
+        if not removed_any:
+            self.report({'INFO'}, f"No mesh grid data found on {model.name}")
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Removed mesh grid from {model.name}")
+        _tag_viewports()
+        return {'FINISHED'}
+
+
 class BMG_PT_MeshStateEditor(Panel):
     """Panel for controlling BMG building mesh states"""
     bl_label = "BMG Mesh State Editor"
@@ -560,28 +1209,50 @@ class BMG_PT_MeshStateEditor(Panel):
     bl_category = 'BMG Editor'
 
     @classmethod
-    def poll(cls, context):
+    def poll(cls, _context):
         """Only show panel if a BMG model is present"""
         for col in bpy.data.collections:
             if col.name.startswith("DRSModel_"):
-                for child in col.children_recursive:
-                    if child.name.startswith("MeshSetGrid_"):
-                        return True
+                return True
         return False
 
     def draw(self, context):
         layout = self.layout
+        active_model = _find_active_drs_model_collection(context)
+        has_active_model = bool(active_model and active_model.name.startswith("DRSModel_"))
+        active_blob = _get_meshgrid_blob(active_model) if has_active_model else None
+        has_grid = active_blob is not None
 
         # Mesh grid controls
         grid_box = layout.box()
         grid_box.label(text="Mesh Grid", icon='SNAP_INCREMENT')
         grid_box.prop(context.window_manager, "bmg_show_meshgrid", text="Show Mesh Grid")
-        grid_box.prop(
+
+        if has_active_model:
+            row = grid_box.row(align=True)
+            row.operator("bmg.create_meshgrid_active_model", text="Create Grid", icon='ADD')
+            row.operator("bmg.remove_meshgrid_active_model", text="Remove Grid", icon='TRASH')
+        else:
+            grid_box.label(text="Select a DRSModel_* collection", icon='INFO')
+
+        rot_row = grid_box.row()
+        rot_row.enabled = has_grid
+        rot_row.prop(
             context.window_manager,
             "bmg_meshgrid_rotation",
             text="Rotation",
             slider=True,
         )
+
+        pivot_row = grid_box.row()
+        pivot_row.enabled = has_grid
+        pivot_row.prop(
+            context.window_manager,
+            "bmg_meshgrid_center_pivoted",
+            text="Center Pivot At Origin (0,0,0)",
+        )
+        if not has_grid:
+            grid_box.label(text="No mesh grid found for active model", icon='ERROR')
 
         # Visibility toggles
         vis_box = layout.box()
@@ -617,6 +1288,8 @@ class BMG_PT_MeshStateEditor(Panel):
 classes = (
     BMG_OT_SwitchMeshState,
     BMG_OT_SwitchAllMeshSetsState,
+    BMG_OT_CreateMeshGridForActiveModel,
+    BMG_OT_RemoveMeshGridForActiveModel,
     BMG_PT_MeshStateEditor,
 )
 
@@ -642,6 +1315,12 @@ def register():
         get=_get_meshgrid_rotation,
         set=_set_meshgrid_rotation,
     )
+    bpy.types.WindowManager.bmg_meshgrid_center_pivoted = BoolProperty(
+        name="Center Pivot At Origin",
+        description="When enabled, the mesh grid is centered at 0,0,0; otherwise it uses the model center",
+        get=_get_meshgrid_center_pivoted,
+        set=_set_meshgrid_center_pivoted,
+    )
     bpy.types.WindowManager.bmg_show_collision_shapes = BoolProperty(
         name="Show Collision Shapes",
         description="Toggle visibility of CollisionShapes_Collection in all BMG models",
@@ -656,6 +1335,8 @@ def register():
     )
     if _sync_grid_cell_mesh_visibility not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(_sync_grid_cell_mesh_visibility)
+    if _sync_meshgrid_rotation_controller not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(_sync_meshgrid_rotation_controller)
 
 
 def unregister():
@@ -663,10 +1344,13 @@ def unregister():
         bpy.utils.unregister_class(cls)
     del bpy.types.WindowManager.bmg_show_meshgrid
     del bpy.types.WindowManager.bmg_meshgrid_rotation
+    del bpy.types.WindowManager.bmg_meshgrid_center_pivoted
     del bpy.types.WindowManager.bmg_show_slocators
     del bpy.types.WindowManager.bmg_show_collision_shapes
     if _sync_grid_cell_mesh_visibility in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(_sync_grid_cell_mesh_visibility)
+    if _sync_meshgrid_rotation_controller in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(_sync_meshgrid_rotation_controller)
 
 
 if __name__ == "__main__":

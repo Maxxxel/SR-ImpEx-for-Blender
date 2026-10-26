@@ -4141,16 +4141,21 @@ def create_box_shape(box: bpy.types.Object) -> BoxShape:
     _box_shape.coord_system = CMatCoordinateSystem()
     _box_shape.geo_aabox = CGeoAABox()
 
-    # Extract the transformation from the object's world matrix.
-    # The rotation part (a 3x3 matrix) and the translation (a vector) directly correspond
-    # to the coordinate system used during creation.
-    world_matrix = box.matrix_world
-    rotation = world_matrix.to_3x3()
-    translation = world_matrix.to_translation()
+    # DRS stores game coordinates. The Blender world matrix also contains the
+    # GameOrientation display conversion, which the importer will apply again.
+    game_matrix = box.matrix_world.copy()
+    parent = box.parent
+    while parent is not None:
+        if parent.type == "EMPTY" and parent.name.startswith("GameOrientation"):
+            game_matrix = parent.matrix_world.inverted() @ game_matrix
+            break
+        parent = parent.parent
+    rotation = game_matrix.to_3x3()
+    translation = game_matrix.to_translation()
 
-    # Set the coordinate system position.
+    # Undo the box-specific Z-position flip in import_collision_shapes.
     _box_shape.coord_system.position = Vector3(
-        translation.x, translation.y, translation.z
+        translation.x, translation.y, -translation.z
     )
     # Flatten the 3x3 rotation matrix into a row-major list of 9 floats.
     _box_shape.coord_system.matrix.matrix = [
