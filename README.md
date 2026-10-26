@@ -11,7 +11,7 @@ SR-ImpEx is a Blender add-on for importing and exporting BattleForge and Skylord
 
 Follow these steps to install the add-on into Blender:
 
-1. Download the latest release (`Battleforge_Blender_*.zip`) from the [Releases](./releases) section.
+1. Download the latest release (`Battleforge_Blender_*.zip`) from the [Releases](https://github.com/Maxxxel/SR-ImpEx-for-Blender/releases) section.
 2. Open Blender.
 3. Navigate to `Edit > Preferences > Add-ons`.
 4. Click on the `Install...` button.
