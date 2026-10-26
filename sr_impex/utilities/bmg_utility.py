@@ -283,6 +283,8 @@ def persist_meshgrid_blob_on_collection(
         "rows": grid.grid_height,
         "columns": grid.grid_width,
         "orientation": grid.grid_rotation if hasattr(grid, "grid_rotation") else 0,
+        "module_distance": grid.module_distance if hasattr(grid, "module_distance") else 2.0,
+        "is_center_pivoted": int(getattr(grid, "is_center_pivoted", 1)),
         "ground_decal": grid.ground_decal if grid.ground_decal else "",
         "cells": [],
     }
@@ -823,8 +825,72 @@ def load_bmg(
 # region Export Blender Model to BMG
 
 
-def create_mesh_set_grid():
+def _safe_blob_int(value, fallback: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _safe_blob_float(value, fallback: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _safe_blob_center_pivoted(value, fallback: int = 1) -> int:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"0", "false", "no", "off"}:
+            return 0
+        if normalized in {"1", "true", "yes", "on"}:
+            return 1
+    if value is None:
+        return 1 if fallback else 0
+    return 1 if bool(value) else 0
+
+
+def create_mesh_set_grid(source_collection: bpy.types.Collection = None):
     _mesh_set_grid = MeshSetGrid()
+
+    if source_collection is not None:
+        blob_data = source_collection.get(MESHGRID_BLOB_KEY)
+        if blob_data:
+            try:
+                blob = json.loads(blob_data)
+            except Exception:
+                blob = None
+
+            if isinstance(blob, dict):
+                grid_width = _safe_blob_int(
+                    blob.get("grid_width", blob.get("columns", _mesh_set_grid.grid_width)),
+                    _mesh_set_grid.grid_width,
+                )
+                grid_height = _safe_blob_int(
+                    blob.get("grid_height", blob.get("rows", _mesh_set_grid.grid_height)),
+                    _mesh_set_grid.grid_height,
+                )
+                _mesh_set_grid.grid_width = max(0, min(127, grid_width))
+                _mesh_set_grid.grid_height = max(0, min(127, grid_height))
+                _mesh_set_grid.grid_rotation = _safe_blob_int(
+                    round(
+                        _safe_blob_float(
+                            blob.get("grid_rotation", blob.get("orientation", _mesh_set_grid.grid_rotation)),
+                            float(_mesh_set_grid.grid_rotation),
+                        )
+                    ),
+                    _mesh_set_grid.grid_rotation,
+                )
+                _mesh_set_grid.module_distance = _safe_blob_float(
+                    blob.get("module_distance", _mesh_set_grid.module_distance),
+                    _mesh_set_grid.module_distance,
+                )
+                _mesh_set_grid.is_center_pivoted = _safe_blob_center_pivoted(
+                    blob.get("is_center_pivoted", _mesh_set_grid.is_center_pivoted),
+                    _mesh_set_grid.is_center_pivoted,
+                )
+
     # TODO: Calculate grid_width and grid_height based on model boundaries
     # TODO: Check if UUID needs to be generated
     # TODO: Check if we have a ground_decal in blender to use here
@@ -929,7 +995,7 @@ def save_bmg(
     new_bmg_file: BMG = BMG(model_type=model_type)
 
     # First thing we always need to build is the MeshSetGrid
-    mesh_set_grid = create_mesh_set_grid()
+    mesh_set_grid = create_mesh_set_grid(source_collection_copy)
 
     # Now we save the Nodes in Order
     nodes = InformationIndices[model_type]
