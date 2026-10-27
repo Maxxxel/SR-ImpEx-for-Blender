@@ -1,0 +1,1878 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Official documentation for the DRS file format & the Blender Import/Export Plugin. Includes the DRS format manual (subclasses, attributes) and tutorials for installation, import, and export.">
+      
+      
+        <meta name="author" content="Maxxxel">
+      
+      
+        <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/unit_creation_buide/">
+      
+      
+        <link rel="prev" href="../object_creation_guide/">
+      
+      
+        <link rel="next" href="../building_creation_guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Unit Creation Guide - Battleforge Blender Plugin & DRS Format Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#unit-creation-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-header__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+      
+  <img src="../../assets/images/favicon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Battleforge Blender Plugin & DRS Format Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Unit Creation Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    https://github.com/Maxxxel/SR-ImpEx-for-Blender/
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-nav__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+      
+  <img src="../../assets/images/favicon.png" alt="logo">
+
+    </a>
+    Battleforge Blender Plugin & DRS Format Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    https://github.com/Maxxxel/SR-ImpEx-for-Blender/
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plugin Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../object_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Object Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unit Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unit Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before You Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Before You Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#go-and-rig-relationships" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GO and rig relationships
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-set-up-the-required-locators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Set Up the Required Locators
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-understand-units-vs-animated-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Understand Units vs. Animated Objects
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Understand Units vs. Animated Objects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#actions-and-saved-metadata-are-separate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actions and saved metadata are separate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-add-animation-variants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Add Animation Variants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-add-markers-for-important-animations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Add Markers for Important Animations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-configure-basic-unit-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Configure Basic Unit Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-add-audio-and-effects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Add Audio and Effects
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-export-the-unit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Export the Unit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-final-export-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Final Export Result
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Final Export Result">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#animation-round-trip-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animation round-trip checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Guides
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../building_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_shading_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Shading Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_locators_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Locators Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_abilities_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Abilities Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_effects_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Effects Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRS Structures
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DRS Structures
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/header/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Header
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/common/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geometry
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Geometry
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeomesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoMesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeoprimitivecontainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoPrimitiveContainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeoobbtree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoOBBTree
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/collisionshape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    collisionShape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdspmeshfile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDspMeshFile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation & Effects
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Animation & Effects
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cskskininfo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSkSkinInfo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cskskeleton/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSkSkeleton
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdspjointmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDspJointMap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdrwlocatorlist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDrwLocatorList
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/animationset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AnimationSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/animationtimings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AnimationTimings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/effectset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EffectSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Miscellaneous
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Miscellaneous
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/drwresourcemeta/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DrwResourceMeta
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary (Enums)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="unit-creation-guide">Unit Creation Guide<a class="headerlink" href="#unit-creation-guide" title="Permanent link">&para;</a></h1>
+<p>This guide walks through the basic setup for creating a unit or animated object with the SR-ImpEx Blender plugin.</p>
+<p>First follow the shared scene, mesh, UV, and material setup in the <a href="../object_creation_guide/">Object Creation Guide</a>. Do not copy the static-object collision or export choices unchanged: units and animated objects use different export types.</p>
+<table>
+<thead>
+<tr>
+<th>Target</th>
+<th>DRS export type</th>
+<th>Important difference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A unit with animation/locator metadata</td>
+<td><code>Animated Unit</code></td>
+<td>Writes unit animation, effect, and locator blocks; does not export the object collision-shape block.</td>
+</tr>
+<tr>
+<td>A rigged prop or animated object</td>
+<td><code>Animated Object (no collision)</code> or <code>Animated Object (with collision)</code></td>
+<td>Can use simple object collision when that type is chosen. It does not gain unit locators simply by being animated.</td>
+</tr>
+<tr>
+<td>A building with states/grid resources</td>
+<td>Building export types</td>
+<td>Follow the <a href="../building_creation_guide/">Building Creation Guide</a>, including its current export limitations.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="before-you-start">Before You Start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
+<p>A unit or animated object needs:</p>
+<ul>
+<li>a deform armature and its skeleton/rest pose;</li>
+<li>render meshes with an Armature modifier referencing that deform armature;</li>
+<li>vertex groups that match the intended deform bones, with valid skin weights;</li>
+<li>Blender actions and animation metadata appropriate to the target asset.</li>
+</ul>
+<p>Each vertex can use up to <code>4</code> bone influences. Clean up and normalize weights intentionally; limiting the influence count during export is not a substitute for checking the deformation.</p>
+<p>The new-scene operator creates the shared object collections, not a finished character rig. Put the deform armature in a direct child collection named <code>Armature_Collection</code> and render meshes directly in <code>Meshes_Collection</code>. Start from an imported, compatible skeleton when possible; changing a skeleton/rest pose without checking the skin and animations can break their agreement.</p>
+<h3 id="go-and-rig-relationships">GO and rig relationships<a class="headerlink" href="#go-and-rig-relationships" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Recommended practice:</strong> Keep the armature and meshes in one consistent model coordinate convention. When using <code>GameOrientation</code> (GO), leave the armature under the model's helper and keep skinned meshes attached to their deform armature. Parenting before modeling is convenient, not a required order of operations.</p>
+</blockquote>
+<p>Do not reparent every skinned mesh directly to GO just because a static mesh can be authored that way. Bone-attached locators also stay attached to bones. Avoid applying transforms to GO, the armature, or an existing bound rig as a blanket rotation fix; changes to a rig need animation and skin validation, not just a still-frame check. See <a href="../object_creation_guide/#3-understand-gameorientation-recommended-practice">Object Creation Guide, step 3</a> for the distinction between collections, parenting, and baked mesh rotation.</p>
+<p><img alt="Armature, skeleton, and skin overview" src="https://i.gyazo.com/883689b7da73bc1a30636faf6d42d121.png" /></p>
+<h2 id="1-set-up-the-required-locators">1. Set Up the Required Locators<a class="headerlink" href="#1-set-up-the-required-locators" title="Permanent link">&para;</a></h2>
+<p>A unit also uses locators.</p>
+<p><img alt="Locator overview" src="https://i.gyazo.com/5c17e19a5660a258d9ae6a575e3e11ff.png" /></p>
+<p>The following are common starting points, <strong>not a universally enforced minimum set</strong>. Match the needs of a comparable working unit and its gameplay resources. Add them through <strong>DRS Editor &gt; CDrwLocatorList</strong> with the top-level <code>DRSModel_...</code> collection active:</p>
+<ul>
+<li><code>HealthBar</code>: a health-bar/UI position, commonly left without a bone parent.</li>
+<li><code>Hit</code>: a hit-related point; bone attachment depends on the asset.</li>
+<li><code>Projectile_Spawn</code>: a projectile-origin position/orientation where the asset uses that role.</li>
+</ul>
+<p>Adding a locator alone does not define a projectile, damage rule, or gameplay ability. The current DRS writer includes <code>CDrwLocatorList</code> for <code>Animated Unit</code>, not the animated-object export types.</p>
+<p><img alt="Minimum locator setup" src="https://i.gyazo.com/24af20064e578abefbfbf9a788a30873.png" /></p>
+<p>Use this order to avoid losing locator placement:</p>
+<ol>
+<li><strong>Add</strong> an entry or choose an existing one, then set <strong>Type</strong>, <strong>File</strong> if needed, and <strong>Parent</strong>. A bone parent makes it follow that bone; an empty parent field is a model-root point.</li>
+<li>Click <strong>Update parent and remove transformations</strong> to commit the metadata/attachment. <strong>This resets position and rotation</strong>, so do it before final placement, not after.</li>
+<li>Move and rotate the scene locator to its intended point. Scrub an animation if it is bone-attached.</li>
+<li>Make the model root active again and click <strong>Sync from Scene</strong>. This writes scene transforms/attachments into the model's saved locator data; it is not just a UI refresh.</li>
+<li>Save the <code>.blend</code> file. Export reads the saved locator data, not an unsynchronized scene marker.</li>
+</ol>
+<blockquote>
+<p><strong>GO note:</strong> A non-bone locator can use the model's GO convention; a bone locator must remain bone-local. The editor manages this distinction. Do not manually reparent every locator to GO or use the parent-reset button as a keep-transform operation.</p>
+</blockquote>
+<p>See the <a href="../advanced_locators_guide/">Advanced Locators Guide</a> for supported types, resource references, multiple-model selection, and the difference between changing metadata and syncing scene transforms.</p>
+<h2 id="2-understand-units-vs-animated-objects">2. Understand Units vs. Animated Objects<a class="headerlink" href="#2-understand-units-vs-animated-objects" title="Permanent link">&para;</a></h2>
+<p>A unit usually has multiple animation modes. The current animated-object export path keeps the <code>Idle</code> visibility job and removes unit-style markers/timings; selecting <code>Animated Object</code> is not a way to export a unit with fewer requirements.</p>
+<p>The editor's initialization template provides a useful starting list, not an exporter-enforced guarantee that every unit needs exactly these animations:</p>
+<ul>
+<li><code>Idle</code></li>
+<li><code>Walk</code></li>
+<li><code>Run</code></li>
+<li><code>Spawn</code></li>
+<li><code>HitFromBack</code></li>
+<li><code>Cheer/Emote</code></li>
+<li><code>HitFromFront</code></li>
+<li><code>Die</code></li>
+<li><code>HitFromLeft</code></li>
+<li><code>HitFromRight</code></li>
+<li><code>PushBackStandUp (Loop)</code></li>
+</ul>
+<p>Loop animations have three parts: start, loop, and end. The loop section should be the repeated part. A good example is a unit being pushed back continuously by wind and staying inside the same repeated motion.</p>
+<p>There are more animation types available. Check the <strong>AnimationSet Editor</strong> and a comparable working asset for the relevant set. Entries marked <strong>Not yet Supported</strong>, such as ModeSwitch, are not an authoring promise.</p>
+<h3 id="actions-and-saved-metadata-are-separate">Actions and saved metadata are separate<a class="headerlink" href="#actions-and-saved-metadata-are-separate" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Create or import the Blender actions on the deform rig, then choose their references in the AnimationSet rows.</li>
+<li>Use <strong>Init</strong> only when you intentionally want to clear and repopulate the current editor setup; do not use it as a harmless refresh on imported metadata.</li>
+<li>Choose animation modes, variants, weights, and any markers, then click <strong>Save</strong> in the AnimationSet editor to persist them to the model collection.</li>
+<li>Save the <code>.blend</code> file as well. <strong>Reset</strong> reloads saved metadata; it does not save pending edits.</li>
+</ol>
+<p>An action existing in Blender's Action list does not mean it is referenced by the saved AnimationSet or will be included in <code>Export All SKA Actions</code>.</p>
+<p><img alt="AnimationSet Editor" src="https://i.gyazo.com/973918d3bf7244dfcfdc5057d3266531.png" /></p>
+<h2 id="3-add-animation-variants">3. Add Animation Variants<a class="headerlink" href="#3-add-animation-variants" title="Permanent link">&para;</a></h2>
+<p>You can create multiple variants for the same animation and assign a weight to each one.</p>
+<p>For example, if you want two idle animations and one should play most of the time, you can assign weights like this:</p>
+<ul>
+<li>default idle: <code>80</code></li>
+<li>special idle: <code>20</code></li>
+</ul>
+<p>Using a total of <code>100</code> makes the intended weighting easy to review. The editor accepts individual values from <code>0</code> to <code>100</code>, but does not automatically normalize or validate the total.</p>
+<p>Other important settings:</p>
+<ul>
+<li><code>Allows IK</code>: enabled for new variants by default; metadata, not an IK-baking command.</li>
+<li><code>Force No Blend</code>: disabled for new variants by default; preserve deliberate imported settings.</li>
+</ul>
+<p>For a unit that uses melee attacks, configure the appropriate attack mode and marker relationship required by that asset. The add-on stores the animation/visual metadata; it does not create the gameplay ability itself.</p>
+<h2 id="4-add-markers-for-important-animations">4. Add Markers for Important Animations<a class="headerlink" href="#4-add-markers-for-important-animations" title="Permanent link">&para;</a></h2>
+<p>Some animations, especially <code>Spawn</code> and <code>Attack</code>, need a marker.</p>
+<p>Markers store an event position and normalized point in an animation. Assets can use them for spawn, attack, and other visual/gameplay timing, but the add-on does not validate when an external gameplay system makes a unit controllable or applies a hit.</p>
+<p><strong>Marker Time is a fraction from <code>0</code> to <code>1</code>, not seconds or a frame number.</strong> In a <code>5</code>-second clip, <code>0.6</code> means <code>3</code> seconds. To target <code>0.6</code> seconds in that clip, enter <code>0.12</code>.</p>
+<p>Match the marker's animation type/visibility job to the intended mode and preview the relevant variant. Do not assume an identically named Blender action automatically creates that relationship. The editor derives timing metadata from the referenced clip and marker settings; the displayed millisecond timing fields are read-only.</p>
+<p><img alt="Marker timing example" src="https://i.gyazo.com/4d53b0c5410240c9561d1979442662d0.png" /></p>
+<p>Useful marker tools:</p>
+<ul>
+<li><code>Display Marker</code>: previews the animation at the selected marker time</li>
+<li><code>Play Marker</code>: plays the animation until the marker time so you can fine-tune the timing</li>
+<li><code>XYZ</code>: sets the exact 3D marker position</li>
+</ul>
+<p>Place the marker where the target asset expects the event position, such as a weapon or hand attachment point. Check its displayed position against the animated pose rather than only against the rest pose.</p>
+<p>A marker and a <code>Projectile_Spawn</code> locator may use related positions, but they are separate data. Moving one does not automatically update the other; save AnimationSet edits and sync locator edits through their respective editors.</p>
+<p><img alt="Marker position example" src="https://i.gyazo.com/760291a354e81c46101851736776d15f.png" /></p>
+<p>For more animation types such as spell casting or ranged attacks, check the <a href="../advanced_abilities_guide/">Advanced Abilities Guide</a>.</p>
+<h2 id="5-configure-basic-unit-settings">5. Configure Basic Unit Settings<a class="headerlink" href="#5-configure-basic-unit-settings" title="Permanent link">&para;</a></h2>
+<p>In the upper section of the unit editor, you can configure basic values such as walk speed, run speed, and additional settings for flying units.</p>
+<p>Some of these values still need further investigation.</p>
+<p><img alt="Basic unit settings" src="https://i.gyazo.com/2d4d14f733d4b6047f402bdb4e0a6c2d.png" /></p>
+<h2 id="6-add-audio-and-effects">6. Add Audio and Effects<a class="headerlink" href="#6-add-audio-and-effects" title="Permanent link">&para;</a></h2>
+<p><code>EffectSet</code> is used for sounds and effects. There is a separate <a href="../advanced_effects_guide/">Advanced Effects Guide</a> for the full system.</p>
+<p>For the basic workflow, it is enough to look at audio for <code>Attack</code> and <code>Spawn</code>.</p>
+<p><img alt="EffectSet audio example" src="https://i.gyazo.com/e66241d71fc57b9eae110f21753d8c31.png" /></p>
+<p>EffectSet <strong>Time</strong> also uses a normalized <code>0..1</code> range. Match the animation key and variant as well as the time when aligning a sound with a marker. <code>0.6</code> means 60% of the selected clip, not 0.6 seconds.</p>
+<p>Use the EffectSet editor's <strong>Save</strong> to persist changes separately from the AnimationSet and locator data. Imported sound references are resource strings; the editor does not automatically package every referenced file or create a game sound bank.</p>
+<p>For the exact fields, preview limits, sound types, and reference rules, use the <a href="../advanced_effects_guide/">Advanced Effects Guide</a>.</p>
+<h2 id="7-export-the-unit">7. Export the Unit<a class="headerlink" href="#7-export-the-unit" title="Permanent link">&para;</a></h2>
+<p>Make the root <code>DRSModel_...</code> collection active and choose <strong>File &gt; Export &gt; Battleforge Object/Unit (.drs)</strong>.</p>
+<ol>
+<li>Choose <strong>Animated Unit</strong> for the unit metadata workflow above, or the matching <strong>Animated Object</strong> type for an animated prop. Do not export a unit as an animated object if you need its markers, unit effects, and locators.</li>
+<li>Enable <strong>Export All SKA Actions</strong> when you want the clips referenced by the <strong>saved AnimationSet</strong> written alongside the DRS. It does not mean every Blender action, and an EffectSet-only reference is not enough to select a clip.</li>
+<li>Choose <strong>Model Name Prefix</strong> explicitly. The actual default is <strong>No Prefix</strong>. <code>Model Name Prefix</code>, <code>Folder Name Prefix</code>, and <code>Keep Existing Prefix</code> serve different naming workflows; verify the resulting names and saved references rather than renaming output files independently.</li>
+<li>Leave <strong>[DEBUG] Export SKA Tangents</strong> enabled for Hermite tangent export unless you deliberately need a stepped/flat debugging comparison. It cannot repair missing keys or an unbaked control rig.</li>
+<li>Use the ordinary UV, normal, triangulation, mip-map, and vertex-budget checks from the object guide. Unit collision is not added by populating object collision collections; only collision-enabled animated-object types write that primitive block.</li>
+</ol>
+<blockquote>
+<p><strong>Rig export limitation:</strong> The writer exports the deform armature, not an armature whose name contains <code>Control_Rig</code>. It reads deform-bone location/quaternion F-curves and does not automatically bake constraints, IK, or NLA results. A successful control-rig preview is therefore not proof that the exported action contains the same motion. Prepare compatible keyed deform actions on a working copy and verify a fresh SKA import; do not destructively apply transforms or bake away the only copy of your rig.</p>
+</blockquote>
+<p><img alt="Animated export settings" src="https://i.gyazo.com/0c0baa604baf8b688dba0920f478c1af.png" /></p>
+<h2 id="8-final-export-result">8. Final Export Result<a class="headerlink" href="#8-final-export-result" title="Permanent link">&para;</a></h2>
+<p>A successful animated export produces the <code>.drs</code>, generated <code>.dds</code> maps, and the referenced <code>.ska</code> clips when action export is enabled. Check the message log and actual files; missing or unresolved action references must not be mistaken for a complete result.</p>
+<h3 id="animation-round-trip-checklist">Animation round-trip checklist<a class="headerlink" href="#animation-round-trip-checklist" title="Permanent link">&para;</a></h3>
+<ul class="task-list">
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> The deform armature, skin, and saved AnimationSet refer to the same model and skeleton.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Weights were checked across representative poses, with no more than four influences per vertex.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> AnimationSet and EffectSet edits were saved; locator scene changes were synced.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Required action references resolve, and exported filenames match the chosen prefix policy.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Marker and sound times were interpreted as normalized fractions.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> The exported DRS and clips were imported in a separate scene using the same <code>Apply Transform</code> display setting.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Animations were checked over their full duration, including looping and bone-attached locators, not just in a still pose.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Final behavior was checked in game; preview playback does not prove an external ability or sound resource is configured.</li>
+</ul>
+<p>If the mesh is rotated correctly but the animation is not, inspect the deform action, rest pose, and rig/export relationships before changing GO. If a marker or locator appears in Blender but is missing from the export, check the selected model type and the relevant editor's saved metadata.</p>
+<h2 id="related-guides">Related Guides<a class="headerlink" href="#related-guides" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../object_creation_guide/">Object Creation Guide</a></li>
+<li><a href="../building_creation_guide/">Building Creation Guide</a></li>
+<li><a href="../advanced_locators_guide/">Advanced Locators Guide</a></li>
+<li><a href="../advanced_abilities_guide/">Advanced Abilities Guide</a></li>
+<li><a href="../advanced_effects_guide/">Advanced Effects Guide</a></li>
+<li><a href="../advanced_shading_guide/">Advanced Shading Guide</a></li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      © 2025 Maxxxel – Battleforge Blender Plugin
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/drs-plugin/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "toc.integrate", "content.code.copy", "content.code.annotate", "content.tabs.link", "search.highlight", "search.suggest", "header.autohide"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

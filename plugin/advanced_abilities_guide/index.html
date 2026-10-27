@@ -1,0 +1,2039 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Official documentation for the DRS file format & the Blender Import/Export Plugin. Includes the DRS format manual (subclasses, attributes) and tutorials for installation, import, and export.">
+      
+      
+        <meta name="author" content="Maxxxel">
+      
+      
+        <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_abilities_guide/">
+      
+      
+        <link rel="prev" href="../advanced_locators_guide/">
+      
+      
+        <link rel="next" href="../advanced_effects_guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Advanced Abilities Guide - Battleforge Blender Plugin & DRS Format Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#advanced-abilities-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-header__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+      
+  <img src="../../assets/images/favicon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Battleforge Blender Plugin & DRS Format Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Advanced Abilities Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    https://github.com/Maxxxel/SR-ImpEx-for-Blender/
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-nav__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+      
+  <img src="../../assets/images/favicon.png" alt="logo">
+
+    </a>
+    Battleforge Blender Plugin & DRS Format Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    https://github.com/Maxxxel/SR-ImpEx-for-Blender/
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plugin Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../object_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Object Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unit_creation_buide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unit Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../building_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_shading_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Shading Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_locators_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Locators Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Abilities Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Abilities Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-know-which-data-you-are-editing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Know Which Data You Are Editing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Know Which Data You Are Editing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#templates-are-not-universal-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Templates Are Not Universal Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-work-safely-in-the-animationset-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Work Safely in the AnimationSet Editor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-choose-an-existing-visual-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Choose an Existing Visual Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-assign-and-check-every-variant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Assign and Check Every Variant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-place-markers-and-understand-time-units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Place Markers and Understand Time Units
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Place Markers and Understand Time Units">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generated-millisecond-timings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generated Millisecond Timings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-castresolve-and-startloopend-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Cast/Resolve and Start/Loop/End Workflows
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Cast/Resolve and Start/Loop/End Workflows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cast-or-ranged-release-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cast or Ranged Release Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loop-set-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loop Set Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-prepare-the-actual-export-action" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Prepare the Actual Export Action
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Prepare the Actual Export Action">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ska-metadata-is-not-an-animationset-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SKA Metadata Is Not an AnimationSet Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-save-export-and-round-trip-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Save, Export, and Round-Trip Check
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Save, Export, and Round-Trip Check">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#troubleshooting-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting Checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Reading
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_effects_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Effects Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRS Structures
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DRS Structures
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/header/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Header
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/common/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geometry
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Geometry
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeomesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoMesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeoprimitivecontainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoPrimitiveContainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeoobbtree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoOBBTree
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/collisionshape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    collisionShape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdspmeshfile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDspMeshFile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation & Effects
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Animation & Effects
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cskskininfo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSkSkinInfo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cskskeleton/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSkSkeleton
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdspjointmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDspJointMap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdrwlocatorlist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDrwLocatorList
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/animationset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AnimationSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/animationtimings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AnimationTimings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/effectset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EffectSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Miscellaneous
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Miscellaneous
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/drwresourcemeta/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DrwResourceMeta
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary (Enums)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="advanced-abilities-guide">Advanced Abilities Guide<a class="headerlink" href="#advanced-abilities-guide" title="Permanent link">&para;</a></h1>
+<p>Configure attack, casting, and channeling <strong>animation metadata</strong> after completing the <a href="../unit_creation_buide/">Unit Creation Guide</a>. For timed audio and visual resources, use the <a href="../advanced_effects_guide/">Advanced Effects Guide</a>; for attachment points, use the <a href="../advanced_locators_guide/">Advanced Locators Guide</a>.</p>
+<blockquote>
+<p><strong>Scope:</strong> an entry called an “Ability” in this editor maps a visual job to an animation. It does not create a gameplay ability, projectile behavior, damage, targeting rules, cooldown, or resource cost. Those must already be configured in the game's data. The workflows below concern <strong>DRS</strong> export; BMG animation/effect export is incomplete and is not an equivalent route.</p>
+</blockquote>
+<h2 id="1-know-which-data-you-are-editing">1. Know Which Data You Are Editing<a class="headerlink" href="#1-know-which-data-you-are-editing" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Data</th>
+<th>What it contains</th>
+<th>Where it is authored</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Blender Action / <code>.ska</code></td>
+<td>Bone motion and clip timing</td>
+<td>Action Editor; <code>Clip Timing...</code> for timing metadata</td>
+</tr>
+<tr>
+<td><code>AnimationSet</code></td>
+<td>Visual job (<code>vis_job</code>), mode, weighted Action variants, clip segments, markers</td>
+<td><code>AnimationSet Editor</code></td>
+</tr>
+<tr>
+<td><code>AnimationTimings</code></td>
+<td>Timing category/tag, variant index, millisecond timings, direction, marker reference</td>
+<td>Generated through the editor's per-variant <code>Timing</code> section</td>
+</tr>
+<tr>
+<td><code>EffectSet</code></td>
+<td>Audio/FX references scheduled against a named SKA clip</td>
+<td><code>EffectSet</code> panel</td>
+</tr>
+<tr>
+<td>Locators</td>
+<td>Model or bone attachment points</td>
+<td><code>CDrwLocatorList Editor</code></td>
+</tr>
+</tbody>
+</table>
+<p>An animation marker, a locator, and an EffectSet keyframe are separate records. Matching their time or position does <strong>not</strong> automatically link them or create an in-game event.</p>
+<h3 id="templates-are-not-universal-requirements">Templates Are Not Universal Requirements<a class="headerlink" href="#templates-are-not-universal-requirements" title="Permanent link">&para;</a></h3>
+<p><code>Init</code> populates the catalog's base template: <code>Idle</code>, <code>Walk</code>, <code>Run</code>, <code>Spawn</code>, <code>HitFromBack</code>, <code>Cheer / Emote</code>, <code>HitFromFront</code>, <code>Die</code>, <code>HitFromLeft</code>, <code>HitFromRight</code>, and <code>PushBackStandUp</code> (Start/Loop/End). This is a useful starting point for many units, not an exporter-enforced checklist for every model. Choose mappings required by the existing unit/game configuration; do not add empty entries just to match this list.</p>
+<p>An animated prop may need only <code>Idle</code>. The <strong>Animated Object</strong> DRS export types retain only visual job <code>0</code> (Idle) and remove animation markers and timings. Use <strong>Animated Unit</strong> when the exported model needs attack/cast mappings and their timing data.</p>
+<p>Sources: <a href="../../definitions/abilities.py">ability catalog</a>, <a href="../../blender/editors/animation_set_editor.py#L1818">editor initialization</a>, <a href="../../utilities/drs_utility.py#L5374">DRS model-type filtering</a>.</p>
+<h2 id="2-work-safely-in-the-animationset-editor">2. Work Safely in the AnimationSet Editor<a class="headerlink" href="#2-work-safely-in-the-animationset-editor" title="Permanent link">&para;</a></h2>
+<p>Make the intended <code>DRSModel_*</code> root collection active, then open <strong>3D Viewport → Sidebar → DRS Editor → AnimationSet Editor</strong>. When switching between models, save the current model's edits first and use <code>Reset</code> to load the newly active model's stored data.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Actual behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Init</code></td>
+<td>Clears the current editor list, then creates the base template. It is not a harmless refresh.</td>
+</tr>
+<tr>
+<td><code>Remove All</code></td>
+<td>Clears the working list. Save afterward only if that removal is intended.</td>
+</tr>
+<tr>
+<td><code>Save</code></td>
+<td>Writes working state to the active collection's <code>AnimationSetJSON</code>; does not export files or save the <code>.blend</code>.</td>
+</tr>
+<tr>
+<td><code>Reset</code></td>
+<td>Reloads the active collection's stored data, discarding unsaved editor changes.</td>
+</tr>
+<tr>
+<td><code>Mode</code></td>
+<td>Filters entries by mode. Labels include <code>Base</code>, <code>Special</code>, <code>Rest</code>, and <code>Rest-&gt;Base</code> when present.</td>
+</tr>
+<tr>
+<td><code>Add Ability…</code></td>
+<td>Adds catalog components in the current mode; existing <code>(vis_job, mode)</code> pairs are not added twice.</td>
+</tr>
+<tr>
+<td>Ability-row minus button</td>
+<td>Removes that mode-key entry. Grouped rows should be checked carefully after removal.</td>
+</tr>
+<tr>
+<td>Variant <code>+</code> / <code>−</code></td>
+<td>Adds/removes variants of the selected entry.</td>
+</tr>
+</tbody>
+</table>
+<p>Save a backup before editing imported metadata: the editor reconstructs its supported schema, not every possible unknown field in an original file.</p>
+<p>Source: <a href="../../blender/editors/animation_set_editor.py">editor controls and persistence</a>.</p>
+<h2 id="3-choose-an-existing-visual-mapping">3. Choose an Existing Visual Mapping<a class="headerlink" href="#3-choose-an-existing-visual-mapping" title="Permanent link">&para;</a></h2>
+<p>Use the catalog label matching the model's existing game-side behavior. These are actual catalog entries, not new gameplay ability definitions:</p>
+<table>
+<thead>
+<tr>
+<th>Catalog label</th>
+<th>Visual-job components</th>
+<th>Timing category / tag</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Attack</code></td>
+<td><code>MeleeAttack</code> (<code>8</code>); catalog describes it as melee <strong>or ranged</strong></td>
+<td><code>Melee</code> / <code>0</code>; marker required by the catalog</td>
+</tr>
+<tr>
+<td><code>Special Melee Attack Ground</code></td>
+<td><code>SpecialMeleeAttack</code> (<code>15</code>)</td>
+<td><code>Melee</code> / <code>114</code>; marker required</td>
+</tr>
+<tr>
+<td><code>Special Melee Attack Air</code></td>
+<td><code>SpecialMeleeAttackAir</code> (<code>16</code>)</td>
+<td><code>Melee</code> / <code>115</code>; marker required</td>
+</tr>
+<tr>
+<td><code>Cast (Ground Only)</code></td>
+<td><code>CastGround</code> (<code>18</code>), <code>CastResolve</code> (<code>19</code>)</td>
+<td><code>CastResolve</code> / <code>0</code></td>
+</tr>
+<tr>
+<td><code>Cast (Ground &amp; Air)</code></td>
+<td>Ground <code>18</code>/<code>19</code>, Air <code>22</code>/<code>21</code></td>
+<td><code>CastResolve</code> / <code>0</code>; catalog requires identical ground/air timings</td>
+</tr>
+<tr>
+<td><code>PreparedSalvo</code></td>
+<td>Ground <code>185</code>/<code>186</code>, Air <code>187</code>/<code>188</code></td>
+<td><code>CastResolve</code> / <code>54</code></td>
+</tr>
+<tr>
+<td><code>SpecialRangedAir</code></td>
+<td>Cast <code>316</code>, Resolve <code>317</code></td>
+<td><code>CastResolve</code> / <code>148</code></td>
+</tr>
+<tr>
+<td><code>Harpoon</code></td>
+<td>Cast <code>321</code>, Resolve <code>322</code></td>
+<td><code>CastResolve</code> / <code>150</code></td>
+</tr>
+<tr>
+<td><code>Heal Channel</code></td>
+<td>Start <code>177</code>, Loop <code>178</code>, End <code>179</code></td>
+<td><code>Channel</code> / <code>48</code></td>
+</tr>
+</tbody>
+</table>
+<p>There is no generic catalog entry named <code>Ranged Attack</code>. A regular ranged model can use the existing <code>Attack</code> visual job; a specialized model may use one of the named cast/resolve mappings. The timing label <code>Melee</code> on <code>Attack</code> is not a gameplay switch that makes an attack melee.</p>
+<p>Ground-only and ground/air cast entries share visual-job IDs, so they are not independent sets of interchangeable slots. Display labels are inferred from the catalog's ID map and can resolve to the shared ground/air label after reloading.</p>
+<p><strong>Mode switching is not a supported recipe.</strong> The catalog explicitly calls its entry <code>ModeSwitch (Not yet Supported)</code>. <code>SwitchToSpecial</code> and <code>SwitchToNormal</code> are internal component roles sharing job <code>7</code>, not independent supported animation types. Although <code>ModeSwitch</code> exists in the timing-category enum, that alone does not implement a complete transition workflow. Preserve known working data rather than treating the presence of a label as proof of support.</p>
+<p>Sources: <a href="../../definitions/abilities.py">catalog labels, IDs and tags</a>, <a href="../../definitions/enums.py#L21">timing-category enum</a>, <a href="../../blender/editors/animation_set_editor.py#L154">ID-based grouping</a>.</p>
+<h2 id="4-assign-and-check-every-variant">4. Assign and Check Every Variant<a class="headerlink" href="#4-assign-and-check-every-variant" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Add the matching catalog entry in the intended mode.</li>
+<li>Select a variant and choose its <strong>Action</strong>. The dropdown includes Actions from the entire <code>.blend</code>, not only the current model. Its shortened display label is not necessarily its datablock name or exported filename.</li>
+<li>Give each intended variant a weight. <code>80</code> and <code>20</code> is a useful two-variant convention. Animation weights are individually limited to <code>0..100</code> in this UI, but the editor does <strong>not</strong> normalize their sum or reject totals other than <code>100</code>. Do not assume a particular engine selection algorithm from the percentage display alone.</li>
+<li>Review <code>Allows IK</code> and <code>Force No Blend</code>. New variants default to enabled and disabled respectively; they are metadata flags, not Blender rigging or baking commands. Keep established imported settings unless a deliberate change is needed.</li>
+<li>Preview <strong>each</strong> variant. <code>Play</code> uses the selected variant, not a weighted random sample.</li>
+</ol>
+<p>A variant with <code>&lt;None&gt;</code>/an empty Action is skipped when constructing the exported AnimationSet. Merely creating an Action or NLA strip does not add it to an ability mapping.</p>
+<p>Sources: <a href="../../blender/editors/animation_set_editor.py#L1186">variant properties and UI</a>, <a href="../../utilities/drs_utility.py#L4736">variant export filtering</a>.</p>
+<h2 id="5-place-markers-and-understand-time-units">5. Place Markers and Understand Time Units<a class="headerlink" href="#5-place-markers-and-understand-time-units" title="Permanent link">&para;</a></h2>
+<p>The catalog enables the <code>Marker</code> section for <code>Spawn</code>, <code>Attack</code>, and selected special mappings. Casting entries normally use <code>Cast→Resolve</code> instead; a marker section is not available for every ability.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Meaning in the current editor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Time</code></td>
+<td>Fraction of the full Action, <code>0..1</code>; <strong>not seconds or a Blender frame number</strong></td>
+</tr>
+<tr>
+<td><code>Is Spawn Animation</code></td>
+<td>Stored marker flag; seeded for Spawn, not a general gameplay activation toggle</td>
+</tr>
+<tr>
+<td><code>Position</code></td>
+<td>Stored XYZ event position; choose it against the pose at the marker time</td>
+</tr>
+<tr>
+<td><code>Direction</code></td>
+<td>Stored direction vector; also orients the display arrow</td>
+</tr>
+<tr>
+<td><code>Play Marker</code></td>
+<td>Plays from the Action's start to the normalized marker time</td>
+</tr>
+<tr>
+<td><code>Display Marker</code></td>
+<td>Assigns the Action, jumps to the marker pose, and shows its arrow in <code>DRSMarkers</code></td>
+</tr>
+</tbody>
+</table>
+<p>For a five-second clip, marker <code>0.6</code> is at <strong>three seconds</strong>. To place an event at <code>0.6</code> seconds in that clip, use <code>0.12</code>. EffectSet keyframe times use the same normalized <code>0..1</code> convention, so matching fractions aligns the scheduled moments only when both refer to the same full clip.</p>
+<p>Keep these editor units separate from unverified game-tick behavior. Historical notes about 100-ms quantization, a 200-ms Spawn minimum, a six-entry limit, and resolve-phase duration are <strong>research hypotheses</strong>, not confirmed authoring rules. See <a href="../../drs/animationtimings/#research-notes-are-not-confirmed-engine-limits">AnimationTimings research status</a> before interpreting exported millisecond fields.</p>
+<p>For a weapon or hand event, inspect the pose with <code>Display Marker</code>, then edit the marker's numeric Position/Direction. Markers are not bone-bound locators, and dragging the helper arrow is not a supported “sync back” workflow: the stored UI values remain authoritative. A marker can be near a projectile attachment point, but neither creates nor automatically links that locator. Retain imported armature/locator parenting; do not reparent bones or locators just to match the helper arrow.</p>
+<h3 id="generated-millisecond-timings">Generated Millisecond Timings<a class="headerlink" href="#generated-millisecond-timings" title="Permanent link">&para;</a></h3>
+<p>The <code>Timing</code> section shows read-only <code>Type</code>, <code>Tag ID</code>, <code>Is Enter Mode</code>, <code>VariantIndex</code>, <code>Cast (ms)</code>, <code>Duration (ms)</code>, <code>Used FPS</code>, and <code>MarkerID</code>; its Direction remains editable. Change clip timing and the normalized marker/split controls rather than attempting to type new millisecond values.</p>
+<p>For timing recomputation, the editor uses the Action's <code>frame_length</code> and <code>original_fps</code> when available, otherwise its frame-range span and effective scene FPS (<code>fps / fps_base</code>). In this implementation:</p>
+<ul>
+<li><code>Duration (ms)</code> / exported <code>resolve_ms</code> is the <strong>full clip duration</strong>.</li>
+<li>Exported <code>cast_ms</code> is that duration multiplied by marker Time, or by <code>Cast→Resolve</code> when no marker is present.</li>
+</ul>
+<p>These are the add-on's calculations, not proof that a specific game-side damage/projectile event uses either field in a particular way. Some older format documentation describes different meanings and editable timing fields; the current editor code is authoritative for these controls.</p>
+<p>Sources: <a href="../../blender/editors/animation_set_editor.py#L2453">marker controls and timing display</a>, <a href="../../blender/editors/animation_set_editor.py#L1119">timing recomputation</a>, <a href="../../blender/editors/animation_set_editor.py#L1750">timing serialization</a>, <a href="../../definitions/animation_definitions.py#L170">binary marker fields</a>.</p>
+<h2 id="6-castresolve-and-startloopend-workflows">6. Cast/Resolve and Start/Loop/End Workflows<a class="headerlink" href="#6-castresolve-and-startloopend-workflows" title="Permanent link">&para;</a></h2>
+<h3 id="cast-or-ranged-release-example">Cast or Ranged Release Example<a class="headerlink" href="#cast-or-ranged-release-example" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Use the existing model's mapping: for example <code>Attack</code> for its regular attack or <code>Cast (Ground Only)</code> for an existing generic cast hook.</li>
+<li>Assign the full clip, including preparation and follow-through.</li>
+<li>For <code>Attack</code>, set marker Time at the visual release/contact pose. For a cast pair, set <code>Cast→Resolve</code> at the transition you want to inspect.</li>
+<li>Use <code>Play Cast</code> and <code>Play Resolve</code> to inspect the two ranges of the selected full Action. Resolve rows are hidden in the main ability list.</li>
+<li>Configure the required locator separately, then add audio/FX keyframes to the corresponding clip in <a href="../advanced_effects_guide/">EffectSet</a>.</li>
+<li>Save, export, and test in the game configuration that actually invokes this visual job. A plausible preview does not create a functioning spell or projectile.</li>
+</ol>
+<p>Action selection is propagated between corresponding Cast/Resolve entries. Ground and air channels are separate; explicitly verify their clips and matching timings rather than assuming one edit updates both.</p>
+<h3 id="loop-set-example">Loop Set Example<a class="headerlink" href="#loop-set-example" title="Permanent link">&para;</a></h3>
+<p>For <code>PushBackStandUp</code>, <code>Heal Channel</code>, or another catalog Start/Loop/End group, the UI shows one <strong>Loop Set</strong> row. Use a full clip with a preparation, repeatable middle, and exit. Set <code>Start.end</code> and <code>Loop.end</code>, then inspect the <code>Start</code>, <code>Loop</code>, and <code>End</code> preview buttons. Selecting an Action propagates the same variant index's file across the group.</p>
+<p><strong>Range caveat:</strong> linked Action selection and preview buttons are not a guarantee that every hidden component's exported Start/End values have been synchronized. Current drawing logic updates only the first Start/Loop variants' ranges, and cast previews compute their Resolve range separately. Reimport and check the exported component ranges, especially End/Resolve and additional variants, before relying on segmented playback.</p>
+<p>Sources: <a href="../../blender/editors/animation_set_editor.py#L314">cast and loop previews</a>, <a href="../../blender/editors/animation_set_editor.py#L960">linked Action assignment</a>.</p>
+<h2 id="7-prepare-the-actual-export-action">7. Prepare the Actual Export Action<a class="headerlink" href="#7-prepare-the-actual-export-action" title="Permanent link">&para;</a></h2>
+<p>A <strong>control rig</strong> is an authoring aid; the <strong>deform/game armature</strong> supplies the exported skeleton and motion. The preview helpers can prefer an armature named <code>Control_Rig</code>, while the SKA exporter explicitly excludes armatures containing that name. Successful control-rig playback therefore does not prove that the export Action contains usable deform-bone motion.</p>
+<p>The SKA writer reads the selected Action's bone <strong>location and quaternion rotation F-curves</strong>. It does not bake evaluated IK/constraints, the NLA stack, Euler rotation, or scale into motion automatically. Bake/convert the intended final motion onto the deform armature's bones before export when the source relies on those systems. Preserve the existing skeleton/rest-pose relationships and bone names; the writer derives bone IDs from known names or its fallback name hash.</p>
+<p>Prefer zero-based clip keyframes for new work: SKA sample times are calculated from absolute keyframe numbers divided by clip length, without subtracting an arbitrary Action start offset. A clip moved to a later timeline position can preview correctly yet export shifted times.</p>
+<p>Use <code>Clip Timing...</code> to inspect or set per-Action FPS/duration metadata. The dialog offers fixed-frame FPS retiming, duration-to-FPS calculation, FPS/duration-to-frame-length calculation, and scene fallback. These operations set timing metadata; they do not rescale or bake the Action's F-curves. Imported <code>frame_length</code>, <code>original_fps</code>, and <code>original_duration</code> can override later scene changes, so review them after changing a clip's length. Preview can also change scene FPS and timeline limits.</p>
+<p>Sources: <a href="../../blender/editors/animation_set_editor.py#L1295">preview armature lookup</a>, <a href="../../utilities/ska_utility.py#L61">export armature lookup</a>, <a href="../../utilities/ska_utility.py#L325">SKA writer</a>, <a href="../../blender/editors/animation_set_editor.py#L2182">Clip Timing dialog</a>.</p>
+<h3 id="ska-metadata-is-not-an-animationset-mode">SKA Metadata Is Not an AnimationSet Mode<a class="headerlink" href="#ska-metadata-is-not-an-animationset-mode" title="Permanent link">&para;</a></h3>
+<p>The full track/keyframe path in the current <a href="../../definitions/ska_definitions.py">SKA reader/writer</a> is implemented for file types <strong>6 and 7</strong>. <a href="../../utilities/ska_utility.py#L657">New SKA exports</a> are generated as <strong>type 7</strong>; a research template describing types 2–5 does not establish equivalent add-on support for them.</p>
+<ul>
+<li>Track headers distinguish <strong>position (<code>0</code>)</strong> from <strong>quaternion rotation (<code>1</code>)</strong> and bind tracks to skeleton bone IDs. Renaming a clip does not retarget its skeleton.</li>
+<li>Each keyframe stores four values and four tangent components. This layout is not a generic export path for arbitrary Blender scale, Euler, or constraint animation.</li>
+<li>Both supported layouts store duration, repeat/stutter metadata, frame length, and trailing integers; type 7 includes an extra integer before frame length. Do not assign guessed meanings to unknown fields. This is not a lossless byte-for-byte rewrite: the current exporter generates three trailing zeros, so keep the original clip as a reference.</li>
+<li>The writer uses the Action's <code>repeat</code> value when present, otherwise <code>0</code>, and its <code>stutter_mode</code> when present, otherwise <code>2</code>. These file-level settings are distinct from AnimationSet's Start/Loop/End clip ranges.</li>
+<li>Historical notes call frame length “unused” or describe particular stutter values as smooth. Those engine effects remain unverified. The add-on still uses frame-length/FPS metadata for timing calculations; do not discard it or treat it as a guaranteed in-game speed control. Use <code>Clip Timing...</code> and round-trip the result.</li>
+</ul>
+<h2 id="8-save-export-and-round-trip-check">8. Save, Export, and Round-Trip Check<a class="headerlink" href="#8-save-export-and-round-trip-check" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Inspect every mapping/variant and its timing section, then click <strong>Save</strong> in both AnimationSet and EffectSet. Save the <code>.blend</code> too.</li>
+<li>Export a DRS as <strong>Animated Unit</strong> for these unit visual mappings.</li>
+<li>Enable <strong>Export All SKA Actions</strong> when new SKA files are needed. Despite its name, this exports clips referenced in the saved AnimationSet blob, <strong>not every Action in the file</strong>. An EffectSet-only Action reference does not by itself schedule an SKA export. Unresolved Actions can be skipped.</li>
+<li>Choose <strong>Model Name Prefix</strong> deliberately: <code>No Prefix</code>, <code>Model Name Prefix</code>, <code>Folder Name Prefix</code>, or <code>Keep Existing Prefix</code>. The DRS dialog currently defaults to <strong>No Prefix</strong>, not Model Name Prefix. The naming map rewrites AnimationSet, marker-set and EffectSet animation references together, replacing spaces and resolving filename collisions; check actual output names rather than predicting them from dropdown labels.</li>
+<li>For smooth keyed motion, review <strong>[DEBUG] Export SKA Tangents</strong> (enabled by default in DRS export). The standalone SKA exporter selects one Action and has its own <code>Export Tangents</code> toggle, defaulting to off. Tangents cannot recover missing/baked-out motion.</li>
+<li>Reimport the output into a clean test scene and compare clips, mapping IDs, variants, ranges, timing values, marker position/direction, and effects against the source. Finally verify the game-side behavior with its existing ability definitions.</li>
+</ol>
+<h3 id="troubleshooting-checklist">Troubleshooting Checklist<a class="headerlink" href="#troubleshooting-checklist" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Check first</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No attack/cast mappings after export</td>
+<td>Animated Unit type, correct active root, editor Save, nonempty Action assignments; Animated Object intentionally filters these out.</td>
+</tr>
+<tr>
+<td>Missing or incorrect SKA</td>
+<td>Saved AnimationSet references, actual Action names, output prefix, ambiguous/truncated names, and exported files. The resolver can fall back to similar prefixes.</td>
+</tr>
+<tr>
+<td>Motion works only on the control rig</td>
+<td>Bake deform-bone location/quaternion channels; the writer does not export the evaluated rig/NLA result.</td>
+</tr>
+<tr>
+<td>Wrong speed or shifted release</td>
+<td>Per-Action timing metadata, effective FPS, zero-based keyframes, normalized Time versus seconds, and full-clip versus segment timing.</td>
+</tr>
+<tr>
+<td>Loop/resolve replays the wrong part</td>
+<td>Reimport and inspect all hidden component ranges and variant indices; preview splits alone are insufficient.</td>
+</tr>
+<tr>
+<td>Marker display is right but game event is wrong</td>
+<td>Compare exported marker IDs to <code>AnimationTimings</code> references and confirm the game actually invokes the intended job/tag. Marker-set IDs are regenerated on Save separately from timing IDs; do not assume those links round-trip unchanged.</td>
+</tr>
+<tr>
+<td>Existing data changes after Save</td>
+<td>Work on a copy; schema reconstruction is not lossless preservation of unknown fields or unsupported mappings.</td>
+</tr>
+</tbody>
+</table>
+<p>Sources: <a href="../../utilities/drs_utility.py#L5060">referenced-only SKA export</a>, <a href="../../utilities/helpers.py#L355">export naming</a>, <a href="../../__init__.py#L430">DRS export options</a>, <a href="../../utilities/drs_resolvers.py#L32">Action resolver</a>, <a href="../../blender/editors/animation_set_editor.py#L1649">marker/timing serialization</a>.</p>
+<h2 id="related-reading">Related Reading<a class="headerlink" href="#related-reading" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../advanced_effects_guide/">Advanced Effects Guide</a>: audio/FX configuration and preservation caveats.</li>
+<li><a href="../advanced_locators_guide/">Advanced Locators Guide</a>: attachment types and bone relationships.</li>
+<li><a href="../unit_creation_buide/">Unit Creation Guide</a>: shared unit setup, without repeating it here.</li>
+<li><a href="../../drs/animationset/">AnimationSet format</a> and <a href="../../drs/animationtimings/">AnimationTimings format</a>: binary structure references; consult the source links above for current UI behavior.</li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      © 2025 Maxxxel – Battleforge Blender Plugin
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/drs-plugin/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "toc.integrate", "content.code.copy", "content.code.annotate", "content.tabs.link", "search.highlight", "search.suggest", "header.autohide"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

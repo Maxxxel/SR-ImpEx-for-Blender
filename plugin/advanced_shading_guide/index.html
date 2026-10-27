@@ -1,0 +1,2114 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Official documentation for the DRS file format & the Blender Import/Export Plugin. Includes the DRS format manual (subclasses, attributes) and tutorials for installation, import, and export.">
+      
+      
+        <meta name="author" content="Maxxxel">
+      
+      
+        <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_shading_guide/">
+      
+      
+        <link rel="prev" href="../building_creation_guide/">
+      
+      
+        <link rel="next" href="../advanced_locators_guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Advanced Shading Guide - Battleforge Blender Plugin & DRS Format Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#advanced-shading-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-header__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+      
+  <img src="../../assets/images/favicon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Battleforge Blender Plugin & DRS Format Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Advanced Shading Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    https://github.com/Maxxxel/SR-ImpEx-for-Blender/
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-nav__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+      
+  <img src="../../assets/images/favicon.png" alt="logo">
+
+    </a>
+    Battleforge Blender Plugin & DRS Format Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    https://github.com/Maxxxel/SR-ImpEx-for-Blender/
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plugin Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../object_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Object Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unit_creation_buide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unit Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../building_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Shading Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Shading Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-start-with-the-drs-material-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Start with the DRS material layout
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Start with the DRS material layout">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#names-are-part-of-the-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Names are part of the integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-texture-suffixes-and-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Texture suffixes and channels
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Texture suffixes and channels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#combined-parameter-map-recommended-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combined parameter map: recommended baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#separate-maps-channel-aware-authoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Separate maps: channel-aware authoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-material-flags-supported-controls-versus-unknowns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Material flags: supported controls versus unknowns
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-normal-maps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Normal maps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-refraction-and-environment-cubemaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Refraction and environment cubemaps
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Refraction and environment cubemaps">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#refraction-map-and-color" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refraction map and color
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-level-environment-helper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model-level environment helper
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-flu-animation-and-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Flu animation and Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-wind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Wind
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-export-and-verification-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Export and verification checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-and-format-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation and format references
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Guides
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_locators_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Locators Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_abilities_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Abilities Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_effects_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Effects Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DRS Structures
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    DRS Structures
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/header/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Header
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/common/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geometry
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Geometry
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeomesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoMesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeoprimitivecontainer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoPrimitiveContainer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cgeoobbtree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CGeoOBBTree
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/collisionshape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    collisionShape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdspmeshfile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDspMeshFile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation & Effects
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Animation & Effects
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cskskininfo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSkSkinInfo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cskskeleton/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CSkSkeleton
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdspjointmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDspJointMap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/cdrwlocatorlist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CDrwLocatorList
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/animationset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AnimationSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/animationtimings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AnimationTimings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/effectset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EffectSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Miscellaneous
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Miscellaneous
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../drs/drwresourcemeta/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DrwResourceMeta
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary (Enums)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="advanced-shading-guide">Advanced Shading Guide<a class="headerlink" href="#advanced-shading-guide" title="Permanent link">&para;</a></h1>
+<p>Use this guide to prepare DRS materials, choose texture channels, and edit the material data written by the exporter. The same material workflow applies to static objects, units, and building meshes; their collection and animation setup is covered in the <a href="#related-guides">creation guides</a>.</p>
+<blockquote>
+<p><strong>Preview is not export.</strong> The Blender shader previews selected DRS features. Export collects images, repacks parameter channels, and writes material flags, refraction color, flow vectors, and wind values. It does <strong>not</strong> bake an arbitrary Blender shader or guarantee identical in-game lighting, transparency, or animation.</p>
+</blockquote>
+<h2 id="1-start-with-the-drs-material-layout">1. Start with the DRS material layout<a class="headerlink" href="#1-start-with-the-drs-material-layout" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Use an imported DRS material as a reference, or assign the bundled <strong>DRS Material</strong> asset from the Asset Browser's <strong>DRS_Material</strong> catalog. Scene initialization registers the <strong>Battleforge Assets</strong> library; choose it or <strong>All Libraries</strong> in the browser.</li>
+<li>Select your render mesh inside <code>Meshes_Collection</code>. The material panels also accept meshes in <code>GroundDecal_Collection</code>.</li>
+<li>Open the <strong>Shading</strong> workspace and make the intended material the object's <strong>active material</strong>. The exporter reads that material, not a separate material for every face slot. Split objects when different exported materials are needed.</li>
+<li>Assign images to the existing labeled texture nodes. Keep a valid active UV map on the mesh: export calculates tangents and reads those UVs.</li>
+<li>In the 3D Viewport sidebar (<code>N</code>), open <strong>DRS Editor → Material</strong>. Use <strong>Flags (bool_parameter)</strong>, <strong>Flow</strong>, <strong>Wind</strong>, and <strong>Cubemap Helper</strong> for object-level settings.</li>
+</ol>
+<p>Flags, flow, and wind belong to the <strong>object</strong>. Shader links and images belong to the <strong>material</strong>. If two meshes need independent previews or texture assignments, make their materials single-user before changing them.</p>
+<h3 id="names-are-part-of-the-integration">Names are part of the integration<a class="headerlink" href="#names-are-part-of-the-integration" title="Permanent link">&para;</a></h3>
+<p>Do not rename or replace the exporter-used nodes while reorganizing the graph:</p>
+<ul>
+<li><strong>DRS Shader</strong> is the named <strong>Principled BSDF</strong> node, not the processing group.</li>
+<li><strong>AIO DRS Engine</strong> is the group label; its node name is <code>DRS_Engine_Group</code> and its node-tree name is <code>AIO_DRS_Engine</code>.</li>
+<li>Keep the texture labels in the table below, plus <strong>Separate Metallic</strong>, <strong>Separate Roughness</strong>, <strong>Separate Emission</strong>, <strong>Separate Flu Mask</strong>, and <strong>Refraction Color</strong>.</li>
+<li>Keep <strong>Apply Flu Mask</strong> and <strong>Mix Refraction Shader</strong>: UI callbacks use those labels to enable or mute preview branches.</li>
+</ul>
+<p>The runtime builder's layout is the reference if an older asset has different nodes. Merely renaming an unrelated shader does not reproduce its supported connections. See the <a href="../../blender/drs_material.py">material builder</a>.</p>
+<h2 id="2-texture-suffixes-and-channels">2. Texture suffixes and channels<a class="headerlink" href="#2-texture-suffixes-and-channels" title="Permanent link">&para;</a></h2>
+<p>Suffixes identify the generated texture roles; the material's <strong>node labels and assigned images</strong> are also important for discovery. Renaming an image file alone does not enable its export.</p>
+<table>
+<thead>
+<tr>
+<th>Suffix</th>
+<th>Image node label</th>
+<th>Verified use</th>
+<th>Export condition / format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_col</code></td>
+<td><strong>Color Map (_col)</strong></td>
+<td>Color feeds base color and emission color. Alpha feeds the opacity preview when alpha test or decal mode is enabled.</td>
+<td>Required image; DXT5 DDS.</td>
+</tr>
+<tr>
+<td><code>_nor</code></td>
+<td><strong>Normal Map (_nor)</strong></td>
+<td>Color passes through Blender's Normal Map node. The importer sets <strong>Non-Color</strong>.</td>
+<td><strong>Use Normal Map (Bit 17)</strong>; DXT1 DDS.</td>
+</tr>
+<tr>
+<td><code>_par</code></td>
+<td><strong>Parameter Map (_par)</strong></td>
+<td><strong>R = metallic, G = roughness, B = flu mask, A = emission strength</strong>. The importer sets <strong>Non-Color</strong> and <strong>Channel Packed</strong> alpha.</td>
+<td><strong>Use Parameter Map (Bit 16)</strong>; repacked DXT5 DDS.</td>
+</tr>
+<tr>
+<td><code>_flu</code></td>
+<td><strong>Flu Map Layer 1</strong>, <strong>Flu Map Layer 2</strong></td>
+<td>Tileable color image; import assigns the same sRGB image to both preview layers.</td>
+<td>Bit 16 and a detected flu image; one DXT5 DDS, not two independent layer textures.</td>
+</tr>
+<tr>
+<td><code>_ref</code></td>
+<td><strong>Refraction Map (_ref)</strong></td>
+<td>Color controls the internal refraction/transparent preview mix; alpha controls the final opaque/refraction mix. <strong>Refraction Color</strong> is a separate RGB value. Import sets the map to <strong>Non-Color</strong>.</td>
+<td>Effective Bit 18 and a detected refraction image; DXT5 DDS.</td>
+</tr>
+<tr>
+<td><code>_env</code></td>
+<td><strong>Environment Cubemap (_env)</strong></td>
+<td>Model-level image on the cubemap helper, not an ordinary mesh texture node.</td>
+<td><strong>Use Env/Cube Map (Bit 18)</strong> with an assigned helper image; DXT5 cubemap.</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>_par</code> green channel is used directly as <strong>roughness</strong> in the Blender graph; it is not inverted into smoothness. The separate numeric <code>smoothness</code> entry in the DRS format is not this texture channel.</p>
+<p><strong>Engine interpretation versus add-on convention:</strong> the table documents the current Blender shader and exporter packing. Older research-template comments suggested red might be ambient occlusion, green specular, and blue roughness when no flu map is present. Those are historical hypotheses, not confirmed engine semantics. Keep the current channel layout; do not swap channels or label the old interpretation as verified without controlled in-game comparisons.</p>
+<p>Likewise, historical Paint.NET notes recommending DXT3 for color or DXT1 for refraction are not the current export settings and do not establish an exclusive list of engine-supported DDS formats. The formats in the table describe what this add-on currently generates.</p>
+<h3 id="combined-parameter-map-recommended-baseline">Combined parameter map: recommended baseline<a class="headerlink" href="#combined-parameter-map-recommended-baseline" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Prepare one RGBA image with the packing shown above. Preserve alpha: here it carries emission, not opacity.</li>
+<li>Assign it to <strong>Parameter Map (_par)</strong>; use <strong>Non-Color</strong> and <strong>Channel Packed</strong> alpha when assigning a new image manually.</li>
+<li>Leave the group's <strong>Use Separate Maps</strong> input off, and enable <strong>Use Parameter Map (Bit 16)</strong> in the sidebar.</li>
+<li>Clear unused images from the <strong>Separate …</strong> nodes. Export prefers assigned separate metallic, roughness, and emission images over the combined image, even when <strong>Use Separate Maps</strong> is off in the preview.</li>
+</ol>
+<p>A flu mask of zero selects the color-map side of the preview mix; a mask of one selects the animated flu-color side. Emission strength uses <code>_par</code> alpha, while the emission color comes from <code>_col</code>.</p>
+<h3 id="separate-maps-channel-aware-authoring">Separate maps: channel-aware authoring<a class="headerlink" href="#separate-maps-channel-aware-authoring" title="Permanent link">&para;</a></h3>
+<p>The graph exposes <strong>Separate Maps (Artist Override)</strong> and the <strong>Use Separate Maps</strong> group input. This input switches the <strong>preview</strong> between combined and separate sources; it is not a DRS flag and does not by itself select export sources.</p>
+<p>The packing helper reads the following channels from its resolved images:</p>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Channel copied into exported <code>_par</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Metallic source</td>
+<td>Red → R</td>
+</tr>
+<tr>
+<td>Roughness source</td>
+<td>Green → G</td>
+</tr>
+<tr>
+<td>Flu-mask source</td>
+<td>Blue → B</td>
+</tr>
+<tr>
+<td>Emission source</td>
+<td>Alpha → A</td>
+</tr>
+</tbody>
+</table>
+<p>For RGB grayscale metallic or roughness images, put the intended value in all RGB channels. A separate RGBA emission image must carry the intended strength in <strong>alpha</strong>, not only in RGB. The separate preview inputs use the image's <strong>Color</strong> output, so an emission image whose RGB and alpha differ can preview differently from its export.</p>
+<p>The packer accepts either one shared image for all resolved channels, or a distinct image for every supplied channel. Partially reused images mixed with different images are rejected. Distinct images must have identical width and height. Unresolved channels are filled with <strong>0</strong>, not the shader socket's preview default. The group's declared separate-input defaults are metallic <code>0</code>, roughness <code>0.8</code>, emission <code>0</code>, and flu mask <code>0</code>; linked nodes can override those preview defaults.</p>
+<blockquote>
+<p><strong>Current flu-mask limitation:</strong> the standard export path first resolves the group's <strong>Flu Mask</strong> output by searching upstream for an image whose label contains <code>_par</code>. With the generated graph, this favors the combined parameter image; an image assigned only to <strong>Separate Flu Mask</strong> is not a reliable exported B source. For fluid materials, prefer a combined <code>_par</code> and check its blue channel after export. Do not assume the visible separate-mask preview proves it was written.</p>
+</blockquote>
+<p>These are image-packing rules, not shader evaluation: procedural nodes, ramps, scalar defaults, and arbitrary graph edits are not baked into parameter textures. See <a href="../../utilities/drs_utility.py"><code>create_mesh</code> and the packing helper</a>.</p>
+<h2 id="3-material-flags-supported-controls-versus-unknowns">3. Material flags: supported controls versus unknowns<a class="headerlink" href="#3-material-flags-supported-controls-versus-unknowns" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Material → Flags (bool_parameter)</strong>. New object properties start with <strong>Raw bool_parameter = 0</strong>; imported objects are populated from their file. Prefer the labeled toggles over manual raw-integer edits, because the toggles also update the supported preview connections.</p>
+<table>
+<thead>
+<tr>
+<th>UI control</th>
+<th>Implemented Blender / export behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Enable Alpha Test (Bit 0)</strong></td>
+<td>Connects <code>_col</code> alpha to <strong>DRS Shader</strong> alpha; exported as a flag.</td>
+</tr>
+<tr>
+<td><strong>Decal Mode (Bit 1)</strong></td>
+<td>Also enables that alpha connection; exported as a flag. It does not create a decal mesh or projection setup.</td>
+</tr>
+<tr>
+<td><strong>Use Parameter Map (Bit 16)</strong></td>
+<td>Connects <code>_par</code> data for preview; gates <code>_par</code> and <code>_flu</code> export.</td>
+</tr>
+<tr>
+<td><strong>Use Normal Map (Bit 17)</strong></td>
+<td>Connects the normal texture for preview; gates <code>_nor</code> export.</td>
+</tr>
+<tr>
+<td><strong>Use Refraction Map (Bit 18)</strong></td>
+<td>Requires a loaded <strong>Refraction Map (_ref)</strong> image; enables the refraction preview branch.</td>
+</tr>
+<tr>
+<td><strong>Use Env/Cube Map (Bit 18)</strong></td>
+<td>Requires a loaded helper image; controls helper visibility and requests <code>_env</code> export.</td>
+</tr>
+<tr>
+<td><strong>Disable Receive Shadows (Bit 20)</strong></td>
+<td>Named flag stored for export; no corresponding Blender shadow-preview callback is implemented here.</td>
+</tr>
+<tr>
+<td><strong>Enable SH Lighting (Bit 21)</strong></td>
+<td>Named flag stored for export; no corresponding Blender lighting-preview callback is implemented here.</td>
+</tr>
+<tr>
+<td><strong>Unknown Bitflag … (Bit N)</strong></td>
+<td>Uninterpreted flags. Preserve known-good imported values rather than choosing bits from their names.</td>
+</tr>
+</tbody>
+</table>
+<p>With both alpha/decal flags off, the callback disconnects color alpha and sets preview alpha to 1. With either enabled, it uses the color image's <strong>Straight</strong> alpha mode. This is not evidence that every in-game alpha/decal rendering detail is reproduced.</p>
+<p>The refraction and environment controls are <strong>two sources for the same exported Bit 18</strong>, not two independent file bits. Export recomputes that bit from enabled paths that actually have images; setting the raw integer alone cannot substitute for the required assets. The refraction-data writer then checks this effective bit, so an assigned <code>_ref</code> image can also be written when only the environment path enabled Bit 18. Clear an unused refraction image rather than relying solely on its preview toggle.</p>
+<h2 id="4-normal-maps">4. Normal maps<a class="headerlink" href="#4-normal-maps" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Assign the image to <strong>Normal Map (_nor)</strong> and use <strong>Non-Color</strong>.</li>
+<li>Enable <strong>Use Normal Map (Bit 17)</strong> on each mesh that needs it.</li>
+<li>Keep the generated connection through <strong>AIO DRS Engine → Normal → DRS Shader</strong> and keep a valid UV layout.</li>
+</ol>
+<p>The exporter resolves an image rather than baking normal-processing nodes, then converts it to DXT1. No extra normal-channel inversion is performed by the shown material builder or packing path. If a source asset uses a different convention, compare against a working imported material instead of assuming a green-channel flip is required.</p>
+<h2 id="5-refraction-and-environment-cubemaps">5. Refraction and environment cubemaps<a class="headerlink" href="#5-refraction-and-environment-cubemaps" title="Permanent link">&para;</a></h2>
+<h3 id="refraction-map-and-color">Refraction map and color<a class="headerlink" href="#refraction-map-and-color" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Load an image into <strong>Refraction Map (_ref)</strong> before enabling <strong>Use Refraction Map (Bit 18)</strong>. An enable attempt without an image is rejected with a notice.</li>
+<li>Set the <strong>Refraction Color</strong> RGB node; the generated node defaults to white <code>(1, 1, 1)</code>.</li>
+<li>Inspect the material in a shading mode that evaluates its nodes. The preview uses a glass/transparent branch, the parameter-map roughness, and the normal-map result. Enabling the branch also enables backface culling; disabling it mutes the branch and disables that culling setting.</li>
+<li>Check the exported texture and RGB value after a round trip. Changing internal glass IOR, mix nodes, or other Blender-only settings does not serialize those shader edits into DRS.</li>
+</ol>
+<p>The preview wiring establishes how Blender uses the map, not a complete specification of the game's refraction algorithm. When Bit 18 is inactive, export writes a zero refraction color. When active, it reads the labeled <strong>Refraction Color</strong> node; if that node cannot be found, the export fallback is black.</p>
+<h3 id="model-level-environment-helper">Model-level environment helper<a class="headerlink" href="#model-level-environment-helper" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Select a mesh under the intended <code>DRSModel_&lt;basename&gt;</code> root and open <strong>Material → Cubemap Helper</strong>.</li>
+<li>Click <strong>Add Cubemap (Earth Base)</strong>. This creates or resets <code>Environment_Collection</code> / <code>Environment_Cubemap</code> using the bundled earth cubemap when available. Check <strong>Model Cubemap → Assigned</strong>, not just that a helper object exists.</li>
+<li>To use a custom image, select the helper and replace the image on <strong>Environment Cubemap (_env)</strong> in its material. Keep that node label/name and the helper collection intact. Re-select the render mesh afterward.</li>
+<li>Enable <strong>Use Env/Cube Map (Bit 18)</strong> for each mesh that should request the model's cubemap. Adding the helper alone is not that per-mesh export request.</li>
+<li>Use <strong>Debug Export Cubemap</strong> to check conversion independently. It writes a timestamped DDS to the add-on's <code>sr_impex/debug</code> folder; it is not a complete model export. <strong>Remove Cubemap</strong> removes the model helper, so check all dependent meshes afterward.</li>
+</ol>
+<p>The export converter supports square-face <strong>6×1 horizontal strips</strong>, <strong>1×6 vertical strips</strong>, and a <strong>4×3 cross</strong>. Strip order is <code>+X, -X, +Y, -Y, +Z, -Z</code> (left-to-right or top-to-bottom). The cross uses this layout; each entry is one square tile:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Column 1</th>
+<th>Column 2</th>
+<th>Column 3</th>
+<th>Column 4</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Top</td>
+<td>—</td>
+<td>+Y</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Middle</td>
+<td>-X</td>
+<td>+Z</td>
+<td>+X</td>
+<td>-Z</td>
+</tr>
+<tr>
+<td>Bottom</td>
+<td>—</td>
+<td>-Y</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>The helper's automatic preview UV layout supports <strong>strips only</strong>; a cross can be accepted by export without receiving a correct helper preview. The helper is a textured emission cube, not a Blender world-lighting or reflection-capture system. Do not judge in-game environment behavior from its visibility alone. Cubemap conversion requires the bundled <code>texconv.exe</code> and <code>texassemble.exe</code>.</p>
+<h2 id="6-flu-animation-and-flow">6. Flu animation and Flow<a class="headerlink" href="#6-flu-animation-and-flow" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Set up <code>_par</code> with a nonzero blue mask where flu color should appear and enable Bit 16.</li>
+<li>Assign the <strong>same tileable image</strong> to <strong>Flu Map Layer 1</strong> and <strong>Flu Map Layer 2</strong>. The generated preview repeats the images and crossfades two animated coordinate layers; export selects one flu image, so different images in the two nodes are not a supported two-texture export setup.</li>
+<li>Open <strong>Material → Flow</strong> and enable <strong>Write Flow</strong> when the four flow vectors should be written to the mesh material block.</li>
+<li>Set the vectors using a working imported asset as a starting point. Play or scrub the timeline to inspect the preview, then reimport an export to check the stored values.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Flow control</th>
+<th>New-object default</th>
+<th>What is verified</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Write Flow</strong></td>
+<td>Off</td>
+<td>Enables vector export; it is separate from the texture-enable flag.</td>
+</tr>
+<tr>
+<td><strong>Max Flow Speed</strong></td>
+<td><code>(0, 0, 0, 0)</code></td>
+<td>Four stored components; XYZ feeds preview <strong>MaxSpeed</strong>.</td>
+</tr>
+<tr>
+<td><strong>Min Flow Speed</strong></td>
+<td><code>(0, 0, 0, 0)</code></td>
+<td>XYZ feeds preview <strong>MinSpeed</strong>.</td>
+</tr>
+<tr>
+<td><strong>Flow Speed Change</strong></td>
+<td><code>(0, 0, 0, 0)</code></td>
+<td>XYZ feeds preview <strong>Frequency</strong>.</td>
+</tr>
+<tr>
+<td><strong>Flow Scale</strong></td>
+<td><code>(0, 0, 0, 0)</code></td>
+<td>XYZ feeds preview <strong>Scale</strong>, multiplying generated coordinates.</td>
+</tr>
+</tbody>
+</table>
+<p>The UI declares no extra min/max bounds for these vectors. All <strong>four components</strong> are exported when <strong>Write Flow</strong> is enabled, but the fourth component is not used by this preview. Its in-game meaning and the engine's units are not established here. The preview group interface starts with scale <code>(1, 1, 1)</code>, whereas object Flow properties start at zero; those are different defaults. A zero scale collapses the preview's spatial coordinate variation.</p>
+<p><strong>Write Flow</strong> gates serialization, not the shader's time driver. Conversely, Bit 16 gates <code>_par</code>/<code>_flu</code> texture export but does not automatically enable <strong>Write Flow</strong>. The preview's frame-driven oscillation is an approximation, not a measured copy of game timing.</p>
+<h2 id="7-wind">7. Wind<a class="headerlink" href="#7-wind" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Material → Wind</strong>. If the mesh has no generated wind modifier, click <strong>Add Wind Modifier</strong>; the controls remain disabled until a <code>WindEffect</code> Geometry Nodes modifier exists. Imported render meshes normally receive this modifier during material creation.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>New-object default</th>
+<th>Declared UI range / preview use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Wind Response</strong></td>
+<td><code>0.0</code></td>
+<td><code>0.0</code>–<code>0.1</code>; multiplies scene time before the preview's noise node.</td>
+</tr>
+<tr>
+<td><strong>Wind Height</strong></td>
+<td><code>0.0</code></td>
+<td>No explicit min/max bounds; lower threshold for the preview's height falloff.</td>
+</tr>
+</tbody>
+</table>
+<p>The current preview measures <strong>local Y</strong>, uses the mesh's local Y bounding-box span for the falloff's upper endpoint, and offsets positions along <strong>local X</strong>. It is not a world-Z height slider. Recheck the preview after editing mesh orientation or dimensions. Keep the modifier's <strong>Wind Response</strong> and <strong>Wind Height</strong> node names if editing its graph.</p>
+<p>Export stores these two object values in the material entries for wind response and wind height. It does not serialize the Geometry Nodes graph as an engine wind simulation. More generally, the exporter creates the numeric <strong>Materials</strong> block from defaults and overrides these wind entries; arbitrary Principled settings are not converted into the format's other numeric material parameters.</p>
+<h2 id="8-export-and-verification-checklist">8. Export and verification checklist<a class="headerlink" href="#8-export-and-verification-checklist" title="Permanent link">&para;</a></h2>
+<ul class="task-list">
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Each render mesh has the intended <strong>active material</strong>, a valid active UV map, and the expected DRS node layout.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Color Map (_col)</strong> has a loaded image. Missing color data aborts mesh export; a flat Blender base color is not a replacement.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Bit 16/17 and refraction/environment toggles match the images actually assigned. Clear stale separate-map images before using a combined <code>_par</code>.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Parameter sources use a supported packing pattern and matching dimensions; emission is in alpha, and the exported blue flu mask is checked explicitly.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Both flu preview layers use the same image. <strong>Write Flow</strong> is enabled only when its vectors should be written.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Cubemap conversion succeeds, and required conversion executables remain in the add-on's resources folder.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Export into a separate output folder, inspect the generated DDS files and warnings, then reimport the DRS into a separate scene to compare textures, flags, refraction RGB, flow vectors, and wind values.</li>
+</ul>
+<p>The material exporter traverses supported image chains with a bounded search and role-label matching; it does not evaluate arbitrary node graphs. Prefer the generated layout to deep chains or renamed nodes. A file being created is not sufficient proof that every optional texture was exported: several missing-map and packing failures are reported without immediately aborting the whole model export.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Checks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Material panels only show a selection notice</td>
+<td>Select a <strong>mesh</strong> in <code>Meshes_Collection</code> or <code>GroundDecal_Collection</code>, not an armature, helper, or the root collection.</td>
+</tr>
+<tr>
+<td>Mesh export stops at color-map setup</td>
+<td>Check the active material, <strong>DRS Shader</strong> name, <strong>Color Map (_col)</strong> image and label, and its connection to base color.</td>
+</tr>
+<tr>
+<td><code>_par</code> is absent or differs from preview</td>
+<td>Enable Bit 16; inspect separate-node overrides, source channels, dimensions, and mixed reused/distinct-image errors. Preview scalar defaults are not exported texture data.</td>
+</tr>
+<tr>
+<td>Fluid color or mask disappears</td>
+<td>Check Bit 16, both flu images, packed <code>_par</code> blue, and the separate-flu-mask limitation above. Toggle Bit 16 off/on after assigning images to refresh the mask preview callback.</td>
+</tr>
+<tr>
+<td>Normal map is absent</td>
+<td>Enable Bit 17; check <strong>Normal Map (_nor)</strong>, <strong>Non-Color</strong>, and the generated normal chain.</td>
+</tr>
+<tr>
+<td>Refraction/environment toggle turns itself off</td>
+<td>Assign the required image first. Check the sidebar notice and the helper's <strong>Assigned</strong> status. Raw Bit 18 alone is insufficient.</td>
+</tr>
+<tr>
+<td>Cubemap conversion fails</td>
+<td>Check layout dimensions, face order, the two bundled conversion tools, and the debug-export error log in <code>sr_impex/debug</code>. Cross preview UVs are not generated automatically.</td>
+</tr>
+<tr>
+<td>Flow seems static or uniform</td>
+<td>Check nonzero scale and speed values, timeline playback, and the flu mask. <strong>Write Flow</strong> controls export, not playback.</td>
+</tr>
+<tr>
+<td>Wind controls are disabled or falloff seems wrong</td>
+<td>Add the modifier, preserve its expected node names, and inspect local Y extent and <strong>Wind Height</strong>, not only world-space height.</td>
+</tr>
+<tr>
+<td>Two objects' previews change together</td>
+<td>Their material or processing node tree may be shared; inspect datablock users before making independent edits.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="implementation-and-format-references">Implementation and format references<a class="headerlink" href="#implementation-and-format-references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../blender/drs_material.py">Material builder</a>: <code>_build_aio_engine_group_internals</code>, <code>_link_material_nodes</code>, map setters, and wind preview creation.</li>
+<li><a href="../../blender/editors/material_flow_editor.py">Material/Flow/Wind editor</a>: UI labels, property defaults/ranges, flag callbacks, and preview updates.</li>
+<li><a href="../../blender/editors/environment_cubemap_editor.py">Cubemap editor</a>: helper controls and debug export.</li>
+<li><a href="../../utilities/drs_utility.py">Import/export integration</a>: <code>create_material</code>, <code>setup_material_parameters</code>, <code>create_mesh</code>, <code>set_metallic_roughness_emission_map</code>, and cubemap conversion.</li>
+<li><a href="../../drs/cdspmeshfile/">CDspMeshFile format</a>: <a href="../../drs/cdspmeshfile/#materials">Materials</a>, <a href="../../drs/cdspmeshfile/#textures">Textures</a>, <a href="../../drs/cdspmeshfile/#refraction">Refraction</a>, and <a href="../../drs/cdspmeshfile/#flow">Flow</a> describe the stored blocks, not a complete engine shader specification.</li>
+</ul>
+<h2 id="related-guides">Related Guides<a class="headerlink" href="#related-guides" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Start with the <a href="../object_creation_guide/">Object Creation Guide</a>.</li>
+<li>For unit-specific export and animation setup, see the <a href="../unit_creation_buide/">Unit Creation Guide</a>.</li>
+<li>For building and state-based mesh setup, see the <a href="../building_creation_guide/">Building Creation Guide</a>.</li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      © 2025 Maxxxel – Battleforge Blender Plugin
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/drs-plugin/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "toc.integrate", "content.code.copy", "content.code.annotate", "content.tabs.link", "search.highlight", "search.suggest", "header.autohide"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
