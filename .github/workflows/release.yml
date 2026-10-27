@@ -52,7 +52,9 @@ jobs:
 
       - name: Build release package
         if: steps.existing-release.outputs.exists == 'false'
-        run: python create_release_package.py
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: git archive --format=zip --output="SR-ImpEx-for-Blender-$VERSION.zip" HEAD sr_impex
 
       - name: Publish GitHub release
         if: steps.existing-release.outputs.exists == 'false'
