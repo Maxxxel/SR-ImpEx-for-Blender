@@ -26,7 +26,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          version="$(python -c 'import re; from pathlib import Path; text=Path("sr_impex/__init__.py").read_text(encoding="utf-8"); match=re.search(r'"'"'"version":\s*\((\d+),\s*(\d+),\s*(\d+)\)'"'"', text); raise SystemExit("Version not found") if match is None else print(".".join(match.groups()))')"
+          version="$(python -c 'import re; from pathlib import Path; text=Path("sr_impex/__init__.py").read_text(encoding="utf-8"); match=re.search(r'"'"'"version":\s*\((\d+),\s*(\d+),\s*(\d+)\)'"'"', text); print(".".join(match.groups())) if match is not None else (_ for _ in ()).throw(SystemExit("Version not found"))')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Release version: $version"
 
