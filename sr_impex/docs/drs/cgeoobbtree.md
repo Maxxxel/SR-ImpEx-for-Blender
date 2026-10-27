@@ -34,7 +34,7 @@ Stores an **oriented bounding box hierarchy** (flat array of nodes) plus a compa
 
 | Field                    | Type                       | Bytes | Description |
 |-------------------------|----------------------------|------:|-------------|
-| `oriented_bounding_box` | `CMatCoordinateSystem`     | 48    | Rotation basis (`Matrix3x3`) + position (`Vector3`). No scale. |
+| `oriented_bounding_box` | `CMatCoordinateSystem`     | 48    | Orientation and box size encoded together in `Matrix3x3`, plus center position (`Vector3`). |
 | `first_child_index`     | `uint16`                   | 2     | Index into `obb_nodes`, or `0` if leaf. |
 | `second_child_index`    | `uint16`                   | 2     | Index into `obb_nodes`, or `0` if leaf. |
 | `skip_pointer`          | `uint16`                   | 2     | Index used to **skip** an entire subtree (stackless traversal). |
@@ -51,7 +51,7 @@ Stores an **oriented bounding box hierarchy** (flat array of nodes) plus a compa
 ## Authoring & In-Game Behavior
 
 - **What artists control:** The shape ultimately follows your exported mesh. Cleaner topology → tighter OBBs → fewer false hits.
-- **Transforms:** Nodes store **rotation + position** only; **no scale**. Keep rotations valid (orthonormal-ish) to avoid degenerate boxes. See [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem).
+- **Transforms:** OBB size is part of the matrix, not a separate dimensions field. The current exporter multiplies its fitted axes by the corresponding **half-extents**, transposes that scaled basis for storage, and stores the box center in `position`. Do not normalize the serialized basis to unit length: that would erase the box dimensions. See [CMatCoordinateSystem](common.md#cmatcoordinatesystem) and the [export implementation](../../utilities/drs_utility.py#L3338). This confirms scaled bases for OBBs, not for every other block that uses the same structure.
 - **Exporter note:** The plugin uses a newer OBB fitting that can produce **smaller boxes** than legacy data — that’s expected and good. 
 - **Triangles:** The tree references the **same face list** (3×`uint16` indices). Respect 16-bit limits from [Face](../drs/common.md#face-struct).
 
@@ -66,7 +66,7 @@ Stores an **oriented bounding box hierarchy** (flat array of nodes) plus a compa
 | Child/skip indices `< matrix_count` (or `0` for leaf) | Prevents OOB traversal.
 | `triangle_offset + total_triangles ≤ triangle_count` | Valid leaf spans.
 | Face indices `< vertex_count` (from the linked mesh) | Keeps references valid (16-bit).
-| OBB basis ~orthonormal | Invalid bases break collision math.
+| OBB basis finite, nondegenerate, with fitted axis lengths preserved | The stored axes include size; only their directions form the orientation basis. |
 
 ---
 

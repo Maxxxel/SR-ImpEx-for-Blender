@@ -4150,7 +4150,33 @@ def create_box_shape(box: bpy.types.Object) -> BoxShape:
             game_matrix = parent.matrix_world.inverted() @ game_matrix
             break
         parent = parent.parent
-    rotation = game_matrix.to_3x3()
+
+    vertices = [v.co.copy() for v in box.data.vertices]
+    if len(vertices) < 8:
+        raise ValueError("The box object must have at least eight vertices.")
+
+    # Applying rotation bakes the basis into the mesh. Face normals recover
+    # it without assuming the importer's vertex ordering (Blender cubes differ).
+    normals = []
+    for polygon in box.data.polygons:
+        normal = polygon.normal.normalized()
+        if normal.length > 1e-8 and not any(abs(normal.dot(other)) > 1.0 - 1e-5 for other in normals):
+            normals.append(normal)
+    if len(normals) != 3 or any(
+        abs(normals[first].dot(normals[second])) > 1e-5
+        for first in range(3) for second in range(first + 1, 3)
+    ):
+        raise ValueError(f"Box {box.name!r} must be a rectangular box with three perpendicular axes.")
+    axes = []
+    for index in range(3):
+        normal = max(normals, key=lambda candidate: abs(candidate[index]))
+        normals.remove(normal)
+        axes.append(normal if normal[index] >= 0.0 else -normal)
+    local_basis = Matrix(axes).transposed()
+    if local_basis.determinant() < 0.0:
+        axes[2].negate()
+        local_basis = Matrix(axes).transposed()
+    rotation = game_matrix.to_3x3() @ local_basis
     translation = game_matrix.to_translation()
 
     # Undo the box-specific Z-position flip in import_collision_shapes.
@@ -4170,19 +4196,15 @@ def create_box_shape(box: bpy.types.Object) -> BoxShape:
         rotation[2][2],
     ]
 
-    # Compute the axis aligned bounding box from the object's mesh vertices (in local space).
-    # These vertices were created directly from the original AABox corners.
-    vertices = [v.co for v in box.data.vertices]
-    if not vertices:
-        raise ValueError("The object has no vertices to compute a bounding box from.")
-
-    # Determine the minimum and maximum extents along each axis.
-    min_x = min(v.x for v in vertices)
-    min_y = min(v.y for v in vertices)
-    min_z = min(v.z for v in vertices)
-    max_x = max(v.x for v in vertices)
-    max_y = max(v.y for v in vertices)
-    max_z = max(v.z for v in vertices)
+    # Project the mesh onto the recovered basis instead of using its world
+    # axis-aligned bounds, which would lose an applied rotation.
+    local_coordinates = [local_basis.transposed() @ vertex for vertex in vertices]
+    min_x = min(v.x for v in local_coordinates)
+    min_y = min(v.y for v in local_coordinates)
+    min_z = min(v.z for v in local_coordinates)
+    max_x = max(v.x for v in local_coordinates)
+    max_y = max(v.y for v in local_coordinates)
+    max_z = max(v.z for v in local_coordinates)
 
     _box_shape.geo_aabox.lower_left_corner = Vector3(min_x, min_y, min_z)
     _box_shape.geo_aabox.upper_right_corner = Vector3(max_x, max_y, max_z)
@@ -4203,38 +4225,37 @@ def create_sphere_shape(sphere: bpy.types.Object) -> SphereShape:
     mesh = sphere.data
     mesh.calc_loop_triangles()
 
-    # Compute world-space coordinates for each vertex.
-    vertices_world = [sphere.matrix_world @ v.co for v in mesh.vertices]
-    if not vertices_world:
+    # DRS stores game coordinates. Remove the display-only GameOrientation
+    # conversion before deriving the primitive from its mesh vertices.
+    game_matrix = sphere.matrix_world.copy()
+    parent = sphere.parent
+    while parent is not None:
+        if parent.type == "EMPTY" and parent.name.startswith("GameOrientation"):
+            game_matrix = parent.matrix_world.inverted() @ game_matrix
+            break
+        parent = parent.parent
+    vertices_game = [game_matrix @ v.co for v in mesh.vertices]
+    if not vertices_game:
         raise ValueError(
             "The sphere object has no vertices to compute a bounding sphere from."
         )
 
     # Compute the center as the centroid of the vertices.
     # (This works well if the object is a well-formed sphere.)
-    center = sum(vertices_world, Vector((0, 0, 0))) / len(vertices_world)
+    center = sum(vertices_game, Vector((0, 0, 0))) / len(vertices_game)
 
     # Compute the radius as the maximum distance from the center to any vertex.
-    radius = max((v - center).length for v in vertices_world)
+    radius = max((v - center).length for v in vertices_game)
 
     # Assign the computed center to the exported coordinate system.
     _sphere_shape.coord_system.position = Vector3(center.x, center.y, center.z)
 
-    # Extract a pure rotation without scaling by converting to and from a quaternion.
-    # This is important if the object has non-uniform scaling.
-    pure_rotation = sphere.matrix_world.to_quaternion().to_matrix()
-    # Flatten the 3x3 rotation matrix in row-major order.
-    _sphere_shape.coord_system.matrix.matrix = [
-        pure_rotation[0][0],
-        pure_rotation[0][1],
-        pure_rotation[0][2],
-        pure_rotation[1][0],
-        pure_rotation[1][1],
-        pure_rotation[1][2],
-        pure_rotation[2][0],
-        pure_rotation[2][1],
-        pure_rotation[2][2],
-    ]
+    # Sphere orientation is not used by the game.
+    _sphere_shape.coord_system.matrix.matrix = (
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+    )
 
     # Fill in the geometric sphere information.
     _sphere_shape.geo_sphere.radius = radius
@@ -4258,36 +4279,87 @@ def create_cylinder_shape(cylinder: bpy.types.Object) -> CylinderShape:
     mesh = cylinder.data
     mesh.calc_loop_triangles()
 
-    # Get all vertices in world space.
-    verts = [cylinder.matrix_world @ v.co for v in mesh.vertices]
-    # Compute the bounding box (min and max coordinates)
-    min_co = Vector(
-        (min(v.x for v in verts), min(v.y for v in verts), min(v.z for v in verts))
-    )
-    max_co = Vector(
-        (max(v.x for v in verts), max(v.y for v in verts), max(v.z for v in verts))
-    )
-    # The center of the bounding box
-    center = (min_co + max_co) * 0.5
+    game_matrix = cylinder.matrix_world.copy()
+    parent = cylinder.parent
+    while parent is not None:
+        if parent.type == "EMPTY" and parent.name.startswith("GameOrientation"):
+            game_matrix = parent.matrix_world.inverted() @ game_matrix
+            break
+        parent = parent.parent
 
-    # The exported depth (height) is the Y extent
-    depth = max_co.y - min_co.y
-    # Use the average of the X and Z extents to compute the radius.
-    radius_x = (max_co.x - min_co.x) / 2.0
-    radius_z = (max_co.z - min_co.z) / 2.0
-    radius = (radius_x + radius_z) / 2.0
+    verts = [game_matrix @ v.co for v in mesh.vertices]
+    if not verts:
+        raise ValueError("The cylinder object has no vertices to export.")
+
+    # A cap may be one n-gon or many coplanar triangles. Choosing the largest
+    # face instead can pick a side wall, and PCA confuses wide and tall cylinders.
+    planes = []
+    for polygon in mesh.polygons:
+        normal = polygon.normal
+        point = mesh.vertices[polygon.vertices[0]].co
+        for plane_normal, plane_point, indices in planes:
+            if (
+                normal.dot(plane_normal) > 1.0 - 1e-5
+                and abs((point - plane_point).dot(plane_normal)) < 1e-5
+            ):
+                indices.update(polygon.vertices)
+                break
+        else:
+            planes.append((normal.copy(), point.copy(), set(polygon.vertices)))
+
+    caps = [plane for plane in planes if len(plane[2]) > 4]
+    cap_pair = None
+    for index, first in enumerate(caps):
+        for second in caps[index + 1:]:
+            if first[0].dot(second[0]) < -1.0 + 1e-5:
+                cap_pair = (first[2], second[2])
+                break
+        if cap_pair is not None:
+            break
+    if cap_pair is None:
+        raise ValueError(
+            f"Cylinder {cylinder.name!r} needs two planar circular caps; "
+            "cannot determine its axis from this mesh."
+        )
+
+    cap_centers = [
+        Vector(tuple(sum(verts[index][axis] for index in indices) / len(indices) for axis in range(3)))
+        for indices in cap_pair
+    ]
+    center = (cap_centers[0] + cap_centers[1]) * 0.5
+    cap_offset = cap_centers[0] - cap_centers[1]
+    depth = cap_offset.length
+    if depth < 1e-8:
+        raise ValueError(f"Cylinder {cylinder.name!r} has zero height.")
+    axis = cap_offset / depth
+    radial_vectors = [
+        (vertex - center) - axis * (vertex - center).dot(axis)
+        for vertex in verts
+    ]
+    radius = max(vector.length for vector in radial_vectors)
+    if radius < 1e-8:
+        raise ValueError(f"Cylinder {cylinder.name!r} has zero radius.")
+    # Blender's cylinder generator starts the ring on +Y, not +X. Preserve
+    # that phase so untouched imports retain their DRS coordinate-system basis.
+    radial_y = next(vector.normalized() for vector in radial_vectors if vector.length > radius * 0.5)
+    radial_x = radial_y.cross(axis).normalized()
+    mesh_rotation = Matrix(
+        (
+            (radial_x.x, radial_y.x, axis.x, 0.0),
+            (radial_x.y, radial_y.y, axis.y, 0.0),
+            (radial_x.z, radial_y.z, axis.z, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+        )
+    )
 
     # In the import, we offset the translation by adding half the depth to Y.
     # So here we subtract that offset to recover the original (foreign) translation.
     foreign_position = center - Vector((0, depth * 0.5, 0))
 
-    # In the import the cylinder was rotated by 90° about X,
-    # so we remove that extra rotation:
-    # rot_inv = Matrix.Rotation(-radians(90), 4, 'X')
-    # No we do not want to rotate
-    rot_inv = Matrix.Identity(4)
-    # Here we assume the object has no additional baked rotation.
-    foreign_rot = rot_inv @ Matrix.Identity(4)
+    # The importer applies this display rotation to Blender's Z-axis cylinder.
+    # Remove it to recover the DRS coordinate-system rotation.
+    additional_rot = Matrix.Rotation(radians(90), 4, "X")
+    foreign_rot = additional_rot.inverted() @ mesh_rotation.to_4x4()
     foreign_rot_3x3 = foreign_rot.to_3x3()
 
     # Fill in the coordinate system data:

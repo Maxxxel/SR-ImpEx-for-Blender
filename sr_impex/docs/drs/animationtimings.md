@@ -1,10 +1,10 @@
 # AnimationTimings<a id="animationtimings"></a>
 
-Stores precise timing information (start/end in milliseconds) for specific types of animations, often used to synchronize gameplay events like ability casts or melee strikes with the visual animation. ⏱️
+Stores millisecond timing values grouped by animation category, tag, and variant. The serialized fields are known; their exact engine interpretation is not universally established for every animation type.
 
 ---
 ## Overview
-- **Purpose:** Defines key time points within animations for gameplay logic, such as when an ability effect should trigger (`resolve_ms`) relative to the animation starting (`cast_ms`).
+- **Purpose:** Associates timing values and optional marker references with animation categories and tags. Do not assume `cast_ms` and `resolve_ms` are two universal absolute event timestamps.
 - **Where it appears:** Included in animated model types that typically perform actions: `AnimatedUnit`, `AnimatedObjectNoCollision`, `AnimatedObjectCollision`. See `WriteOrder`.
 - **Engine impact:** Used by the gameplay systems (e.g., combat, abilities) to synchronize actions and effects precisely with the visual animation playback. Incorrect timings can lead to abilities feeling laggy or effects appearing at the wrong moment.
 
@@ -51,8 +51,8 @@ Specifies the core timing data in milliseconds, along with direction and a marke
 
 | Field                 | Type       | Description                                                                                                                                        |
 | :-------------------- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cast_ms`             | `int32`    | Time in milliseconds (relative to animation start) when the action/cast begins.                                                                    |
-| `resolve_ms`          | `int32`    | Time in milliseconds when the main effect/impact of the action occurs (e.g., damage dealt, projectile fired).                                        |
+| `cast_ms`             | `int32`    | Stored millisecond value. The current editor derives it from the clip duration multiplied by a marker/split fraction. |
+| `resolve_ms`          | `int32`    | Stored millisecond value. The current editor uses the stored resolve duration or the full referenced clip duration; this does not prove the engine treats it as an impact timestamp. |
 | `direction`           | `Vector3`  | Direction vector associated with the timing event. See [Vector3](../drs/common.md#vector3).                                                         |
 | `animation_marker_id` | `uint32`   | ID linking this timing event back to a specific marker defined in the `AnimationSet`. See [AnimationMarkerSet](../drs/animationset.md#animationmarkerset). |
 
@@ -70,11 +70,17 @@ An unclear structure appearing at the end of the `AnimationTimings` block.
 ## Authoring & In-Game Behavior
 - **Blender Workflow:**
     - **Animation Set Editor:** Timings are managed exclusively through the **Animation Set Editor** UI panel, specifically in the "Timings" section. Artists define entries based on `Animation Type` (CastResolve, Melee, etc.) and `Tag ID`.
-    - **Editing:** Within the editor, you set the `Cast Ms`, `Resolve Ms`, `Direction`, and link it to an `Animation Marker ID` (which must correspond to an ID defined in the "Marker Sets" section of the same editor).
+    - **Editing:** The per-variant Timing section exposes the category/tag and related settings. Displayed millisecond timing values are read-only; adjust the referenced clip metadata and the marker/cast-to-resolve fraction instead. See the [Advanced Abilities Guide](../plugin/advanced_abilities_guide.md#5-place-markers-and-understand-time-units).
     - **JSON Blob:** Like `AnimationSet` data, the timings configuration is stored in the **JSON blob** (`ANIM_BLOB_KEY`) attached to the main model collection (under the `"timings"` key). This blob is the authoritative source for export.
     - **Export (`create_animation_timings`):** The exporter reads the `"timings"` list from the JSON blob and reconstructs the `AnimationTimings` structure, including all substructures, based on the editor's data (`blob_to_animationtimings`). If no timings are defined in the blob, this block might be skipped during export (depending on model type requirements).
     - **Import (`animtimings_to_blob`):** The importer reads the `AnimationTimings` block, converts it to the JSON list format, and stores it within the main animation blob (`ANIM_BLOB_KEY`) on the collection. The editor UI then loads this data.
-- **In-Game Function:** The game uses these timings to synchronize gameplay events. For example, in a melee attack animation (`animation_type = 2`), `cast_ms` might be when the weapon starts swinging, and `resolve_ms` is the exact moment the weapon should hit and deal damage. The `direction` might indicate the attack's vector, and `animation_marker_id` links it to potentially other data like sound or visual effect triggers defined in `AnimationSet`.
+- **Current serialization:** The editor's [timing serializer](../../blender/editors/animation_set_editor.py#L1748) uses a stored positive `resolve_ms` when available, otherwise derives the full clip duration in milliseconds. It calculates `cast_ms` from that duration and the marker or cast-to-resolve fraction. This is the implemented authoring convention, not independent proof of every game-side timing rule.
+
+### Research Notes Are Not Confirmed Engine Limits
+
+Historical binary-template comments suggest game logic may quantize timing to 100-ms ticks, Spawn may need at least 200 ms, and entries after the sixth may be ignored. They also describe `resolve_ms` for CastResolve as a phase duration rather than a full-clip duration. These observations have **not been verified** and must not be presented as format guarantees or used to add silent clamping/truncation.
+
+The distinction matters: the current editor's full-duration serialization and the historical phase-duration hypothesis are not interchangeable. Preserve a known working asset, compare exported values, and verify actual behavior in game before changing either interpretation. Template notes about tag IDs or hardcoded exceptions likewise need confirmation before becoming authoring rules.
 
 ---
 ## Validation Rules
@@ -84,8 +90,8 @@ An unclear structure appearing at the end of the `AnimationTimings` block.
 | `magic == 1650881127`              | Confirms correct block type.                                                     |
 | `version` is supported (e.g., 3, 4)  | Ensures correct structure interpretation (presence of `animation_tag_id`, etc.). |
 | Counts match list lengths          | Prevents read errors and ensures data integrity.                                   |
-| `resolve_ms >= cast_ms`            | Logically, the effect resolution shouldn't happen before the cast starts.        |
-| `animation_marker_id` exists in `AnimationSet` | Ensures the timing event can be correctly linked to its marker context.      |
+| Timing values checked against the target type and source asset | No universal endpoint/phase-duration rule is established here; avoid inventing validation from the field names. |
+| Marker references resolve when that linkage is used | Match the relevant `AnimationMarkerSet`; not every tag-based record necessarily uses a marker link. |
 
 ---
 ## Cross-References

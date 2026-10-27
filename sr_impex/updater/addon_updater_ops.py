@@ -1298,12 +1298,16 @@ def select_link_function(self, tag):
     server, instead of downloading the default release/tag source code.
     """
 
-    # -- Default, universal case (and is the only option for GitLab/Bitbucket)
+    # -- Default, universal case (and the fallback for GitLab/Bitbucket)
     link = tag["zipball_url"]
 
-    # -- Example: select the first (or only) asset instead source code --
-    # if "assets" in tag and "browser_download_url" in tag["assets"][0]:
-    # 	link = tag["assets"][0]["browser_download_url"]
+    # GitHub release assets contain the package produced by the release
+    # workflow. Keep the source archive as a fallback for older releases.
+    tag_name = tag.get("tag_name", "").removeprefix("v")
+    package_name = f"SR-ImpEx-for-Blender-{tag_name}.zip"
+    for asset in tag.get("assets", []):
+        if asset.get("name") == package_name and asset.get("browser_download_url"):
+            return asset["browser_download_url"]
 
     # -- Example: select asset based on OS, where multiple builds exist --
     # # not tested/no error checking, modify to fit your own needs!

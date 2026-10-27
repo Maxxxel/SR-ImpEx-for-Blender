@@ -106,6 +106,47 @@ class CollisionBoxRoundtripTests(unittest.TestCase):
         _, imported = import_box(export_box(root), True)
         self.assert_geometry_equal(expected, world_vertices(imported))
 
+    def test_applied_rotation_after_parenting_to_game_orientation(self):
+        shape = BoxShape()
+        shape.coord_system.matrix.matrix = [v for row in Matrix.Identity(3) for v in row]
+        shape.geo_aabox.lower_left_corner = Vector3(-0.2, -0.4, -1.5)
+        shape.geo_aabox.upper_right_corner = Vector3(0.3, 0.5, 1.7)
+        root, box = import_box(shape, True)
+        box.rotation_euler = (0.2, -0.5, 0.4)
+        bpy.context.view_layer.objects.active = box
+        box.select_set(True)
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+        bpy.context.view_layer.update()
+        expected = world_vertices(box)
+
+        _, imported = import_box(export_box(root), True)
+        self.assert_geometry_equal(expected, world_vertices(imported))
+
+    def test_authored_cube_with_applied_rotation_and_scale(self):
+        shape = BoxShape()
+        shape.coord_system.matrix.matrix = [v for row in Matrix.Identity(3) for v in row]
+        shape.geo_aabox.lower_left_corner = Vector3(-1, -1, -1)
+        shape.geo_aabox.upper_right_corner = Vector3(1, 1, 1)
+        root, original = import_box(shape, True)
+        collection = original.users_collection[0]
+        parent = original.parent
+        bpy.data.objects.remove(original, do_unlink=True)
+        bpy.ops.mesh.primitive_cube_add()
+        box = bpy.context.object
+        for linked in list(box.users_collection):
+            linked.objects.unlink(box)
+        collection.objects.link(box)
+        box.parent = parent
+        box.location = (0.3, 0.7, -0.9)
+        box.rotation_euler = (0.2, -0.5, 0.4)
+        box.scale = (0.2, 0.4, 1.5)
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+        bpy.context.view_layer.update()
+        expected = world_vertices(box)
+        for _ in range(3):
+            root, imported = import_box(export_box(root), True)
+            self.assert_geometry_equal(expected, world_vertices(imported))
+
     def test_unparented_box_in_game_coordinates(self):
         shape = BoxShape()
         shape.coord_system.matrix.matrix = [v for row in Matrix.Identity(3) for v in row]
