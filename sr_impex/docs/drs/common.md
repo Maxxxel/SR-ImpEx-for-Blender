@@ -18,19 +18,20 @@ A `Face` represents a **triangle** defined by **three 16-bit vertex indices** in
 
 **Notes**
 - Each face always references exactly **three vertices** — only triangles are supported.
-- Because face indices are stored as `ushort`, both the **vertex index** and **face count** are constrained by 16-bit limits.
+- The 16-bit limit applies to **each stored vertex index**, not to the number of triangles. Count fields in the enclosing mesh blocks are separate 32-bit integers.
 
-### Limits
+### Index Capacity Versus Exporter Limits
 
 | Constraint | Description |
 |-------------|-------------|
-| `vertex_count ≤ 65,535` | Maximum addressable vertex index (`ushort` limit) |
-| `face_count ≤ 21,845` | Maximum number of triangles (`65,535 / 3 ≈ 21,845`) if fully packed |
-| `index_count = face_count * 3` | Each face consumes three indices |
+| `0 ≤ index ≤ 65,535` | Range of one unsigned 16-bit index. This can address 65,536 distinct zero-based vertex slots. |
+| `index < vertex_count` | Every index must refer to an existing vertex. |
+| `index_count = face_count * 3` | Each triangle consumes three indices; this does not make `index_count` a 16-bit field. |
+| Exporter validation: at most `32,767` vertices | A separate implementation check on each render mesh and on the combined welded mesh, not a limit derived from the index field's width. |
 
-**Implications**
-- A single mesh block can contain at most ~21 k triangles.
-- Larger objects must be split into multiple mesh chunks.
+There is **no supported deduction of a 21,845-triangle limit** from three `ushort` indices per face. Reusing vertices allows many triangles to reference the same vertex slots. No additional game-side triangle-count limit has been established here; a wider serialized count is not a guarantee that arbitrarily large meshes work in game.
+
+Sources: [Face serialization](../../definitions/base_types.py#L60), [mesh definitions](../../definitions/mesh_definitions.py), [current vertex-count validation](../../utilities/drs_utility.py#L420).
 
 ---
 
@@ -77,7 +78,7 @@ Common across geometry and animation data (e.g., `CGeoAABox`, marker positions/d
 ## Matrix3x3
 <a id="matrix3x3"></a>
 
-A 3×3 **orientation (rotation) matrix** stored as **9 floats** in **row-major** order.  
+A 3×3 **linear basis** stored as **9 floats** in **row-major** order. Its interpretation depends on the consuming block; it is not universally a unit-length rotation matrix.
 Total size: **36 bytes**. 
 
 | Row | Elements            | Type  | Bytes |
@@ -90,8 +91,9 @@ Total size: **36 bytes**.
 Represents orientation in `CMatCoordinateSystem` and other transforms. Stored/serialized as 9 consecutive floats. 
 
 **Constraints / Conventions**
-- Intended to be a rotation basis; normalization/orthogonality is expected by readers.  
-- Serialization is strictly 9 floats; no implicit translation. 
+- Check the consuming block before normalizing the basis. OBB nodes deliberately include box size in the matrix; normalizing those vectors would discard the dimensions.
+- Scale behavior for other block types is not established by the shared storage layout alone. Preserve imported values rather than assuming either universal scale support or a universal prohibition.
+- Serialization is strictly 9 floats; no implicit translation.
 
 
 ---
@@ -122,12 +124,12 @@ Used where a complete affine transform is required (e.g., skeleton super-parent)
 ## CMatCoordinateSystem
 <a id="cmatcoordinatesystem"></a>
 
-Compact transform pairing **orientation** (`Matrix3x3`) with **position** (`Vector3`).  
+Compact transform pairing a **linear basis** (`Matrix3x3`) with **position** (`Vector3`).
 Total size: **48 bytes** (`36 + 12`). 
 
 | Field     | Type         | Bytes | Description                     |
 |-----------|--------------|------:|---------------------------------|
-| `matrix`  | `Matrix3x3`  | 36    | Rotation basis (row-major)      |
+| `matrix`  | `Matrix3x3`  | 36    | Block-specific linear basis (row-major) |
 | `position`| `Vector3`    | 12    | Translation (x, y, z)           |
 
 **Usage**
@@ -135,5 +137,6 @@ Total size: **48 bytes** (`36 + 12`).
 - Always serialized as 9 floats (matrix) followed by 3 floats (position). 
 
 **Constraints / Conventions**
-- No scale component; scale is not supported.  
-- Consumers assume the matrix encodes a valid rotation basis. 
+- There is no **separate** scale field, but the 3×3 matrix can encode scale. For OBB nodes, the exporter explicitly multiplies axes by their half-extents before serialization.
+- Whether another consumer accepts scaled bases is a separate engine question; it remains unverified here for locators and collision primitives. Do not infer that any arbitrary Blender transform is supported in every block.
+- See the [OBB notes](cgeoobbtree.md#obbnode) and the [OBB exporter](../../utilities/drs_utility.py#L3338) before interpreting axis lengths or changing normalization.

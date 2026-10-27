@@ -1,0 +1,45 @@
+name: Deploy documentation
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "sr_impex/docs/**"
+      - "sr_impex/mkdocs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: documentation-master
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            mkdocs \
+            mkdocs-material \
+            mkdocstrings[python] \
+            mkdocs-git-revision-date-localized-plugin \
+            pymdown-extensions
+
+      - name: Build documentation
+        run: mkdocs build --config-file sr_impex/mkdocs.yml
+
+      - name: Deploy documentation to gh-pages
+        run: mkdocs gh-deploy --force --config-file sr_impex/mkdocs.yml

@@ -55,7 +55,7 @@ Defines a single locator point.
 | `length == len(slocators)`         | Internal consistency.                                               |
 | `bone_id` is valid (`-1` or exists in `CSkSkeleton`) | Prevents attaching locators to non-existent bones.                  |
 | `file_name_length` matches actual string length | Prevents read errors.                                               |
-| `cmat_coordinate_system` is valid (orthonormal rotation) | Ensures correct orientation in-game.                                |
+| `cmat_coordinate_system` has finite, valid values in the intended space | Scaling behavior outside OBB is unverified; see [CMatCoordinateSystem](common.md#cmatcoordinatesystem). |
 
 ---
 ## Cross-References

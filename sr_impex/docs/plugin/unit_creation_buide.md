@@ -2,17 +2,32 @@
 
 This guide walks through the basic setup for creating a unit or animated object with the SR-ImpEx Blender plugin.
 
-Before starting the unit-specific setup, first complete the shared base scene and mesh setup from the [Object Creation Guide](object_creation_guide.md). After that, continue here with the unit-specific steps.
+First follow the shared scene, mesh, UV, and material setup in the [Object Creation Guide](object_creation_guide.md). Do not copy the static-object collision or export choices unchanged: units and animated objects use different export types.
+
+| Target | DRS export type | Important difference |
+|---|---|---|
+| A unit with animation/locator metadata | `Animated Unit` | Writes unit animation, effect, and locator blocks; does not export the object collision-shape block. |
+| A rigged prop or animated object | `Animated Object (no collision)` or `Animated Object (with collision)` | Can use simple object collision when that type is chosen. It does not gain unit locators simply by being animated. |
+| A building with states/grid resources | Building export types | Follow the [Building Creation Guide](building_creation_guide.md), including its current export limitations. |
 
 ## Before You Start
 
 A unit or animated object needs:
 
-- an armature in Blender
-- a skeleton
-- a skin with bone weights
+- a deform armature and its skeleton/rest pose;
+- render meshes with an Armature modifier referencing that deform armature;
+- vertex groups that match the intended deform bones, with valid skin weights;
+- Blender actions and animation metadata appropriate to the target asset.
 
-Bone weights are stored through vertex groups, and each vertex can use up to `4` bone influences.
+Each vertex can use up to `4` bone influences. Clean up and normalize weights intentionally; limiting the influence count during export is not a substitute for checking the deformation.
+
+The new-scene operator creates the shared object collections, not a finished character rig. Put the deform armature in a direct child collection named `Armature_Collection` and render meshes directly in `Meshes_Collection`. Start from an imported, compatible skeleton when possible; changing a skeleton/rest pose without checking the skin and animations can break their agreement.
+
+### GO and rig relationships
+
+> **Recommended practice:** Keep the armature and meshes in one consistent model coordinate convention. When using `GameOrientation` (GO), leave the armature under the model's helper and keep skinned meshes attached to their deform armature. Parenting before modeling is convenient, not a required order of operations.
+
+Do not reparent every skinned mesh directly to GO just because a static mesh can be authored that way. Bone-attached locators also stay attached to bones. Avoid applying transforms to GO, the armature, or an existing bound rig as a blanket rotation fix; changes to a rig need animation and skin validation, not just a still-frame check. See [Object Creation Guide, step 3](object_creation_guide.md#3-understand-gameorientation-recommended-practice) for the distinction between collections, parenting, and baked mesh rotation.
 
 ![Armature, skeleton, and skin overview](https://i.gyazo.com/883689b7da73bc1a30636faf6d42d121.png)
 
@@ -22,28 +37,33 @@ A unit also uses locators.
 
 ![Locator overview](https://i.gyazo.com/5c17e19a5660a258d9ae6a575e3e11ff.png)
 
-At minimum, a unit needs the following three locators, which can be added through the `CDrwLocatorList Editor` in the `DRS Editor` side panel:
+The following are common starting points, **not a universally enforced minimum set**. Match the needs of a comparable working unit and its gameplay resources. Add them through **DRS Editor > CDrwLocatorList** with the top-level `DRSModel_...` collection active:
 
-- `HealthBar`: position of the in-game health bar, usually not bound to any bone
-- `Hit`: used for enemy-to-unit hit calculations, usually bound to a bone
-- `ProjectileSpawn`: used for melee hit origin or as the spawn point for projectiles and effects, usually bound to a bone
+- `HealthBar`: a health-bar/UI position, commonly left without a bone parent.
+- `Hit`: a hit-related point; bone attachment depends on the asset.
+- `Projectile_Spawn`: a projectile-origin position/orientation where the asset uses that role.
+
+Adding a locator alone does not define a projectile, damage rule, or gameplay ability. The current DRS writer includes `CDrwLocatorList` for `Animated Unit`, not the animated-object export types.
 
 ![Minimum locator setup](https://i.gyazo.com/24af20064e578abefbfbf9a788a30873.png)
 
-The locator controls work as follows:
+Use this order to avoid losing locator placement:
 
-- `Add/Remove`: add or remove locators
-- `Sync from Scene`: refresh the UI after moving locators in the 3D view
-- `Type`: see the [Advanced Locators Guide](advanced_locators_guide.md) for more details
-- `File`: see the [Advanced Locators Guide](advanced_locators_guide.md) for more details
-- `Parent`: binds a locator to a bone so it moves with the bone; if left empty, the locator stays relative to the model
-- `Update Parent and remove transformations`: use this after binding a locator to a bone and moving it in space to save the result correctly
+1. **Add** an entry or choose an existing one, then set **Type**, **File** if needed, and **Parent**. A bone parent makes it follow that bone; an empty parent field is a model-root point.
+2. Click **Update parent and remove transformations** to commit the metadata/attachment. **This resets position and rotation**, so do it before final placement, not after.
+3. Move and rotate the scene locator to its intended point. Scrub an animation if it is bone-attached.
+4. Make the model root active again and click **Sync from Scene**. This writes scene transforms/attachments into the model's saved locator data; it is not just a UI refresh.
+5. Save the `.blend` file. Export reads the saved locator data, not an unsynchronized scene marker.
+
+> **GO note:** A non-bone locator can use the model's GO convention; a bone locator must remain bone-local. The editor manages this distinction. Do not manually reparent every locator to GO or use the parent-reset button as a keep-transform operation.
+
+See the [Advanced Locators Guide](advanced_locators_guide.md) for supported types, resource references, multiple-model selection, and the difference between changing metadata and syncing scene transforms.
 
 ## 2. Understand Units vs. Animated Objects
 
-A unit usually has multiple animations. An animated object usually only has one animation, typically an idle animation with one or more variants.
+A unit usually has multiple animation modes. The current animated-object export path keeps the `Idle` visibility job and removes unit-style markers/timings; selecting `Animated Object` is not a way to export a unit with fewer requirements.
 
-The minimum useful animation setup for a unit usually includes:
+The editor's initialization template provides a useful starting list, not an exporter-enforced guarantee that every unit needs exactly these animations:
 
 - `Idle`
 - `Walk`
@@ -59,7 +79,16 @@ The minimum useful animation setup for a unit usually includes:
 
 Loop animations have three parts: start, loop, and end. The loop section should be the repeated part. A good example is a unit being pushed back continuously by wind and staying inside the same repeated motion.
 
-There are many more animation types available. For the full list, check the `AnimationSet Editor`.
+There are more animation types available. Check the **AnimationSet Editor** and a comparable working asset for the relevant set. Entries marked **Not yet Supported**, such as ModeSwitch, are not an authoring promise.
+
+### Actions and saved metadata are separate
+
+1. Create or import the Blender actions on the deform rig, then choose their references in the AnimationSet rows.
+2. Use **Init** only when you intentionally want to clear and repopulate the current editor setup; do not use it as a harmless refresh on imported metadata.
+3. Choose animation modes, variants, weights, and any markers, then click **Save** in the AnimationSet editor to persist them to the model collection.
+4. Save the `.blend` file as well. **Reset** reloads saved metadata; it does not save pending edits.
+
+An action existing in Blender's Action list does not mean it is referenced by the saved AnimationSet or will be included in `Export All SKA Actions`.
 
 ![AnimationSet Editor](https://i.gyazo.com/973918d3bf7244dfcfdc5057d3266531.png)
 
@@ -72,27 +101,24 @@ For example, if you want two idle animations and one should play most of the tim
 - default idle: `80`
 - special idle: `20`
 
-The weights should add up to `100`.
+Using a total of `100` makes the intended weighting easy to review. The editor accepts individual values from `0` to `100`, but does not automatically normalize or validate the total.
 
 Other important settings:
 
-- `Allows IK`: usually left enabled
-- `Force no blend`: usually left disabled
+- `Allows IK`: enabled for new variants by default; metadata, not an IK-baking command.
+- `Force No Blend`: disabled for new variants by default; preserve deliberate imported settings.
 
-For a melee unit, the minimum additional animation requirement is an `Attack` animation.
+For a unit that uses melee attacks, configure the appropriate attack mode and marker relationship required by that asset. The add-on stores the animation/visual metadata; it does not create the gameplay ability itself.
 
 ## 4. Add Markers for Important Animations
 
 Some animations, especially `Spawn` and `Attack`, need a marker.
 
-The marker determines when the important gameplay event happens:
+Markers store an event position and normalized point in an animation. Assets can use them for spawn, attack, and other visual/gameplay timing, but the add-on does not validate when an external gameplay system makes a unit controllable or applies a hit.
 
-- for `Spawn`, it marks when the unit becomes controllable
-- for `Attack`, it marks when the hit should begin calculating
+**Marker Time is a fraction from `0` to `1`, not seconds or a frame number.** In a `5`-second clip, `0.6` means `3` seconds. To target `0.6` seconds in that clip, enter `0.12`.
 
-Everything after that point is usually just recovery, follow-through, or visual polish.
-
-For example, if a spawn animation lasts `5` seconds, you probably do not want the player to wait the full `5` seconds before the unit can be controlled. In that case, the marker could be set to something like `0.6`.
+Match the marker's animation type/visibility job to the intended mode and preview the relevant variant. Do not assume an identically named Blender action automatically creates that relationship. The editor derives timing metadata from the referenced clip and marker settings; the displayed millisecond timing fields are read-only.
 
 ![Marker timing example](https://i.gyazo.com/4d53b0c5410240c9561d1979442662d0.png)
 
@@ -102,9 +128,9 @@ Useful marker tools:
 - `Play Marker`: plays the animation until the marker time so you can fine-tune the timing
 - `XYZ`: sets the exact 3D marker position
 
-The marker position is where hits, effects, or other gameplay events begin. Good positions are the tip of a sword, the middle of an axe blade, or the hand itself.
+Place the marker where the target asset expects the event position, such as a weapon or hand attachment point. Check its displayed position against the animated pose rather than only against the rest pose.
 
-Often this ends up being the same position as the `ProjectileSpawn` locator.
+A marker and a `Projectile_Spawn` locator may use related positions, but they are separate data. Moving one does not automatically update the other; save AnimationSet edits and sync locator edits through their respective editors.
 
 ![Marker position example](https://i.gyazo.com/760291a354e81c46101851736776d15f.png)
 
@@ -126,26 +152,48 @@ For the basic workflow, it is enough to look at audio for `Attack` and `Spawn`.
 
 ![EffectSet audio example](https://i.gyazo.com/e66241d71fc57b9eae110f21753d8c31.png)
 
-The time value uses a normalized range. This lets you place sounds to match important animation moments. For example, a hit sound can be placed at the same normalized time as the hit marker.
+EffectSet **Time** also uses a normalized `0..1` range. Match the animation key and variant as well as the time when aligning a sound with a marker. `0.6` means 60% of the selected clip, not 0.6 seconds.
 
-For the remaining values, refer to the [Advanced Effects Guide](advanced_effects_guide.md).
+Use the EffectSet editor's **Save** to persist changes separately from the AnimationSet and locator data. Imported sound references are resource strings; the editor does not automatically package every referenced file or create a game sound bank.
+
+For the exact fields, preview limits, sound types, and reference rules, use the [Advanced Effects Guide](advanced_effects_guide.md).
 
 ## 7. Export the Unit
 
-For export, choose either `Animated Object` or `Animated Unit`.
+Make the root `DRSModel_...` collection active and choose **File > Export > Battleforge Object/Unit (.drs)**.
 
-Recommended export settings:
+1. Choose **Animated Unit** for the unit metadata workflow above, or the matching **Animated Object** type for an animated prop. Do not export a unit as an animated object if you need its markers, unit effects, and locators.
+2. Enable **Export All SKA Actions** when you want the clips referenced by the **saved AnimationSet** written alongside the DRS. It does not mean every Blender action, and an EffectSet-only reference is not enough to select a clip.
+3. Choose **Model Name Prefix** explicitly. The actual default is **No Prefix**. `Model Name Prefix`, `Folder Name Prefix`, and `Keep Existing Prefix` serve different naming workflows; verify the resulting names and saved references rather than renaming output files independently.
+4. Leave **[DEBUG] Export SKA Tangents** enabled for Hermite tangent export unless you deliberately need a stepped/flat debugging comparison. It cannot repair missing keys or an unbaked control rig.
+5. Use the ordinary UV, normal, triangulation, mip-map, and vertex-budget checks from the object guide. Unit collision is not added by populating object collision collections; only collision-enabled animated-object types write that primitive block.
 
-- enable `Export all SKA Actions`
-- enable tangent export for smooth animations
-- use the default naming convention, which is usually `model name prefix`
+> **Rig export limitation:** The writer exports the deform armature, not an armature whose name contains `Control_Rig`. It reads deform-bone location/quaternion F-curves and does not automatically bake constraints, IK, or NLA results. A successful control-rig preview is therefore not proof that the exported action contains the same motion. Prepare compatible keyed deform actions on a working copy and verify a fresh SKA import; do not destructively apply transforms or bake away the only copy of your rig.
 
 ![Animated export settings](https://i.gyazo.com/0c0baa604baf8b688dba0920f478c1af.png)
 
 ## 8. Final Export Result
 
-After exporting, you will find the following files in your export folder:
+A successful animated export produces the `.drs`, generated `.dds` maps, and the referenced `.ska` clips when action export is enabled. Check the message log and actual files; missing or unresolved action references must not be mistaken for a complete result.
 
-- `.drs`
-- `.dds`
-- `.ska`
+### Animation round-trip checklist
+
+- [ ] The deform armature, skin, and saved AnimationSet refer to the same model and skeleton.
+- [ ] Weights were checked across representative poses, with no more than four influences per vertex.
+- [ ] AnimationSet and EffectSet edits were saved; locator scene changes were synced.
+- [ ] Required action references resolve, and exported filenames match the chosen prefix policy.
+- [ ] Marker and sound times were interpreted as normalized fractions.
+- [ ] The exported DRS and clips were imported in a separate scene using the same `Apply Transform` display setting.
+- [ ] Animations were checked over their full duration, including looping and bone-attached locators, not just in a still pose.
+- [ ] Final behavior was checked in game; preview playback does not prove an external ability or sound resource is configured.
+
+If the mesh is rotated correctly but the animation is not, inspect the deform action, rest pose, and rig/export relationships before changing GO. If a marker or locator appears in Blender but is missing from the export, check the selected model type and the relevant editor's saved metadata.
+
+## Related Guides
+
+- [Object Creation Guide](object_creation_guide.md)
+- [Building Creation Guide](building_creation_guide.md)
+- [Advanced Locators Guide](advanced_locators_guide.md)
+- [Advanced Abilities Guide](advanced_abilities_guide.md)
+- [Advanced Effects Guide](advanced_effects_guide.md)
+- [Advanced Shading Guide](advanced_shading_guide.md)

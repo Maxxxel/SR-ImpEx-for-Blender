@@ -1,0 +1,66 @@
+name: Create release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-master
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read add-on version
+        id: version
+        shell: bash
+        run: |
+          version="$(python -c 'import re; from pathlib import Path; text=Path("sr_impex/__init__.py").read_text(encoding="utf-8"); match=re.search(r'"'"'"version":\s*\((\d+),\s*(\d+),\s*(\d+)\)'"'"', text); raise SystemExit("Version not found") if match is None else print(".".join(match.groups()))')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Release version: $version"
+
+      - name: Check whether the version is already released
+        id: existing-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release v$VERSION already exists; nothing to publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.existing-release.outputs.exists == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build release package
+        if: steps.existing-release.outputs.exists == 'false'
+        run: python create_release_package.py
+
+      - name: Publish GitHub release
+        if: steps.existing-release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" "SR-ImpEx-for-Blender-$VERSION.zip" \
+            --target "$GITHUB_SHA" \
+            --title "SR-ImpEx v$VERSION" \
+            --generate-notes

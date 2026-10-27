@@ -38,7 +38,7 @@ Rectangular volume with local transform + AABB extents.
 
 | Field            | Type                              | Description |
 |------------------|-----------------------------------|-------------|
-| `coord_system`   | [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem) | Local orientation and position (no scale). |
+| `coord_system`   | [CMatCoordinateSystem](../drs/common.md#cmatcoordinatesystem) | Local basis and position; size is also described by the AABB corners. |
 | `geo_aabox`      | [CGeoAABox](#cgeoaabox)           | Lower/upper corners in local space. |
 
 ### CGeoAABox
@@ -91,7 +91,9 @@ Rectangular volume with local transform + AABB extents.
 ## Authoring & In-Game Behavior
 
 - **Blender workflow:** Create dedicated collision objects (box/sphere/cylinder) and tag them; the exporter writes them into the respective arrays.
-- **Transforms:** Apply scale/rotation before export. `CMatCoordinateSystem` stores rotation + position (no non-uniform scale), while dimensions live in the geo structs.
+- **Transforms:** Collision boxes and cylinders support parenting to `GameOrientation`, correcting the viewport rotation, and applying that rotation before export. The exporter recovers their baked orientation from the mesh and removes the display-only `GameOrientation` transform. `CMatCoordinateSystem` stores rotation + position, while dimensions live in the geo structs.
+- **Primitive geometry:** Keep boxes rectangular and cylinders circular with two parallel planar caps. Cylinder caps may be n-gons or triangulated; cap triangles are grouped by plane rather than mistaken for side walls. Arbitrarily deformed meshes, sheared boxes, and elliptical cylinders cannot be represented exactly by these primitives.
+- **Scale interpretation:** The shared 3×3 storage has no separate scale field, but that does not prohibit scale inside its basis. Scaled bases are confirmed for OBB nodes; game-side acceptance of scaled collision bases remains unverified. Do not transfer OBB normalization/size rules to collision shapes automatically.
 - **Usage pattern:** These primitives provide quick acceptance/rejection. If a model also has `CGeoOBBTree`, detailed triangle tests can follow.
 
 ---
@@ -103,7 +105,18 @@ Rectangular volume with local transform + AABB extents.
 | `version == 1`                                 | Confirms layout. |
 | Counts match array lengths                     | Prevents read overruns. |
 | Positive dimensions (radius/height/extents)    | Zero/negative sizes break tests. |
-| Orthonormal rotation in `coord_system`         | Keeps boxes/cylinders well-formed. |
+| Finite, nondegenerate basis and valid primitive dimensions | Check the resulting volume; game support for scaled collision bases is not established here. |
+
+### Blender round-trip checks
+
+From the repository root, run the regression scripts with Blender (not system Python):
+
+```powershell
+blender --background --factory-startup --python-exit-code 1 --python tests\blender_collision_box_roundtrip.py
+blender --background --factory-startup --python-exit-code 1 --python tests\blender_collision_cylinder_roundtrip.py
+```
+
+The cylinder script optionally accepts `-- --drs-fixture "C:\path\source.drs"` to check a real asset's collision geometry and coordinate systems across repeated binary round trips. Fixtures are read only; the scripts never save over source assets.
 
 ---
 
