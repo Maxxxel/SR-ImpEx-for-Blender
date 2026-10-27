@@ -474,16 +474,16 @@ def split_meshes_by_uv_islands(meshes_collection: bpy.types.Collection) -> None:
 def set_origin_to_world_origin(meshes_collection: bpy.types.Collection) -> None:
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
-            # Set the object's active scene to the current scene
-            bpy.context.view_layer.objects.active = obj
-            # Select the object
-            obj.select_set(True)
-            # Set the origin to the world origin (0, 0, 0)
-            bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
-            # Deselect the object
-            obj.select_set(False)
-    # Move the cursor back to the world origin
-    bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
+            # Apply the full world-space transform directly to the mesh vertices.
+            # This is equivalent to "Apply All Transforms" but does not depend on
+            # the 3D cursor position or on the object being active in the view layer
+            # (both of which caused origin_set to silently fail / produce wrong results,
+            # leading to exported decal meshes being offset in-game).
+            world_matrix = obj.matrix_world.copy()
+            obj.data.transform(world_matrix)
+            # Reset the object's own transform to identity so vertex.co == world
+            # position, regardless of the object's rotation mode.
+            obj.matrix_world = Matrix.Identity(4)
 
 
 def get_bb(obj) -> Tuple[Vector3, Vector3]:
