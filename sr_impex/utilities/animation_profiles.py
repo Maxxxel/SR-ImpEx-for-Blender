@@ -16,7 +16,7 @@ BASIC_DEFAULTS = {
 
 PROFILE_ITEMS = (
     ('STATIC', 'Static Object', 'No skeletal animation mappings; wind and flow do not need SKA clips'),
-    ('ANIMATED_OBJECT', 'Animated Object', 'Idle only, for a prop with a skeleton'),
+    ('ANIMATED_OBJECT', 'Animated Object', 'Idle starter for a prop with a skeleton; other clips need a script trigger'),
     ('UNIT', 'Unit', 'Idle, Walk, Run, Spawn and Die; add attacks and other reactions as needed'),
     ('BUILDING', 'Building', 'Idle for a skinned building; static building states need no SKA clips'),
 )
