@@ -36,16 +36,7 @@ Skip this step for an imported DRS.
 
 ![Set up a static model from selected meshes](../assets/images/guides/static/setup.png)
 
-### Where to put your meshes
-
-Your model's structure in the Outliner:
-
-```text
-DRSModel_object_stone_block
-├── GameOrientation
-└── Meshes_Collection
-    └── Stone Block
-```
+<span id="where-to-put-your-meshes"></span>
 
 !!! info "GameOrientation — your model's parent object"
     **GameOrientation** keeps your model aligned with the game. Import and
