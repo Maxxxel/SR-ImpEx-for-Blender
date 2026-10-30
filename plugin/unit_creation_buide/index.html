@@ -402,7 +402,7 @@
   <span class="md-ellipsis">
     
   
-    Static Object Guide
+    Object Guide
   
 
     
@@ -522,15 +522,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-understand-units-vs-animated-objects" class="md-nav__link">
+  <a href="#2-set-up-unit-animations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Understand Units vs. Animated Objects
+        2. Set Up Unit Animations
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Understand Units vs. Animated Objects">
+    <nav class="md-nav" aria-label="2. Set Up Unit Animations">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -848,36 +848,12 @@
 
 
 <h1 id="unit-creation-guide">Unit Creation Guide<a class="headerlink" href="#unit-creation-guide" title="Permanent link">&para;</a></h1>
-<p>This guide walks through the basic setup for creating a unit or animated object with the SR-ImpEx Blender plugin.</p>
-<p>First follow the shared scene, mesh, UV, and material setup in the <a href="../object_creation_guide/">Object Creation Guide</a>. Do not copy the static-object collision or export choices unchanged: units and animated objects use different export types.</p>
-<table>
-<thead>
-<tr>
-<th>Target</th>
-<th>DRS export type</th>
-<th>Important difference</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>A unit with animation/locator metadata</td>
-<td><code>Animated Unit</code></td>
-<td>Writes unit animation, effect, and locator blocks; does not export the object collision-shape block.</td>
-</tr>
-<tr>
-<td>A rigged prop or animated object</td>
-<td><code>Animated Object (no collision)</code> or <code>Animated Object (with collision)</code></td>
-<td>Can use simple object collision when that type is chosen. It does not gain unit locators simply by being animated.</td>
-</tr>
-<tr>
-<td>A building with states/grid resources</td>
-<td>Building export types</td>
-<td>Follow the <a href="../building_creation_guide/">Building Creation Guide</a>, including its current export limitations.</td>
-</tr>
-</tbody>
-</table>
+<p>Create and export an animated unit with the SR-ImpEx Blender plugin. For static or animated props, use the <a href="../object_creation_guide/">Object Guide</a>.</p>
+<p>For a new unit, use <strong>DRS Editor → Model Setup → Set Up Model → Unit</strong>.
+Follow the <a href="../object_creation_guide/">Object Guide</a> for shared mesh, UV and material setup.
+Use <strong>Animated Unit</strong> as the export type for this workflow.</p>
 <h2 id="before-you-start">Before You Start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
-<p>A unit or animated object needs:</p>
+<p>A unit needs:</p>
 <ul>
 <li>a deform armature and its skeleton/rest pose;</li>
 <li>render meshes with an Armature modifier referencing that deform armature;</li>
@@ -906,7 +882,7 @@ have different bone weights, its skin record can keep only one weight set; the
 export log warns and retains the first weighted set. Make the corresponding
 weights agree or separate the positions, then verify collision/query behavior
 in the editor. Render meshes still have their own per-mesh skin streams.</p>
-<p>The new-scene operator creates the shared object collections, not a finished character rig. Put the deform armature in a direct child collection named <code>Armature_Collection</code> and render meshes directly in <code>Meshes_Collection</code>. Start from an imported, compatible skeleton when possible; changing a skeleton/rest pose without checking the skin and animations can break their agreement.</p>
+<p>Put the deform armature in a direct child collection named <code>Armature_Collection</code> and render meshes directly in <code>Meshes_Collection</code>. Start from an imported, compatible skeleton when possible; changing a skeleton/rest pose without checking the skin and animations can break their agreement.</p>
 <h3 id="go-and-rig-relationships">GO and rig relationships<a class="headerlink" href="#go-and-rig-relationships" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><strong>Recommended practice:</strong> Keep the armature and meshes in one consistent model coordinate convention. When using <code>GameOrientation</code> (GO), leave the armature under the model's helper and keep skinned meshes attached to their deform armature. Parenting before modeling is convenient, not a required order of operations.</p>
@@ -922,7 +898,7 @@ in the editor. Render meshes still have their own per-mesh skin streams.</p>
 <li><code>Hit</code>: a hit-related point; bone attachment depends on the asset.</li>
 <li><code>Projectile_Spawn</code>: a projectile-origin position/orientation where the asset uses that role.</li>
 </ul>
-<p>Adding a locator alone does not define a projectile, damage rule, or gameplay ability. The current DRS writer includes <code>CDrwLocatorList</code> for <code>Animated Unit</code>, not the animated-object export types.</p>
+<p>Adding a locator alone does not define a projectile, damage rule, or gameplay ability.</p>
 <p><img alt="Minimum locator setup" src="https://i.gyazo.com/24af20064e578abefbfbf9a788a30873.png" /></p>
 <p>Use this order to avoid losing locator placement:</p>
 <ol>
@@ -936,7 +912,7 @@ in the editor. Render meshes still have their own per-mesh skin streams.</p>
 <p><strong>GO note:</strong> A non-bone locator can use the model's GO convention; a bone locator must remain bone-local. The editor manages this distinction. Do not manually reparent every locator to GO or use the parent-reset button as a keep-transform operation.</p>
 </blockquote>
 <p>See the <a href="../advanced_locators_guide/">Advanced Locators Guide</a> for supported types, resource references, multiple-model selection, and the difference between changing metadata and syncing scene transforms.</p>
-<h2 id="2-understand-units-vs-animated-objects">2. Understand Units vs. Animated Objects<a class="headerlink" href="#2-understand-units-vs-animated-objects" title="Permanent link">&para;</a></h2>
+<h2 id="2-set-up-unit-animations">2. Set Up Unit Animations<a class="headerlink" href="#2-set-up-unit-animations" title="Permanent link">&para;</a></h2>
 <p>For the selected animation variant, <strong>DRS Editor &gt; Animation Set Editor</strong>
 provides Clip Settings and playback. Text events and Target IDs are in the
 collapsed <strong>Advanced SKA Data</strong> section; their usage is not fully verified. <strong>Play</strong> sets
@@ -949,7 +925,7 @@ Blender preview. See the <a href="../advanced_abilities_guide/">Advanced Abiliti
 incoming and outgoing handle slopes. Prefer aligned handles, and reimport the
 exported clip to check motion between keys, especially after adjusting handle
 lengths or using keys close together on subframes.</p>
-<p>A unit usually has multiple animation modes. The current animated-object export path keeps the <code>Idle</code> visibility job and removes unit-style markers/timings; selecting <code>Animated Object</code> is not a way to export a unit with fewer requirements.</p>
+<p>Use the animation modes required by the unit's existing gameplay setup.</p>
 <p>The editor's initialization template provides a useful starting list, not an exporter-enforced guarantee that every unit needs exactly these animations:</p>
 <ul>
 <li><code>Idle</code></li>
@@ -1007,7 +983,7 @@ lengths or using keys close together on subframes.</p>
 <p>For more animation types such as spell casting or ranged attacks, check the <a href="../advanced_abilities_guide/">Advanced Abilities Guide</a>.</p>
 <h2 id="5-configure-basic-unit-settings">5. Configure Basic Unit Settings<a class="headerlink" href="#5-configure-basic-unit-settings" title="Permanent link">&para;</a></h2>
 <p>In the upper section of the unit editor, you can configure basic values such as walk speed, run speed, and additional settings for flying units.</p>
-<p>Some of these values still need further investigation.</p>
+<p>Use the <a href="../advanced_abilities_guide/#basics-motion-in-the-game">Basics settings reference</a> for walk/run reference speeds, terrain alignment and flight settings.</p>
 <p><img alt="Basic unit settings" src="https://i.gyazo.com/2d4d14f733d4b6047f402bdb4e0a6c2d.png" /></p>
 <h2 id="6-add-audio-and-effects">6. Add Audio and Effects<a class="headerlink" href="#6-add-audio-and-effects" title="Permanent link">&para;</a></h2>
 <p><code>EffectSet</code> is used for sounds and effects. There is a separate <a href="../advanced_effects_guide/">Advanced Effects Guide</a> for the full system.</p>
@@ -1017,13 +993,13 @@ lengths or using keys close together on subframes.</p>
 <p>Use the EffectSet editor's <strong>Save</strong> to persist changes separately from the AnimationSet and locator data. Imported sound references are resource strings; the editor does not automatically package every referenced file or create a game sound bank.</p>
 <p>For the exact fields, preview limits, sound types, and reference rules, use the <a href="../advanced_effects_guide/">Advanced Effects Guide</a>.</p>
 <h2 id="7-export-the-unit">7. Export the Unit<a class="headerlink" href="#7-export-the-unit" title="Permanent link">&para;</a></h2>
-<p>Make the root <code>DRSModel_...</code> collection active and choose <strong>File &gt; Export &gt; Battleforge Object/Unit (.drs)</strong>.</p>
+<p>Select a model mesh and choose <strong>DRS Editor → Model Setup → Export DRS</strong>.</p>
 <ol>
-<li>Choose <strong>Animated Unit</strong> for the unit metadata workflow above, or the matching <strong>Animated Object</strong> type for an animated prop. Do not export a unit as an animated object if you need its markers, unit effects, and locators.</li>
+<li>Choose <strong>Animated Unit</strong>.</li>
 <li>Enable <strong>Export All SKA Actions</strong> when you want the clips referenced by the <strong>saved AnimationSet</strong> written alongside the DRS. It does not mean every Blender action, and an EffectSet-only reference is not enough to select a clip.</li>
 <li>Choose <strong>Model Name Prefix</strong> explicitly. The actual default is <strong>No Prefix</strong>. <code>Model Name Prefix</code>, <code>Folder Name Prefix</code>, and <code>Keep Existing Prefix</code> serve different naming workflows; verify the resulting names and saved references rather than renaming output files independently.</li>
 <li>Leave <strong>[DEBUG] Export SKA Tangents</strong> enabled for Hermite tangent export unless you deliberately need a stepped/flat debugging comparison. It cannot repair missing keys or an unbaked control rig.</li>
-<li>Use the ordinary UV, normal, triangulation, mip-map, and vertex-budget checks from the object guide. Unit collision is not added by populating object collision collections; only collision-enabled animated-object types write that primitive block.</li>
+<li>Use the ordinary UV, normal, triangulation, mip-map, and vertex-budget checks from the object guide.</li>
 </ol>
 <blockquote>
 <p><strong>Rig export limitation:</strong> The writer exports the deform armature, not an armature whose name contains <code>Control_Rig</code>. It reads deform-bone location/quaternion F-curves and does not automatically bake constraints, IK, or NLA results. A successful control-rig preview is therefore not proof that the exported action contains the same motion. Prepare compatible keyed deform actions on a working copy and verify a fresh SKA import; do not destructively apply transforms or bake away the only copy of your rig.</p>
@@ -1045,7 +1021,7 @@ lengths or using keys close together on subframes.</p>
 <p>If the mesh is rotated correctly but the animation is not, inspect the deform action, rest pose, and rig/export relationships before changing GO. If a marker or locator appears in Blender but is missing from the export, check the selected model type and the relevant editor's saved metadata.</p>
 <h2 id="related-guides">Related Guides<a class="headerlink" href="#related-guides" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../object_creation_guide/">Object Creation Guide</a></li>
+<li><a href="../object_creation_guide/">Object Guide</a></li>
 <li><a href="../building_creation_guide/">Building Creation Guide</a></li>
 <li><a href="../advanced_locators_guide/">Advanced Locators Guide</a></li>
 <li><a href="../advanced_abilities_guide/">Advanced Abilities Guide</a></li>
@@ -1075,7 +1051,7 @@ lengths or using keys close together on subframes.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 18:36:13 UTC">October 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 20:23:09 UTC">October 30, 2026</span>
   </span>
 
     

@@ -29,7 +29,7 @@
     
     
       
-        <title>Static Object Guide - Skylords Reborn Blender Artist Guides</title>
+        <title>Object Guide - Skylords Reborn Blender Artist Guides</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#static-object-from-blender-to-drs" class="md-skip">
+        <a href="#object-guide-from-blender-to-drs" class="md-skip">
           Skip to content
         </a>
       
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Static Object Guide
+              Object Guide
             
           </span>
         </div>
@@ -411,7 +411,7 @@
   <span class="md-ellipsis">
     
   
-    Static Object Guide
+    Object Guide
   
 
     
@@ -429,7 +429,7 @@
   <span class="md-ellipsis">
     
   
-    Static Object Guide
+    Object Guide
   
 
     
@@ -560,10 +560,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-export" class="md-nav__link">
+  <a href="#7-animate-your-object" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Export
+        7. Animate your object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Animate your object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#prepare-the-rig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prepare the rig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#assign-the-idle-animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assign the Idle animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Export
       
     </span>
   </a>
@@ -571,10 +610,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#8-check-the-exported-copy" class="md-nav__link">
+  <a href="#9-check-the-exported-copy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        8. Check the exported copy
+        9. Check the exported copy
       
     </span>
   </a>
@@ -813,12 +852,12 @@
   
 
 
-<h1 id="static-object-from-blender-to-drs">Static Object: from Blender to DRS<a class="headerlink" href="#static-object-from-blender-to-drs" title="Permanent link">&para;</a></h1>
-<p>Export a rock, prop or other <strong>non-animated object</strong> with SR-ImpEx.</p>
+<h1 id="object-guide-from-blender-to-drs">Object Guide: from Blender to DRS<a class="headerlink" href="#object-guide-from-blender-to-drs" title="Permanent link">&para;</a></h1>
+<p>Create and export <strong>static or animated props</strong>, such as rocks, gates and moving machinery.</p>
 <h2 id="1-choose-your-starting-point">1. Choose your starting point<a class="headerlink" href="#1-choose-your-starting-point" title="Permanent link">&para;</a></h2>
 <h3 id="a-edit-an-existing-drs">A. Edit an existing DRS<a class="headerlink" href="#a-edit-an-existing-drs" title="Permanent link">&para;</a></h3>
 <ol>
-<li>Put the <code>.drs</code> and its textures in the same folder.</li>
+<li>Put the <code>.drs</code>, its textures and any referenced <code>.ska</code> clips in the same folder.</li>
 <li>Choose <strong>File → Import → Battleforge Model (.drs/.bmg)</strong> and open the <code>.drs</code>.</li>
 <li>Select the visible model mesh and make your changes.</li>
 </ol>
@@ -837,7 +876,7 @@ Continue with these copies.</p>
 <ol>
 <li>Select your model meshes.</li>
 <li>Open <strong>DRS Editor → Model Setup → Set Up Model</strong>.</li>
-<li>Choose <strong>Static Object</strong>, enter a name such as <code>object_stone_block</code>, and keep
+<li>Choose <strong>Static Object</strong> or <strong>Animated Object</strong>, enter a name such as <code>object_stone_block</code>, and keep
    <strong>Include Selected Meshes</strong> enabled.</li>
 <li>Enable <strong>Collision Support</strong> if your object needs collision; otherwise leave it off.
    Click <strong>OK</strong>.</li>
@@ -850,7 +889,8 @@ Continue with these copies.</p>
 Set Up Model create it for you.</p>
 <ul>
 <li>Move, rotate and resize your <strong>meshes</strong>. Leave GameOrientation unchanged.</li>
-<li>Keep the meshes in <strong>Meshes_Collection</strong> and parented to this model's GameOrientation.</li>
+<li>Keep visible meshes in <strong>Meshes_Collection</strong>. For a static object, parent them to GameOrientation.</li>
+<li>For an animated object, parent the deform armature to GameOrientation and keep skinned meshes attached to their armature.</li>
 <li>Moving a mesh into the collection does not parent it.</li>
 <li>Parenting without preserving transforms can rotate or mirror a mesh.
   Use <strong>Object (Keep Transform)</strong> to keep its current placement.</li>
@@ -867,7 +907,7 @@ attached to their armature.</p>
 <p><span id="4-model-the-object"></span></p>
 <h2 id="3-check-your-model">3. Check your model<a class="headerlink" href="#3-check-your-model" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Use UV-mapped meshes with geometry modifiers applied.</li>
+<li>Use UV-mapped meshes with geometry modifiers applied. For animation, keep the <strong>Armature</strong> modifier.</li>
 <li>Use one DRS material per mesh. Separate multi-material meshes by material.</li>
 <li>Check size and facing against an imported game object if you have one available.</li>
 </ul>
@@ -904,7 +944,7 @@ For a lit preview, use <strong>DRS Editor → Render Setup → Add Render</stron
 See the <a href="../material_artist_workflow/">Default Material Guide</a> for more material options.</p>
 <p><span id="8-create-collision-shapes"></span></p>
 <h2 id="6-add-collision-shapes">6. Add collision shapes<a class="headerlink" href="#6-add-collision-shapes" title="Permanent link">&para;</a></h2>
-<p>For an object without collision, continue to <a href="#7-export">export</a>.</p>
+<p>Skip this step if your object does not need collision.</p>
 <ol>
 <li>Add cubes, spheres or cylinders and fit them around your model. Use several shapes if needed.</li>
 <li>Move cubes into <strong>Boxes_Collection</strong>, spheres into <strong>Spheres_Collection</strong>,
@@ -913,12 +953,91 @@ See the <a href="../material_artist_workflow/">Default Material Guide</a> for mo
 <li>Set them to <strong>Wire</strong> display and disable rendering for these helper objects.</li>
 </ol>
 <p>Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.</p>
-<h2 id="7-export">7. Export<a class="headerlink" href="#7-export" title="Permanent link">&para;</a></h2>
+<h2 id="7-animate-your-object">7. Animate your object<a class="headerlink" href="#7-animate-your-object" title="Permanent link">&para;</a></h2>
+<p>For a static object, continue to <a href="#8-export">export</a>.</p>
+<h3 id="prepare-the-rig">Prepare the rig<a class="headerlink" href="#prepare-the-rig" title="Permanent link">&para;</a></h3>
+<p>For an imported animated DRS, keep its existing rig. For a new rig:</p>
+<ol>
+<li>Put the deform armature in <strong>Armature_Collection</strong>, directly under your <strong>DRSModel_…</strong> collection.
+   Create that collection if it is missing.</li>
+<li>Before weighting or animating, parent the new armature to <strong>GameOrientation</strong> using
+   <strong>Object (Without Inverse)</strong>. Set its local location and rotation to <strong>0</strong>, and scale to <strong>1</strong>.</li>
+<li>Rig and weight your meshes. Keep them in <strong>Meshes_Collection</strong>, parented to the
+   armature using <strong>Object (Keep Transform)</strong>.</li>
+<li>Check that each mesh's <strong>Armature</strong> modifier points to that rig. Use no more than
+   <strong>four bone weights per vertex</strong>. Run <strong>Animation Set Editor → Skinning → Check Skin Weights</strong>.</li>
+</ol>
+<h3 id="assign-the-idle-animation">Assign the Idle animation<a class="headerlink" href="#assign-the-idle-animation" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Create your repeating motion as an Action on the deform armature.</li>
+<li>Select a model mesh and open <strong>DRS Editor → Animation Set Editor</strong>.</li>
+<li>Click <strong>Initialize Animation Set</strong> (or <strong>Init</strong>), choose <strong>Animated Object</strong>,
+   leave <strong>Replace Existing Mappings</strong> off and confirm.</li>
+<li>Select <strong>Idle</strong> in <strong>Base</strong> mode and assign your Action to its variant, or keep the imported Action.</li>
+<li>Open <strong>Clip Settings → Edit Settings</strong>. Set the clip timing and <strong>Time addressing → Loop</strong>, then confirm with <strong>OK</strong>.</li>
+<li>Use <strong>Play</strong> to check the loop, then click <strong>Save</strong> in Animation Set Editor.</li>
+</ol>
+<p><img alt="Idle clip settings with Time addressing set to Loop" src="../../assets/images/guides/animated/clip-settings.png" /></p>
+<p>Animated objects automatically play <strong>Base Idle</strong>. Other action types are greyed out.</p>
+<details class="tip">
+<summary>Advanced: rig controls and IK</summary>
+<p>Bake the evaluated motion onto the deform bones of an export copy.
+Export keyed bone location and quaternion rotation. Keep the original control rig.
+Check the exported SKA after reimport.</p>
+</details>
+<details class="tip">
+<summary>Advanced: a rig from another program</summary>
+<p>Use a compatible imported DRS rig or prepare a new rig as above. Transfer the
+mesh and retarget the animation to that deform rig. Bake control-rig motion
+onto the deform bones of an export copy, then check a DRS/SKA reimport.
+Keep your original foreign rig intact.</p>
+</details>
+<details class="tip">
+<summary>Advanced: play another animation from a map script</summary>
+<p>For a gate that opens when a lever is used:</p>
+<ol>
+<li>Create the opening motion as a separate Action.</li>
+<li>Export it with <strong>File → Export → Battleforge Animation (.ska)</strong>.</li>
+<li>Give the filename to the map author. Their map script plays that file
+   at the chosen event, once or in a loop.</li>
+</ol>
+<p>Keep Idle in AnimationSet. Do not add an Attack or Walk mapping for this clip.
+The plugin does not create the map script.</p>
+</details>
+<p><span id="7-export"></span></p>
+<h2 id="8-export">8. Export<a class="headerlink" href="#8-export" title="Permanent link">&para;</a></h2>
 <ol>
 <li>Select a mesh belonging to the model.</li>
 <li>Open <strong>DRS Editor → Model Setup → Export DRS</strong>.</li>
 <li>Choose a separate output folder and a filename such as <code>object_stone_block.drs</code>.</li>
-<li>Check <strong>Static Object (no collision)</strong>, or <strong>Static Object (with collision)</strong> if appropriate.</li>
+<li>
+<p>Choose the matching <strong>Model Type</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Object</th>
+<th>Without collision</th>
+<th>With collision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Static</td>
+<td>Static Object (no collision)</td>
+<td>Static Object (with collision)</td>
+</tr>
+<tr>
+<td>Animated</td>
+<td>Animated Object (no collision)</td>
+<td>Animated Object (with collision)</td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p>For an animated object, enable <strong>Export All SKA Actions</strong> to include the clips
+   assigned in your saved AnimationSet. Keep <strong>No Prefix</strong> unless you need a different naming scheme.</p>
+</li>
 <li>Keep <strong>Mip Maps → Auto</strong> and the other defaults. Click <strong>Export DRS</strong>.</li>
 </ol>
 <p><img alt="The static-object export dialog" src="../../assets/images/guides/static/export.png" /></p>
@@ -956,11 +1075,13 @@ See the <a href="../material_artist_workflow/">Default Material Guide</a> for mo
 </tbody>
 </table>
 </details>
-<h2 id="8-check-the-exported-copy">8. Check the exported copy<a class="headerlink" href="#8-check-the-exported-copy" title="Permanent link">&para;</a></h2>
+<p><span id="8-check-the-exported-copy"></span></p>
+<h2 id="9-check-the-exported-copy">9. Check the exported copy<a class="headerlink" href="#9-check-the-exported-copy" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Keep the exported <code>.drs</code> and <code>.dds</code> textures together in the output folder.</li>
+<li>Keep the exported <code>.drs</code>, <code>.dds</code> textures and any <code>.ska</code> clips together in the output folder.</li>
 <li>Import the DRS into a fresh Blender scene. Enable <strong>Import Collision Shape</strong> if used.
-   Check orientation, size, textures and collision fit.</li>
+   Check orientation, size, textures and collision fit. For an animated object,
+   also enable <strong>Import Animation</strong> and check the full Idle loop.</li>
 <li>Test it in the Skylords Map Editor.</li>
 </ol>
 <p>If a texture is missing, check its slot in Material Editor and the export folder.</p>
@@ -986,7 +1107,7 @@ See the <a href="../material_artist_workflow/">Default Material Guide</a> for mo
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 19:44:04 UTC">October 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 20:23:09 UTC">October 30, 2026</span>
   </span>
 
     
