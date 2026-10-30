@@ -495,6 +495,29 @@ def set_origin_to_world_origin(meshes_collection: bpy.types.Collection) -> None:
     bpy.context.scene.cursor.location=cursor
 
 
+def bake_export_mesh_coordinates(context, meshes_collection):
+    """Bake export copies into game space, including mesh rotation and scale.
+
+    Moving an origin alone does not bake object transforms. Both render streams
+    and the OBB builder consume raw mesh coordinates, so they need the same bake.
+    """
+    context.view_layer.update()
+    transforms=[]
+    for obj in meshes_collection.objects:
+        if obj.type!='MESH':continue
+        matrix=obj.matrix_world.copy()
+        parent=obj.parent
+        while parent:
+            if parent.name.startswith('GameOrientation'):
+                matrix=parent.matrix_world.inverted_safe() @ matrix
+                break
+            parent=parent.parent
+        transforms.append((obj,matrix))
+    for obj,matrix in transforms:
+        obj.data.transform(matrix)
+        obj.data.update()
+
+
 def get_bb(obj) -> Tuple[Vector3, Vector3]:
     """Get the Bounding Box of an Object. Returns the minimum and maximum Vector of the Bounding Box."""
     return bounds_from_positions(vertex.co for vertex in obj.data.vertices) if obj.type == "MESH" else bounds_from_positions(())
@@ -5384,9 +5407,9 @@ def save_drs(
             return abort(keep_debug_collections, source_collection_copy)
 
     try:
-        set_origin_to_world_origin(meshes_collection)
+        bake_export_mesh_coordinates(context,meshes_collection)
     except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Error setting origin for meshes: {e}", "Origin Error", "ERROR")
+        logger.log(f"Error converting export meshes to game coordinates: {e}", "Transform Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)
 
     # === Action name strategy for export =========================================

@@ -202,7 +202,7 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
     # this one needs to be named exactly 'filepath' for ExportHelper
     filepath: StringProperty(
         name="File Path",
-        description="Filepath used for exporting the SKA",
+        description="DRS model or BMG building file to import",
         maxlen=1024,
         subtype="FILE_PATH",
     )  # type: ignore
