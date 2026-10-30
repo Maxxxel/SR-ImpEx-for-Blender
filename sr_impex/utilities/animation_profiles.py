@@ -33,3 +33,12 @@ def starter_abilities(profile, has_skeleton):
     if profile == 'UNIT':
         return ('Idle', 'Walk', 'Run', 'Spawn', 'Die')
     raise ValueError('Unknown animation profile: ' + profile)
+
+
+def mapping_disabled_reason(profile, visual_jobs, mode):
+    """Artist restrictions for verified automatic animation consumers."""
+    if profile == 'STATIC':
+        return 'Static objects do not use skeletal animation mappings.'
+    if profile == 'ANIMATED_OBJECT' and (int(mode) != 0 or any(int(j) != 0 for j in visual_jobs)):
+        return 'Animated objects only use Idle in Base mode automatically.'
+    return ''

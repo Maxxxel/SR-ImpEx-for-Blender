@@ -39,7 +39,7 @@ from sr_impex.definitions.enums import AnimationType as DRS_ANIM_TYPE
 
 from sr_impex.utilities.drs_resolvers import resolve_action_from_blob_name as _resolve_action_name
 from sr_impex.utilities.animation_profiles import (
-    BASIC_DEFAULTS, FLOAT32_MAX, PROFILE_ITEMS, starter_abilities,
+    BASIC_DEFAULTS, FLOAT32_MAX, PROFILE_ITEMS, starter_abilities, mapping_disabled_reason,
 )
 
 
@@ -187,6 +187,36 @@ def _infer_ability_for_visjob(vis_id: int, _st=None) -> str:
 
 _CURRENT_MODEL = None
 
+def _model_profile(col):
+    if col is None:return ''
+    profile=col.get('_sr_animation_profile','')
+    if profile:return profile
+    if 'sr_impex_meshgrid_blob' in col:return 'BUILDING'
+    return {'object':'STATIC','animated_object':'ANIMATED_OBJECT','unit':'UNIT'}.get(col.get('_sr_model_type',''),'')
+
+
+def _ability_disabled_reason(name,mode,col=None):
+    if col is None:col=_active_top_drsmodel()
+    components=_iter_all_abilities().get(name,{}).get('components',[])
+    return mapping_disabled_reason(_model_profile(col),[c['vis_job_id'] for c in components],mode)
+
+
+def _draw_object_animation_help(layout,col):
+    if _model_profile(col)!='ANIMATED_OBJECT':return
+    layout.label(text='Objects automatically use Base Idle.',icon='INFO')
+    st=_state()
+    layout.prop(st,'show_scripted_help',text='Scripted animations',emboss=False,
+                icon='TRIA_DOWN' if st.show_scripted_help else 'TRIA_RIGHT')
+    if st.show_scripted_help:
+        box=layout.box()
+        for line in ('Extra clips need a map script.',
+                     'Create an Action and export it as SKA.',
+                     'The map author triggers that filename',
+                     'at an event, once or in a loop.',
+                     'No extra AnimationSet entry is needed.'):
+            box.label(text=line)
+
+
 def _draw_editor_ui(layout):
     st = _state()
     col = _active_top_drsmodel()
@@ -221,11 +251,13 @@ def _draw_editor_ui(layout):
 
     layout.separator()
 
+    _draw_object_animation_help(layout,col)
+
     # Runtime unit motion is separate from Blender's clip preview.
-    basics = layout.box()
-    basics.label(text="Basics", icon="ANIM_DATA")
-    profile = col.get('_sr_animation_profile', '')
+    profile = _model_profile(col)
     if not profile or profile == 'UNIT' or scene.sr_ska_debug_view:
+        basics = layout.box()
+        basics.label(text="Basics", icon="ANIM_DATA")
         row = basics.row(align=True)
         row.prop(st, "default_walk_speed")
         row.prop(st, "default_run_speed")
@@ -239,8 +271,6 @@ def _draw_editor_ui(layout):
             flight.prop(st, 'fly_bank_scale')
             flight.prop(st, 'fly_accel_scale')
             flight.prop(st, 'fly_hit_scale')
-    else:
-        basics.label(text='Unit motion settings are available in Debug View.', icon='INFO')
 
     layout.separator()
 
@@ -300,10 +330,13 @@ def _draw_editor_ui(layout):
     # draw list
     for label, any_idx in items:
         r = left.row(align=True)
-        r.enabled = True
-        op = r.operator(
+        entry=st.mode_keys[any_idx]
+        reason=mapping_disabled_reason(profile,[int(entry.vis_job)],int(entry.special_mode))
+        select=r.row(align=True)
+        select.enabled = not reason
+        op = select.operator(
             "drs.animset_select_ability",
-            text=label,
+            text=label+(' (not used)' if reason else ''),
             depress=(st.active_mode_key == any_idx),
         )
         op.index = any_idx
@@ -326,6 +359,10 @@ def _draw_editor_ui(layout):
         mk = st.mode_keys[st.active_mode_key]
         ab_name = _infer_ability_for_visjob(int(mk.vis_job), st)
         box = right.box()
+        reason=mapping_disabled_reason(profile,[int(mk.vis_job)],int(mk.special_mode))
+        if reason:
+            right.label(text='Not used automatically by this model.',icon='INFO')
+            box.enabled=False
         box.label(text=ab_name, icon="ACTION")
         if mk.target_mode >= 0:
             box.label(
@@ -797,9 +834,10 @@ def _fill_picker_items(self_items, mode: int, query: str = ""):
             continue
         it = self_items.add()
         it.name = name
-        it.description = desc
+        reason=_ability_disabled_reason(name,mode)
+        it.description = reason or desc
         it.category = cat
-        it.available = True
+        it.available = not reason
         it.selected = False
 
 
@@ -1264,6 +1302,8 @@ class ModeKeyPG(bpy.types.PropertyGroup):
 
 
 class AnimSetState(bpy.types.PropertyGroup):
+    show_scripted_help: BoolProperty(name='Scripted animations',default=False,
+        description='A map script can play an exported SKA by filename at an event, once or looping; no extra AnimationSet action is needed')
     # Basics
     default_run_speed: FloatProperty(name="Run Reference Speed", default=BASIC_DEFAULTS['default_run_speed'],
         min=-FLOAT32_MAX, max=FLOAT32_MAX, soft_min=0.0, soft_max=10.0,
@@ -1840,9 +1880,9 @@ def _initialize_profile(col, profile, replace_existing=False):
     if replace_existing:
         st.mode_keys.clear()
         st.active_mode_key = 0
+    col['_sr_animation_profile'] = profile
     for ability in starter_abilities(profile, _find_armature(col) is not None):
         bpy.ops.drs.modekey_add_ability(ability=ability, mode=0)
-    col['_sr_animation_profile'] = profile
     st.show_mode = '0'
     _redraw_ui()
 
@@ -1899,7 +1939,7 @@ class DRS_OT_AnimSet_Reinit(bpy.types.Operator):
         self.target_collection = col.name
         fallback = 'BUILDING' if 'sr_impex_meshgrid_blob' in col else (
             'UNIT' if _find_armature(col) is not None else 'STATIC')
-        self.profile = col.get('_sr_animation_profile', fallback)
+        self.profile = _model_profile(col) or fallback
         return context.window_manager.invoke_props_dialog(self, width=420)
 
     def draw(self, _context):
@@ -1938,6 +1978,10 @@ class DRS_OT_ModeKey_AddAbility(bpy.types.Operator):
     mode: IntProperty(default=0)  # type: ignore
 
     def execute(self, _ctx):
+        reason=_ability_disabled_reason(self.ability,self.mode)
+        if reason:
+            self.report({'WARNING'},reason)
+            return {'CANCELLED'}
         st = _state()
         ability_data = _iter_all_abilities().get(self.ability) or {}
         existing = {(int(m.vis_job), int(m.special_mode)) for m in st.mode_keys}
@@ -2790,6 +2834,7 @@ class DRS_OT_OpenAbilityPicker(bpy.types.Operator):
 
     def draw(self, _context):
         layout = self.layout
+        _draw_object_animation_help(layout,_active_top_drsmodel())
         box = layout.box()
         box.template_list(
             "DRS_UL_AbilityPicker", "", self, "items", self, "active_index", rows=12
@@ -2809,7 +2854,8 @@ class DRS_OT_OpenAbilityPicker(bpy.types.Operator):
 
         # fallback: if nothing checked, use the active row
         if not selected_names and (0 <= self.active_index < len(self.items)):
-            selected_names = [self.items[self.active_index].name]
+            item=self.items[self.active_index]
+            if item.available:selected_names = [item.name]
 
         if not selected_names:
             return {"CANCELLED"}

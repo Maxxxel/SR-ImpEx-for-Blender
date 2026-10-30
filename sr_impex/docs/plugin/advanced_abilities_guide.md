@@ -31,7 +31,23 @@ Existing mappings are kept. Enable **Replace Existing Mappings** only to clear t
 
 These are small starting layouts, not a universal list required by the engine. For an animated unit, always assign a usable **Idle in Base mode**: several actions use it as a fallback. A file loading successfully does not guarantee safe playback when that fallback is missing. A fallback Idle does not replace the intended walk, spawn or death motion. Add attack, hit, mode-change and other animations when the existing game configuration uses them. Building damage states and construction are configured through the building tools, not by this template. The type choice does not change the export type or create gameplay behavior.
 
-An animated prop may need only Idle. The **Animated Object** DRS export types retain only Idle and remove animation markers and timings. Use **Animated Unit** when the exported model needs attack/cast mappings and timing data. Units and animated objects need an armature before initialization.
+For **Animated Object**, use **Idle in Base mode** for automatic playback.
+Other action types are greyed out. Existing entries and Blender Actions are kept.
+The **Animated Object** DRS export types retain only Idle and remove animation
+markers and timings. Units and animated objects need an armature before initialization.
+
+??? tip "Scripted animations for objects"
+    A map script can tell an object to play a particular SKA file at an event.
+    For example, a lever can trigger a gate's opening animation.
+
+    1. Create the extra clip as a separate Blender Action.
+    2. Export it with **File → Export → Battleforge Animation (.ska)**.
+    3. Give the SKA filename to the map author. They trigger it from the map
+       script, either once or in a loop.
+
+    Keep Idle in AnimationSet. No Attack, Walk or other mapping is needed for
+    the scripted clip. Without a script trigger, that extra clip will not play
+    automatically. The plugin does not create the map script.
 
 ### Basics: Motion in the Game
 
