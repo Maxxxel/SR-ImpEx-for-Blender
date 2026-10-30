@@ -171,6 +171,18 @@ Animated objects automatically play **Base Idle**. Other action types are greyed
     Keep Idle in AnimationSet. Do not add an Attack or Walk mapping for this clip.
     The plugin does not create the map script.
 
+    **For a usable gate, coordinate the blocking with the map author:**
+
+    - Keep the frame's permanent blocker separate from the door's switchable blocker.
+    - A simple custom setup uses a static frame asset and a separate moving-door asset,
+      placed as separate entities. The map author must set up the gate or blocker logic.
+    - Two meshes inside one DRS do not create separate blockers. The native gate command
+      switches its gate entity's whole obstacle, not a named mesh or collision shape.
+    - Playing the opening SKA changes the visible motion only. The passage also needs
+      to be unblocked by the map's gameplay logic.
+
+    Two visible model files are a convenient setup, not a requirement for every gate.
+
 <span id="7-export"></span>
 
 ## 8. Export

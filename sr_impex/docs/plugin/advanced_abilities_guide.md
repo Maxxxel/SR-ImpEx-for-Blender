@@ -49,6 +49,11 @@ markers and timings. Units and animated objects need an armature before initiali
     the scripted clip. Without a script trigger, that extra clip will not play
     automatically. The plugin does not create the map script.
 
+    For a usable gate, the map author must also change its blocking state.
+    Keep permanent frame blocking separate from the switched door blocker;
+    splitting one DRS into two meshes is not enough. See the
+    [gate setup notes in the Object Guide](object_creation_guide.md#7-animate-your-object).
+
 ### Basics: Motion in the Game
 
 For a unit, open **Basics**. Keep the imported settings unless you intend to change its motion. These settings are exported; Blender's **Play** previews the Action and does not simulate the game's movement, terrain or hit reactions.
