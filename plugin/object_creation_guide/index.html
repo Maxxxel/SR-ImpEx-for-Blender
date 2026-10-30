@@ -832,26 +832,24 @@
 <h3 id="b-make-a-model-from-scratch">B. Make a model from scratch<a class="headerlink" href="#b-make-a-model-from-scratch" title="Permanent link">&para;</a></h3>
 <p>Create your model in Blender. Select its meshes, then follow step 2.</p>
 <h3 id="c-use-a-model-from-another-program">C. Use a model from another program<a class="headerlink" href="#c-use-a-model-from-another-program" title="Permanent link">&para;</a></h3>
-<p>Import it with <strong>File → Import → FBX</strong> or <strong>Wavefront OBJ</strong>.
-Select its meshes, then follow step 2.</p>
+<p>Import the model with Blender. Select its meshes, then follow step 2.</p>
 <details class="tip">
 <summary>Using a rigged model as a static object</summary>
-<p>Duplicate the model. Select the duplicate meshes in the pose you want and
-use <strong>Object → Convert → Mesh</strong>. Continue with these copies.</p>
+<p>Duplicate the meshes and convert the copies to meshes in the desired pose.
+Continue with these copies.</p>
 </details>
 <h2 id="2-set-up-a-new-model">2. Set up a new model<a class="headerlink" href="#2-set-up-a-new-model" title="Permanent link">&para;</a></h2>
 <p>Skip this step for an imported DRS.</p>
 <ol>
-<li>With your meshes selected, move the mouse over the <strong>3D Viewport</strong> and press <strong>N</strong>.</li>
-<li>Open the <strong>DRS Editor</strong> tab on the right.</li>
-<li>In <strong>Model Setup</strong>, click <strong>Set Up Model</strong>.</li>
+<li>Select your model meshes.</li>
+<li>Open <strong>DRS Editor → Model Setup → Set Up Model</strong>.</li>
 <li>Choose <strong>Static Object</strong>, enter a name such as <code>object_stone_block</code>, and keep
    <strong>Include Selected Meshes</strong> enabled.</li>
 <li>Leave <strong>Collision Support</strong> off for now and click <strong>OK</strong>.</li>
 </ol>
 <p><img alt="Set up a static model from selected meshes" src="../../assets/images/guides/static/setup.png" /></p>
 <h3 id="where-to-put-your-meshes">Where to put your meshes<a class="headerlink" href="#where-to-put-your-meshes" title="Permanent link">&para;</a></h3>
-<p>Look at the <strong>Outliner</strong>, Blender's object list at the top right:</p>
+<p>Your model's structure in the Outliner:</p>
 <div class="highlight"><span class="filename">Text Only</span><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>DRSModel_object_stone_block
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── GameOrientation
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>└── Meshes_Collection
@@ -869,11 +867,8 @@ Set Up Model create it for you.</p>
 </div>
 <details class="tip">
 <summary>Advanced: add another mesh</summary>
-<ol>
-<li>Select the new mesh and press <strong>M</strong> to move it into this model's <strong>Meshes_Collection</strong>.</li>
-<li>With the mesh selected, Shift-select <strong>GameOrientation</strong> in the Outliner.</li>
-<li>Move the mouse over the 3D Viewport and press <strong>Ctrl+P → Object (Keep Transform)</strong>.</li>
-</ol>
+<p>Move the new mesh into this model's <strong>Meshes_Collection</strong> and parent it to
+<strong>GameOrientation</strong> using <strong>Object (Keep Transform)</strong>.</p>
 <p>Use the GameOrientation from the same model. Keep existing rigged meshes
 attached to their armature.</p>
 </details>
@@ -881,11 +876,8 @@ attached to their armature.</p>
 <p><span id="4-model-the-object"></span></p>
 <h2 id="3-check-your-model">3. Check your model<a class="headerlink" href="#3-check-your-model" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Use mesh objects. Convert text, curves or metaballs with <strong>Object → Convert → Mesh</strong>.</li>
-<li>Apply geometry modifiers such as Mirror or Bevel before export. Keep an editable copy.</li>
-<li>UV unwrap your mesh before adding textures.</li>
-<li>Use one DRS material per mesh. For a foreign mesh with several materials,
-  enter <strong>Edit Mode</strong>, press <strong>A</strong>, then <strong>P → By Material</strong>.</li>
+<li>Use UV-mapped meshes with geometry modifiers applied.</li>
+<li>Use one DRS material per mesh. Separate multi-material meshes by material.</li>
 <li>Check size and facing against an imported game object if you have one available.</li>
 </ul>
 <p>Already imported a DRS and only changed its shape? Keep its existing material and go to step 6.</p>
@@ -914,9 +906,8 @@ Choose <strong>Default</strong> as the material type and keep <strong>Artist Vie
 <p>For an imported DRS, keep the assigned textures or replace the ones you want to change.
 For a foreign model, load its textures here.</p>
 <p><img alt="Default material with a color texture assigned" src="../../assets/images/guides/static/material.png" /></p>
-<p>Switch the viewport to <strong>Material Preview</strong> to check the result.
-For a lit preview, click <strong>DRS Editor → Render Setup → Add Render</strong>,
-then switch to <strong>Rendered</strong> shading. Press <strong>F12</strong> for a camera render.</p>
+<p>Check the result in <strong>Material Preview</strong>.
+For a lit preview, use <strong>DRS Editor → Render Setup → Add Render</strong>.</p>
 <p><img alt="The static object in a lit render setup" src="../../assets/images/guides/static/render.png" /></p>
 <p>For cut-out leaves or fences, enable <strong>EnableAlphaTest</strong> under <strong>Material Flags</strong>.
 See the <a href="../material_artist_workflow/">Default Material Guide</a> for more material options.</p>
@@ -927,15 +918,15 @@ See the <a href="../material_artist_workflow/">Default Material Guide</a> for mo
 <ol>
 <li>Add cubes, spheres or cylinders and fit them around your model.</li>
 <li>Move them into <strong>Boxes_Collection</strong>, <strong>Spheres_Collection</strong> or <strong>Cylinders_Collection</strong>.</li>
-<li>Parent them to <strong>GameOrientation</strong> with <strong>Ctrl+P → Object (Keep Transform)</strong>.</li>
-<li>Select each shape and set <strong>Object Properties → Viewport Display → Display As → Wire</strong>.</li>
+<li>Parent them to <strong>GameOrientation</strong> using <strong>Object (Keep Transform)</strong>.</li>
+<li>Set the collision helpers to <strong>Wire</strong> display.</li>
 </ol>
 <p>Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.
 After export, reimport with collision shapes enabled and check their fit.</p>
 </details>
 <h2 id="6-export">6. Export<a class="headerlink" href="#6-export" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Save your <code>.blend</code> file and select one mesh belonging to the model.</li>
+<li>Select a mesh belonging to the model.</li>
 <li>Open <strong>DRS Editor → Model Setup → Export DRS</strong>.</li>
 <li>Choose a separate output folder and a filename such as <code>object_stone_block.drs</code>.</li>
 <li>Check <strong>Static Object (no collision)</strong>, or <strong>Static Object (with collision)</strong> if appropriate.</li>
@@ -1005,7 +996,7 @@ After export, reimport with collision shapes enabled and check their fit.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 18:36:13 UTC">October 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 18:37:49 UTC">October 30, 2026</span>
   </span>
 
     
