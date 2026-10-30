@@ -6,19 +6,19 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Official documentation for the DRS file format & the Blender Import/Export Plugin. Includes the DRS format manual (subclasses, attributes) and tutorials for installation, import, and export.">
+        <meta name="description" content="Artist guides for creating, painting, animating and exporting Skylords Reborn models in Blender.">
       
       
         <meta name="author" content="Maxxxel">
       
       
-        <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/drs/common/">
+        <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/material_artist_workflow/">
       
       
-        <link rel="prev" href="../header/">
+        <link rel="prev" href="../advanced_shading_guide/">
       
       
-        <link rel="next" href="../cgeomesh/">
+        <link rel="next" href="../advanced_locators_guide/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Common - Battleforge Blender Plugin & DRS Format Documentation</title>
+        <title>Default Material Guide - Skylords Reborn Blender Artist Guides</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#common-structures" class="md-skip">
+        <a href="#default-material-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -98,7 +98,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-header__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-header__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
       
   <img src="../../assets/images/favicon.png" alt="logo">
 
@@ -111,13 +111,13 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Battleforge Blender Plugin & DRS Format Documentation
+            Skylords Reborn Blender Artist Guides
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Common
+              Default Material Guide
             
           </span>
         </div>
@@ -237,12 +237,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-nav__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-nav__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
       
   <img src="../../assets/images/favicon.png" alt="logo">
 
     </a>
-    Battleforge Blender Plugin & DRS Format Documentation
+    Skylords Reborn Blender Artist Guides
   </label>
   
     <div class="md-nav__source">
@@ -290,8 +290,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -309,6 +311,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -318,13 +326,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -345,7 +351,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -363,14 +369,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../plugin/object_creation_guide/" class="md-nav__link">
+      <a href="../model_artist_pipeline/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Object Creation Guide
+    Artist Model Pipeline
   
 
     
@@ -391,7 +397,35 @@
   
   
     <li class="md-nav__item">
-      <a href="../../plugin/unit_creation_buide/" class="md-nav__link">
+      <a href="../object_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Static Object Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unit_creation_buide/" class="md-nav__link">
         
   
   
@@ -419,7 +453,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../plugin/building_creation_guide/" class="md-nav__link">
+      <a href="../building_creation_guide/" class="md-nav__link">
         
   
   
@@ -447,7 +481,35 @@
   
   
     <li class="md-nav__item">
-      <a href="../../plugin/advanced_shading_guide/" class="md-nav__link">
+      <a href="../object_setup_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Object Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_shading_guide/" class="md-nav__link">
         
   
   
@@ -455,185 +517,6 @@
     
   
     Advanced Shading Guide
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../plugin/advanced_locators_guide/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Advanced Locators Guide
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../plugin/advanced_abilities_guide/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Advanced Abilities Guide
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../plugin/advanced_effects_guide/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Advanced Effects Guide
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-    
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    DRS Structures
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    DRS Structures
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../header/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Header
   
 
     
@@ -670,7 +553,7 @@
   <span class="md-ellipsis">
     
   
-    Common
+    Default Material Guide
   
 
     
@@ -688,7 +571,7 @@
   <span class="md-ellipsis">
     
   
-    Common
+    Default Material Guide
   
 
     
@@ -714,22 +597,44 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#face" class="md-nav__link">
+  <a href="#1-open-the-material-editor" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Face
+        1. Open the Material Editor
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Face">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-add-your-textures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Add your textures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Add your textures">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#index-capacity-versus-exporter-limits" class="md-nav__link">
+  <a href="#choose-where-surface-values-come-from" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Index Capacity Versus Exporter Limits
+        Choose where surface values come from
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#paint-a-texture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Paint a texture
       
     </span>
   </a>
@@ -742,10 +647,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#vertex-vector4" class="md-nav__link">
+  <a href="#3-enable-the-features-you-need" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Vertex (Vector4)
+        3. Enable the features you need
       
     </span>
   </a>
@@ -753,10 +658,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#vector3" class="md-nav__link">
+  <a href="#4-adjust-the-appearance" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Vector3
+        4. Adjust the appearance
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Adjust the appearance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#moving-textures-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Moving textures: flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bending-in-the-wind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bending in the wind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reflections-and-refraction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reflections and refraction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-check-the-whole-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Check the whole model
       
     </span>
   </a>
@@ -764,32 +719,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#matrix3x3" class="md-nav__link">
+  <a href="#if-something-looks-wrong" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Matrix3x3
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#matrix4x4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Matrix4x4
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cmatcoordinatesystem" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CMatCoordinateSystem
+        If something looks wrong
       
     </span>
   </a>
@@ -805,79 +738,6 @@
 
               
             
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Geometry
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Geometry
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
               
                 
   
@@ -885,14 +745,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../cgeomesh/" class="md-nav__link">
+      <a href="../advanced_locators_guide/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CGeoMesh
+    Advanced Locators Guide
   
 
     
@@ -913,14 +773,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../cgeoprimitivecontainer/" class="md-nav__link">
+      <a href="../advanced_abilities_guide/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CGeoPrimitiveContainer
+    Advanced Abilities Guide
   
 
     
@@ -941,529 +801,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../cgeoobbtree/" class="md-nav__link">
+      <a href="../advanced_effects_guide/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CGeoOBBTree
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../collisionshape/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    collisionShape
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../cdspmeshfile/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDspMeshFile
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Animation & Effects
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Animation & Effects
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../cskskininfo/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CSkSkinInfo
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../cskskeleton/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CSkSkeleton
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../cdspjointmap/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDspJointMap
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../cdrwlocatorlist/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDrwLocatorList
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../animationset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    AnimationSet
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../animationtimings/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    AnimationTimings
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../effectset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    EffectSet
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
-        
-          
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Miscellaneous
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Miscellaneous
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../drwresourcemeta/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    DrwResourceMeta
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
-        
-          
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../glossary/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Glossary (Enums)
+    Advanced Effects Guide
   
 
     
@@ -1504,272 +849,268 @@
   
 
 
-<h1 id="common-structures">Common Structures<a class="headerlink" href="#common-structures" title="Permanent link">&para;</a></h1>
-<p>Canonical definitions for small, frequently reused data structures across DRS classes.<br />
-These structs are referenced by multiple classes such as <code>CGeoMesh</code>, <code>CGeoSubset</code>, and <code>CGeoMaterial</code>.</p>
-<hr />
-<h2 id="face">Face<a class="headerlink" href="#face" title="Permanent link">&para;</a></h2>
-<p><a id="face-struct"></a></p>
-<p>A <code>Face</code> represents a <strong>triangle</strong> defined by <strong>three 16-bit vertex indices</strong> into a mesh’s <code>vertices</code> array.</p>
+<h1 id="default-material-guide">Default Material Guide<a class="headerlink" href="#default-material-guide" title="Permanent link">&para;</a></h1>
+<p>Use this guide to set up <strong>Default</strong> materials in Blender 5. Other material
+types are covered in the <a href="../advanced_shading_guide/">advanced reference</a>.</p>
+<h2 id="1-open-the-material-editor">1. Open the Material Editor<a class="headerlink" href="#1-open-the-material-editor" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Select the part of your model you want to edit.</li>
+<li>In the 3D Viewport, press <strong>N</strong> and open <strong>DRS Editor &gt; Material Editor</strong>.</li>
+<li>If needed, click <strong>Create DRS Material</strong> or <strong>Create / Upgrade DRS Material</strong>.</li>
+<li>Set <strong>Material Type</strong> to <strong>Default</strong>. Stay in <strong>Artist View</strong>.</li>
+</ol>
+<p>An imported model usually already has its material. Upgrading an older setup
+creates a new material and keeps the old one. Check the textures afterward.</p>
+<h2 id="2-add-your-textures">2. Add your textures<a class="headerlink" href="#2-add-your-textures" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Textures</strong>. Assign each image to its matching slot and tick the box beside
+it to include it. You do not need to connect shader nodes or change image settings.</p>
 <table>
 <thead>
 <tr>
-<th style="text-align: right;">Field</th>
-<th>Type</th>
-<th>Description</th>
+<th>Slot</th>
+<th>What to put here</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: right;"><code>i0</code></td>
-<td><code>ushort</code></td>
-<td>Index of first vertex (0-based)</td>
+<td><strong>ColorMap</strong></td>
+<td>The model's color texture, usually named <code>_col</code>. Start here.</td>
 </tr>
 <tr>
-<td style="text-align: right;"><code>i1</code></td>
-<td><code>ushort</code></td>
-<td>Index of second vertex (0-based)</td>
+<td><strong>NormalMap</strong></td>
+<td>Surface detail such as cracks and bumps, usually <code>_nor</code>.</td>
 </tr>
 <tr>
-<td style="text-align: right;"><code>i2</code></td>
-<td><code>ushort</code></td>
-<td>Index of third vertex (0-based)</td>
+<td><strong>ParamMap</strong></td>
+<td>A packed texture controlling surface properties, usually <code>_par</code>.</td>
+</tr>
+<tr>
+<td><strong>FluidMap</strong></td>
+<td>The moving color layer for effects such as lava, usually <code>_flu</code>.</td>
+</tr>
+<tr>
+<td><strong>EnvironmentMap</strong></td>
+<td>A reflection cubemap. Optional; see reflections below.</td>
+</tr>
+<tr>
+<td><strong>RefractionParamMap</strong></td>
+<td>A distortion texture for the view behind the model. Optional.</td>
+</tr>
+<tr>
+<td><strong>ScratchMap</strong></td>
+<td>A texture whose alpha controls the scratch darkening effect. Optional.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Notes</strong>
-- Each face always references exactly <strong>three vertices</strong> — only triangles are supported.
-- The 16-bit limit applies to <strong>each stored vertex index</strong>, not to the number of triangles. Count fields in the enclosing mesh blocks are separate 32-bit integers.</p>
-<h3 id="index-capacity-versus-exporter-limits">Index Capacity Versus Exporter Limits<a class="headerlink" href="#index-capacity-versus-exporter-limits" title="Permanent link">&para;</a></h3>
+<p>Leave unused maps disabled. For imported models, keep the original slot assignments;
+filenames alone do not decide how the game uses a texture.</p>
+<p>Enable <strong>Auto map flags</strong> to keep the normal and parameter-map switches in sync
+with your assigned maps. <strong>Calculate Map Flags</strong> updates them once instead.
+Neither button chooses transparency or reflection settings for you.</p>
+<h3 id="choose-where-surface-values-come-from">Choose where surface values come from<a class="headerlink" href="#choose-where-surface-values-come-from" title="Permanent link">&para;</a></h3>
+<p>Use <strong>Parameter Source</strong> in Textures:</p>
 <table>
 <thead>
 <tr>
-<th>Constraint</th>
-<th>Description</th>
+<th>Choice</th>
+<th>Use it when…</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>0 ≤ index ≤ 65,535</code></td>
-<td>Range of one unsigned 16-bit index. This can address 65,536 distinct zero-based vertex slots.</td>
+<td><strong>Packed _par / _spec</strong></td>
+<td>You already have a packed parameter texture. For Default, assign it to ParamMap.</td>
 </tr>
 <tr>
-<td><code>index &lt; vertex_count</code></td>
-<td>Every index must refer to an existing vertex.</td>
+<td><strong>Separate artist maps</strong></td>
+<td>You have separate roughness, metalness, mask and emission images. The plugin packs them on export. Use matching image sizes.</td>
 </tr>
 <tr>
-<td><code>index_count = face_count * 3</code></td>
-<td>Each triangle consumes three indices; this does not make <code>index_count</code> a 16-bit field.</td>
-</tr>
-<tr>
-<td>Exporter validation: at most <code>32,767</code> vertices</td>
-<td>A separate implementation check on each render mesh and on the combined welded mesh, not a limit derived from the index field's width.</td>
+<td><strong>Scalar values</strong></td>
+<td>You want one value across the whole mesh. Edit the sliders in Material Parameters.</td>
 </tr>
 </tbody>
 </table>
-<p>There is <strong>no supported deduction of a 21,845-triangle limit</strong> from three <code>ushort</code> indices per face. Reusing vertices allows many triangles to reference the same vertex slots. No additional game-side triangle-count limit has been established here; a wider serialized count is not a guarantee that arbitrarily large meshes work in game.</p>
-<p>Sources: <a href="../../definitions/base_types.py#L60">Face serialization</a>, <a href="../../definitions/mesh_definitions.py">mesh definitions</a>, <a href="../../utilities/drs_utility.py#L420">current vertex-count validation</a>.</p>
-<hr />
-<h2 id="vertex-vector4">Vertex (Vector4)<a class="headerlink" href="#vertex-vector4" title="Permanent link">&para;</a></h2>
-<p><a id="vertex-struct"></a></p>
-<p>A <code>Vertex</code> used by many classes is a <strong>4D float vector</strong> where <code>w</code> is always <code>1.0</code>.</p>
+<p>For a Default parameter texture, the channels are:</p>
 <table>
 <thead>
 <tr>
-<th style="text-align: right;">Component</th>
-<th>Type</th>
-<th>Description</th>
+<th>Channel</th>
+<th>Controls</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: right;"><code>x</code></td>
-<td><code>float</code></td>
-<td>X coordinate</td>
+<td><strong>Red</strong></td>
+<td>Smoothness: higher values make smoother highlights.</td>
 </tr>
 <tr>
-<td style="text-align: right;"><code>y</code></td>
-<td><code>float</code></td>
-<td>Y coordinate</td>
+<td><strong>Green</strong></td>
+<td>Metalness: higher values make the surface more metallic.</td>
 </tr>
 <tr>
-<td style="text-align: right;"><code>z</code></td>
-<td><code>float</code></td>
-<td>Z coordinate</td>
+<td><strong>Blue</strong></td>
+<td>The flow mask. In reflection variants it also controls reflection contribution.</td>
 </tr>
 <tr>
-<td style="text-align: right;"><code>w</code></td>
-<td><code>float</code></td>
-<td>Always <code>1.0</code> (homogeneous coordinate)</td>
+<td><strong>Alpha</strong></td>
+<td>Emissivity: the surface's glow contribution. This is not transparency.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Notes</strong>
-- The extra component <code>w</code> exists for alignment and homogeneous transform support.
-- Importers typically ignore <code>w</code> since it’s constant.</p>
-<hr />
-<h2 id="vector3">Vector3<a class="headerlink" href="#vector3" title="Permanent link">&para;</a></h2>
-<p><a id="vector3"></a></p>
-<p>A 3D point or direction, stored as three <strong>32-bit floats</strong> (<code>x</code>, <code>y</code>, <code>z</code>).<br />
-Total size: <strong>12 bytes</strong>. </p>
+<p>In Separate artist maps mode, roughness is converted to smoothness automatically.
+Use grayscale images; the plugin reads each image's red channel. Missing separate
+maps fall back to the packed map, or zero if none is assigned.</p>
+<p><strong>Why did the sliders disappear?</strong> A parameter map replaces Smoothness,
+Metalness, Reflectivity and Emissivity. Edit the map instead. Choose Scalar
+values if you want to use those sliders.</p>
+<h3 id="paint-a-texture">Paint a texture<a class="headerlink" href="#paint-a-texture" title="Permanent link">&para;</a></h3>
+<p>Click <strong>Paint</strong> beside the texture slot you want to edit. The plugin creates
+an editable, packed working image, keeps any existing strokes, and selects it
+for both image and model painting. Original game files stay unchanged. Reusing
+Paint continues on the same working image. Edited textures are converted back
+to DDS when you export the model.</p>
+<p>Some compressed DDS images can show painted pixels in the Image Editor while
+the model still displays old GPU texture data. Paint avoids that path by using
+an uncompressed working image. After painting, save your image to a separate
+PNG with <strong>Image &gt; Save As</strong>, and save your <code>.blend</code> file.</p>
+<p>Imported UVs may sit a whole tile below the base image. This comes from the
+V-axis conversion and looks the same with Repeat sampling. Paint shows one image and leaves the UVs unchanged. UVs below the base tile
+can remain outside the visible image; this does not change Repeat sampling
+on the model. Shared or overlapping UVs make a brush stroke appear on every mesh
+part using those pixels. For unique painting on each part, give it unique UV
+space and texture content first.</p>
+<h2 id="3-enable-the-features-you-need">3. Enable the features you need<a class="headerlink" href="#3-enable-the-features-you-need" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Material Flags</strong>. Leave imported flags alone unless you are changing that
+feature.</p>
 <table>
 <thead>
 <tr>
-<th>Component</th>
-<th>Type</th>
-<th style="text-align: right;">Bytes</th>
-<th>Notes</th>
+<th>Setting</th>
+<th>When to use it</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>x</code></td>
-<td>float</td>
-<td style="text-align: right;">4</td>
-<td>little-endian IEEE-754</td>
+<td><strong>UseParameterMap</strong></td>
+<td>Use the packed or separate parameter maps. Auto map flags can handle this.</td>
 </tr>
 <tr>
-<td><code>y</code></td>
-<td>float</td>
-<td style="text-align: right;">4</td>
-<td></td>
+<td><strong>UseNormalMap</strong></td>
+<td>Use your NormalMap. Auto map flags can handle this.</td>
 </tr>
 <tr>
-<td><code>z</code></td>
-<td>float</td>
-<td style="text-align: right;">4</td>
-<td></td>
+<td><strong>EnableAlphaTest</strong></td>
+<td>Cut holes in a surface, such as the spaces between leaves. Pixels below the alpha cutoff are discarded. This does not enable smooth, glass-like transparency.</td>
+</tr>
+<tr>
+<td><strong>UseEnvironmentMap</strong></td>
+<td>Add reflections from a cubemap.</td>
+</tr>
+<tr>
+<td><strong>DecalMode</strong></td>
+<td>Use the game's decal rendering path. Leave it off for ordinary solid models.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Usage</strong><br />
-Common across geometry and animation data (e.g., <code>CGeoAABox</code>, marker positions/directions, etc.). </p>
-<p><strong>Constraints / Conventions</strong>
-- Exactly 3 floats; no padding or <code>w</code> component.
-- Coordinate meaning depends on the parent structure (position vs. direction). </p>
-<hr />
-<h2 id="matrix3x3">Matrix3x3<a class="headerlink" href="#matrix3x3" title="Permanent link">&para;</a></h2>
-<p><a id="matrix3x3"></a></p>
-<p>A 3×3 <strong>linear basis</strong> stored as <strong>9 floats</strong> in <strong>row-major</strong> order. Its interpretation depends on the consuming block; it is not universally a unit-length rotation matrix.
-Total size: <strong>36 bytes</strong>. </p>
+<p>For cutouts, put the opacity mask in <strong>ColorMap alpha</strong>. Keep ParamMap alpha
+for emissivity. The game's final transparency also depends on its rendering
+setup; check the edges in the Map Editor.</p>
+<h2 id="4-adjust-the-appearance">4. Adjust the appearance<a class="headerlink" href="#4-adjust-the-appearance" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Material Parameters</strong> and enable the values you want to export.
+Only controls relevant to your setup appear in Artist View. Numeric sliders
+stop at the supported minimum and maximum; you do not need to manage range
+warnings.</p>
+<ul>
+<li><strong>Saturation:</strong> lower it to reduce color intensity.</li>
+<li><strong>SpecularScale (approx.):</strong> adjusts highlight strength. Blender previews an
+  approximation, so check the final result in the Map Editor.</li>
+<li><strong>Scratch:</strong> controls darkening from ScratchMap alpha. It needs a ScratchMap.</li>
+<li><strong>Smoothness, Metalness, Reflectivity, Emissivity:</strong> available in Scalar values
+  mode. With maps enabled, edit the corresponding map channels instead.</li>
+</ul>
+<h3 id="moving-textures-flow">Moving textures: flow<a class="headerlink" href="#moving-textures-flow" title="Permanent link">&para;</a></h3>
+<p>Assign <strong>FluidMap</strong> and a parameter map with a <strong>blue flow mask</strong>. Blue marks
+where the fluid layer blends into the base color. Press <strong>Space</strong> to play the
+timeline; the mesh itself does not have to move.</p>
+<p>To adjust the movement, open <strong>Flow — Speed and Direction</strong> and enable
+<strong>Custom Flow Settings</strong>:</p>
+<ul>
+<li><strong>Minimum Speed / Maximum Speed:</strong> the direction and speed range on each axis.
+  Use the same minimum and maximum for steady movement.</li>
+<li><strong>Speed Variation:</strong> how the speed changes within that range.</li>
+<li><strong>Pattern Scale:</strong> the size of the flow pattern.</li>
+</ul>
+<p>Leave Custom Flow Settings off to use the engine defaults. This does not disable flow.</p>
+<h3 id="bending-in-the-wind">Bending in the wind<a class="headerlink" href="#bending-in-the-wind" title="Permanent link">&para;</a></h3>
+<p>In Material Parameters, enable <strong>WindResponse</strong> and <strong>WindHeight</strong>.
+Start with a small WindResponse within <strong>0–0.1</strong>; zero means no movement.
+WindHeight (<strong>0–10</strong>) sets where bending begins along the model's game height
+axis. Increase it to keep more of the base still. The plugin adds the preview
+automatically. Press <strong>Space</strong> to see it. During Texture Paint, wind deformation
+is paused to keep the surface stable; it returns when you leave paint mode.
+Exported wind values are unchanged.</p>
+<h3 id="reflections-and-refraction">Reflections and refraction<a class="headerlink" href="#reflections-and-refraction" title="Permanent link">&para;</a></h3>
+<p>For reflections, enable <strong>UseEnvironmentMap</strong>. Assign an EnvironmentMap in
+Textures, or use <strong>Use Bundled Environment</strong> when that helper is shown.
+The game can use a fallback environment when no map is assigned.</p>
+<p>For refraction, assign <strong>RefractionParamMap</strong>, then adjust <strong>RefractionScale</strong>
+and <strong>RefractionColor</strong>. The preview is set up automatically. Refraction distorts
+the view behind the surface; it is separate from reflections and alpha cutouts.
+Blender approximates this effect and does not reproduce the game's refraction blur.
+See <a href="../advanced_shading_guide/">refraction details</a> only
+if you need to author the texture channels yourself.</p>
+<h2 id="5-check-the-whole-model">5. Check the whole model<a class="headerlink" href="#5-check-the-whole-model" title="Permanent link">&para;</a></h2>
+<p>Open <strong>DRS Editor &gt; Render Setup</strong> and click <strong>Add Render</strong>. This adds lights,
+a camera and a ground setup around the whole model in your current scene.
+The setup includes a Sun (<strong>Warm daylight</strong>), a sky fill light and a world
+background. Switch the viewport shading to <strong>Rendered</strong>. Press <strong>Space</strong> for flow
+and wind.</p>
+<p><strong>Exposure</strong> in Render Setup adjusts overall brightness. The default is <strong>0</strong>;
+<strong>1</strong> makes the whole image twice as bright, including glowing textures. It
+does not add a missing light. For stronger directional light, adjust the Sun's
+Energy in Blender's Light Data Properties.</p>
+<p><img alt="Nomad model preview rendered in Blender" src="../../assets/images/guides/default-nomad-preview.png" /></p>
+<p><em>Example Blender preview. The Map Editor remains the final check for game lighting and effects.</em></p>
+<p>Export a test, import it again, and check it in the Map Editor before sharing it.</p>
+<h2 id="if-something-looks-wrong">If something looks wrong<a class="headerlink" href="#if-something-looks-wrong" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Row</th>
-<th>Elements</th>
-<th>Type</th>
-<th style="text-align: right;">Bytes</th>
+<th>Problem</th>
+<th>Check first</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>0</td>
-<td><code>m00 m01 m02</code></td>
-<td>float</td>
-<td style="text-align: right;">12</td>
+<td>No material controls</td>
+<td>Select a mesh with an active DRS material.</td>
 </tr>
 <tr>
-<td>1</td>
-<td><code>m10 m11 m12</code></td>
-<td>float</td>
-<td style="text-align: right;">12</td>
+<td>Texture has no effect</td>
+<td>Check the slot checkbox and its matching material flag.</td>
 </tr>
 <tr>
-<td>2</td>
-<td><code>m20 m21 m22</code></td>
-<td>float</td>
-<td style="text-align: right;">12</td>
+<td>Smoothness or metalness sliders have no effect</td>
+<td>The parameter map may be supplying those values instead.</td>
+</tr>
+<tr>
+<td>Flow or wind is still</td>
+<td>Play the timeline with Space. Check the map or WindResponse.</td>
+</tr>
+<tr>
+<td>Rendered view is dark</td>
+<td>Use Add Render to add lighting.</td>
+</tr>
+<tr>
+<td>Blender and game look different</td>
+<td>Compare in the Map Editor; lighting, reflections and refraction have preview limits.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Usage</strong><br />
-Represents orientation in <code>CMatCoordinateSystem</code> and other transforms. Stored/serialized as 9 consecutive floats. </p>
-<p><strong>Constraints / Conventions</strong>
-- Check the consuming block before normalizing the basis. OBB nodes deliberately include box size in the matrix; normalizing those vectors would discard the dimensions.
-- Scale behavior for other block types is not established by the shared storage layout alone. Preserve imported values rather than assuming either universal scale support or a universal prohibition.
-- Serialization is strictly 9 floats; no implicit translation.</p>
-<hr />
-<h2 id="matrix4x4">Matrix4x4<a class="headerlink" href="#matrix4x4" title="Permanent link">&para;</a></h2>
-<p><a id="matrix4x4"></a></p>
-<p>A full <strong>4×4 transform matrix</strong> stored as <strong>16 floats</strong> in <strong>row-major</strong> order.<br />
-Total size: <strong>64 bytes</strong>. </p>
-<table>
-<thead>
-<tr>
-<th>Row</th>
-<th>Elements</th>
-<th>Type</th>
-<th style="text-align: right;">Bytes</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>0</td>
-<td><code>m00 m01 m02 m03</code></td>
-<td>float</td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td>1</td>
-<td><code>m10 m11 m12 m13</code></td>
-<td>float</td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td>2</td>
-<td><code>m20 m21 m22 m23</code></td>
-<td>float</td>
-<td style="text-align: right;">16</td>
-</tr>
-<tr>
-<td>3</td>
-<td><code>m30 m31 m32 m33</code></td>
-<td>float</td>
-<td style="text-align: right;">16</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Usage</strong><br />
-Used where a complete affine transform is required (e.g., skeleton super-parent). Written row by row. </p>
-<p><strong>Constraints / Conventions</strong>
-- 16 floats, no extra padding.<br />
-- Meaning of the last column/row follows typical affine layout; specific interpretation depends on the consuming block. </p>
-<hr />
-<h2 id="cmatcoordinatesystem">CMatCoordinateSystem<a class="headerlink" href="#cmatcoordinatesystem" title="Permanent link">&para;</a></h2>
-<p><a id="cmatcoordinatesystem"></a></p>
-<p>Compact transform pairing a <strong>linear basis</strong> (<code>Matrix3x3</code>) with <strong>position</strong> (<code>Vector3</code>).
-Total size: <strong>48 bytes</strong> (<code>36 + 12</code>). </p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th style="text-align: right;">Bytes</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>matrix</code></td>
-<td><code>Matrix3x3</code></td>
-<td style="text-align: right;">36</td>
-<td>Block-specific linear basis (row-major)</td>
-</tr>
-<tr>
-<td><code>position</code></td>
-<td><code>Vector3</code></td>
-<td style="text-align: right;">12</td>
-<td>Translation (x, y, z)</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Usage</strong>
-- Core transform used by many blocks: <code>SLocator</code>, <code>OBBNode</code>, <code>BoxShape</code>, <code>CylinderShape</code>, <code>SphereShape</code>, etc.<br />
-- Always serialized as 9 floats (matrix) followed by 3 floats (position). </p>
-<p><strong>Constraints / Conventions</strong>
-- There is no <strong>separate</strong> scale field, but the 3×3 matrix can encode scale. For OBB nodes, the exporter explicitly multiplies axes by their half-extents before serialization.
-- Whether another consumer accepts scaled bases is a separate engine question; it remains unverified here for locators and collision primitives. Do not infer that any arbitrary Blender transform is supported in every block.
-- See the <a href="../cgeoobbtree/#obbnode">OBB notes</a> and the <a href="../../utilities/drs_utility.py#L3338">OBB exporter</a> before interpreting axis lengths or changing normalization.</p>
+<p>Need raw records, channel evidence or export-only parameters? Open the
+<a href="../advanced_shading_guide/">advanced material reference</a>. You do not need
+Debug View for the normal workflow.</p>
 
 
 
@@ -1792,7 +1133,7 @@ Total size: <strong>48 bytes</strong> (<code>36 + 12</code>). </p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 17:25:34 UTC">October 30, 2026</span>
   </span>
 
     
@@ -1802,7 +1143,7 @@ Total size: <strong>48 bytes</strong> (<code>36 + 12</code>). </p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 17:25:34 UTC">October 30, 2026</span>
   </span>
 
     

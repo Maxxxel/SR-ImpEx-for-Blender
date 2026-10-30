@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Official documentation for the DRS file format & the Blender Import/Export Plugin. Includes the DRS format manual (subclasses, attributes) and tutorials for installation, import, and export.">
+        <meta name="description" content="Artist guides for creating, painting, animating and exporting Skylords Reborn models in Blender.">
       
       
         <meta name="author" content="Maxxxel">
@@ -15,10 +15,10 @@
         <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_shading_guide/">
       
       
-        <link rel="prev" href="../building_creation_guide/">
+        <link rel="prev" href="../object_setup_reference/">
       
       
-        <link rel="next" href="../advanced_locators_guide/">
+        <link rel="next" href="../material_artist_workflow/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Advanced Shading Guide - Battleforge Blender Plugin & DRS Format Documentation</title>
+        <title>Advanced Shading Guide - Skylords Reborn Blender Artist Guides</title>
       
     
     
@@ -98,7 +98,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-header__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-header__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
       
   <img src="../../assets/images/favicon.png" alt="logo">
 
@@ -111,7 +111,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Battleforge Blender Plugin & DRS Format Documentation
+            Skylords Reborn Blender Artist Guides
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -237,12 +237,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-nav__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-nav__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
       
   <img src="../../assets/images/favicon.png" alt="logo">
 
     </a>
-    Battleforge Blender Plugin & DRS Format Documentation
+    Skylords Reborn Blender Artist Guides
   </label>
   
     <div class="md-nav__source">
@@ -311,6 +311,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -363,6 +369,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../model_artist_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Artist Model Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../object_creation_guide/" class="md-nav__link">
         
   
@@ -370,7 +404,7 @@
   <span class="md-ellipsis">
     
   
-    Object Creation Guide
+    Static Object Guide
   
 
     
@@ -427,6 +461,34 @@
     
   
     Building Creation Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../object_setup_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Object Setup
   
 
     
@@ -515,23 +577,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="1. Start with the DRS material layout">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#names-are-part-of-the-integration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Names are part of the integration
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -542,34 +587,6 @@
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="2. Texture suffixes and channels">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#combined-parameter-map-recommended-baseline" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Combined parameter map: recommended baseline
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#separate-maps-channel-aware-authoring" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Separate maps: channel-aware authoring
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -604,41 +621,13 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="5. Refraction and environment cubemaps">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#refraction-map-and-color" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Refraction map and color
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#model-level-environment-helper" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Model-level environment helper
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-flu-animation-and-flow" class="md-nav__link">
+  <a href="#6-flow-animation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Flu animation and Flow
+        6. Flow animation
       
     </span>
   </a>
@@ -668,35 +657,30 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
+  <a href="#soft-transparency-for-a-simple-surface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Troubleshooting
+        Soft transparency for a simple surface
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Soft transparency for a simple surface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#keep-flow-on-a-soft-edged-waterfall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keep flow on a soft-edged waterfall
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#implementation-and-format-references" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Implementation and format references
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-guides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Guides
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -704,6 +688,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../material_artist_workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Default Material Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -800,801 +812,6 @@
   
 
     
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    DRS Structures
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    DRS Structures
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/header/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Header
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/common/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Common
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Geometry
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Geometry
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeomesh/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoMesh
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeoprimitivecontainer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoPrimitiveContainer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeoobbtree/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoOBBTree
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/collisionshape/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    collisionShape
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdspmeshfile/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDspMeshFile
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Animation & Effects
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Animation & Effects
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cskskininfo/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CSkSkinInfo
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cskskeleton/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CSkSkeleton
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdspjointmap/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDspJointMap
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdrwlocatorlist/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDrwLocatorList
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/animationset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    AnimationSet
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/animationtimings/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    AnimationTimings
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/effectset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    EffectSet
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
-        
-          
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Miscellaneous
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Miscellaneous
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/drwresourcemeta/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    DrwResourceMeta
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
-        
-          
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../glossary/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Glossary (Enums)
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
   </ul>
 </nav>
                   </div>
@@ -1616,380 +833,69 @@
 
 
 <h1 id="advanced-shading-guide">Advanced Shading Guide<a class="headerlink" href="#advanced-shading-guide" title="Permanent link">&para;</a></h1>
-<p>Use this guide to prepare DRS materials, choose texture channels, and edit the material data written by the exporter. The same material workflow applies to static objects, units, and building meshes; their collection and animation setup is covered in the <a href="#related-guides">creation guides</a>.</p>
-<blockquote>
-<p><strong>Preview is not export.</strong> The Blender shader previews selected DRS features. Export collects images, repacks parameter channels, and writes material flags, refraction color, flow vectors, and wind values. It does <strong>not</strong> bake an arbitrary Blender shader or guarantee identical in-game lighting, transparency, or animation.</p>
-</blockquote>
+<p>For the current Blender 5 material system, use the <a href="../material_artist_workflow/">Artist Material Workflow</a>. This page is a practical overview; this guide covers extra painting and shading tasks and preview limits.</p>
 <h2 id="1-start-with-the-drs-material-layout">1. Start with the DRS material layout<a class="headerlink" href="#1-start-with-the-drs-material-layout" title="Permanent link">&para;</a></h2>
-<ol>
-<li>Use an imported DRS material as a reference, or assign the bundled <strong>DRS Material</strong> asset from the Asset Browser's <strong>DRS_Material</strong> catalog. Scene initialization registers the <strong>Battleforge Assets</strong> library; choose it or <strong>All Libraries</strong> in the browser.</li>
-<li>Select your render mesh inside <code>Meshes_Collection</code>. The material panels also accept meshes in <code>GroundDecal_Collection</code>.</li>
-<li>Open the <strong>Shading</strong> workspace and make the intended material the object's <strong>active material</strong>. The exporter reads that material, not a separate material for every face slot. Split objects when different exported materials are needed.</li>
-<li>Assign images to the existing labeled texture nodes. Keep a valid active UV map on the mesh: export calculates tangents and reads those UVs.</li>
-<li>In the 3D Viewport sidebar (<code>N</code>), open <strong>DRS Editor → Material</strong>. Use <strong>Flags (bool_parameter)</strong>, <strong>Flow</strong>, <strong>Wind</strong>, and <strong>Cubemap Helper</strong> for object-level settings.</li>
-</ol>
-<p>Flags, flow, and wind belong to the <strong>object</strong>. Shader links and images belong to the <strong>material</strong>. If two meshes need independent previews or texture assignments, make their materials single-user before changing them.</p>
-<h3 id="names-are-part-of-the-integration">Names are part of the integration<a class="headerlink" href="#names-are-part-of-the-integration" title="Permanent link">&para;</a></h3>
-<p>Do not rename or replace the exporter-used nodes while reorganizing the graph:</p>
-<ul>
-<li><strong>DRS Shader</strong> is the named <strong>Principled BSDF</strong> node, not the processing group.</li>
-<li><strong>AIO DRS Engine</strong> is the group label; its node name is <code>DRS_Engine_Group</code> and its node-tree name is <code>AIO_DRS_Engine</code>.</li>
-<li>Keep the texture labels in the table below, plus <strong>Separate Metallic</strong>, <strong>Separate Roughness</strong>, <strong>Separate Emission</strong>, <strong>Separate Flu Mask</strong>, and <strong>Refraction Color</strong>.</li>
-<li>Keep <strong>Apply Flu Mask</strong> and <strong>Mix Refraction Shader</strong>: UI callbacks use those labels to enable or mute preview branches.</li>
-</ul>
-<p>The runtime builder's layout is the reference if an older asset has different nodes. Merely renaming an unrelated shader does not reproduce its supported connections. See the <a href="../../blender/drs_material.py">material builder</a>.</p>
+<p>Select the render mesh and open <strong>DRS Editor &gt; Material Editor</strong>. Choose <strong>Create / Upgrade DRS Material</strong> when needed. An upgrade creates a new material; keep the previous version until you have checked the result. Choose the appropriate engine material handler and assign its textures and parameters. An arbitrary Blender node graph is not baked into a game shader.</p>
 <h2 id="2-texture-suffixes-and-channels">2. Texture suffixes and channels<a class="headerlink" href="#2-texture-suffixes-and-channels" title="Permanent link">&para;</a></h2>
-<p>Suffixes identify the generated texture roles; the material's <strong>node labels and assigned images</strong> are also important for discovery. Renaming an image file alone does not enable its export.</p>
-<table>
-<thead>
-<tr>
-<th>Suffix</th>
-<th>Image node label</th>
-<th>Verified use</th>
-<th>Export condition / format</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>_col</code></td>
-<td><strong>Color Map (_col)</strong></td>
-<td>Color feeds base color and emission color. Alpha feeds the opacity preview when alpha test or decal mode is enabled.</td>
-<td>Required image; DXT5 DDS.</td>
-</tr>
-<tr>
-<td><code>_nor</code></td>
-<td><strong>Normal Map (_nor)</strong></td>
-<td>Color passes through Blender's Normal Map node. The importer sets <strong>Non-Color</strong>.</td>
-<td><strong>Use Normal Map (Bit 17)</strong>; DXT1 DDS.</td>
-</tr>
-<tr>
-<td><code>_par</code></td>
-<td><strong>Parameter Map (_par)</strong></td>
-<td><strong>R = metallic, G = roughness, B = flu mask, A = emission strength</strong>. The importer sets <strong>Non-Color</strong> and <strong>Channel Packed</strong> alpha.</td>
-<td><strong>Use Parameter Map (Bit 16)</strong>; repacked DXT5 DDS.</td>
-</tr>
-<tr>
-<td><code>_flu</code></td>
-<td><strong>Flu Map Layer 1</strong>, <strong>Flu Map Layer 2</strong></td>
-<td>Tileable color image; import assigns the same sRGB image to both preview layers.</td>
-<td>Bit 16 and a detected flu image; one DXT5 DDS, not two independent layer textures.</td>
-</tr>
-<tr>
-<td><code>_ref</code></td>
-<td><strong>Refraction Map (_ref)</strong></td>
-<td>Color controls the internal refraction/transparent preview mix; alpha controls the final opaque/refraction mix. <strong>Refraction Color</strong> is a separate RGB value. Import sets the map to <strong>Non-Color</strong>.</td>
-<td>Effective Bit 18 and a detected refraction image; DXT5 DDS.</td>
-</tr>
-<tr>
-<td><code>_env</code></td>
-<td><strong>Environment Cubemap (_env)</strong></td>
-<td>Model-level image on the cubemap helper, not an ordinary mesh texture node.</td>
-<td><strong>Use Env/Cube Map (Bit 18)</strong> with an assigned helper image; DXT5 cubemap.</td>
-</tr>
-</tbody>
-</table>
-<p>The <code>_par</code> green channel is used directly as <strong>roughness</strong> in the Blender graph; it is not inverted into smoothness. The separate numeric <code>smoothness</code> entry in the DRS format is not this texture channel.</p>
-<p><strong>Engine interpretation versus add-on convention:</strong> the table documents the current Blender shader and exporter packing. Older research-template comments suggested red might be ambient occlusion, green specular, and blue roughness when no flu map is present. Those are historical hypotheses, not confirmed engine semantics. Keep the current channel layout; do not swap channels or label the old interpretation as verified without controlled in-game comparisons.</p>
-<p>Likewise, historical Paint.NET notes recommending DXT3 for color or DXT1 for refraction are not the current export settings and do not establish an exclusive list of engine-supported DDS formats. The formats in the table describe what this add-on currently generates.</p>
-<h3 id="combined-parameter-map-recommended-baseline">Combined parameter map: recommended baseline<a class="headerlink" href="#combined-parameter-map-recommended-baseline" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Prepare one RGBA image with the packing shown above. Preserve alpha: here it carries emission, not opacity.</li>
-<li>Assign it to <strong>Parameter Map (_par)</strong>; use <strong>Non-Color</strong> and <strong>Channel Packed</strong> alpha when assigning a new image manually.</li>
-<li>Leave the group's <strong>Use Separate Maps</strong> input off, and enable <strong>Use Parameter Map (Bit 16)</strong> in the sidebar.</li>
-<li>Clear unused images from the <strong>Separate …</strong> nodes. Export prefers assigned separate metallic, roughness, and emission images over the combined image, even when <strong>Use Separate Maps</strong> is off in the preview.</li>
-</ol>
-<p>A flu mask of zero selects the color-map side of the preview mix; a mask of one selects the animated flu-color side. Emission strength uses <code>_par</code> alpha, while the emission color comes from <code>_col</code>.</p>
-<h3 id="separate-maps-channel-aware-authoring">Separate maps: channel-aware authoring<a class="headerlink" href="#separate-maps-channel-aware-authoring" title="Permanent link">&para;</a></h3>
-<p>The graph exposes <strong>Separate Maps (Artist Override)</strong> and the <strong>Use Separate Maps</strong> group input. This input switches the <strong>preview</strong> between combined and separate sources; it is not a DRS flag and does not by itself select export sources.</p>
-<p>The packing helper reads the following channels from its resolved images:</p>
-<table>
-<thead>
-<tr>
-<th>Source</th>
-<th>Channel copied into exported <code>_par</code></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Metallic source</td>
-<td>Red → R</td>
-</tr>
-<tr>
-<td>Roughness source</td>
-<td>Green → G</td>
-</tr>
-<tr>
-<td>Flu-mask source</td>
-<td>Blue → B</td>
-</tr>
-<tr>
-<td>Emission source</td>
-<td>Alpha → A</td>
-</tr>
-</tbody>
-</table>
-<p>For RGB grayscale metallic or roughness images, put the intended value in all RGB channels. A separate RGBA emission image must carry the intended strength in <strong>alpha</strong>, not only in RGB. The separate preview inputs use the image's <strong>Color</strong> output, so an emission image whose RGB and alpha differ can preview differently from its export.</p>
-<p>The packer accepts either one shared image for all resolved channels, or a distinct image for every supplied channel. Partially reused images mixed with different images are rejected. Distinct images must have identical width and height. Unresolved channels are filled with <strong>0</strong>, not the shader socket's preview default. The group's declared separate-input defaults are metallic <code>0</code>, roughness <code>0.8</code>, emission <code>0</code>, and flu mask <code>0</code>; linked nodes can override those preview defaults.</p>
-<blockquote>
-<p><strong>Current flu-mask limitation:</strong> the standard export path first resolves the group's <strong>Flu Mask</strong> output by searching upstream for an image whose label contains <code>_par</code>. With the generated graph, this favors the combined parameter image; an image assigned only to <strong>Separate Flu Mask</strong> is not a reliable exported B source. For fluid materials, prefer a combined <code>_par</code> and check its blue channel after export. Do not assume the visible separate-mask preview proves it was written.</p>
-</blockquote>
-<p>These are image-packing rules, not shader evaluation: procedural nodes, ramps, scalar defaults, and arbitrary graph edits are not baked into parameter textures. See <a href="../../utilities/drs_utility.py"><code>create_mesh</code> and the packing helper</a>.</p>
+<p>For inspected Default variants, the parameter map uses <strong>R smoothness, G metalness, B flow mask or reflection input depending on the shader variant, and A emissivity</strong>. The same texture identifier has other meanings in legacy specular handlers, so use the selected material type rather than guessing from a filename. Color-map opacity is separate from parameter-map alpha.</p>
+<p>When using separate artist maps, the current packer converts roughness to <code>1 - roughness</code> for R, writes metalness to G, the flow/reflection input to B and emissivity to A. Use matching dimensions; missing separate maps fall back to the packed map or zero.</p>
 <h2 id="3-material-flags-supported-controls-versus-unknowns">3. Material flags: supported controls versus unknowns<a class="headerlink" href="#3-material-flags-supported-controls-versus-unknowns" title="Permanent link">&para;</a></h2>
-<p>Open <strong>Material → Flags (bool_parameter)</strong>. New object properties start with <strong>Raw bool_parameter = 0</strong>; imported objects are populated from their file. Prefer the labeled toggles over manual raw-integer edits, because the toggles also update the supported preview connections.</p>
-<table>
-<thead>
-<tr>
-<th>UI control</th>
-<th>Implemented Blender / export behavior</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Enable Alpha Test (Bit 0)</strong></td>
-<td>Connects <code>_col</code> alpha to <strong>DRS Shader</strong> alpha; exported as a flag.</td>
-</tr>
-<tr>
-<td><strong>Decal Mode (Bit 1)</strong></td>
-<td>Also enables that alpha connection; exported as a flag. It does not create a decal mesh or projection setup.</td>
-</tr>
-<tr>
-<td><strong>Use Parameter Map (Bit 16)</strong></td>
-<td>Connects <code>_par</code> data for preview; gates <code>_par</code> and <code>_flu</code> export.</td>
-</tr>
-<tr>
-<td><strong>Use Normal Map (Bit 17)</strong></td>
-<td>Connects the normal texture for preview; gates <code>_nor</code> export.</td>
-</tr>
-<tr>
-<td><strong>Use Refraction Map (Bit 18)</strong></td>
-<td>Requires a loaded <strong>Refraction Map (_ref)</strong> image; enables the refraction preview branch.</td>
-</tr>
-<tr>
-<td><strong>Use Env/Cube Map (Bit 18)</strong></td>
-<td>Requires a loaded helper image; controls helper visibility and requests <code>_env</code> export.</td>
-</tr>
-<tr>
-<td><strong>Disable Receive Shadows (Bit 20)</strong></td>
-<td>Named flag stored for export; no corresponding Blender shadow-preview callback is implemented here.</td>
-</tr>
-<tr>
-<td><strong>Enable SH Lighting (Bit 21)</strong></td>
-<td>Named flag stored for export; no corresponding Blender lighting-preview callback is implemented here.</td>
-</tr>
-<tr>
-<td><strong>Unknown Bitflag … (Bit N)</strong></td>
-<td>Uninterpreted flags. Preserve known-good imported values rather than choosing bits from their names.</td>
-</tr>
-</tbody>
-</table>
-<p>With both alpha/decal flags off, the callback disconnects color alpha and sets preview alpha to 1. With either enabled, it uses the color image's <strong>Straight</strong> alpha mode. This is not evidence that every in-game alpha/decal rendering detail is reproduced.</p>
-<p>The refraction and environment controls are <strong>two sources for the same exported Bit 18</strong>, not two independent file bits. Export recomputes that bit from enabled paths that actually have images; setting the raw integer alone cannot substitute for the required assets. The refraction-data writer then checks this effective bit, so an assigned <code>_ref</code> image can also be written when only the environment path enabled Bit 18. Clear an unused refraction image rather than relying solely on its preview toggle.</p>
+<p>Flag labels depend on the material handler; a bit does not necessarily have a universal meaning. <strong>Calculate Map Flags</strong> or <strong>Auto map flags</strong> calculates the Default material's parameter and normal map bits from enabled images while retaining other bits. Preserve unknown imported flags unless you have a reason to change them. Review the resulting material in the game.</p>
 <h2 id="4-normal-maps">4. Normal maps<a class="headerlink" href="#4-normal-maps" title="Permanent link">&para;</a></h2>
-<ol>
-<li>Assign the image to <strong>Normal Map (_nor)</strong> and use <strong>Non-Color</strong>.</li>
-<li>Enable <strong>Use Normal Map (Bit 17)</strong> on each mesh that needs it.</li>
-<li>Keep the generated connection through <strong>AIO DRS Engine → Normal → DRS Shader</strong> and keep a valid UV layout.</li>
-</ol>
-<p>The exporter resolves an image rather than baking normal-processing nodes, then converts it to DXT1. No extra normal-channel inversion is performed by the shown material builder or packing path. If a source asset uses a different convention, compare against a working imported material instead of assuming a green-channel flip is required.</p>
+<p>Assign the normal image to its supported texture slot and enable the appropriate flag. Treat it as non-color data. The exporter calculates geometry tangents from the active UV layer; check UV seams and compare a fresh import.</p>
 <h2 id="5-refraction-and-environment-cubemaps">5. Refraction and environment cubemaps<a class="headerlink" href="#5-refraction-and-environment-cubemaps" title="Permanent link">&para;</a></h2>
-<h3 id="refraction-map-and-color">Refraction map and color<a class="headerlink" href="#refraction-map-and-color" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Load an image into <strong>Refraction Map (_ref)</strong> before enabling <strong>Use Refraction Map (Bit 18)</strong>. An enable attempt without an image is rejected with a notice.</li>
-<li>Set the <strong>Refraction Color</strong> RGB node; the generated node defaults to white <code>(1, 1, 1)</code>.</li>
-<li>Inspect the material in a shading mode that evaluates its nodes. The preview uses a glass/transparent branch, the parameter-map roughness, and the normal-map result. Enabling the branch also enables backface culling; disabling it mutes the branch and disables that culling setting.</li>
-<li>Check the exported texture and RGB value after a round trip. Changing internal glass IOR, mix nodes, or other Blender-only settings does not serialize those shader edits into DRS.</li>
-</ol>
-<p>The preview wiring establishes how Blender uses the map, not a complete specification of the game's refraction algorithm. When Bit 18 is inactive, export writes a zero refraction color. When active, it reads the labeled <strong>Refraction Color</strong> node; if that node cannot be found, the export fallback is black.</p>
-<h3 id="model-level-environment-helper">Model-level environment helper<a class="headerlink" href="#model-level-environment-helper" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Select a mesh under the intended <code>DRSModel_&lt;basename&gt;</code> root and open <strong>Material → Cubemap Helper</strong>.</li>
-<li>Click <strong>Add Cubemap (Earth Base)</strong>. This creates or resets <code>Environment_Collection</code> / <code>Environment_Cubemap</code> using the bundled earth cubemap when available. Check <strong>Model Cubemap → Assigned</strong>, not just that a helper object exists.</li>
-<li>To use a custom image, select the helper and replace the image on <strong>Environment Cubemap (_env)</strong> in its material. Keep that node label/name and the helper collection intact. Re-select the render mesh afterward.</li>
-<li>Enable <strong>Use Env/Cube Map (Bit 18)</strong> for each mesh that should request the model's cubemap. Adding the helper alone is not that per-mesh export request.</li>
-<li>Use <strong>Debug Export Cubemap</strong> to check conversion independently. It writes a timestamped DDS to the add-on's <code>sr_impex/debug</code> folder; it is not a complete model export. <strong>Remove Cubemap</strong> removes the model helper, so check all dependent meshes afterward.</li>
-</ol>
-<p>The export converter supports square-face <strong>6×1 horizontal strips</strong>, <strong>1×6 vertical strips</strong>, and a <strong>4×3 cross</strong>. Strip order is <code>+X, -X, +Y, -Y, +Z, -Z</code> (left-to-right or top-to-bottom). The cross uses this layout; each entry is one square tile:</p>
-<table>
-<thead>
-<tr>
-<th></th>
-<th>Column 1</th>
-<th>Column 2</th>
-<th>Column 3</th>
-<th>Column 4</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Top</td>
-<td>—</td>
-<td>+Y</td>
-<td>—</td>
-<td>—</td>
-</tr>
-<tr>
-<td>Middle</td>
-<td>-X</td>
-<td>+Z</td>
-<td>+X</td>
-<td>-Z</td>
-</tr>
-<tr>
-<td>Bottom</td>
-<td>—</td>
-<td>-Y</td>
-<td>—</td>
-<td>—</td>
-</tr>
-</tbody>
-</table>
-<p>The helper's automatic preview UV layout supports <strong>strips only</strong>; a cross can be accepted by export without receiving a correct helper preview. The helper is a textured emission cube, not a Blender world-lighting or reflection-capture system. Do not judge in-game environment behavior from its visibility alone. Cubemap conversion requires the bundled <code>texconv.exe</code> and <code>texassemble.exe</code>.</p>
-<h2 id="6-flu-animation-and-flow">6. Flu animation and Flow<a class="headerlink" href="#6-flu-animation-and-flow" title="Permanent link">&para;</a></h2>
-<ol>
-<li>Set up <code>_par</code> with a nonzero blue mask where flu color should appear and enable Bit 16.</li>
-<li>Assign the <strong>same tileable image</strong> to <strong>Flu Map Layer 1</strong> and <strong>Flu Map Layer 2</strong>. The generated preview repeats the images and crossfades two animated coordinate layers; export selects one flu image, so different images in the two nodes are not a supported two-texture export setup.</li>
-<li>Open <strong>Material → Flow</strong> and enable <strong>Write Flow</strong> when the four flow vectors should be written to the mesh material block.</li>
-<li>Set the vectors using a working imported asset as a starting point. Play or scrub the timeline to inspect the preview, then reimport an export to check the stored values.</li>
-</ol>
-<table>
-<thead>
-<tr>
-<th>Flow control</th>
-<th>New-object default</th>
-<th>What is verified</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Write Flow</strong></td>
-<td>Off</td>
-<td>Enables vector export; it is separate from the texture-enable flag.</td>
-</tr>
-<tr>
-<td><strong>Max Flow Speed</strong></td>
-<td><code>(0, 0, 0, 0)</code></td>
-<td>Four stored components; XYZ feeds preview <strong>MaxSpeed</strong>.</td>
-</tr>
-<tr>
-<td><strong>Min Flow Speed</strong></td>
-<td><code>(0, 0, 0, 0)</code></td>
-<td>XYZ feeds preview <strong>MinSpeed</strong>.</td>
-</tr>
-<tr>
-<td><strong>Flow Speed Change</strong></td>
-<td><code>(0, 0, 0, 0)</code></td>
-<td>XYZ feeds preview <strong>Frequency</strong>.</td>
-</tr>
-<tr>
-<td><strong>Flow Scale</strong></td>
-<td><code>(0, 0, 0, 0)</code></td>
-<td>XYZ feeds preview <strong>Scale</strong>, multiplying generated coordinates.</td>
-</tr>
-</tbody>
-</table>
-<p>The UI declares no extra min/max bounds for these vectors. All <strong>four components</strong> are exported when <strong>Write Flow</strong> is enabled, but the fourth component is not used by this preview. Its in-game meaning and the engine's units are not established here. The preview group interface starts with scale <code>(1, 1, 1)</code>, whereas object Flow properties start at zero; those are different defaults. A zero scale collapses the preview's spatial coordinate variation.</p>
-<p><strong>Write Flow</strong> gates serialization, not the shader's time driver. Conversely, Bit 16 gates <code>_par</code>/<code>_flu</code> texture export but does not automatically enable <strong>Write Flow</strong>. The preview's frame-driven oscillation is an approximation, not a measured copy of game timing.</p>
+<p>Default refraction uses a refraction texture, color and scale. For the inspected shader, RG shifts a screen-color sample, B influences mip bias and alpha contributes the filtered background. The camera compositor reproduces part of this behavior; its B-channel blur, render ordering, lighting and edge behavior are incomplete. Viewport refraction is a separate approximation. Refraction does not automatically enable an environment-map flag. Validate this effect in the Map Editor.</p>
+<p>Environment map handling also varies by material; Blender's environment response is an approximation of the game's renderer. Test it with the intended game resources.</p>
+<h2 id="6-flow-animation">6. Flow animation<a class="headerlink" href="#6-flow-animation" title="Permanent link">&para;</a></h2>
+<p>Assign a fluid map and parameter map, adjust the Default Flow controls, and play or scrub the timeline. Parameter-map B is the flow mask in the inspected flow shader. The preview uses recovered turbulence math and a deterministic animation sequence; game random history, texture format, shading coordinates and lighting can differ. <strong>Write Flow</strong> controls whether the named flow vectors are serialized, not whether the presence of a fluid map selects the game shader's flow path. Use the Custom Flow Settings controls to change movement.</p>
+<p>Flow uses the mesh's rest positions and advances while the timeline plays. Moving a bone should not drag the procedural fluid pattern through the surface; keeping the body still should not stop the flow. The plugin supplies the rest-position attribute automatically and upgrades older flow graphs when the timeline advances.</p>
+<p>During playback, flow continues when the SKA animation loops. Pausing holds the fluid; pressing Space again resumes it. Changing clips or clip FPS does not restart its motion. Scrubbing while paused sets the fluid to that timeline time. Renders use timeline time too, so rendering the same frame gives the same fluid pattern. This can differ from the continuously running viewport after several clip loops.</p>
+<p>The preview integrates flow at a fixed 60 updates per second. This is a repeatable Blender preview policy; the game's shared random state and rendering history can still produce a different pattern.</p>
 <h2 id="7-wind">7. Wind<a class="headerlink" href="#7-wind" title="Permanent link">&para;</a></h2>
-<p>Open <strong>Material → Wind</strong>. If the mesh has no generated wind modifier, click <strong>Add Wind Modifier</strong>; the controls remain disabled until a <code>WindEffect</code> Geometry Nodes modifier exists. Imported render meshes normally receive this modifier during material creation.</p>
-<table>
-<thead>
-<tr>
-<th>Control</th>
-<th>New-object default</th>
-<th>Declared UI range / preview use</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Wind Response</strong></td>
-<td><code>0.0</code></td>
-<td><code>0.0</code>–<code>0.1</code>; multiplies scene time before the preview's noise node.</td>
-</tr>
-<tr>
-<td><strong>Wind Height</strong></td>
-<td><code>0.0</code></td>
-<td>No explicit min/max bounds; lower threshold for the preview's height falloff.</td>
-</tr>
-</tbody>
-</table>
-<p>The current preview measures <strong>local Y</strong>, uses the mesh's local Y bounding-box span for the falloff's upper endpoint, and offsets positions along <strong>local X</strong>. It is not a world-Z height slider. Recheck the preview after editing mesh orientation or dimensions. Keep the modifier's <strong>Wind Response</strong> and <strong>Wind Height</strong> node names if editing its graph.</p>
-<p>Export stores these two object values in the material entries for wind response and wind height. It does not serialize the Geometry Nodes graph as an engine wind simulation. More generally, the exporter creates the numeric <strong>Materials</strong> block from defaults and overrides these wind entries; arbitrary Principled settings are not converted into the format's other numeric material parameters.</p>
+<p>In Default <strong>Material Parameters</strong>, enable WindResponse and WindHeight.
+The preview modifier is managed automatically. Play the timeline to see the
+movement. The engine uses height along local game Y and a world-space wind
+displacement. The preview follows the default engine wind field; individual
+maps can supply different wind. Wind pauses while painting and resumes when leaving Texture Paint.</p>
 <h2 id="8-export-and-verification-checklist">8. Export and verification checklist<a class="headerlink" href="#8-export-and-verification-checklist" title="Permanent link">&para;</a></h2>
-<ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Each render mesh has the intended <strong>active material</strong>, a valid active UV map, and the expected DRS node layout.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Color Map (_col)</strong> has a loaded image. Missing color data aborts mesh export; a flat Blender base color is not a replacement.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Bit 16/17 and refraction/environment toggles match the images actually assigned. Clear stale separate-map images before using a combined <code>_par</code>.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Parameter sources use a supported packing pattern and matching dimensions; emission is in alpha, and the exported blue flu mask is checked explicitly.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Both flu preview layers use the same image. <strong>Write Flow</strong> is enabled only when its vectors should be written.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Cubemap conversion succeeds, and required conversion executables remain in the add-on's resources folder.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Export into a separate output folder, inspect the generated DDS files and warnings, then reimport the DRS into a separate scene to compare textures, flags, refraction RGB, flow vectors, and wind values.</li>
-</ul>
-<p>The material exporter traverses supported image chains with a bounded search and role-label matching; it does not evaluate arbitrary node graphs. Prefer the generated layout to deep chains or renamed nodes. A file being created is not sufficient proof that every optional texture was exported: several missing-map and packing failures are reported without immediately aborting the whole model export.</p>
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Symptom</th>
-<th>Checks</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Material panels only show a selection notice</td>
-<td>Select a <strong>mesh</strong> in <code>Meshes_Collection</code> or <code>GroundDecal_Collection</code>, not an armature, helper, or the root collection.</td>
-</tr>
-<tr>
-<td>Mesh export stops at color-map setup</td>
-<td>Check the active material, <strong>DRS Shader</strong> name, <strong>Color Map (_col)</strong> image and label, and its connection to base color.</td>
-</tr>
-<tr>
-<td><code>_par</code> is absent or differs from preview</td>
-<td>Enable Bit 16; inspect separate-node overrides, source channels, dimensions, and mixed reused/distinct-image errors. Preview scalar defaults are not exported texture data.</td>
-</tr>
-<tr>
-<td>Fluid color or mask disappears</td>
-<td>Check Bit 16, both flu images, packed <code>_par</code> blue, and the separate-flu-mask limitation above. Toggle Bit 16 off/on after assigning images to refresh the mask preview callback.</td>
-</tr>
-<tr>
-<td>Normal map is absent</td>
-<td>Enable Bit 17; check <strong>Normal Map (_nor)</strong>, <strong>Non-Color</strong>, and the generated normal chain.</td>
-</tr>
-<tr>
-<td>Refraction/environment toggle turns itself off</td>
-<td>Assign the required image first. Check the sidebar notice and the helper's <strong>Assigned</strong> status. Raw Bit 18 alone is insufficient.</td>
-</tr>
-<tr>
-<td>Cubemap conversion fails</td>
-<td>Check layout dimensions, face order, the two bundled conversion tools, and the debug-export error log in <code>sr_impex/debug</code>. Cross preview UVs are not generated automatically.</td>
-</tr>
-<tr>
-<td>Flow seems static or uniform</td>
-<td>Check nonzero scale and speed values, timeline playback, and the flu mask. <strong>Write Flow</strong> controls export, not playback.</td>
-</tr>
-<tr>
-<td>Wind controls are disabled or falloff seems wrong</td>
-<td>Add the modifier, preserve its expected node names, and inspect local Y extent and <strong>Wind Height</strong>, not only world-space height.</td>
-</tr>
-<tr>
-<td>Two objects' previews change together</td>
-<td>Their material or processing node tree may be shared; inspect datablock users before making independent edits.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="implementation-and-format-references">Implementation and format references<a class="headerlink" href="#implementation-and-format-references" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../blender/drs_material.py">Material builder</a>: <code>_build_aio_engine_group_internals</code>, <code>_link_material_nodes</code>, map setters, and wind preview creation.</li>
-<li><a href="../../blender/editors/material_flow_editor.py">Material/Flow/Wind editor</a>: UI labels, property defaults/ranges, flag callbacks, and preview updates.</li>
-<li><a href="../../blender/editors/environment_cubemap_editor.py">Cubemap editor</a>: helper controls and debug export.</li>
-<li><a href="../../utilities/drs_utility.py">Import/export integration</a>: <code>create_material</code>, <code>setup_material_parameters</code>, <code>create_mesh</code>, <code>set_metallic_roughness_emission_map</code>, and cubemap conversion.</li>
-<li><a href="../../drs/cdspmeshfile/">CDspMeshFile format</a>: <a href="../../drs/cdspmeshfile/#materials">Materials</a>, <a href="../../drs/cdspmeshfile/#textures">Textures</a>, <a href="../../drs/cdspmeshfile/#refraction">Refraction</a>, and <a href="../../drs/cdspmeshfile/#flow">Flow</a> describe the stored blocks, not a complete engine shader specification.</li>
+<li>Use the correct active material and UV layer for each exported mesh. Confirm enabled images are present.</li>
+<li>Export to a separate folder, then inspect the DRS and DDS files and any referenced resources.</li>
+<li>Reimport the exported model into a fresh scene and compare the material and mesh.</li>
+<li>Check animations, wind, flow, refraction, alpha edges and lighting in the Map Editor or game. Blender preview is not a pixel-match guarantee.</li>
 </ul>
-<h2 id="related-guides">Related Guides<a class="headerlink" href="#related-guides" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Start with the <a href="../object_creation_guide/">Object Creation Guide</a>.</li>
-<li>For unit-specific export and animation setup, see the <a href="../unit_creation_buide/">Unit Creation Guide</a>.</li>
-<li>For building and state-based mesh setup, see the <a href="../building_creation_guide/">Building Creation Guide</a>.</li>
-</ul>
+<p>For supported and unresolved material families, raw records and texture conversion, see the <a href="../material_artist_workflow/">Artist Material Workflow</a>. For the complete model workflow, start with the <a href="../model_artist_pipeline/">Artist Model Pipeline</a>.</p>
+<h2 id="soft-transparency-for-a-simple-surface">Soft transparency for a simple surface<a class="headerlink" href="#soft-transparency-for-a-simple-surface" title="Permanent link">&para;</a></h2>
+<p>For a simple transparent mesh, try <strong>SimpleTextured</strong>. Assign its Texture with
+a grayscale opacity gradient in the image alpha channel: white is visible,
+black is transparent, and gray gives partial visibility. Start with white
+Color, material Alpha <strong>1</strong>, and UseVertexColor disabled. Lower material
+Alpha for an additional fade across the whole surface. Use a texture format
+that retains alpha.</p>
+<p>Alpha Test is a cutout operation and does not enable smooth transparency by
+itself. Do not put the opacity gradient in Default's ParamMap alpha; that
+channel controls emissivity.</p>
+<p>If transparent surfaces overlap incorrectly, try DisableDepthWrite while
+keeping depth testing enabled, and check the result in the Map Editor.
+Changing to SimpleTextured also changes the shader: it does not preserve
+Default's normal/PAR lighting or FluidMap flow. Test a flowing waterfall
+separately before replacing its existing material. This recipe is supported
+by engine/shader analysis; it has not been visually checked on every model.</p>
+<h3 id="keep-flow-on-a-soft-edged-waterfall">Keep flow on a soft-edged waterfall<a class="headerlink" href="#keep-flow-on-a-soft-edged-waterfall" title="Permanent link">&para;</a></h3>
+<p>If a waterfall already uses Default's FluidMap, keep that material for the
+first test. The game supports flow together with its refraction screen lookup.
+Start with <strong>RefractionScale 0</strong>, a white <strong>RefractionColor</strong>, and a refraction
+map with neutral RG and black B. This brings in the background without adding
+distortion or an extra blur bias.</p>
+<p>For a soft bottom edge, reduce the water contribution while increasing the
+background contribution in the same area. Refraction-map alpha adds background;
+it does not automatically fade out the water. Use the ParamMap blue flow mask
+to fade flow locally, and make sure the underlying ColorMap and any glow or
+highlights do not leave a solid edge. Disable Alpha Test for this test.</p>
+<p>A readable moving body with a fade near the bottom is a useful starting point.
+Only add subtle distortion after the edge works. Review the actual model in
+the Map Editor: this setup follows the engine shader, but a finished visual
+match depends on the model's existing textures and lighting.</p>
 
 
 
@@ -2012,7 +918,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 17:25:34 UTC">October 30, 2026</span>
   </span>
 
     
@@ -2022,7 +928,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 10, 2026 16:07:14 UTC">March 10, 2026</span>
   </span>
 
     

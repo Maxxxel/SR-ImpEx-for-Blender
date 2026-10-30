@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Official documentation for the DRS file format & the Blender Import/Export Plugin. Includes the DRS format manual (subclasses, attributes) and tutorials for installation, import, and export.">
+        <meta name="description" content="Artist guides for creating, painting, animating and exporting Skylords Reborn models in Blender.">
       
       
         <meta name="author" content="Maxxxel">
@@ -15,7 +15,7 @@
         <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_locators_guide/">
       
       
-        <link rel="prev" href="../advanced_shading_guide/">
+        <link rel="prev" href="../material_artist_workflow/">
       
       
         <link rel="next" href="../advanced_abilities_guide/">
@@ -29,7 +29,7 @@
     
     
       
-        <title>Advanced Locators Guide - Battleforge Blender Plugin & DRS Format Documentation</title>
+        <title>Advanced Locators Guide - Skylords Reborn Blender Artist Guides</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#advanced-locators-guide" class="md-skip">
+        <a href="#locator-editor" class="md-skip">
           Skip to content
         </a>
       
@@ -98,7 +98,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-header__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-header__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
       
   <img src="../../assets/images/favicon.png" alt="logo">
 
@@ -111,7 +111,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Battleforge Blender Plugin & DRS Format Documentation
+            Skylords Reborn Blender Artist Guides
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -237,12 +237,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-nav__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-nav__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
       
   <img src="../../assets/images/favicon.png" alt="logo">
 
     </a>
-    Battleforge Blender Plugin & DRS Format Documentation
+    Skylords Reborn Blender Artist Guides
   </label>
   
     <div class="md-nav__source">
@@ -311,6 +311,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -363,6 +369,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../model_artist_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Artist Model Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../object_creation_guide/" class="md-nav__link">
         
   
@@ -370,7 +404,7 @@
   <span class="md-ellipsis">
     
   
-    Object Creation Guide
+    Static Object Guide
   
 
     
@@ -447,6 +481,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../object_setup_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Object Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../advanced_shading_guide/" class="md-nav__link">
         
   
@@ -455,6 +517,34 @@
     
   
     Advanced Shading Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../material_artist_workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Default Material Guide
   
 
     
@@ -535,155 +625,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#before-you-start" class="md-nav__link">
+  <a href="#edit-a-locator" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Before You Start
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Before You Start">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#which-export-types-contain-locators" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Which export types contain locators?
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#locator-types-choose-a-role-not-a-required-set" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Locator Types: Choose a Role, Not a Required Set
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Locator Types: Choose a Role, Not a Required Set">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-belongs-in-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What belongs in File?
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#a-reliable-editing-workflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A Reliable Editing Workflow
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="A Reliable Editing Workflow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-create-or-choose-an-entry" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Create or choose an entry
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-set-metadata-and-attachment-before-positioning" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Set metadata and attachment before positioning
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-position-the-scene-object-then-save-its-transform" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Position the scene object, then save its transform
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-remove-through-the-editor" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Remove through the editor
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#gameorientation-and-attachment-spaces" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GameOrientation and Attachment Spaces
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="GameOrientation and Attachment Spaces">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#the-special-2-option" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The special -2 option
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#exactly-what-sync-from-scene-does" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exactly What Sync from Scene Does
+        Edit a locator
       
     </span>
   </a>
@@ -691,10 +636,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#persistence-previews-and-export" class="md-nav__link">
+  <a href="#choose-an-attachment" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Persistence, Previews, and Export
+        Choose an attachment
       
     </span>
   </a>
@@ -702,10 +647,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
+  <a href="#choose-and-preview-an-effect" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Troubleshooting
+        Choose and preview an effect
       
     </span>
   </a>
@@ -713,49 +658,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#checklists" class="md-nav__link">
+  <a href="#placement-and-export" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Checklists
+        Placement and export
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Checklists">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#before-placement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Before placement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#before-export" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Before export
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#related-guides-and-implementation-references" class="md-nav__link">
+  <a href="#common-problems" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Related Guides and Implementation References
+        Common problems
       
     </span>
   </a>
@@ -834,801 +751,6 @@
   
 
     
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    DRS Structures
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    DRS Structures
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/header/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Header
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/common/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Common
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Geometry
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Geometry
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeomesh/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoMesh
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeoprimitivecontainer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoPrimitiveContainer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeoobbtree/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoOBBTree
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/collisionshape/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    collisionShape
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdspmeshfile/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDspMeshFile
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Animation & Effects
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Animation & Effects
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cskskininfo/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CSkSkinInfo
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cskskeleton/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CSkSkeleton
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdspjointmap/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDspJointMap
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdrwlocatorlist/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDrwLocatorList
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/animationset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    AnimationSet
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/animationtimings/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    AnimationTimings
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/effectset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    EffectSet
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
-        
-          
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Miscellaneous
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Miscellaneous
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/drwresourcemeta/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    DrwResourceMeta
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
-        
-          
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../glossary/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Glossary (Enums)
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
   </ul>
 </nav>
                   </div>
@@ -1649,291 +771,100 @@
   
 
 
-<h1 id="advanced-locators-guide">Advanced Locators Guide<a class="headerlink" href="#advanced-locators-guide" title="Permanent link">&para;</a></h1>
-<p>Locators describe attachment points and functional positions: a health-bar offset, a projectile origin, a bone-following effect, or a referenced module. This guide covers editing those entries, preserving their coordinate spaces, and getting scene changes into the exported <code>CDrwLocatorList</code>.</p>
-<blockquote>
-<p><strong>Two rules prevent most export mistakes:</strong> the model collection's saved locator data, not viewport geometry, is exported; and bone-attached locators must remain attached to their bones, not be reparented directly to <code>GameOrientation</code>.</p>
-</blockquote>
-<h2 id="before-you-start">Before You Start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Start with an imported, working asset of the same kind whenever possible. Preserve its skeleton, locator types, and resource-reference conventions until replacements have been verified in-game.</li>
-<li>Make the <strong>top-level</strong> <code>DRSModel_&lt;basename&gt;</code> collection the active <strong>Layer Collection</strong> in the Outliner. Selecting a mesh, armature, or <code>SLocators_Collection</code> is not equivalent.</li>
-<li>Open the 3D Viewport sidebar (<strong>N</strong>) → <strong>DRS Editor</strong> → <strong>CDrwLocatorList</strong>.</li>
-<li>Keep the model's armature, and <code>GameOrientation</code> if used, inside this model's collection tree. The editor finds the first armature whose name does not contain <code>Control_Rig</code>; multiple candidate armatures can make attachment ambiguous.</li>
-<li>Keep a saved <code>.blend</code> backup before changing attachment rules or deleting entries.</li>
-</ul>
-<h3 id="which-export-types-contain-locators">Which export types contain locators?<a class="headerlink" href="#which-export-types-contain-locators" title="Permanent link">&para;</a></h3>
-<p>The current <code>WriteOrder</code> includes <code>CDrwLocatorList</code> for <strong>AnimatedUnit</strong>. The listed static/animated object and building export types do <strong>not</strong> include this block. Creating locator markers or a blob does not add a locator block to those formats automatically. A model's appearance or its use as a building does not, by itself, establish support for unit-style locators.</p>
-<p>For buildings, distinguish locator attachments from <a href="../advanced_effects_guide/">effects and audio</a>, construction data, and the building's own mesh/state setup. Follow the <a href="../building_creation_guide/">Building Creation Guide</a> and the requirements of a matching working asset rather than changing the export type solely to obtain locators.</p>
-<h2 id="locator-types-choose-a-role-not-a-required-set">Locator Types: Choose a Role, Not a Required Set<a class="headerlink" href="#locator-types-choose-a-role-not-a-required-set" title="Permanent link">&para;</a></h2>
-<p>These are the exact <strong>Type</strong> labels exposed by the editor. Their names describe intended roles; the add-on does not validate the game's requirements for a particular asset. Not every unit needs every type, and a type label alone does not make the associated gameplay behavior work.</p>
+<h1 id="locator-editor">Locator Editor<a class="headerlink" href="#locator-editor" title="Permanent link">&para;</a></h1>
+<p>Locators are attachment points for effects, projectiles, health bars and model parts.</p>
+<h2 id="edit-a-locator">Edit a locator<a class="headerlink" href="#edit-a-locator" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Select your model and open <strong>DRS Editor → Locator Editor</strong>.</li>
+<li>Select a locator in the list, or click <strong>+</strong> beside the list and choose its type.</li>
+<li>Choose <strong>Attach to</strong>. For a resource locator, select its <strong>Effect</strong> or <strong>Resource</strong>.</li>
+<li>Click <strong>Apply Changes</strong>.</li>
+<li>Move or rotate the marker in the viewport, then click <strong>Save Placement</strong>.</li>
+<li>Save your <code>.blend</code> and export the model.</li>
+</ol>
+<p>The list stays short; scroll to see more entries. <strong>−</strong> beside the list removes the selected locator record and its marker. Only relevant fields appear below the list. Hover over <strong>Attach to</strong> for a description of each choice.</p>
+<p>Changing an attachment starts the locator at its new attachment's origin. Changing only its type or filename keeps its placement. Apply pending detail edits before saving placement.</p>
+<h2 id="choose-an-attachment">Choose an attachment<a class="headerlink" href="#choose-an-attachment" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>ID</th>
-<th>Type</th>
-<th>Practical role / authoring guidance</th>
+<th>Choice</th>
+<th>What it means</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>0</td>
-<td><code>HealthBar</code></td>
-<td>A position for the health-bar/UI offset. Start from the placement of a comparable working unit.</td>
+<td><strong>Model</strong></td>
+<td>Moves with the model, without following a particular bone.</td>
 </tr>
 <tr>
-<td>1</td>
-<td><code>DestructiblePart</code></td>
-<td>Attachment for a referenced destructible module; the importer can load its static BMS mesh preview.</td>
+<td><strong>Skeleton</strong></td>
+<td>Gives the effect access to the model's skeleton, so the effect can use its own bone links.</td>
 </tr>
 <tr>
-<td>2</td>
-<td><code>Construction</code></td>
-<td>Construction-related point; preserve the reference asset's usage rather than assuming a universal setup.</td>
-</tr>
-<tr>
-<td>3</td>
-<td><code>Turret</code></td>
-<td>Turret-related entry. In the current importer, a non-empty <strong>File</strong> is loaded as an SKA animation on the model's armature, not as a generic turret mesh.</td>
-</tr>
-<tr>
-<td>4</td>
-<td><code>FxbIdle</code></td>
-<td>Idle-effect role. Verify the referenced effect and activation behavior against the asset.</td>
-</tr>
-<tr>
-<td>5</td>
-<td><code>Wheel</code></td>
-<td>Wheel/module attachment; the importer attempts to load an animated BMS module and its animations.</td>
-</tr>
-<tr>
-<td>6</td>
-<td><code>StaticPerm</code></td>
-<td>Static permanent-effect role; retain the working asset's conventions.</td>
-</tr>
-<tr>
-<td>7</td>
-<td><code>Unknown7</code></td>
-<td>Unresolved role. Preserve existing entries unless their behavior is known.</td>
-</tr>
-<tr>
-<td>8</td>
-<td><code>DynamicPerm</code></td>
-<td>Dynamic permanent-effect role; check attachment and resource behavior in-game.</td>
-</tr>
-<tr>
-<td>9–13</td>
-<td><code>DamageFlameSmall</code>, <code>DamageFlameSmallSmoke</code>, <code>DamageFlameLarge</code>, <code>DamageSmokeOnly</code>, <code>DamageFlameHuge</code></td>
-<td>Damage-effect positions. These labels are not a requirement to add all five.</td>
-</tr>
-<tr>
-<td>14–16</td>
-<td><code>SpellCast</code>, <code>SpellHitAll</code>, <code>Hit</code></td>
-<td>Spell/cast/hit-related positions; match the asset's actual effect and animation setup.</td>
-</tr>
-<tr>
-<td>29</td>
-<td><code>Projectile_Spawn</code></td>
-<td>Projectile-origin position/orientation where the game uses this role. Confirm direction and timing in-game.</td>
+<td><strong>Bone</strong></td>
+<td>Follows the bone you choose.</td>
 </tr>
 </tbody>
 </table>
-<h3 id="what-belongs-in-file">What belongs in File?<a class="headerlink" href="#what-belongs-in-file" title="Permanent link">&para;</a></h3>
-<p><strong>File</strong> becomes the locator's <code>file_name</code> string. It is a resource reference, not a sound-event editor or an automatic resource-packaging step.</p>
+<p>For imported models, keep the original attachment unless you intend to change it. <strong>Skeleton</strong> does not mean the first or root bone. Firedancer uses it for one persistent effect whose internal emitters attach to her head and hands.</p>
+<p>The old checkbox stored <strong>Model as -1</strong> and <strong>Skeleton as -2</strong>. These are real engine attachment modes. The new names replace the numeric checkbox; imported values are preserved.</p>
+<h2 id="choose-and-preview-an-effect">Choose and preview an effect<a class="headerlink" href="#choose-and-preview-an-effect" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Configure <strong>Skylords Reborn Folder</strong> in the add-on preferences. See the <a href="../advanced_effects_guide/">Effects Guide</a>.</li>
+<li>Select a <strong>Persistent Figure FX</strong> or <strong>Persistent Building FX</strong> locator.</li>
+<li>Click the search icon beside <strong>Effect</strong> to open <strong>Effect Selector</strong>. Search by name or choose a category.</li>
+<li><strong>Preview</strong> auditions the resource. <strong>Use Resource</strong> updates the draft filename; <strong>Cancel</strong> keeps the previous one.</li>
+<li>Click <strong>Apply Changes</strong>, then <strong>Update Preview</strong>. Press <strong>Space</strong> to play the timeline.</li>
+</ol>
+<p><strong>Audio</strong> and <strong>Live Update</strong> sit below the preview button. Live Update refreshes resource edits after you pause editing. <strong>×</strong> beside Update Preview clears the model's generated FX and audio. State-triggered effects require the corresponding game state; they are not automatically played as persistent effects.</p>
+<p>Firedancer's Idle fire comes from her persistent locator, not an Idle EffectSet entry. It can play without an animation event.</p>
+<p>Categories are filename hints. The source effect files remain external assets; assigning a reference does not copy them into the DRS. Create or edit effects in the external Effect Editor.</p>
+<h2 id="placement-and-export">Placement and export<a class="headerlink" href="#placement-and-export" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Leave it empty when the locator only defines a position and the asset does not require a resource there.</li>
-<li>Use the exact resource name/path expected by a working asset and the game. The editor stores the text as entered; it does not validate, copy, or convert the referenced resource. Do not assume Blender's file picker turns an absolute disk path or a <code>//</code> path into a usable game reference.</li>
-<li>For <code>DestructiblePart</code> and <code>Wheel</code>, the current preview loaders resolve the reference relative to the imported DRS directory. A trailing <code>.module</code> is replaced with <code>.bms</code>, and the BMS supplies the referenced DRS mesh/state data.</li>
-<li>For <code>Turret</code>, the current importer passes a non-empty reference to the SKA animation reader relative to the DRS directory. Do not substitute an arbitrary <code>.module</code> because the type sounds like a model attachment.</li>
-<li><code>.fxb</code> references can describe effects, but the locator importer does not currently build their effect visualization. A marker sphere is not evidence that the effect resource was found or will run.</li>
-<li>Configure audio variants such as <code>.snr</code>/<code>.wav</code>, sound types, and animation-keyed events in the <strong>EffectSet</strong> workflow, not by placing an audio filename in a locator. See the <a href="../advanced_effects_guide/">Advanced Effects Guide</a>.</li>
+<li>Use <strong>+</strong>, rather than duplicating marker objects. Duplicated markers can share the same internal identity.</li>
+<li>Use <strong>Save Placement</strong> after moving or rotating markers. Export uses saved locator data, not unsaved viewport movement.</li>
+<li>Deleting a marker alone does not remove its saved locator. Use <strong>−</strong> beside the list.</li>
+<li>Module references can show imported model parts. Changing a filename does not automatically rebuild construction geometry.</li>
+<li>Preserve imported unknown types. IDs 14 and 15 are not offered for new locators.</li>
+<li>Test attachments through representative animations and in the Map Editor after export.</li>
 </ul>
-<p>No concrete game resource filenames are prescribed here: use references verified in the installed/extracted assets being targeted.</p>
-<h2 id="a-reliable-editing-workflow">A Reliable Editing Workflow<a class="headerlink" href="#a-reliable-editing-workflow" title="Permanent link">&para;</a></h2>
-<h3 id="1-create-or-choose-an-entry">1. Create or choose an entry<a class="headerlink" href="#1-create-or-choose-an-entry" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Activate the correct top-level <code>DRSModel_&lt;basename&gt;</code> collection and open <strong>CDrwLocatorList</strong>.</li>
-<li>Click <strong>Add</strong>, choose <strong>Type</strong> in the dialog, and confirm; or select an existing row.</li>
-<li>Select the intended row explicitly. Selecting a row selects its matching scene object when one exists.</li>
-</ol>
-<p>New entries start with an empty <strong>File</strong>, no bone attachment, zero position, and identity rotation. The editor normally creates a small mesh sphere named <code>Locator_&lt;Type&gt;</code> under <code>SLocators_Collection</code>; locators are not necessarily Blender Empty objects. Imported module previews can instead be meshes or armatures.</p>
-<blockquote>
-<p><strong>Sync existing viewport edits before Add or another detail update.</strong> These operations reapply saved data to the model's locators, so unsaved scene offsets on other entries can be overwritten too.</p>
-</blockquote>
-<h3 id="2-set-metadata-and-attachment-before-positioning">2. Set metadata and attachment before positioning<a class="headerlink" href="#2-set-metadata-and-attachment-before-positioning" title="Permanent link">&para;</a></h3>
-<p>Under <strong>Selected Locator</strong>:</p>
-<ol>
-<li>Choose <strong>Type</strong> and enter <strong>File</strong>, if applicable.</li>
-<li>If the locator must follow a bone, choose it in <strong>Parent</strong>. If it is a model-root point, leave <strong>Parent</strong> empty.</li>
-<li>Click <strong>Update parent and remove transformations</strong> to commit those fields.</li>
-</ol>
-<p><strong>This button resets the selected entry's stored position to zero and rotation to identity every time</strong>, even if the parent did not change or only <strong>File</strong> was edited. A bone locator resets to its bone-local origin; a non-bone locator resets to the game-space origin, displayed through <code>GameOrientation</code> when available. It is not a keep-world-transform reparent command or Blender's Apply Transforms command.</p>
-<p>The optional popup editor also shows <strong>Position (view)</strong>. It is not the placement workflow: the update operator resets position rather than saving an entered offset. Position the actual scene object after the detail update.</p>
-<h3 id="3-position-the-scene-object-then-save-its-transform">3. Position the scene object, then save its transform<a class="headerlink" href="#3-position-the-scene-object-then-save-its-transform" title="Permanent link">&para;</a></h3>
-<ol>
-<li>Select the matching locator marker or module root in the viewport/Outliner.</li>
-<li>Move and rotate it to the required point. Keep the intended parent and avoid introducing scale as a substitute for placement.</li>
-<li>For a bone attachment, scrub relevant animations and check that the point follows the correct bone.</li>
-<li>Reactivate the top-level <code>DRSModel_&lt;basename&gt;</code> collection if selecting a child changed the active Layer Collection.</li>
-<li>Click <strong>Sync from Scene</strong>. This captures scene transforms into the saved locator data and reapplies the attachment rules.</li>
-<li>Save the <code>.blend</code> file after synchronizing.</li>
-</ol>
-<p>If metadata must change later, expect the update button to reset the offset: note the intended placement, commit the metadata, reposition the object, and sync again.</p>
-<h3 id="4-remove-through-the-editor">4. Remove through the editor<a class="headerlink" href="#4-remove-through-the-editor" title="Permanent link">&para;</a></h3>
-<p>Use <strong>Remove</strong> for an entry that should not export. It removes the saved entry and its matching scene object. Deleting only a viewport marker does not remove the saved entry; synchronization can recreate it.</p>
-<h2 id="gameorientation-and-attachment-spaces">GameOrientation and Attachment Spaces<a class="headerlink" href="#gameorientation-and-attachment-spaces" title="Permanent link">&para;</a></h2>
-<p><code>GameOrientation</code> (<strong>GO</strong>) is the model's game/display-space helper, not an export prerequisite or a universal replacement for bone parenting. The standard conversion includes a Y-axis mirror and rotations about X and Z, so treating it as only an ordinary rotation can produce incorrect offsets.</p>
-<blockquote>
-<p><strong>Good practice, not mandatory ordering:</strong> establish the model hierarchy early to make its coordinate spaces easier to reason about. Modeling first and then <strong>parent → correct rotation → apply the relevant mesh transforms</strong> is also a supported workflow; check the resulting game-space orientation and resync locator placement afterward. Not every mesh needs a direct GO parent: imported armature hierarchies and bone-locator relationships should remain intact.</p>
-</blockquote>
-<p>That mesh workflow is not a reason to apply transforms blindly to locator markers or imported armatures. Sync reads a locator's <strong>object transform</strong>, not the position/orientation baked into its sphere's vertices. Place/rotate the locator object and sync it; baking that placement into the marker mesh can lose the intended exported point.</p>
+<h2 id="common-problems">Common problems<a class="headerlink" href="#common-problems" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Locator attachment</th>
-<th>Scene representation used by the editor</th>
-<th>What Sync from Scene records</th>
+<th>Problem</th>
+<th>Check</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>No bone; GO found</td>
-<td>Object parent is <code>GameOrientation</code>; saved game-space transform is displayed through GO.</td>
-<td>For a <strong>direct GO child</strong>, removes GO's world transform from the object's world transform and stores game-space position/3×3 matrix; normally <code>bone_id = -1</code>.</td>
+<td>No locator list</td>
+<td>Select a mesh or collection belonging to the intended model.</td>
 </tr>
 <tr>
-<td>Valid bone</td>
-<td>Object parent is the armature, with <code>parent_type = BONE</code> and the selected bone. The armature may itself sit under GO.</td>
-<td>Object-local location and <code>matrix_basis</code> 3×3 matrix; the parent bone's index in that armature's bone list. GO is not stripped separately from this local offset.</td>
+<td>A bone attachment cannot be selected</td>
+<td>Import the model's skeleton first.</td>
 </tr>
 <tr>
-<td>No bone and no recognized GO parent</td>
-<td>No helper conversion is applied during capture.</td>
-<td>The object's world transform is stored directly. An arbitrary parent or indirect GO ancestor is not treated as the direct-GO case.</td>
+<td>A marker moves to the origin</td>
+<td>Changing attachment resets placement. Position it afterward and Save Placement.</td>
+</tr>
+<tr>
+<td>A locator returns after deleting its marker</td>
+<td>Remove the record with <strong>−</strong> beside the list.</td>
+</tr>
+<tr>
+<td>Export uses an old position</td>
+<td>Save Placement before exporting.</td>
+</tr>
+<tr>
+<td>The effect is missing</td>
+<td>Check the library path and resource filename, then Update Preview. Game-state FX may require their activation state.</td>
 </tr>
 </tbody>
 </table>
-<p>The editor materializes a non-bone entry by multiplying its saved game-space transform by GO's world matrix; it captures a direct GO child's transform using the inverse operation. With no GO helper, those saved values are used as world-space values instead.</p>
-<p><strong>Do not manually parent every locator to GO.</strong> Set attachment through <strong>Parent</strong> and the update button. Bone-following points must remain bone-attached; otherwise Sync will classify them as non-bone and lose that attachment. For a new manually created non-bone marker, establish its intended game-space placement before syncing; merely using “Keep Transform” to reparent can preserve the wrong space.</p>
-<p>The locator editor searches for the <strong>exact object name</strong> <code>GameOrientation</code> inside the active model's collection tree. A helper renamed to <code>GameOrientation.001</code> is not found by this lookup. This matters when multiple models are imported into one scene. Resolve helper naming/model isolation deliberately; do not compensate by rotating every locator or changing bone parents.</p>
-<h3 id="the-special-2-option">The special -2 option<a class="headerlink" href="#the-special-2-option" title="Permanent link">&para;</a></h3>
-<p>When an armature exists and <strong>Parent</strong> is empty, the editor exposes <strong>If None set Parent to -2</strong>. Committing the update writes <code>bone_id = -2</code> instead of <code>-1</code>; the option is described as allowing attachment to a bone specified in an effect. It is still a non-bone entry in Blender, not a selection of bone index 2.</p>
-<p>Use it only when the target asset/effect calls for it. For an imported <code>-2</code> entry, confirm the checkbox and commit it before positioning and syncing: import stores the numeric ID, whereas non-bone Sync chooses <code>-2</code> from the saved checkbox flag. As with other detail updates, committing the option resets the offset.</p>
-<h2 id="exactly-what-sync-from-scene-does">Exactly What Sync from Scene Does<a class="headerlink" href="#exactly-what-sync-from-scene-does" title="Permanent link">&para;</a></h2>
-<p><strong>Sync from Scene</strong> scans recursively through the active model collection, not just the selected marker or <code>SLocators_Collection</code>. It recognizes objects with the <code>_cdrw_uid</code> custom property or names beginning with <code>Locator_</code>.</p>
-<ul>
-<li>Matches existing entries by <code>_cdrw_uid</code>; assigns UIDs and appends entries for newly recognized objects.</li>
-<li>Records bone-local transforms for actual bone parents; otherwise records the non-bone transform according to the GO rules above.</li>
-<li>Updates <code>class_id</code> from an object's <code>_class_id</code> property when present. For a newly discovered marker without saved metadata, it infers the class from an exact <code>Locator_&lt;Type&gt;</code> name, otherwise defaults to <code>HealthBar</code>.</li>
-<li>Retains an existing entry's <strong>File</strong>; it does <strong>not</strong> read a resource reference from the object's <code>_file</code> property. New scene-discovered entries start with an empty <strong>File</strong>.</li>
-<li>Never removes saved entries merely because their scene objects were deleted.</li>
-<li>Reapplies saved data to the scene and refreshes the list after capture.</li>
-</ul>
-<p>Changing <strong>Type</strong>, <strong>File</strong>, <strong>Parent</strong>, or the <code>-2</code> checkbox in the UI is not committed by Sync. Use <strong>Update parent and remove transformations</strong>, then place the object and sync. Use <strong>Add</strong> rather than duplicating a locator object: duplicating its UID can make two objects compete for one saved entry. Renaming an existing marker does not replace its saved type/file metadata.</p>
-<h2 id="persistence-previews-and-export">Persistence, Previews, and Export<a class="headerlink" href="#persistence-previews-and-export" title="Permanent link">&para;</a></h2>
-<p>The authoritative data is the <code>CDrwLocatorListJSON</code> custom property on the <strong>model collection</strong>. It contains the version and locator entries, including their UIDs, class IDs, resource strings, bone IDs, position, rotation matrix, and preserved unknown integer. UIDs connect this data to scene objects; they are not exported as gameplay identifiers.</p>
-<ul>
-<li>DRS import saves the blob before optional module/locator visualization. Disabling <strong>Import Modules/Locators</strong> can leave valid locator data with no visible markers.</li>
-<li>Simply opening the list reads the saved data; it does not build missing previews. Sync can materialize missing objects, but it first captures any recognized objects already present, so use a backup and inspect the result.</li>
-<li><strong>Add</strong>, the detail update, and Sync materialize generic marker spheres when no matching object exists. They do not rebuild a referenced BMS module or an FXB simulation just because <strong>File</strong> changed.</li>
-<li>With <strong>Import Modules/Locators</strong> enabled, <code>DestructiblePart</code>/<code>Wheel</code> can load module previews. A non-empty <code>Turret</code> reference loads animation and returns without creating its own locator marker. Missing referenced files may cause import failures; preserving the blob does not supply those files.</li>
-<li>Export copies the blob to its working collection and converts that saved data to <code>SLocator</code> entries when the selected export type includes <code>CDrwLocatorList</code>. It does <strong>not</strong> perform an automatic scene sync or discover markers as a fallback.</li>
-<li>Missing locator data produces an empty list with a warning; malformed JSON is not a supported recovery path. Reimport a working source or restore a backup rather than hand-editing an uncertain blob.</li>
-</ul>
-<p>A sphere moving correctly in Blender proves only the scene attachment. Resource availability, effect activation, projectile direction, and gameplay behavior still need a matching game asset and an in-game check.</p>
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Symptom</th>
-<th>Check / correction</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>No valid DRSModel selected.</strong></td>
-<td>Make a direct child of the scene named <code>DRSModel_&lt;basename&gt;</code> the active Layer Collection. A nested model collection or selected object is insufficient.</td>
-</tr>
-<tr>
-<td><strong>No armature in this model</strong> or no <strong>Parent</strong> field</td>
-<td>Ensure the intended armature is inside this model's collection tree and is not a <code>Control_Rig</code>. Do not pick an unrelated preview armature.</td>
-</tr>
-<tr>
-<td>Locator snaps to an origin after updating</td>
-<td>Expected: the detail update resets stored translation/rotation. Place it afterward and use Sync. Sync other pending edits before any operation that reapplies the blob.</td>
-</tr>
-<tr>
-<td>Bone-following point becomes static</td>
-<td>Check actual bone parenting, not just the UI's pending <strong>Parent</strong> value. Commit the parent, reposition, and sync; do not reparent the point directly to GO.</td>
-</tr>
-<tr>
-<td>Offset is rotated/mirrored, or differs after Sync</td>
-<td>If GO is used, check its exact name and direct non-bone parenting; otherwise confirm the intended world/game-space values. Do not apply a second conversion or strip GO from a bone-local offset.</td>
-</tr>
-<tr>
-<td>File/type edit disappears or exports unchanged</td>
-<td>Commit with <strong>Update parent and remove transformations</strong>. Sync captures scene data, not unsaved UI metadata or <code>_file</code>. Reposition after committing.</td>
-</tr>
-<tr>
-<td>Deleted locator returns</td>
-<td>Use <strong>Remove</strong>; scene deletion alone leaves the saved entry intact.</td>
-</tr>
-<tr>
-<td>Duplicate or unexpected <code>HealthBar</code> entries</td>
-<td>Inspect manually named <code>Locator_*</code> objects and duplicated UIDs. Prefer <strong>Add</strong>; new name inference requires an exact type label, not an arbitrary name or <code>.001</code> suffix.</td>
-</tr>
-<tr>
-<td>A <code>-2</code> attachment becomes <code>-1</code> after Sync</td>
-<td>Commit <strong>If None set Parent to -2</strong> before repositioning/syncing. The non-bone capture uses the saved option flag.</td>
-</tr>
-<tr>
-<td>Entry exists but has no marker, module, or effect preview</td>
-<td>Check import options and the type-specific preview behavior above. A missing preview does not imply a missing saved entry.</td>
-</tr>
-<tr>
-<td>Export ignores viewport edits or all locators</td>
-<td>Sync the correct model first; verify its blob and that the chosen export type actually includes <code>CDrwLocatorList</code>. There is no marker-scan export fallback.</td>
-</tr>
-<tr>
-<td>Bone attachment is wrong after skeleton changes</td>
-<td>The editor stores bone-list indices; import resolves stored skeleton identifiers. Keep the working skeleton mapping stable and revalidate attachments after bone additions/reordering.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="checklists">Checklists<a class="headerlink" href="#checklists" title="Permanent link">&para;</a></h2>
-<h3 id="before-placement">Before placement<a class="headerlink" href="#before-placement" title="Permanent link">&para;</a></h3>
-<ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> The intended top-level <code>DRSModel_&lt;basename&gt;</code> is active.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> The export type supports the locator block.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Each chosen type serves an asset-specific purpose; no unverified “required set” was added.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Resource references come from verified assets; audio is configured in EffectSet instead.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Parent/type/file changes have been committed before positioning.</li>
-</ul>
-<h3 id="before-export">Before export<a class="headerlink" href="#before-export" title="Permanent link">&para;</a></h3>
-<ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Bone locators are still attached to the intended bones; non-bone placement uses the intended GO or world/game-space convention.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> If GO is used, its helper naming is unambiguous; the model's armature lookup is also unambiguous.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Placement/orientation has been checked through representative animations.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Sync from Scene</strong> has captured final placement on the correct model.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Unwanted entries were removed through <strong>Remove</strong>, with no duplicate UIDs remaining.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> The <code>.blend</code> was saved after synchronization, and referenced resources are available separately.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Reimport/export placement and the intended in-game behavior have been checked; viewport previews alone were not treated as validation.</li>
-</ul>
-<h2 id="related-guides-and-implementation-references">Related Guides and Implementation References<a class="headerlink" href="#related-guides-and-implementation-references" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../unit_creation_buide/">Unit Creation Guide</a></li>
-<li><a href="../object_creation_guide/">Object Creation Guide</a></li>
-<li><a href="../building_creation_guide/">Building Creation Guide</a></li>
-<li><a href="../advanced_effects_guide/">Advanced Effects Guide</a></li>
-<li><a href="../advanced_abilities_guide/">Advanced Abilities Guide</a></li>
-<li><a href="../../drs/cdrwlocatorlist/">CDrwLocatorList / SLocator format notes</a></li>
-<li><a href="../../drs/cskskeleton/">Skeleton format notes</a></li>
-<li><a href="../../blender/editors/locator_editor.py">Locator editor</a>: active model selection, UI actions, UID matching, GO/bone capture and materialization.</li>
-<li><a href="../../utilities/drs_utility.py">DRS import/export</a>: <code>persist_locator_blob_on_collection</code>, <code>process_slocator_import</code>, module loaders, <code>create_cdrw_locator_list</code>, and export blob copying.</li>
-<li><a href="../../blender/transform_utils.py">Transform helpers</a>: <code>get_conversion_matrix</code> and <code>parent_under_game_axes</code>.</li>
-<li><a href="../../definitions/locator_definitions.py">Locator definitions</a> and <a href="../../definitions/enums.py">type/export-order definitions</a>.</li>
-</ul>
-<p>Where older format notes describe Empty-only markers or a scene-scan export fallback, use the current implementation behavior documented here.</p>
+<p>See the <a href="../advanced_effects_guide/">Effects Guide</a> for animation-triggered effects and sounds, and the <a href="../unit_creation_buide/">Unit Creation Guide</a> for the full workflow.</p>
 
 
 
@@ -1956,7 +887,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 17:25:34 UTC">October 30, 2026</span>
   </span>
 
     
@@ -1966,7 +897,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 10, 2026 16:07:14 UTC">March 10, 2026</span>
   </span>
 
     

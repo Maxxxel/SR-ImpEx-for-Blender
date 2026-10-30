@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Official documentation for the DRS file format & the Blender Import/Export Plugin. Includes the DRS format manual (subclasses, attributes) and tutorials for installation, import, and export.">
+        <meta name="description" content="Artist guides for creating, painting, animating and exporting Skylords Reborn models in Blender.">
       
       
         <meta name="author" content="Maxxxel">
@@ -18,8 +18,6 @@
         <link rel="prev" href="../advanced_abilities_guide/">
       
       
-        <link rel="next" href="../../drs/header/">
-      
       
         
       
@@ -29,7 +27,7 @@
     
     
       
-        <title>Advanced Effects Guide - Battleforge Blender Plugin & DRS Format Documentation</title>
+        <title>Advanced Effects Guide - Skylords Reborn Blender Artist Guides</title>
       
     
     
@@ -98,7 +96,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-header__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-header__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
       
   <img src="../../assets/images/favicon.png" alt="logo">
 
@@ -111,7 +109,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            Battleforge Blender Plugin & DRS Format Documentation
+            Skylords Reborn Blender Artist Guides
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -237,12 +235,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Battleforge Blender Plugin &amp; DRS Format Documentation" class="md-nav__button md-logo" aria-label="Battleforge Blender Plugin & DRS Format Documentation" data-md-component="logo">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-nav__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
       
   <img src="../../assets/images/favicon.png" alt="logo">
 
     </a>
-    Battleforge Blender Plugin & DRS Format Documentation
+    Skylords Reborn Blender Artist Guides
   </label>
   
     <div class="md-nav__source">
@@ -311,6 +309,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -363,6 +367,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../model_artist_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Artist Model Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../object_creation_guide/" class="md-nav__link">
         
   
@@ -370,7 +402,7 @@
   <span class="md-ellipsis">
     
   
-    Object Creation Guide
+    Static Object Guide
   
 
     
@@ -447,6 +479,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../object_setup_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Object Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../advanced_shading_guide/" class="md-nav__link">
         
   
@@ -455,6 +515,34 @@
     
   
     Advanced Shading Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../material_artist_workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Default Material Guide
   
 
     
@@ -591,10 +679,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-understand-the-three-levels" class="md-nav__link">
+  <a href="#1-set-up-the-asset-library" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Understand the Three Levels
+        1. Set Up the Asset Library
       
     </span>
   </a>
@@ -602,33 +690,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-open-the-correct-models-data" class="md-nav__link">
+  <a href="#2-add-an-animation-event" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Open the Correct Model's Data
+        2. Add an Animation Event
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-select-the-event-type-and-resource" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Select the Event Type and Resource
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="3. Select the Event Type and Resource">
+    <nav class="md-nav" aria-label="2. Add an Animation Event">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#file-references-and-paths" class="md-nav__link">
+  <a href="#choose-the-event-type" class="md-nav__link">
     <span class="md-ellipsis">
       
-        File References and Paths
+        Choose the Event Type
       
     </span>
   </a>
@@ -636,10 +713,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#snrsns-resources-and-sound-registration" class="md-nav__link">
+  <a href="#resource-variants" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SNR/SNS Resources and Sound Registration
+        Resource Variants
       
     </span>
   </a>
@@ -652,22 +729,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-align-sound-and-fx-with-the-clip" class="md-nav__link">
+  <a href="#3-check-the-resource" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Align Sound and FX with the Clip
+        3. Check the Resource
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="4. Align Sound and FX with the Clip">
+    <nav class="md-nav" aria-label="3. Check the Resource">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#example-attack-release-sound" class="md-nav__link">
+  <a href="#play-the-effects-in-blender" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Example: Attack Release Sound
+        Play the Effects in Blender
       
     </span>
   </a>
@@ -675,10 +752,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#example-spawn-or-cast-cue" class="md-nav__link">
+  <a href="#what-you-can-check" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Example: Spawn or Cast Cue
+        What You Can Check
       
     </span>
   </a>
@@ -691,10 +768,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-review-parameters-without-guessing-their-semantics" class="md-nav__link">
+  <a href="#4-export-and-test" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Review Parameters Without Guessing Their Semantics
+        4. Export and Test
       
     </span>
   </a>
@@ -702,71 +779,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-preview-and-export-boundaries" class="md-nav__link">
+  <a href="#common-problems" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Preview and Export Boundaries
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="6. Preview and Export Boundaries">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-blender-does-not-preview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What Blender Does Not Preview
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#export-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Export Checklist
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#7-round-trip-limitations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Round-Trip Limitations
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#8-troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        8. Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-guides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Guides
+        Common Problems
       
     </span>
   </a>
@@ -777,801 +793,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    DRS Structures
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    DRS Structures
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/header/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Header
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/common/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Common
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Geometry
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Geometry
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeomesh/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoMesh
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeoprimitivecontainer/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoPrimitiveContainer
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cgeoobbtree/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CGeoOBBTree
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/collisionshape/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    collisionShape
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdspmeshfile/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDspMeshFile
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Animation & Effects
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Animation & Effects
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cskskininfo/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CSkSkinInfo
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cskskeleton/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CSkSkeleton
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdspjointmap/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDspJointMap
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/cdrwlocatorlist/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CDrwLocatorList
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/animationset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    AnimationSet
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/animationtimings/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    AnimationTimings
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/effectset/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    EffectSet
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
-        
-          
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Miscellaneous
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Miscellaneous
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../drs/drwresourcemeta/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    DrwResourceMeta
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
-        
-          
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../glossary/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Glossary (Enums)
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1605,243 +826,212 @@
 
 
 <h1 id="advanced-effects-guide">Advanced Effects Guide<a class="headerlink" href="#advanced-effects-guide" title="Permanent link">&para;</a></h1>
-<p>Use <code>EffectSet</code> to schedule existing sound and visual-effect resources against skeletal animation clips. Complete the <a href="../unit_creation_buide/">Unit Creation Guide</a> first; use the <a href="../advanced_abilities_guide/">Advanced Abilities Guide</a> for Action mappings, markers, and cast/loop segmentation.</p>
-<blockquote>
-<p><strong>Scope:</strong> this editor authors timed resource references in a DRS, not particle systems, sound files, projectile simulation, or gameplay abilities. It does not establish damage, cooldowns, targeting, or spell behavior. The BMG export path has unfinished animation/effect nodes; do not assume it exports the configuration described here.</p>
-<p><strong>Back up imported models before pressing Save.</strong> The current EffectSet UI exposes only animation-keyed entries. Its Save operation rebuilds that subset and does not preserve imported impact/additional sound containers or all header/unknown data. See <a href="#7-round-trip-limitations">round-trip limitations</a> before editing a working game asset.</p>
-</blockquote>
-<h2 id="1-understand-the-three-levels">1. Understand the Three Levels<a class="headerlink" href="#1-understand-the-three-levels" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Level</th>
-<th>Contents</th>
-<th>Example authoring intent</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Effect entry</td>
-<td>An Action / <code>.ska</code> reference plus keyframes</td>
-<td>Events for the clip used by an existing Attack mapping</td>
-</tr>
-<tr>
-<td>Keyframe</td>
-<td>Normalized time, type, audio/spatial parameters, resource variants</td>
-<td>A sound at the release pose</td>
-</tr>
-<tr>
-<td>Variant</td>
-<td>File reference and weight</td>
-<td>Two alternative existing sounds for that one event</td>
-</tr>
-</tbody>
-</table>
-<p>These variants are independent of AnimationSet variants. One chooses a motion clip; the other supplies candidate resources for a scheduled event. If Attack has two different SKA clips, create/check an EffectSet entry for each clip that needs events. There is no automatic “apply this effect to every Attack variant” link.</p>
-<p>An entry is keyed by the <strong>animation filename</strong>, not an ability label, Blender timeline marker, or locator name. Several visual jobs can refer to the same clip; EffectSet does not provide a separate per-ability selector for them.</p>
-<p>Sources: <a href="../../blender/editors/effect_set_editor.py#L180">EffectSet editor state</a>, <a href="../../definitions/effect_definitions.py#L44">binary Keyframe and SkelEff definitions</a>.</p>
-<h2 id="2-open-the-correct-models-data">2. Open the Correct Model's Data<a class="headerlink" href="#2-open-the-correct-models-data" title="Permanent link">&para;</a></h2>
-<p>Make the intended <code>DRSModel_*</code> root collection active and open <strong>3D Viewport → Sidebar → DRS Editor → EffectSet</strong>. The panel remains visible without a valid root, but shows a selection hint instead of data controls. Save pending edits before changing models, then use <code>Reset</code> to load the newly active root's stored state.</p>
+<p>Use <strong>Effect Set Editor</strong> to attach existing effects and sounds to a model's animations. Create new effect assets in the external Effect Editor.</p>
+<p>For building damage, use <strong>BMG Editor â†’ Building Editor â†’ Build Damage Preview</strong>. Its Damage slider combines mesh states, scratch, destruction debris and FX. See <a href="../building_creation_guide/#preview-damage-and-destruction">building damage preview</a>.</p>
+<h2 id="1-set-up-the-asset-library">1. Set Up the Asset Library<a class="headerlink" href="#1-set-up-the-asset-library" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Edit â†’ Preferences â†’ Add-ons â†’ SR ImpEx</strong>.</p>
 <ul>
-<li><strong>Save:</strong> writes the working EffectSet state into the collection's <code>EffectSetJSON</code> property. It does not save the <code>.blend</code>, export the DRS, or write/copy resource files.</li>
-<li><strong>Reset:</strong> reloads stored EffectSet data and discards unsaved panel changes.</li>
-<li><strong>Left-list <code>+</code> / <code>−</code>:</strong> add/remove an Effect entry.</li>
-<li><strong>Action:</strong> choose the animation associated with that entry. The dropdown draws from all Actions in the <code>.blend</code>; check that it belongs to the intended skeleton/model.</li>
-<li><strong>Keyframes <code>+</code> / <code>−</code>:</strong> add/remove scheduled events. A newly added keyframe starts at <code>0</code>, defaults to <strong>FX1</strong>, and includes one empty resource variant.</li>
-<li><strong>Up/down arrows:</strong> reorder keyframe records, not their time values. The editor does not automatically sort by Time.</li>
-<li><strong>Variants <code>+</code> / <code>−</code>:</strong> add/remove candidates for the selected event; edit File and Weight below the list.</li>
+<li>Set <strong>Skylords Reborn Folder</strong> to your game installation.</li>
+<li>Optionally set <strong>Effects Folder</strong> to a loose effect library, such as <code>Mods/Unpack/bf1/gfx/effects</code>. Use this to preview your own assets before installing them.</li>
 </ul>
-<p>The Action label can be shortened for display; it is not a reliable preview of the exported filename. Imported entries also retain their original SKA name internally. See the Action-retargeting caveat below before changing an imported entry's dropdown.</p>
-<p>Sources: <a href="../../blender/editors/effect_set_editor.py#L811">panel controls</a>, <a href="../../blender/editors/effect_set_editor.py#L600">add/save/reset operators</a>.</p>
-<h2 id="3-select-the-event-type-and-resource">3. Select the Event Type and Resource<a class="headerlink" href="#3-select-the-event-type-and-resource" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Type shown in the UI</th>
-<th>Stored value</th>
-<th>Resource category</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Audio (snr/wav)</code></td>
-<td><code>0</code></td>
-<td>Existing <code>.snr</code> or <code>.wav</code> sound reference</td>
-</tr>
-<tr>
-<td><code>FX1 (fxb)</code></td>
-<td><code>1</code></td>
-<td>Existing <code>.fxb</code> visual-effect reference</td>
-</tr>
-<tr>
-<td><code>FX2 (fxb)</code></td>
-<td><code>2</code></td>
-<td>Existing <code>.fxb</code> visual-effect reference</td>
-</tr>
-<tr>
-<td><code>Permanent FX1 (fxb)</code></td>
-<td><code>3</code></td>
-<td>Permanent-effect category, referencing an <code>.fxb</code></td>
-</tr>
-<tr>
-<td><code>Permanent FX2 (fxb)</code></td>
-<td><code>4</code></td>
-<td>Permanent-effect category, referencing an <code>.fxb</code></td>
-</tr>
-</tbody>
-</table>
-<p>These keyframe types are separate from the type field in the format's <strong>additional sound containers</strong>. Research labels such as <code>StepSound</code> refer to that other structure, not to a selectable replacement for keyframe type <code>0</code>. The current panel does not author those containers; see <a href="#7-round-trip-limitations">round-trip limitations</a>.</p>
-<p>The labels establish supported categories, not a complete explanation of the engine difference between FX1 and FX2 or permanent-effect lifetime/cleanup. Reuse a known working model's type when reproducing an existing effect. Do not infer that type <code>3</code> or <code>4</code> means a Blender loop or that the add-on simulates its persistence.</p>
-<h3 id="file-references-and-paths">File References and Paths<a class="headerlink" href="#file-references-and-paths" title="Permanent link">&para;</a></h3>
-<p>The <strong>File (.fxb/.wav/.snr)</strong> field is a plain string. Enter the resource reference expected by the game's content layout, following a comparable working asset's naming/path convention. For illustration, <code>example_attack.wav</code> or <code>example_release.fxb</code> are filenames only, not bundled resources or guaranteed game-valid assets.</p>
-<ul>
-<li>EffectSet export stores the resource string; it does not validate existence, enforce an extension, convert audio, or package the referenced resource.</li>
-<li>A local Windows path used while editing is not automatically rewritten into a deployable game-resource path. Do not leave an absolute workstation path unless the target workflow explicitly supports it.</li>
-<li>Preserve the spelling and relative subpath used by known working content. Confirm the files are installed where the game resolves those references.</li>
-<li>Keep animation <code>.ska</code> references separate from sound/FX File fields. The exporter's shared SKA naming map updates animation references, not the names of external <code>.fxb</code>/<code>.wav</code>/<code>.snr</code> resources.</li>
-<li>Export skips empty resource names. Fill at least one intended resource variant per event and remove empty test events rather than assuming they will produce useful output.</li>
-</ul>
-<p>Sources: <a href="../../blender/editors/effect_set_editor.py#L180">type/file properties</a>, <a href="../../blender/editors/effect_set_editor.py#L421">resource serialization</a>, <a href="../../utilities/helpers.py#L355">shared SKA naming</a>.</p>
-<h3 id="snrsns-resources-and-sound-registration">SNR/SNS Resources and Sound Registration<a class="headerlink" href="#snrsns-resources-and-sound-registration" title="Permanent link">&para;</a></h3>
-<p>An <code>.snr</code> is not simply a WAV file with a different extension. EA AudioCore v0 headers describe the codec, channel configuration, sample rate, sample count, and loop metadata. Depending on the storage type, audio can be embedded in a RAM-style resource or use associated <code>.sns</code> stream data. Keep the resource set expected by the source asset; copying only the SNR header may omit the actual streamed audio.</p>
-<p>For a header whose sample rate and sample count are understood, nominal duration is sample count divided by sample rate. File size is not a reliable substitute, and this audio duration is separate from EffectSet's normalized animation Time.</p>
-<p>Research templates also describe a <code>soundpipeline.bin</code> sound registry containing name/hash and audio metadata. A historical comment claims unregistered sounds can crash the game, but that registration rule and failure mode are <strong>not verified</strong>. Treat it as an investigation point, not a confirmed engine requirement. This add-on does not create or update a sound-pipeline registry when saving EffectSet, and a file reference alone does not prove a custom sound is registered or usable.</p>
-<p>Historical audio-inspection templates include codec-specific XAS assumptions and incomplete optional streaming/prefetch handling. They are not a general-purpose SNR encoder/decoder specification. The EffectSet UI's audio label does not imply that it can encode all listed EA codecs or convert arbitrary WAV files into game resources.</p>
-<h2 id="4-align-sound-and-fx-with-the-clip">4. Align Sound and FX with the Clip<a class="headerlink" href="#4-align-sound-and-fx-with-the-clip" title="Permanent link">&para;</a></h2>
-<p><strong>Time (0..1) is normalized progress through the full clip</strong>, not seconds, milliseconds, or a Blender frame index. For an event at elapsed time $t$ in a clip lasting $D$ seconds:</p>
-<p>$$
-\text{Time} = \frac{t}{D}
-$$</p>
-<p>For a two-second clip with an event at <code>0.8</code> seconds, enter <code>0.4</code>. For a five-second Spawn clip, <code>0.6</code> means <strong>three seconds</strong>, not <code>0.6</code> seconds.</p>
-<p>AnimationSet marker Time is also normalized <code>0..1</code>. If the same full clip has an Attack marker at <code>0.4</code>, using <code>0.4</code> for a sound keyframe is a deliberate way to align them. <strong>There is no live synchronization:</strong> changing the marker does not move EffectSet keyframes, and changing an effect keyframe does not update animation timing metadata.</p>
-<p>For a cast whose <code>Cast→Resolve</code> split is <code>0.35</code>, an event intended at that split uses <code>0.35</code> on that full clip. Do not renormalize it to the shorter preview segment. Imported clips can carry their own FPS/frame-length metadata, so verify clip duration through <code>Clip Timing...</code> in AnimationSet rather than relying only on the current scene's FPS.</p>
-<h3 id="example-attack-release-sound">Example: Attack Release Sound<a class="headerlink" href="#example-attack-release-sound" title="Permanent link">&para;</a></h3>
+<p>Choose the game installation folder containing <code>base/pak</code>, rather than the <code>pak</code> folder itself. Both library paths are saved automatically and restored after Blender restarts, even when Blender's automatic preference saving is off. Leave the optional Effects Folder empty if you only use game assets.</p>
+<p>The add-on also keeps a shared settings copy outside Blender's version-specific profile. It can recover the paths when that profile is reset or replaced. Clearing a path deliberately clears the saved value too.</p>
+<p>The library reads existing files. It prefers loose assets and can find effects and sounds in the game's current PAK archives. It does not modify the game files.</p>
+<p>The first search builds a file index and saves it in your user cache. It is reused across models and Blender restarts. Searches and preview builds check file-system metadata: changed folders are scanned again, and changed PAK directories are read again. Unchanged archives are not unpacked or reindexed. All current archives in <code>base/pak</code> are eligible, including building assets.</p>
+<p><strong>Refresh Effect Library</strong> forces a fresh index if needed. Corrupt or outdated cache data is rebuilt automatically. The cache contains filenames and archive locations; textures, meshes and sounds are loaded only when needed.</p>
+<h2 id="2-add-an-animation-event">2. Add an Animation Event<a class="headerlink" href="#2-add-an-animation-event" title="Permanent link">&para;</a></h2>
 <ol>
-<li>In AnimationSet, identify the Action used by the existing <code>Attack</code> mapping. Preview its selected variant and note the marker fraction at the desired contact/release pose.</li>
-<li>In EffectSet, add a new entry and select that exact Action.</li>
-<li>Add a keyframe and <strong>change the default FX1 type to Audio</strong>.</li>
-<li>Set Time to the intended fraction, then enter a known working <code>.snr</code>/<code>.wav</code> reference in its first variant. Keep one variant at weight <code>100</code> while diagnosing timing.</li>
-<li>Add a separate FX keyframe if a visual resource is also required. Use an appropriate known working FX type and <code>.fxb</code> reference; a single keyframe has only one type.</li>
-<li>Save both editors, save the <code>.blend</code>, export the DRS/SKA files, and test in game. Repeat for every motion variant that needs its own event entry.</li>
+<li>Select a mesh belonging to your imported model.</li>
+<li>Open <strong>DRS Editor â†’ Effect Set Editor</strong>.</li>
+<li>Add an entry and choose its <strong>Action</strong>. Each entry belongs to one SKA animation.</li>
+<li>Add a keyframe and choose its <strong>Type</strong> below.</li>
+<li>Set <strong>Time (0..1)</strong>: <code>0</code> is the clip's start, <code>0.5</code> its middle and <code>1</code> its end.</li>
+<li>Add a resource variant. Open <strong>Effect Selector</strong>, search by name, and click <strong>Use Resource</strong>. You can also enter the filename directly.</li>
+<li>Keep one variant at <strong>Chance 100%</strong> while testing.</li>
+<li>Click <strong>Save</strong>, then save your <code>.blend</code> separately.</li>
 </ol>
-<h3 id="example-spawn-or-cast-cue">Example: Spawn or Cast Cue<a class="headerlink" href="#example-spawn-or-cast-cue" title="Permanent link">&para;</a></h3>
-<p>Use the Action from the existing Spawn or cast mapping, not an assumed ability-name match. Set the sound/FX keyframe at the desired normalized moment, checking a Spawn marker or cast split only as a visual reference. This schedules a cue; it does not determine when a unit becomes controllable, when damage resolves, or when a projectile spawns.</p>
-<p>Sources: <a href="../../blender/editors/effect_set_editor.py#L192">Time property</a>, <a href="../../blender/editors/animation_set_editor.py#L2453">AnimationSet marker and timing controls</a>.</p>
-<h2 id="5-review-parameters-without-guessing-their-semantics">5. Review Parameters Without Guessing Their Semantics<a class="headerlink" href="#5-review-parameters-without-guessing-their-semantics" title="Permanent link">&para;</a></h2>
+<p>Changing the Action retargets the entry. Imported sound containers and header data are retained when you save, although the panel does not yet let you edit every sound container.</p>
+<p><strong>Group</strong> filters the shared resource picker using name/path hints such as Fire/Smoke, Water/Ice, Persistent/Ambient and Buildings/Destruction. Resources can belong to several groups. Choose <strong>All Resources</strong> when unsure. The same picker and preview library are available in <a href="../advanced_locators_guide/#choose-and-preview-an-effect">Locator Editor</a>.</p>
+<h3 id="choose-the-event-type">Choose the Event Type<a class="headerlink" href="#choose-the-event-type" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th>Field</th>
-<th>Practical guidance</th>
+<th>Type</th>
+<th>Use</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>Min Falloff</code>, <code>Max Falloff</code></td>
-<td>Stored falloff parameters. Use values from comparable working audio/effects; the add-on provides no distance preview or documented unit calibration. Keep a sensible minimum/maximum ordering.</td>
+<td>Sound</td>
+<td>Play a sound resource.</td>
 </tr>
 <tr>
-<td><code>Volume</code></td>
-<td>Stored floating-point value, defaulting to <code>1</code> for newly added keyframes. No Blender audition is provided. Do not assume it is a decibel value.</td>
+<td>World FX</td>
+<td>Spawn an effect at the model's position at that moment, with an offset.</td>
 </tr>
 <tr>
-<td><code>Pitch Min</code>, <code>Pitch Max</code></td>
-<td>Stored pitch-shift range. Preserve established values; the UI does not establish whether the engine interprets them as ratios, semitones, or another scale.</td>
+<td>Linked FX</td>
+<td>Use an effect whose setup follows source/target nodes. Attachment depends on the effect itself.</td>
 </tr>
 <tr>
-<td><code>Offset</code></td>
-<td>Stored XYZ offset. The format source itself marks its spatial interpretation as uncertain; it is not a bone picker or an automatic locator binding. Verify coordinate interpretation in game.</td>
+<td>Fade Out Persistent FX</td>
+<td>Fade an existing locator effect with the matching resource name.</td>
 </tr>
 <tr>
-<td><code>Interruptable</code></td>
-<td>Stored boolean flag with this exact UI spelling. Engine interruption behavior is not simulated or fully explained by the editor.</td>
-</tr>
-<tr>
-<td><code>Condition</code></td>
-<td>An incompletely understood conditional field. Do not treat it as a gameplay rule editor; preservation is currently unreliable, as described below.</td>
-</tr>
-<tr>
-<td>Variant <code>Weight</code></td>
-<td>Integer <code>0..255</code> in this panel, stored as an unsigned byte. There is no sum validation or normalization despite the <code>%</code> list label.</td>
+<td>Fade In Persistent FX</td>
+<td>Fade an existing locator effect with the matching resource name back in.</td>
 </tr>
 </tbody>
 </table>
-<p>For a simple two-resource example, <code>80</code> and <code>20</code> makes intent easy to read, but the panel does not prove exact engine probability semantics. Avoid all-zero sets and verify resource selection in game. Sound/FX weights here have a different UI range from AnimationSet's <code>0..100</code> motion weights.</p>
-<p>Locators such as spell or projectile attachment points are a separate mechanism. Use the <a href="../advanced_locators_guide/">Advanced Locators Guide</a> for the actual locator types and parenting controls. Do not assume that an EffectSet Offset or animation marker automatically attaches an FX resource to one of them.</p>
-<p>Sources: <a href="../../blender/editors/effect_set_editor.py#L180">editable properties</a>, <a href="../../definitions/effect_definitions.py#L44">binary parameter definitions and uncertainties</a>.</p>
-<h2 id="6-preview-and-export-boundaries">6. Preview and Export Boundaries<a class="headerlink" href="#6-preview-and-export-boundaries" title="Permanent link">&para;</a></h2>
-<h3 id="what-blender-does-not-preview">What Blender Does Not Preview<a class="headerlink" href="#what-blender-does-not-preview" title="Permanent link">&para;</a></h3>
-<p>The registered EffectSet panel has <strong>no sound audition, FX simulation, or effect-timing playback button</strong>. A <code>Play (Anim Only)</code> operator exists in the source but is not included in this editor's registered class list or drawn controls; do not expect it as an available panel feature.</p>
-<p>Use AnimationSet preview or normal Blender animation playback to inspect motion and note the intended pose/time. That confirms neither resource loading nor engine spatialization, pitch, volume, conditions, permanent-effect behavior, or gameplay synchronization. AnimationSet preview may also choose the control rig, whereas SKA export uses the deform armature; see the <a href="../advanced_abilities_guide/#7-prepare-the-actual-export-action">export Action checklist</a>.</p>
-<h3 id="export-checklist">Export Checklist<a class="headerlink" href="#export-checklist" title="Permanent link">&para;</a></h3>
+<p>Fade events operate on an existing effect; they do not spawn another copy. Their <strong>Fade Duration (s)</strong> controls how long the fade takes.</p>
+<p>For ordinary events, <strong>Offset</strong> adjusts placement. It does not select a bone or replace a locator. Reuse a working model/effect setup when you need a particular attachment behavior.</p>
+<h3 id="resource-variants">Resource Variants<a class="headerlink" href="#resource-variants" title="Permanent link">&para;</a></h3>
+<p>Variants are alternative resources for the same event, not simultaneous layers. For two alternatives, use chances such as <code>80</code> and <code>20</code>, totaling <strong>100</strong>. The engine does not scale these numbers automatically: <code>4 / 3 / 3</code> means <strong>90% silence or no effect</strong>, while <code>40 / 30 / 30</code> always selects one. The panel shows the unused chance. <strong>Normalize to 100%</strong> scales the current proportions when you want an event every time; imported values stay unchanged until you edit them. Avoid totals above 100, which can make later variants unreachable.</p>
+<p>To play two effects or sounds together, create <strong>two events at the same Time</strong>, each with its own resource variant.</p>
+<h2 id="3-check-the-resource">3. Check the Resource<a class="headerlink" href="#3-check-the-resource" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Effect Selector</strong>. Search at the top or choose a category on the left. Categories such as Fire, Water and Buildings are hints from filenames, not engine effect types.</p>
+<p>Select a resource and click <strong>Preview</strong> to audition it on the model. The existing FX preview is paused during the audition and restored when you close the selector. <strong>Cancel</strong> keeps your original resource; <strong>Use Resource</strong> puts the selection in the editable filename field. Save the EffectSet or locator separately to include it in export.</p>
+<p>Sound events show audio resources instead of FXB files. Missing or ambiguous references produce an error when previewing.</p>
+<h3 id="play-the-effects-in-blender">Play the Effects in Blender<a class="headerlink" href="#play-the-effects-in-blender" title="Permanent link">&para;</a></h3>
+<p>In <strong>Object Mode</strong>, click <strong>Update Preview</strong>, then press <strong>Space</strong> to play the normal scene timeline. Choose an animation entry to preview its scheduled effects. Persistent building/unit locator effects can also be previewed when there is no animation entry. Rebuild after the current render finishes.</p>
+<ul>
+<li><strong>Audio</strong> includes sound cues. Multiple cues can overlap. Sound-set loops repeat through the preview range.</li>
+<li><strong>Engine Chances</strong> uses the saved chances. The preview makes repeatable random choices without adding an exported seed setting.</li>
+<li><strong>Selected Variant</strong> auditions the highlighted variant of the highlighted event, even if its chance is zero. Other events keep their normal chances. This changes only the preview.</li>
+<li><strong>Clear Preview</strong> removes generated effects and their audio strips for this model. It leaves your model and unrelated audio alone.</li>
+<li><strong>Live Update</strong> is on by default. After the first <strong>Update Preview</strong>, changes to the selected clip, event timing, volume, pitch, FX offset or variants update automatically after a short pause in editing. Playback stays running at its current frame. Large effects can pause briefly while rebuilding; updates wait until rendering finishes. <strong>Clear Preview</strong> stops live rebuilding. Rebuild the preview after reopening a saved <code>.blend</code>.</li>
+</ul>
+<p>A clip without assigned effects is normal: the preview reports this as information. The same applies when Audio is off for a sound-only clip, or when the preview picks the unused part of the event's chances. Missing files and effects without supported preview components remain errors; the message names the resource, and the model's <strong>Effect Preview Report</strong> in Blender's Text Editor contains details. A persistent locator effect does not need an imported Action unless you also preview timed animation events.</p>
+<p>For sound events, <strong>Pitch Min/Max</strong> are rate shifts: <code>0</code> leaves playback unchanged, <code>0.1</code> adds 10%, and <code>-0.1</code> subtracts 10%. The preview picks a repeatable value between them. Both pitch and sound duration change. Values must produce a positive playback rate to be previewed.</p>
+<p>Controls marked <strong>Export Only</strong> are saved for the game but do not affect the Blender preview: falloff needs positional audio, Interruptible needs gameplay animation interruptions, and Stored Condition is retained without a verified filtering effect in this timeline path. Editing these fields does not rebuild the preview. Use the Map Editor to check gameplay-dependent behavior.</p>
+<p>Generated previews live outside the model's export collection. They are not exported as extra meshes. Do not edit those generated objects; edit the model's EffectSet or the original effect in the external Effect Editor.</p>
+<p>Switching to another model or importing a new model stops the previous model's preview audio. Sound strips you added yourself are kept. Build the selected model's preview again to hear its effects.</p>
+<p>Cycles transparency depth is adjusted automatically for overlapping effect sprites, and restored when the last preview is cleared. Very dense overlaps can reach Blender's hard limit; the preview report lists this case. This setting fixes early ray termination without changing the material's transparency.</p>
+<p>Legacy flame emitters, including Firedancer's head and hands, use smooth transparency automatically in EEVEE. They should look like soft overlapping flames rather than a cloud of dotted pixels during playback. After updating the add-on, click <strong>Update Preview</strong> to rebuild older preview materials. The source textures and exported effects stay unchanged.</p>
+<h3 id="what-you-can-check">What You Can Check<a class="headerlink" href="#what-you-can-check" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Part of the effect</th>
+<th>Blender preview</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lights, billboards and nested effects</td>
+<td>Placement, animation, color and opacity. Light brightness is approximate.</td>
+</tr>
+<tr>
+<td>Effect meshes</td>
+<td>Geometry and the supported DRS material shading. Animated effect meshes also play their SKA through the effect's animation curve. Default refraction meshes sample the background in camera renders and follow the FX fade. The viewport uses a simpler refraction shader.</td>
+</tr>
+<tr>
+<td>Material animation</td>
+<td>Supported scalar and color curves drive the existing material preview. Parameters without a visual route are listed in the report.</td>
+</tr>
+<tr>
+<td>SFP particles</td>
+<td>Starting colors, size, lifetime, rotation, weighted atlas tiles and render ramps. Particles keep their placement at emission and use the stored mass and system damping. Counts, random sampling and reduced motion caches remain bounded approximations.</td>
+</tr>
+<tr>
+<td>Legacy emitters and satellites</td>
+<td>Legacy emitters use traced particle motion, color, opacity, size and supported blend controls. Each component follows its own activation window. Distortion-only particles do not produce colored flames; their heat haze is not reproduced. Scene fog and satellite-specific motion remain incomplete.</td>
+</tr>
+<tr>
+<td>SFP force fields</td>
+<td>Cached attraction, inner/outer sphere boundaries, distortion, uniform drift and vortex motion. The random generator and integration are preview substitutes.</td>
+</tr>
+<tr>
+<td>Trails</td>
+<td>A ribbon from cached attachment motion, with start/end width, lifetime and fade. Spline interpolation, trail ramps and distortion are not reproduced.</td>
+</tr>
+<tr>
+<td>Audio</td>
+<td>Overlapping cues, sound-set loops and pitch variation, and effect volume curves. Spatial falloff and changing pitch during a cue are not reproduced.</td>
+</tr>
+<tr>
+<td>Persistent locator effects</td>
+<td>Named source-bone attachments and fade events. The special Health Bar and Projectile Spawn source slots use model locators; when several match, the preview uses the first. Advanced source/target links still need an engine comparison.</td>
+</tr>
+<tr>
+<td>Terrain decals</td>
+<td>A subdivided surface follows the cached scene terrain. Static decals can also project onto stationary model surfaces. Projection and shading remain approximations of the game.</td>
+</tr>
+<tr>
+<td>Water decals</td>
+<td>Animated 3D DDS texture slices follow the effect's animation-time curve. Placement uses a flat water surface; scene waves, fog and shadow variants are not reproduced.</td>
+</tr>
+<tr>
+<td>Physics pieces</td>
+<td>Cached falling, force, mass, torque and collision motion. Box-based inertia/contact proxies substitute for the game's collision shapes and solver.</td>
+</tr>
+<tr>
+<td>Physics groups and point forces</td>
+<td>Ground offsets, within-group collisions, and attraction/repulsion through range and power curves.</td>
+</tr>
+<tr>
+<td>Legacy wind Force nodes</td>
+<td>Retained in the resource report; they do not drive the preview simulation yet.</td>
+</tr>
+<tr>
+<td>Camera shake</td>
+<td>Reported without moving the artist's camera.</td>
+</tr>
+</tbody>
+</table>
+<p>Additive, screen, multiply and alpha blending have separate preview paths. Premultiplied alpha and blends that depend on the already rendered background remain approximations.</p>
+<p>Effects with glow automatically receive a separate render pass and Blender bloom. No extra artist controls are needed. The preview copies your compositor and restores the original when cleared; a replacement you select yourself is kept. Set up your render before clicking <strong>Update Preview</strong>. Blender's bloom shape and brightness differ from the game, so check the final glow in the Map Editor.</p>
+<p>Water volume textures are decoded when the preview is built. Playback and scrubbing reuse cached slices. Large volumes use fewer slices to bound memory; the report lists this reduction. Ordinary 2D water textures use a static fallback. Water lighting is approximate.</p>
+<p>To preview terrain contacts, place a terrain mesh outside the model's export collection, then click <strong>Update Preview</strong>. The preview snapshots visible environment meshes without changing them. Without an environment surface, physics and terrain decals use a flat ground plane at the model origin. Static decals can project onto stationary model surfaces; animated figures are excluded to prevent stretched projections. Rebuild after changing the environment geometry.</p>
+<p>Physics uses the traced default gravity and force scaling, but its box inertia and collision response differ from the game. Check final contacts, stacking, advanced links and unsupported shader behavior in the Map Editor. Continue editing the effect itself in the external Effect Editor; the Blender tools edit the model's EffectSet references and timing.</p>
+<p>SFP particles, trails, force fields and physics cache motion when you click <strong>Update Preview</strong>. Rebuild after changing the model animation. Playback and scrubbing reuse that cache. Unchanged decal projections are reused too. Long clips or large particle systems use reduced sampling to keep memory use bounded. A model preview is capped at 8,192 particle sprites and 64 simulated debris pieces; the report tells you when a limit reduces the preview.</p>
+<p>SFP flames that produce no glow use smooth transparency automatically. Emitters that produce glow keep the separate glow pass. These choices come from the effect data and need no artist controls. Rebuild older previews after updating the add-on.</p>
+<p>For refraction meshes inside effects, click <strong>Update Preview</strong>, use <strong>Add Render</strong> if your model has no camera or lights, then press <strong>F12</strong>. The render automatically uses the refraction texture to distort the background, including the effect's animated fade. The normal viewport still uses a simpler glass-like shader. A visible background makes the distortion easier to judge. The extra render passes take more render time and are removed with <strong>Clear Preview</strong>; the previous compositor is preserved. Only the frontmost distortion surface is sampled, and the texture's blur/mip control is not reproduced. Compare overlapping haze and final lighting with the Map Editor.</p>
+<p>Check <strong>Effect Preview Report</strong> in Blender's Text Editor for the selected assets' limits. Always test the exported result in the Map Editor; the Blender preview is not yet a visual match for every effect type.</p>
+<p>A successful inspection confirms that the file can be read. It does not prove that every dependency is installed or that the effect will attach correctly in game.</p>
+<h2 id="4-export-and-test">4. Export and Test<a class="headerlink" href="#4-export-and-test" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Save the EffectSet editor and AnimationSet editor to the correct active root; save the <code>.blend</code> separately.</li>
-<li>Use a DRS model type that supports the intended animated model. Animated Object exports intentionally remove non-Idle AnimationSet jobs and animation markers/timings; use Animated Unit for those richer unit mappings.</li>
-<li>Ensure every required clip exists on disk. <strong>Export All SKA Actions</strong> exports saved AnimationSet references, not Actions appearing only in EffectSet or every Action in the <code>.blend</code>.</li>
-<li>Choose the SKA prefix strategy deliberately. The shared map rewrites DRS AnimationSet, marker-set and EffectSet animation references consistently when they resolve to the same Action. Missing/ambiguous Action resolution can still produce mismatches; inspect the exported files.</li>
-<li>Supply external sound/FX assets separately in the expected game-resource layout. This editor writes references, not the assets themselves.</li>
-<li>Reimport a copy of the output, compare its event records with the source, then test audio/FX in the game. Keep the original input and <code>.blend</code> until the round trip is verified.</li>
+<li>Save EffectSet and AnimationSet changes, then save the <code>.blend</code>.</li>
+<li>Export the model and its required SKA clips. An EffectSet reference alone does not export its SKA; add the appropriate AnimationSet mapping or export that clip separately.</li>
+<li>Install any custom effect, texture and sound assets separately. The DRS stores references; it does not bundle them.</li>
+<li>Reimport a copy of the export and check its entries. Then test it in the Map Editor.</li>
 </ol>
-<p>Sources: <a href="../../blender/editors/effect_set_editor.py#L766">unregistered animation-only operator and class list</a>, <a href="../../utilities/drs_utility.py#L5032">EffectSet export</a>, <a href="../../utilities/drs_utility.py#L5060">referenced-only SKA export</a>, <a href="../../utilities/drs_utility.py#L5374">model-type filtering</a>.</p>
-<h2 id="7-round-trip-limitations">7. Round-Trip Limitations<a class="headerlink" href="#7-round-trip-limitations" title="Permanent link">&para;</a></h2>
-<p>These are current implementation boundaries, not settings that can be fixed by guessing different engine values:</p>
-<ul>
-<li><strong>Imported sound containers are not editable/preserved by panel Save.</strong> Import conversion captures <code>impact_sounds</code> and <code>additional_sounds</code>, but the UI state and Save serializer only reconstruct <code>effects</code>. Save also reseeds header defaults/checksum rather than merging all imported metadata, despite comments suggesting preservation. Back up before saving an imported EffectSet containing these records.</li>
-<li><strong>Retargeting an imported entry can retain its old SKA reference.</strong> Serialization prefers the imported hidden <code>raw_ska</code> over the current dropdown Action. To intentionally retarget using the UI, create a fresh entry with the intended Action and recreate its keyframes, then remove the old entry in a backup copy. Check the resulting reference after export.</li>
-<li><strong>Condition is not a reliable round-trip control.</strong> The binary class reads/writes <code>condition</code>, but the editor's conversion helpers use <code>uk</code>. Imported non-default values may be lost and edits may not reach the binary field. The binary field is signed-byte data for applicable EffectSet types, while the UI permits values up to <code>255</code>; do not rely on the UI range as a format guarantee.</li>
-<li><strong>No automatic repair of resource references or timing.</strong> Invalid names, empty variants, incorrect offsets and mistimed events are not diagnosed by a successful Save. Keyframe order is preserved as edited, not sorted by time.</li>
-</ul>
-<p>Sources: <a href="../../blender/editors/effect_set_editor.py#L253">state-only serializer</a>, <a href="../../blender/editors/effect_set_editor.py#L109">header defaults</a>, <a href="../../blender/editors/effect_set_editor.py#L309">import conversion</a>, <a href="../../blender/editors/effect_set_editor.py#L421">export conversion</a>, <a href="../../definitions/effect_definitions.py#L44">actual Condition field</a>.</p>
-<h2 id="8-troubleshooting">8. Troubleshooting<a class="headerlink" href="#8-troubleshooting" title="Permanent link">&para;</a></h2>
+<h2 id="common-problems">Common Problems<a class="headerlink" href="#common-problems" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Symptom</th>
-<th>Checks</th>
+<th>Problem</th>
+<th>Check</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>No sound/FX in Blender</td>
-<td>Expected: the panel does not audition resources or simulate FX. Verify motion separately and test the exported content in game.</td>
+<td>No effect visible in Blender</td>
+<td>Click Update Preview, check the resource paths and current animation time, then read Effect Preview Report for missing dependencies or unsupported components.</td>
 </tr>
 <tr>
-<td>No event in game</td>
-<td>Confirm the game uses that exact SKA, the entry has keyframes/nonempty resources, type matches resource category, edits were saved, and assets are deployed.</td>
+<td>Resource not found</td>
+<td>Check the library folders and filename. A sound may reference an XML sound set or require an SNR/SNS pair.</td>
 </tr>
 <tr>
-<td>Sound at the wrong pose</td>
-<td>Check normalized full-clip Time, clip duration/FPS metadata, and whether the marker/split changed independently.</td>
+<td>Resource name is ambiguous</td>
+<td>Use a unique resource name or remove duplicate test assets from your configured library.</td>
 </tr>
 <tr>
-<td>Only one attack variant has effects</td>
-<td>Add/check entries for all required SKA clips; motion and effect variants are separate.</td>
+<td>Event happens at the wrong pose</td>
+<td>Time is a fraction of the entire clip, not seconds or a frame number.</td>
 </tr>
 <tr>
-<td>New Action chosen but old clip still referenced</td>
-<td>Imported <code>raw_ska</code> takes precedence; recreate the entry rather than trusting the dropdown alone.</td>
+<td>Only one animation variant has an effect</td>
+<td>Add entries for each SKA clip that needs the event.</td>
 </tr>
 <tr>
-<td>SKA missing although EffectSet names it</td>
-<td>Add the required motion mapping in AnimationSet, or export the clip separately. EffectSet-only references do not trigger automatic SKA output.</td>
-</tr>
-<tr>
-<td>FX appears at an unexpected position</td>
-<td>Compare Offset and the existing effect's own configuration; locator attachment and marker Position are separate mechanisms. Do not guess coordinate conventions.</td>
-</tr>
-<tr>
-<td>Imported impact/extra sounds or Condition disappear</td>
-<td>Current preservation limitations; restore the backup and use a workflow that retains those records. A UI Save is not a lossless pass-through.</td>
+<td>Fade does nothing</td>
+<td>Confirm that an existing persistent locator effect uses that resource name.</td>
 </tr>
 </tbody>
 </table>
-<h2 id="related-guides">Related Guides<a class="headerlink" href="#related-guides" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../advanced_abilities_guide/">Advanced Abilities Guide</a>: attack/cast labels, markers, segmented clips, deform-rig and naming checks.</li>
-<li><a href="../advanced_locators_guide/">Advanced Locators Guide</a>: attachment and parenting details.</li>
-<li><a href="../unit_creation_buide/">Unit Creation Guide</a>: the base unit workflow.</li>
-<li><a href="../building_creation_guide/">Building Creation Guide</a>: building-specific scope and BMG export limitations.</li>
-</ul>
+<p>For animation mappings, see the <a href="../advanced_abilities_guide/">Advanced Abilities Guide</a>. For effect attachment points, see the <a href="../advanced_locators_guide/">Advanced Locators Guide</a>.</p>
 
 
 
@@ -1864,7 +1054,7 @@ $$</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 17:25:34 UTC">October 30, 2026</span>
   </span>
 
     
@@ -1874,7 +1064,7 @@ $$</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 27, 2026 10:49:11 UTC">October 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 10, 2026 16:07:14 UTC">March 10, 2026</span>
   </span>
 
     
