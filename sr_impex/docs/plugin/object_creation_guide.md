@@ -40,12 +40,14 @@ Skip this step for an imported DRS.
 <span id="where-to-put-your-meshes"></span>
 
 !!! info "GameOrientation — your model's parent object"
-    **GameOrientation** keeps your model aligned with the game. Import and
+    **GameOrientation** converts between Blender and game coordinates. Import and
     Set Up Model create it for you.
 
     - Move, rotate and resize your **meshes**. Leave GameOrientation unchanged.
     - Keep the meshes in **Meshes_Collection** and parented to this model's GameOrientation.
     - Moving a mesh into the collection does not parent it.
+    - Parenting without preserving transforms can rotate or mirror a mesh.
+      Use **Object (Keep Transform)** to keep its current placement.
 
 ??? tip "Advanced: add another mesh"
     Move the new mesh into this model's **Meshes_Collection** and parent it to
