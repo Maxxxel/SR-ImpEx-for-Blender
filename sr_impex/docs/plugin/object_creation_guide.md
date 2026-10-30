@@ -18,29 +18,27 @@ Create your model in Blender. Select its meshes, then follow step 2.
 
 ### C. Use a model from another program
 
-Import it with **File → Import → FBX** or **Wavefront OBJ**.
-Select its meshes, then follow step 2.
+Import the model with Blender. Select its meshes, then follow step 2.
 
 ??? tip "Using a rigged model as a static object"
-    Duplicate the model. Select the duplicate meshes in the pose you want and
-    use **Object → Convert → Mesh**. Continue with these copies.
+    Duplicate the meshes and convert the copies to meshes in the desired pose.
+    Continue with these copies.
 
 ## 2. Set up a new model
 
 Skip this step for an imported DRS.
 
-1. With your meshes selected, move the mouse over the **3D Viewport** and press **N**.
-2. Open the **DRS Editor** tab on the right.
-3. In **Model Setup**, click **Set Up Model**.
-4. Choose **Static Object**, enter a name such as `object_stone_block`, and keep
+1. Select your model meshes.
+2. Open **DRS Editor → Model Setup → Set Up Model**.
+3. Choose **Static Object**, enter a name such as `object_stone_block`, and keep
    **Include Selected Meshes** enabled.
-5. Leave **Collision Support** off for now and click **OK**.
+4. Leave **Collision Support** off for now and click **OK**.
 
 ![Set up a static model from selected meshes](../assets/images/guides/static/setup.png)
 
 ### Where to put your meshes
 
-Look at the **Outliner**, Blender's object list at the top right:
+Your model's structure in the Outliner:
 
 ```text
 DRSModel_object_stone_block
@@ -58,9 +56,8 @@ DRSModel_object_stone_block
     - Moving a mesh into the collection does not parent it.
 
 ??? tip "Advanced: add another mesh"
-    1. Select the new mesh and press **M** to move it into this model's **Meshes_Collection**.
-    2. With the mesh selected, Shift-select **GameOrientation** in the Outliner.
-    3. Move the mouse over the 3D Viewport and press **Ctrl+P → Object (Keep Transform)**.
+    Move the new mesh into this model's **Meshes_Collection** and parent it to
+    **GameOrientation** using **Object (Keep Transform)**.
 
     Use the GameOrientation from the same model. Keep existing rigged meshes
     attached to their armature.
@@ -71,11 +68,8 @@ DRSModel_object_stone_block
 
 ## 3. Check your model
 
-- Use mesh objects. Convert text, curves or metaballs with **Object → Convert → Mesh**.
-- Apply geometry modifiers such as Mirror or Bevel before export. Keep an editable copy.
-- UV unwrap your mesh before adding textures.
-- Use one DRS material per mesh. For a foreign mesh with several materials,
-  enter **Edit Mode**, press **A**, then **P → By Material**.
+- Use UV-mapped meshes with geometry modifiers applied.
+- Use one DRS material per mesh. Separate multi-material meshes by material.
 - Check size and facing against an imported game object if you have one available.
 
 Already imported a DRS and only changed its shape? Keep its existing material and go to step 6.
@@ -107,9 +101,8 @@ For a foreign model, load its textures here.
 
 ![Default material with a color texture assigned](../assets/images/guides/static/material.png)
 
-Switch the viewport to **Material Preview** to check the result.
-For a lit preview, click **DRS Editor → Render Setup → Add Render**,
-then switch to **Rendered** shading. Press **F12** for a camera render.
+Check the result in **Material Preview**.
+For a lit preview, use **DRS Editor → Render Setup → Add Render**.
 
 ![The static object in a lit render setup](../assets/images/guides/static/render.png)
 
@@ -123,15 +116,15 @@ See the [Default Material Guide](material_artist_workflow.md) for more material 
 
     1. Add cubes, spheres or cylinders and fit them around your model.
     2. Move them into **Boxes_Collection**, **Spheres_Collection** or **Cylinders_Collection**.
-    3. Parent them to **GameOrientation** with **Ctrl+P → Object (Keep Transform)**.
-    4. Select each shape and set **Object Properties → Viewport Display → Display As → Wire**.
+    3. Parent them to **GameOrientation** using **Object (Keep Transform)**.
+    4. Set the collision helpers to **Wire** display.
 
     Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.
     After export, reimport with collision shapes enabled and check their fit.
 
 ## 6. Export
 
-1. Save your `.blend` file and select one mesh belonging to the model.
+1. Select a mesh belonging to the model.
 2. Open **DRS Editor → Model Setup → Export DRS**.
 3. Choose a separate output folder and a filename such as `object_stone_block.drs`.
 4. Check **Static Object (no collision)**, or **Static Object (with collision)** if appropriate.
