@@ -1004,7 +1004,7 @@ need review as described in the <a href="../unit_creation_buide/">Unit Creation 
 <p>Edit each state's render meshes in its own <code>Meshes_Collection</code>. Apply the same UV, triangulation, material, and vertex-budget checks described in the <a href="../object_creation_guide/#4-model-the-object">Object Creation Guide</a>. Use the <a href="../advanced_shading_guide/">Advanced Shading Guide</a> for packed parameters, wind, refraction, and environment maps.</p>
 <h3 id="collision">Collision<a class="headerlink" href="#collision" title="Permanent link">&para;</a></h3>
 <p>Keep building-level collision separate from damage-state collision. A damaged state may need a different approximation than the undamaged building.</p>
-<p>When adding a shape, use its state's matching box/sphere/cylinder collection. As for visible meshes, using the correct model's GO is good practice; fitting the shape first and correcting its rotation after parenting is also possible. Preserve the primitive's geometry: boxes remain rectangular, spheres remain round, and cylinders remain circular and capped. See <a href="../object_creation_guide/#8-create-collision-shapes">Object Creation Guide, step 8</a>.</p>
+<p>When adding a shape, use its state's matching box/sphere/cylinder collection. As for visible meshes, using the correct model's GO is good practice; fitting the shape first and correcting its rotation after parenting is also possible. Preserve the primitive's geometry: boxes remain rectangular, spheres remain round, and cylinders remain circular and capped. See <a href="../object_creation_guide/#6-add-collision-shapes">Add collision shapes</a>.</p>
 <h3 id="ground-decal">Ground decal<a class="headerlink" href="#ground-decal" title="Permanent link">&para;</a></h3>
 <p><code>GroundDecal_Collection</code> is imported when the BMG references a ground decal DRS. It is optional and distinct from both building collision and the grid visualization. Its render meshes are rebuilt into <code>&lt;building&gt;_ground.drs</code>; the BMG reference and textures are updated automatically.</p>
 <h3 id="construction-pieces-and-debris">Construction pieces and debris<a class="headerlink" href="#construction-pieces-and-debris" title="Permanent link">&para;</a></h3>
@@ -1107,7 +1107,7 @@ need review as described in the <a href="../unit_creation_buide/">Unit Creation 
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 17:25:34 UTC">October 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 18:49:46 UTC">October 30, 2026</span>
   </span>
 
     

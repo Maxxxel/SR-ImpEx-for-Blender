@@ -549,10 +549,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-export" class="md-nav__link">
+  <a href="#6-add-collision-shapes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Export
+        6. Add collision shapes
       
     </span>
   </a>
@@ -560,10 +560,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-check-the-exported-copy" class="md-nav__link">
+  <a href="#7-export" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Check the exported copy
+        7. Export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-check-the-exported-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Check the exported copy
       
     </span>
   </a>
@@ -828,7 +839,8 @@ Continue with these copies.</p>
 <li>Open <strong>DRS Editor → Model Setup → Set Up Model</strong>.</li>
 <li>Choose <strong>Static Object</strong>, enter a name such as <code>object_stone_block</code>, and keep
    <strong>Include Selected Meshes</strong> enabled.</li>
-<li>Leave <strong>Collision Support</strong> off for now and click <strong>OK</strong>.</li>
+<li>Enable <strong>Collision Support</strong> if your object needs collision; otherwise leave it off.
+   Click <strong>OK</strong>.</li>
 </ol>
 <p><img alt="Set up a static model from selected meshes" src="../../assets/images/guides/static/setup.png" /></p>
 <p><span id="where-to-put-your-meshes"></span></p>
@@ -889,19 +901,17 @@ For a lit preview, use <strong>DRS Editor → Render Setup → Add Render</stron
 <p>For cut-out leaves or fences, enable <strong>EnableAlphaTest</strong> under <strong>Material Flags</strong>.
 See the <a href="../material_artist_workflow/">Default Material Guide</a> for more material options.</p>
 <p><span id="8-create-collision-shapes"></span></p>
-<details class="info">
-<summary>Optional: add simple collision shapes</summary>
-<p>Enable <strong>Collision Support</strong> in step 2 if your object needs collision.</p>
+<h2 id="6-add-collision-shapes">6. Add collision shapes<a class="headerlink" href="#6-add-collision-shapes" title="Permanent link">&para;</a></h2>
+<p>For an object without collision, continue to <a href="#7-export">export</a>.</p>
 <ol>
-<li>Add cubes, spheres or cylinders and fit them around your model.</li>
-<li>Move them into <strong>Boxes_Collection</strong>, <strong>Spheres_Collection</strong> or <strong>Cylinders_Collection</strong>.</li>
-<li>Parent them to <strong>GameOrientation</strong> using <strong>Object (Keep Transform)</strong>.</li>
-<li>Set the collision helpers to <strong>Wire</strong> display.</li>
+<li>Add cubes, spheres or cylinders and fit them around your model. Use several shapes if needed.</li>
+<li>Move cubes into <strong>Boxes_Collection</strong>, spheres into <strong>Spheres_Collection</strong>,
+   and cylinders into <strong>Cylinders_Collection</strong> under this model's <strong>CollisionShapes_Collection</strong>.</li>
+<li>Parent the shapes to <strong>GameOrientation</strong> using <strong>Object (Keep Transform)</strong>.</li>
+<li>Set them to <strong>Wire</strong> display and disable rendering for these helper objects.</li>
 </ol>
-<p>Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.
-After export, reimport with collision shapes enabled and check their fit.</p>
-</details>
-<h2 id="6-export">6. Export<a class="headerlink" href="#6-export" title="Permanent link">&para;</a></h2>
+<p>Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.</p>
+<h2 id="7-export">7. Export<a class="headerlink" href="#7-export" title="Permanent link">&para;</a></h2>
 <ol>
 <li>Select a mesh belonging to the model.</li>
 <li>Open <strong>DRS Editor → Model Setup → Export DRS</strong>.</li>
@@ -944,10 +954,11 @@ After export, reimport with collision shapes enabled and check their fit.</p>
 </tbody>
 </table>
 </details>
-<h2 id="7-check-the-exported-copy">7. Check the exported copy<a class="headerlink" href="#7-check-the-exported-copy" title="Permanent link">&para;</a></h2>
+<h2 id="8-check-the-exported-copy">8. Check the exported copy<a class="headerlink" href="#8-check-the-exported-copy" title="Permanent link">&para;</a></h2>
 <ol>
 <li>Keep the exported <code>.drs</code> and <code>.dds</code> textures together in the output folder.</li>
-<li>Import the DRS into a fresh Blender scene. Check its orientation, size and textures.</li>
+<li>Import the DRS into a fresh Blender scene. Enable <strong>Import Collision Shape</strong> if used.
+   Check orientation, size, textures and collision fit.</li>
 <li>Test it in the Skylords Map Editor.</li>
 </ol>
 <p>If a texture is missing, check its slot in Material Editor and the export folder.</p>
@@ -973,7 +984,7 @@ After export, reimport with collision shapes enabled and check their fit.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 18:43:19 UTC">October 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 18:49:46 UTC">October 30, 2026</span>
   </span>
 
     
