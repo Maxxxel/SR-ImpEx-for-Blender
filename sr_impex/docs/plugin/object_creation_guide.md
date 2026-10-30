@@ -161,27 +161,20 @@ Animated objects automatically play **Base Idle**. Other action types are greyed
     Keep your original foreign rig intact.
 
 ??? tip "Advanced: play another animation from a map script"
-    For a gate that opens when a lever is used:
+    **Gate setup:**
+
+    - **Decorative gate:** keep the frame and door in one model.
+    - **Gate that opens a passage:** export the frame and door as separate models,
+      each with its own collision shape. Place them separately in the map.
+
+    To control the door:
 
     1. Create the opening motion as a separate Action.
     2. Export it with **File → Export → Battleforge Animation (.ska)**.
-    3. Give the filename to the map author. Their map script plays that file
-       at the chosen event, once or in a loop.
+    3. Give the SKA filename to the map author. Their script plays it on the door
+       and switches the door's blocking when opening or closing the passage.
 
     Keep Idle in AnimationSet. Do not add an Attack or Walk mapping for this clip.
-    The plugin does not create the map script.
-
-    **For a usable gate, coordinate the blocking with the map author:**
-
-    - Keep the frame's permanent blocker separate from the door's switchable blocker.
-    - A simple custom setup uses a static frame asset and a separate moving-door asset,
-      placed as separate entities. The map author must set up the gate or blocker logic.
-    - Two meshes inside one DRS do not create separate blockers. The native gate command
-      switches its gate entity's whole obstacle, not a named mesh or collision shape.
-    - Playing the opening SKA changes the visible motion only. The passage also needs
-      to be unblocked by the map's gameplay logic.
-
-    Two visible model files are a convenient setup, not a requirement for every gate.
 
 <span id="7-export"></span>
 
