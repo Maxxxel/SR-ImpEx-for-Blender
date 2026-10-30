@@ -1,18 +1,14 @@
 # Unit Creation Guide
 
-This guide walks through the basic setup for creating a unit or animated object with the SR-ImpEx Blender plugin.
+Create and export an animated unit with the SR-ImpEx Blender plugin. For static or animated props, use the [Object Guide](object_creation_guide.md).
 
-First follow the shared scene, mesh, UV, and material setup in the [Object Creation Guide](object_creation_guide.md). Do not copy the static-object collision or export choices unchanged: units and animated objects use different export types.
-
-| Target | DRS export type | Important difference |
-|---|---|---|
-| A unit with animation/locator metadata | `Animated Unit` | Writes unit animation, effect, and locator blocks; does not export the object collision-shape block. |
-| A rigged prop or animated object | `Animated Object (no collision)` or `Animated Object (with collision)` | Can use simple object collision when that type is chosen. It does not gain unit locators simply by being animated. |
-| A building with states/grid resources | Building export types | Follow the [Building Creation Guide](building_creation_guide.md), including its current export limitations. |
+For a new unit, use **DRS Editor → Model Setup → Set Up Model → Unit**.
+Follow the [Object Guide](object_creation_guide.md) for shared mesh, UV and material setup.
+Use **Animated Unit** as the export type for this workflow.
 
 ## Before You Start
 
-A unit or animated object needs:
+A unit needs:
 
 - a deform armature and its skeleton/rest pose;
 - render meshes with an Armature modifier referencing that deform armature;
@@ -44,7 +40,7 @@ export log warns and retains the first weighted set. Make the corresponding
 weights agree or separate the positions, then verify collision/query behavior
 in the editor. Render meshes still have their own per-mesh skin streams.
 
-The new-scene operator creates the shared object collections, not a finished character rig. Put the deform armature in a direct child collection named `Armature_Collection` and render meshes directly in `Meshes_Collection`. Start from an imported, compatible skeleton when possible; changing a skeleton/rest pose without checking the skin and animations can break their agreement.
+Put the deform armature in a direct child collection named `Armature_Collection` and render meshes directly in `Meshes_Collection`. Start from an imported, compatible skeleton when possible; changing a skeleton/rest pose without checking the skin and animations can break their agreement.
 
 ### GO and rig relationships
 
@@ -66,7 +62,7 @@ The following are common starting points, **not a universally enforced minimum s
 - `Hit`: a hit-related point; bone attachment depends on the asset.
 - `Projectile_Spawn`: a projectile-origin position/orientation where the asset uses that role.
 
-Adding a locator alone does not define a projectile, damage rule, or gameplay ability. The current DRS writer includes `CDrwLocatorList` for `Animated Unit`, not the animated-object export types.
+Adding a locator alone does not define a projectile, damage rule, or gameplay ability.
 
 ![Minimum locator setup](https://i.gyazo.com/24af20064e578abefbfbf9a788a30873.png)
 
@@ -82,7 +78,7 @@ Use this order to avoid losing locator placement:
 
 See the [Advanced Locators Guide](advanced_locators_guide.md) for supported types, resource references, multiple-model selection, and the difference between changing metadata and syncing scene transforms.
 
-## 2. Understand Units vs. Animated Objects
+## 2. Set Up Unit Animations
 
 For the selected animation variant, **DRS Editor > Animation Set Editor**
 provides Clip Settings and playback. Text events and Target IDs are in the
@@ -98,7 +94,7 @@ incoming and outgoing handle slopes. Prefer aligned handles, and reimport the
 exported clip to check motion between keys, especially after adjusting handle
 lengths or using keys close together on subframes.
 
-A unit usually has multiple animation modes. The current animated-object export path keeps the `Idle` visibility job and removes unit-style markers/timings; selecting `Animated Object` is not a way to export a unit with fewer requirements.
+Use the animation modes required by the unit's existing gameplay setup.
 
 The editor's initialization template provides a useful starting list, not an exporter-enforced guarantee that every unit needs exactly these animations:
 
@@ -177,7 +173,7 @@ For more animation types such as spell casting or ranged attacks, check the [Adv
 
 In the upper section of the unit editor, you can configure basic values such as walk speed, run speed, and additional settings for flying units.
 
-Some of these values still need further investigation.
+Use the [Basics settings reference](advanced_abilities_guide.md#basics-motion-in-the-game) for walk/run reference speeds, terrain alignment and flight settings.
 
 ![Basic unit settings](https://i.gyazo.com/2d4d14f733d4b6047f402bdb4e0a6c2d.png)
 
@@ -197,13 +193,13 @@ For the exact fields, preview limits, sound types, and reference rules, use the 
 
 ## 7. Export the Unit
 
-Make the root `DRSModel_...` collection active and choose **File > Export > Battleforge Object/Unit (.drs)**.
+Select a model mesh and choose **DRS Editor → Model Setup → Export DRS**.
 
-1. Choose **Animated Unit** for the unit metadata workflow above, or the matching **Animated Object** type for an animated prop. Do not export a unit as an animated object if you need its markers, unit effects, and locators.
+1. Choose **Animated Unit**.
 2. Enable **Export All SKA Actions** when you want the clips referenced by the **saved AnimationSet** written alongside the DRS. It does not mean every Blender action, and an EffectSet-only reference is not enough to select a clip.
 3. Choose **Model Name Prefix** explicitly. The actual default is **No Prefix**. `Model Name Prefix`, `Folder Name Prefix`, and `Keep Existing Prefix` serve different naming workflows; verify the resulting names and saved references rather than renaming output files independently.
 4. Leave **[DEBUG] Export SKA Tangents** enabled for Hermite tangent export unless you deliberately need a stepped/flat debugging comparison. It cannot repair missing keys or an unbaked control rig.
-5. Use the ordinary UV, normal, triangulation, mip-map, and vertex-budget checks from the object guide. Unit collision is not added by populating object collision collections; only collision-enabled animated-object types write that primitive block.
+5. Use the ordinary UV, normal, triangulation, mip-map, and vertex-budget checks from the object guide.
 
 > **Rig export limitation:** The writer exports the deform armature, not an armature whose name contains `Control_Rig`. It reads deform-bone location/quaternion F-curves and does not automatically bake constraints, IK, or NLA results. A successful control-rig preview is therefore not proof that the exported action contains the same motion. Prepare compatible keyed deform actions on a working copy and verify a fresh SKA import; do not destructively apply transforms or bake away the only copy of your rig.
 
@@ -228,7 +224,7 @@ If the mesh is rotated correctly but the animation is not, inspect the deform ac
 
 ## Related Guides
 
-- [Object Creation Guide](object_creation_guide.md)
+- [Object Guide](object_creation_guide.md)
 - [Building Creation Guide](building_creation_guide.md)
 - [Advanced Locators Guide](advanced_locators_guide.md)
 - [Advanced Abilities Guide](advanced_abilities_guide.md)

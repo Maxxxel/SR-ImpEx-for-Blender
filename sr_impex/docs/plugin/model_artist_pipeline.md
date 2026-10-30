@@ -10,8 +10,8 @@ export to a separate folder.
 
 | Your goal | Start here | Output to check |
 | --- | --- | --- |
-| Static decoration or object | [Object Creation Guide](object_creation_guide.md) | DRS, texture files and any intended collision |
-| Animated unit or rigged prop | [Unit Creation Guide](unit_creation_buide.md) | DRS, referenced SKA clips and textures |
+| Static or animated prop | [Object Guide](object_creation_guide.md) | DRS, textures, any intended collision and SKA clips for animation |
+| Unit | [Unit Creation Guide](unit_creation_buide.md) | DRS, referenced SKA clips and textures |
 | Building with damage states | [Building Creation Guide](building_creation_guide.md) | BMG, state DRS files, textures and referenced resources |
 | Create or edit a standalone state-resource set | Choose **New BMS** or Open under **BMG Editor > BMS State Resources** | A BMS copy and its separately exported DRS/FX dependencies |
 

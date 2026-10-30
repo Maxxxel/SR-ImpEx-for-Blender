@@ -2,7 +2,7 @@
 
 Create and export models with SR-ImpEx. These guides describe the development build.
 
-**Start here:** [Static Object Guide](plugin/object_creation_guide.md) — edit an existing DRS, create your own model, or bring in a foreign model.
+**Start here:** [Object Guide](plugin/object_creation_guide.md) — create or edit static and animated props from an existing DRS, a new model or a foreign model.
 
 - [Default Material Guide](plugin/material_artist_workflow.md)
 - [Unit Creation Guide](plugin/unit_creation_buide.md)
