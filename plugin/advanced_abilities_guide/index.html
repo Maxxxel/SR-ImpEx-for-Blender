@@ -965,7 +965,24 @@
 </table>
 <p>Existing mappings are kept. Enable <strong>Replace Existing Mappings</strong> only to clear the list first; it does not delete Actions. New entries have no Action assigned. Choose an Action for each entry you need, then click <strong>Save</strong>.</p>
 <p>These are small starting layouts, not a universal list required by the engine. For an animated unit, always assign a usable <strong>Idle in Base mode</strong>: several actions use it as a fallback. A file loading successfully does not guarantee safe playback when that fallback is missing. A fallback Idle does not replace the intended walk, spawn or death motion. Add attack, hit, mode-change and other animations when the existing game configuration uses them. Building damage states and construction are configured through the building tools, not by this template. The type choice does not change the export type or create gameplay behavior.</p>
-<p>An animated prop may need only Idle. The <strong>Animated Object</strong> DRS export types retain only Idle and remove animation markers and timings. Use <strong>Animated Unit</strong> when the exported model needs attack/cast mappings and timing data. Units and animated objects need an armature before initialization.</p>
+<p>For <strong>Animated Object</strong>, use <strong>Idle in Base mode</strong> for automatic playback.
+Other action types are greyed out. Existing entries and Blender Actions are kept.
+The <strong>Animated Object</strong> DRS export types retain only Idle and remove animation
+markers and timings. Units and animated objects need an armature before initialization.</p>
+<details class="tip">
+<summary>Scripted animations for objects</summary>
+<p>A map script can tell an object to play a particular SKA file at an event.
+For example, a lever can trigger a gate's opening animation.</p>
+<ol>
+<li>Create the extra clip as a separate Blender Action.</li>
+<li>Export it with <strong>File → Export → Battleforge Animation (.ska)</strong>.</li>
+<li>Give the SKA filename to the map author. They trigger it from the map
+   script, either once or in a loop.</li>
+</ol>
+<p>Keep Idle in AnimationSet. No Attack, Walk or other mapping is needed for
+the scripted clip. Without a script trigger, that extra clip will not play
+automatically. The plugin does not create the map script.</p>
+</details>
 <h3 id="basics-motion-in-the-game">Basics: Motion in the Game<a class="headerlink" href="#basics-motion-in-the-game" title="Permanent link">&para;</a></h3>
 <p>For a unit, open <strong>Basics</strong>. Keep the imported settings unless you intend to change its motion. These settings are exported; Blender's <strong>Play</strong> previews the Action and does not simulate the game's movement, terrain or hit reactions.</p>
 <table>
@@ -1283,7 +1300,7 @@ and are shared by all variants that reference it.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 17:25:34 UTC">October 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 20:05:12 UTC">October 30, 2026</span>
   </span>
 
     
