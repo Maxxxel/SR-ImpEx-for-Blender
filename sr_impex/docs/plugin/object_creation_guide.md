@@ -32,7 +32,8 @@ Skip this step for an imported DRS.
 2. Open **DRS Editor → Model Setup → Set Up Model**.
 3. Choose **Static Object**, enter a name such as `object_stone_block`, and keep
    **Include Selected Meshes** enabled.
-4. Leave **Collision Support** off for now and click **OK**.
+4. Enable **Collision Support** if your object needs collision; otherwise leave it off.
+   Click **OK**.
 
 ![Set up a static model from selected meshes](../assets/images/guides/static/setup.png)
 
@@ -102,18 +103,19 @@ See the [Default Material Guide](material_artist_workflow.md) for more material 
 
 <span id="8-create-collision-shapes"></span>
 
-??? info "Optional: add simple collision shapes"
-    Enable **Collision Support** in step 2 if your object needs collision.
+## 6. Add collision shapes
 
-    1. Add cubes, spheres or cylinders and fit them around your model.
-    2. Move them into **Boxes_Collection**, **Spheres_Collection** or **Cylinders_Collection**.
-    3. Parent them to **GameOrientation** using **Object (Keep Transform)**.
-    4. Set the collision helpers to **Wire** display.
+For an object without collision, continue to [export](#7-export).
 
-    Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.
-    After export, reimport with collision shapes enabled and check their fit.
+1. Add cubes, spheres or cylinders and fit them around your model. Use several shapes if needed.
+2. Move cubes into **Boxes_Collection**, spheres into **Spheres_Collection**,
+   and cylinders into **Cylinders_Collection** under this model's **CollisionShapes_Collection**.
+3. Parent the shapes to **GameOrientation** using **Object (Keep Transform)**.
+4. Set them to **Wire** display and disable rendering for these helper objects.
 
-## 6. Export
+Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.
+
+## 7. Export
 
 1. Select a mesh belonging to the model.
 2. Open **DRS Editor → Model Setup → Export DRS**.
@@ -134,10 +136,11 @@ See the [Default Material Guide](material_artist_workflow.md) for more material 
     | Mip Maps | Keep **Auto**. Change only to limit the exported mip levels. |
     | Keep Debug Collection | Enable to inspect the prepared export copy. |
 
-## 7. Check the exported copy
+## 8. Check the exported copy
 
 1. Keep the exported `.drs` and `.dds` textures together in the output folder.
-2. Import the DRS into a fresh Blender scene. Check its orientation, size and textures.
+2. Import the DRS into a fresh Blender scene. Enable **Import Collision Shape** if used.
+   Check orientation, size, textures and collision fit.
 3. Test it in the Skylords Map Editor.
 
 If a texture is missing, check its slot in Material Editor and the export folder.

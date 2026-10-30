@@ -117,7 +117,7 @@ Edit each state's render meshes in its own `Meshes_Collection`. Apply the same U
 
 Keep building-level collision separate from damage-state collision. A damaged state may need a different approximation than the undamaged building.
 
-When adding a shape, use its state's matching box/sphere/cylinder collection. As for visible meshes, using the correct model's GO is good practice; fitting the shape first and correcting its rotation after parenting is also possible. Preserve the primitive's geometry: boxes remain rectangular, spheres remain round, and cylinders remain circular and capped. See [Object Creation Guide, step 8](object_creation_guide.md#8-create-collision-shapes).
+When adding a shape, use its state's matching box/sphere/cylinder collection. As for visible meshes, using the correct model's GO is good practice; fitting the shape first and correcting its rotation after parenting is also possible. Preserve the primitive's geometry: boxes remain rectangular, spheres remain round, and cylinders remain circular and capped. See [Add collision shapes](object_creation_guide.md#6-add-collision-shapes).
 
 ### Ground decal
 
