@@ -49,14 +49,21 @@ DRSModel_object_stone_block
     └── Stone Block
 ```
 
-Keep your model meshes in **Meshes_Collection**. Move, rotate and resize the meshes;
-leave **GameOrientation** unchanged.
+!!! info "GameOrientation — your model's parent object"
+    **GameOrientation** keeps your model aligned with the game. Import and
+    Set Up Model create it for you.
 
-If you add a mesh later:
+    - Move, rotate and resize your **meshes**. Leave GameOrientation unchanged.
+    - Keep the meshes in **Meshes_Collection** and parented to this model's GameOrientation.
+    - Moving a mesh into the collection does not parent it.
 
-1. Select it and press **M** to move it into this model's **Meshes_Collection**.
-2. With the mesh selected, Shift-select **GameOrientation** in the Outliner.
-3. Move the mouse over the 3D Viewport and press **Ctrl+P → Object (Keep Transform)**.
+??? tip "Advanced: add another mesh"
+    1. Select the new mesh and press **M** to move it into this model's **Meshes_Collection**.
+    2. With the mesh selected, Shift-select **GameOrientation** in the Outliner.
+    3. Move the mouse over the 3D Viewport and press **Ctrl+P → Object (Keep Transform)**.
+
+    Use the GameOrientation from the same model. Keep existing rigged meshes
+    attached to their armature.
 
 ![The model structure and GameOrientation](../assets/images/guides/static/structure.png)
 
@@ -72,6 +79,13 @@ If you add a mesh later:
 - Check size and facing against an imported game object if you have one available.
 
 Already imported a DRS and only changed its shape? Keep its existing material and go to step 6.
+
+??? tip "Advanced: large models and export errors"
+    - Keep each mesh and the combined model below **32,767 exported vertices**.
+      Leave room for extra vertices at UV seams.
+    - If you reach the limit, reduce the geometry or export smaller, separate DRS objects.
+    - Apply geometry modifiers on a copy before exporting. Keep the editable original.
+    - If export fails, read the add-on log and fix the reported object first.
 
 ## 4. Create a DRS material
 
@@ -112,6 +126,9 @@ See the [Default Material Guide](material_artist_workflow.md) for more material 
     3. Parent them to **GameOrientation** with **Ctrl+P → Object (Keep Transform)**.
     4. Select each shape and set **Object Properties → Viewport Display → Display As → Wire**.
 
+    Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.
+    After export, reimport with collision shapes enabled and check their fit.
+
 ## 6. Export
 
 1. Save your `.blend` file and select one mesh belonging to the model.
@@ -122,6 +139,17 @@ See the [Default Material Guide](material_artist_workflow.md) for more material 
 
 ![The static-object export dialog](../assets/images/guides/static/export.png)
 
+??? tip "Advanced: export options"
+    For extra mesh controls, open **Advanced Mesh Settings** in the export window.
+
+    | Option | Setting |
+    | --- | --- |
+    | Split Mesh by UV Islands | Keep enabled unless you have prepared the splits yourself. |
+    | Flip Normals | Use only to correct confirmed inside-out faces. |
+    | Auto-fix Quad Faces | Keep enabled to export quads as triangles. |
+    | Mip Maps | Keep **Auto**. Change only to limit the exported mip levels. |
+    | Keep Debug Collection | Enable to inspect the prepared export copy. |
+
 ## 7. Check the exported copy
 
 1. Keep the exported `.drs` and `.dds` textures together in the output folder.
@@ -129,5 +157,3 @@ See the [Default Material Guide](material_artist_workflow.md) for more material 
 3. Test it in the Skylords Map Editor.
 
 If a texture is missing, check its slot in Material Editor and the export folder.
-
-[Advanced object setup](object_setup_reference.md)

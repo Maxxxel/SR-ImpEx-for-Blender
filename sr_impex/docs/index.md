@@ -7,7 +7,6 @@ Create and export models with SR-ImpEx. These guides describe the development bu
 - [Default Material Guide](plugin/material_artist_workflow.md)
 - [Unit Creation Guide](plugin/unit_creation_buide.md)
 - [Building Creation Guide](plugin/building_creation_guide.md)
-- [Advanced Object Setup](plugin/object_setup_reference.md)
 - [Advanced Shading Guide](plugin/advanced_shading_guide.md)
 - [Advanced Locators Guide](plugin/advanced_locators_guide.md)
 - [Advanced Abilities Guide](plugin/advanced_abilities_guide.md)

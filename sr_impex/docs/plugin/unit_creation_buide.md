@@ -50,7 +50,7 @@ The new-scene operator creates the shared object collections, not a finished cha
 
 > **Recommended practice:** Keep the armature and meshes in one consistent model coordinate convention. When using `GameOrientation` (GO), leave the armature under the model's helper and keep skinned meshes attached to their deform armature. Parenting before modeling is convenient, not a required order of operations.
 
-Do not reparent every skinned mesh directly to GO just because a static mesh can be authored that way. Bone-attached locators also stay attached to bones. Avoid applying transforms to GO, the armature, or an existing bound rig as a blanket rotation fix; changes to a rig need animation and skin validation, not just a still-frame check. See [Object Creation Guide, step 3](object_setup_reference.md#orientation-and-parenting) for the distinction between collections, parenting, and baked mesh rotation.
+Do not reparent every skinned mesh directly to GO just because a static mesh can be authored that way. Bone-attached locators also stay attached to bones. Avoid applying transforms to GO, the armature, or an existing bound rig as a blanket rotation fix; changes to a rig need animation and skin validation, not just a still-frame check. See [GameOrientation and adding meshes](object_creation_guide.md#where-to-put-your-meshes).
 
 ![Armature, skeleton, and skin overview](https://i.gyazo.com/883689b7da73bc1a30636faf6d42d121.png)
 
