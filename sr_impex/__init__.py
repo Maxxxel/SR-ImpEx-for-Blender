@@ -9,7 +9,6 @@ from bpy_extras.io_utils import ImportHelper, ExportHelper
 from sr_impex.core.profiler import print_profiling_report
 from .blender.editors.obb_debug import (
     DRS_OT_debug_obb_tree,
-    DRS_PT_debug_tools,
     register_obb_debug_properties,
     unregister_obb_debug_properties,
 )
@@ -24,8 +23,13 @@ from .updater import addon_updater_ops
 from .blender.editors import locator_editor
 from .blender.editors import animation_set_editor
 from .blender.editors import material_flow_editor
+from .blender.editors import material_editor
+from .blender import battleforge_preview
+from .blender import asset_preferences
 from .blender.editors import effect_set_editor
-from .blender.editors import bmg_state_editor
+from .blender.editors import bmg_state_editor, building_editor
+from .blender.editors import ska_editor
+from .blender.editors import bms_editor
 from .blender.editors import environment_cubemap_editor
 
 bl_info = {
@@ -33,7 +37,7 @@ bl_info = {
     "author": "Maxxxel",
     "description": "Addon for importing and exporting Battleforge drs/bmg files.",
     "blender": (4, 5, 0),
-    "version": (3, 9, 2),
+    "version": (4, 0, 0),
     "location": "File > Import",
     "warning": "",
     "category": "Import-Export",
@@ -164,9 +168,15 @@ class MyAddonPreferences(bpy.types.AddonPreferences):
     )  # type: ignore
     skylords_root: StringProperty(
         name="Skylords Reborn Folder",
-        description="Path to the game's installation (root folder containing PAKs)",
+        description="Game installation; preview assets are read from Mods/Unpack and base/pak",
         subtype="DIR_PATH",
         default="",
+        update=asset_preferences.changed,
+    )  # type: ignore
+    effects_folder: StringProperty(
+        name="Effects Folder",
+        description="Optional loose effect library, normally Mods/Unpack/bf1/gfx/effects; overrides game assets for Blender previews",
+        subtype="DIR_PATH", default="",update=asset_preferences.changed,
     )  # type: ignore
 
     def draw(self, context):
@@ -176,6 +186,8 @@ class MyAddonPreferences(bpy.types.AddonPreferences):
         box = layout.box()
         box.label(text="Asset Library", icon="ASSET_MANAGER")
         box.prop(self, "skylords_root")
+        box.prop(self, "effects_folder")
+        box.operator('drs.effect_refresh_library', text='Refresh Effect Library', icon='FILE_REFRESH')
         # existing updater UI
         addon_updater_ops.update_settings_ui(self, context)
         addon_updater_ops.update_notice_box_ui(self, context)
@@ -346,6 +358,8 @@ class ImportBFModel(bpy.types.Operator, ImportHelper):
         keywords["import_environment_cubemap"] = self.import_environment_cubemap
 
         if self.clear_scene:
+            from .blender.effect_preview import clear as clear_effect_preview
+            clear_effect_preview(context.scene)
             # Delete all collections
             for collection in bpy.data.collections:
                 bpy.data.collections.remove(collection)
@@ -383,6 +397,9 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
     bl_idname: str = "export_scene.drs"
     bl_label: str = "Export DRS"
     filename_ext: str = ".drs"
+    bl_description='Export the selected Skylords model and its textures; the model is detected from its mesh or collection'
+    advanced_options: BoolProperty(name='Advanced Mesh Settings',default=False,options={'SKIP_SAVE'},
+        description='Show mesh preparation and diagnostic options; the defaults suit most static objects')
 
     # this one needs to be named exactly 'filepath' for ExportHelper
     filepath: StringProperty(
@@ -467,32 +484,30 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
         layout = self.layout
         layout.label(text="Export Settings", icon="EXPORT")
         layout.prop(self, "model_type")
-        layout.separator()
-        layout.label(text="Mesh Export Settings", icon="MESH_CUBE")
-        layout.prop(self, "split_mesh_by_uv_islands")
-        layout.prop(self, "flip_normals")
-        layout.prop(self, "auto_fix_quad_faces")
         layout.prop(self, "mip_maps")
         layout.separator()
-        layout.label(text="SKA Export Settings", icon="ANIM_DATA")
-        layout.prop(self, "export_all_ska_actions")
-        layout.prop(self, "set_model_name_prefix")
-        layout.prop(self, "export_tangents")
-        layout.separator()
-        layout.label(text="MISC Settings", icon="PREFERENCES")
-        layout.prop(self, "keep_debug_collections")
+        if self.model_type.startswith('Animated'):
+            layout.label(text="Animation Export", icon="ANIM_DATA")
+            layout.prop(self, "export_all_ska_actions")
+            if self.export_all_ska_actions:layout.prop(self, "set_model_name_prefix")
+        layout.prop(self,'advanced_options',toggle=True)
+        if self.advanced_options:
+            layout.prop(self, "split_mesh_by_uv_islands")
+            layout.prop(self, "flip_normals")
+            layout.prop(self, "auto_fix_quad_faces")
+            layout.prop(self, "keep_debug_collections")
 
 
     def invoke(self, context, event):
-        # Retrieve the active collection from the active layer collection
-        active_coll = context.view_layer.active_layer_collection.collection
-        coll_name = active_coll.name
-
-        # Strip off the "DRSModel_" prefix if present
-        if coll_name.startswith("DRSModel_"):
-            model_name = coll_name[9:]
-        else:
-            model_name = "you havent selected a DRS model collection"
+        from .utilities.artist_context import find_model
+        root=find_model(context,kind='DRS')
+        if root is None:
+            self.report({'ERROR'},'Select a mesh belonging to a Skylords model before exporting.');return {'CANCELLED'}
+        model_name=root.name.removeprefix('DRSModel_')
+        collision=any(c.name.startswith('CollisionShapes_Collection') and any(o.type=='MESH' for o in c.all_objects) for c in root.children)
+        animated=any(o.type=='ARMATURE' for o in root.all_objects)
+        self.model_type='AnimatedUnit' if root.get('_sr_model_type')=='unit' else ('AnimatedObject' if animated else 'StaticObject')+('Collision' if collision else 'NoCollision')
+        if not animated:self.export_all_ska_actions=False
 
         # Update the file name with the model name
         self.filepath = bpy.path.ensure_ext(model_name, ".drs")
@@ -500,12 +515,13 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
+        keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing", "advanced_options"))
         keywords["split_mesh_by_uv_islands"] = self.split_mesh_by_uv_islands
         keywords["flip_normals"] = self.flip_normals
         keywords["keep_debug_collections"] = self.keep_debug_collections
         keywords["model_type"] = self.model_type
         keywords["export_all_ska_actions"] = self.export_all_ska_actions
+        if not self.model_type.startswith('Animated'):keywords['export_all_ska_actions']=False
         keywords["set_model_name_prefix"] = self.set_model_name_prefix
         keywords["auto_fix_quad_faces"] = self.auto_fix_quad_faces
         keywords["export_tangents"] = self.export_tangents
@@ -521,7 +537,7 @@ class ExportDRSModel(bpy.types.Operator, ExportHelper):
 
         result = save_drs(context, **keywords)
         if result == {"FINISHED"}:
-            self.report({"INFO"}, "Export successfull.")
+            self.report({"INFO"}, "Export complete.")
         else:
             self.report({"ERROR"}, "Export failed. Check details in the Log..")
 
@@ -575,12 +591,13 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
         name="Model Type",
         description="Select the model type",
         items=[
+            ("AUTO", "Preserve / Auto", "Preserve imported nodes or derive a new building layout"),
             ("StaticBuildingNoCollision", "Static Building (no collision)", "Export as static building without collision"),
             ("StaticBuildingCollision", "Static Building (with collision)", "Export as static building with collision"),
             ("AnimatedBuildingCollisionEffects", "Animated Building (with collision & effects)", "Export as animated building with collision and effects"),
             ("AnimatedBuildingCollisionNoEffects", "Animated Building (with collision, no effects)", "Export as animated building with collision but no effects"),
         ],
-        default="StaticBuildingNoCollision",
+        default="AUTO",
     )  # type: ignore
     export_all_ska_actions: BoolProperty(
         name="Export All SKA Actions",
@@ -596,7 +613,7 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
             ("folder_name", "Folder Name Prefix", "Prefix SKA actions with the folder name: new_model_folder_idle.ska"),
             ("keep_existing", "Keep Existing Prefix", "Keep existing prefixes of imported SKA actions: skel_human_2h_idle.ska"),
         ],
-        default="none",
+        default="keep_existing",
     )  # type: ignore
     auto_fix_quad_faces: BoolProperty(
         name="Auto-fix Quad Faces",
@@ -627,28 +644,22 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
         layout.label(text="SKA Export Settings", icon="ANIM_DATA")
         layout.prop(self, "export_all_ska_actions")
         layout.prop(self, "set_model_name_prefix")
-        layout.separator()
-        layout.label(text="MISC Settings", icon="PREFERENCES")
-        layout.prop(self, "keep_debug_collections")
+        layout.label(text="Temporary export meshes are cleaned up automatically.")
 
 
     def invoke(self, context, event):
-        # Retrieve the active collection from the active layer collection
-        active_coll = context.view_layer.active_layer_collection.collection
-        coll_name = active_coll.name
-
-        # Strip off the "DRSModel_" prefix if present
-        if coll_name.startswith("DRSModel_"):
-            model_name = coll_name[9:]
-        else:
-            model_name = "you havent selected a DRS model collection"
-
-        # Update the file name with the model name
-        self.filepath = bpy.path.ensure_ext(model_name, ".drs")
+        from .utilities.building_export import find_building
+        try:
+            root = find_building(context)
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        self.filepath = bpy.path.ensure_ext(root.name.removeprefix("DRSModel_"), ".bmg")
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
+        self.filepath = os.path.splitext(self.filepath)[0] + ".bmg"
         keywords: list = self.as_keywords(ignore=("filter_glob", "check_existing"))
         keywords["split_mesh_by_uv_islands"] = self.split_mesh_by_uv_islands
         keywords["flip_normals"] = self.flip_normals
@@ -665,7 +676,6 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
         model_name = os.path.splitext(model_name)[0]
         keywords["model_name"] = model_name
 
-        self.filepath = bpy.path.ensure_ext(self.filepath, ".drs")
 
         result = save_bmg(context, **keywords)
         if result == {"FINISHED"}:
@@ -675,8 +685,6 @@ class ExportBMGModel(bpy.types.Operator, ExportHelper):
 
         print_profiling_report()
 
-        # Purge unused data blocks
-        bpy.ops.outliner.orphans_purge(do_recursive=True)
 
         return result
 
@@ -778,11 +786,12 @@ class ExportSKAFile(bpy.types.Operator, ExportHelper):
         return {"FINISHED"}
 
 
-class NewBFScene(bpy.types.Operator, ImportHelper):
+class NewBFScene(bpy.types.Operator):
     """Create a new Battleforge scene with selectable type and collision support"""
 
     bl_idname = "scene.new_bf_scene"
-    bl_label = "New Battleforge Scene"
+    bl_label = "Set Up Skylords Model"
+    bl_description = "Create model folders and GameOrientation in this scene; optionally include selected meshes without moving them"
     bl_options = {"REGISTER", "UNDO"}
 
     scene_type: EnumProperty(  # type: ignore
@@ -790,7 +799,8 @@ class NewBFScene(bpy.types.Operator, ImportHelper):
         description="Select the type of scene to create",
         items=[
             ("object", "Static Object", "Create a static object scene"),
-            ("object", "Animated Object", "Create an animated object scene"),
+            ("animated_object", "Animated Object", "Create folders for an animated object; add its rig and animations separately"),
+            ("unit", "Unit", "Create folders for a unit; add its rig and animations separately"),
         ],
         default="object",
     )
@@ -800,16 +810,53 @@ class NewBFScene(bpy.types.Operator, ImportHelper):
         description="Include collision shape collections",
         default=False,
     )
+    model_name: StringProperty(name="Model Name",default="object_custom",
+        description="Name used for the model collection and suggested export filename")
+    use_selected: BoolProperty(name="Include Selected Meshes",default=True,
+        description="Move selected meshes into this model and parent them to GameOrientation while keeping their visible position")
+
+    def invoke(self,context,event):
+        return context.window_manager.invoke_props_dialog(self,width=380)
 
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "scene_type")
+        layout.prop(self, "model_name")
+        layout.prop(self, "use_selected")
         layout.prop(self, "collision_support")
 
     def execute(self, context):
-        create_new_bf_scene(self.scene_type, self.collision_support)
-        self.report({"INFO"}, "New Battleforge scene created.")
+        import re
+        name=re.sub(r'[^a-zA-Z0-9_]+','_',self.model_name.strip()).strip('_')
+        if not name:
+            self.report({'ERROR'},'Enter a model name');return {'CANCELLED'}
+        selected=[o for o in context.selected_objects if o.type=='MESH'] if self.use_selected else []
+        for collection in bpy.data.collections:
+            if collection.name.startswith('DRSModel_') and any(o.name in collection.all_objects for o in selected):
+                self.report({'ERROR'},'These meshes already belong to a model. Select a new mesh or turn off Include Selected Meshes.');return {'CANCELLED'}
+        root=create_new_bf_scene(self.scene_type,self.collision_support,name)
+        go=next(o for o in root.objects if o.name.startswith('GameOrientation'))
+        meshes=next(c for c in root.children if c.name.startswith('Meshes_Collection'))
+        for obj in selected:
+            world=obj.matrix_world.copy()
+            for collection in list(obj.users_collection):collection.objects.unlink(obj)
+            meshes.objects.link(obj);obj.parent=go;obj.matrix_world=world
+        root['_sr_format']='DRS';root['_sr_model_type']=self.scene_type
+        from .utilities.artist_context import find_model
+        for branch in context.view_layer.layer_collection.children:
+            if branch.collection==root:context.view_layer.active_layer_collection=branch;break
+        self.report({"INFO"}, "Model setup created. Select a mesh to create its DRS material.")
         return {"FINISHED"}
+
+
+class DRS_PT_ModelSetup(bpy.types.Panel):
+    bl_label='Model Setup';bl_category='DRS Editor';bl_space_type='VIEW_3D';bl_region_type='UI';bl_order=-100
+    def draw(self,context):
+        from .utilities.artist_context import find_model
+        root=find_model(context)
+        if root: self.layout.label(text=root.name.removeprefix('DRSModel_'),icon='OUTLINER_COLLECTION')
+        self.layout.operator('scene.new_bf_scene',text='Set Up Model',icon='ADD')
+        if root:self.layout.operator('export_scene.drs',text='Export DRS',icon='EXPORT')
 
 
 class ShowMessagesOperator(bpy.types.Operator):
@@ -850,7 +897,7 @@ def menu_func_import(self, _context):
     )
     self.layout.operator(
         NewBFScene.bl_idname,
-        text="New Battleforge Scene - "
+        text="Set Up Skylords Model - "
         + (IS_DEV_VERSION and "DEV" or "")
         + " v"
         + str(bl_info["version"][0])
@@ -904,36 +951,48 @@ def register():
     bpy.utils.register_class(ExportBMGModel)
     bpy.utils.register_class(ExportSKAFile)
     bpy.utils.register_class(NewBFScene)
+    bpy.utils.register_class(DRS_PT_ModelSetup)
     bpy.utils.register_class(ShowMessagesOperator)
     _attach_menus_idempotent()
     bpy.utils.register_class(MyAddonPreferences)
+    asset_preferences.register()
     bpy.utils.register_class(DRS_OT_debug_obb_tree)
-    bpy.utils.register_class(DRS_PT_debug_tools)
     register_obb_debug_properties()
     locator_editor.register()
     material_flow_editor.register()
+    material_editor.register()
+    battleforge_preview.register()
     animation_set_editor.register()
     effect_set_editor.register()
     bmg_state_editor.register()
+    building_editor.register()
+    ska_editor.register()
+    bms_editor.register()
     environment_cubemap_editor.register()
 
 
 def unregister():
+    asset_preferences.unregister()
     addon_updater_ops.unregister()
     bpy.utils.unregister_class(ImportBFModel)
     bpy.utils.unregister_class(ExportDRSModel)
     bpy.utils.unregister_class(ExportBMGModel)
     bpy.utils.unregister_class(ExportSKAFile)
     bpy.utils.unregister_class(NewBFScene)
+    bpy.utils.unregister_class(DRS_PT_ModelSetup)
     bpy.utils.unregister_class(ShowMessagesOperator)
     _detach_menus_safely()
     bpy.utils.unregister_class(MyAddonPreferences)
-    bpy.utils.unregister_class(DRS_PT_debug_tools)
     bpy.utils.unregister_class(DRS_OT_debug_obb_tree)
     unregister_obb_debug_properties()
     locator_editor.unregister()
+    battleforge_preview.unregister()
+    material_editor.unregister()
     material_flow_editor.unregister()
     animation_set_editor.unregister()
     effect_set_editor.unregister()
+    bms_editor.unregister()
+    ska_editor.unregister()
+    building_editor.unregister()
     bmg_state_editor.unregister()
     environment_cubemap_editor.unregister()

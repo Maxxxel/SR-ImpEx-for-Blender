@@ -4,7 +4,15 @@ Buildings add a mesh grid, mesh states, and referenced resources to the ordinary
 
 Start with the [Object Creation Guide](object_creation_guide.md) for mesh, material, collision, and GO basics. Use the [Unit Creation Guide](unit_creation_buide.md) for skeletons and SKA actions when the building is animated.
 
-> **Current support boundary:** Building import, state visibility, and mesh-grid editing are available. Full building export is still incomplete: the current BMG writer does not assemble the complete state/resource graph, and several animation, effect, and collision export branches remain unimplemented. The export menu and a successful completion message do **not** guarantee a game-ready building. Work on copies and retain the original BMG and its referenced assets.
+> **Current support:** Blender 5 can export new static buildings and edited imported buildings, including skinned state resources and SKA actions. Export rebuilds hidden states too, preserves source metadata, and validates output in a temporary folder. New output still needs Map Editor/in-game validation. Debris XML and construction BMS graphs remain separate authoring work; their preview meshes are not rebuilt automatically.
+
+For skinned states, export operates on temporary mesh copies, ignores non-bone
+modifier groups, keeps the strongest four bone weights and normalizes them.
+Unweighted vertices stop a building-state export; assign appropriate deform
+weights and retry. Warnings about coincident positions with different weights
+need review as described in the [Unit Creation Guide](unit_creation_buide.md).
+
+To start a **new static building**, select its render meshes in Object Mode and choose **N > BMG Editor > Building Authoring & Export > Building from Selected Meshes**. This moves them into the central cell's undamaged S0 state. Use **Create / Upgrade Selected Material** for ordinary Blender materials, then configure the DRS material controls. New skinned buildings should start from a compatible animated BMG so the skeleton, animations and state relationships are available.
 
 ## 1. Start from an Existing Building
 
@@ -69,7 +77,7 @@ The mesh-grid visualization expects the model's GO helper to exist. Keeping that
 
 ## 3. Inspect States in the BMG Editor
 
-Open the 3D Viewport sidebar (`N`) and select **BMG Editor > BMG Mesh State Editor**.
+Open the 3D Viewport sidebar (`N`) and select **BMG Editor > BMG State Editor**.
 
 | Button | What to inspect |
 |---|---|
@@ -113,11 +121,11 @@ When adding a shape, use its state's matching box/sphere/cylinder collection. As
 
 ### Ground decal
 
-`GroundDecal_Collection` is imported when the BMG references a ground decal DRS. It is optional and distinct from both building collision and the grid visualization. A new mesh placed in this collection is not automatically wired into a complete exported building resource graph.
+`GroundDecal_Collection` is imported when the BMG references a ground decal DRS. It is optional and distinct from both building collision and the grid visualization. Its render meshes are rebuilt into `<building>_ground.drs`; the BMG reference and textures are updated automatically.
 
 ### Construction pieces and debris
 
-Preserve their referenced assets and the imported relationships. A construction helper or debris mesh is not equivalent to a finished building state. The current UI can inspect these resources, but it does not replace an external debris/resource authoring workflow.
+Preserve their referenced assets and imported relationships. A construction helper or debris mesh is not equivalent to a finished building state. Export preserves their references and copies locally resolvable dependencies, but does not replace an external debris/resource authoring workflow.
 
 ## 6. Animated Buildings and Visual Hooks
 
@@ -127,27 +135,56 @@ Choose only the modes required by the target asset. A long list of available ani
 
 Non-bone locators use the model's coordinate convention, while bone locators follow the armature. Use the [Advanced Locators Guide](advanced_locators_guide.md) rather than manually forcing all helpers under GO.
 
-## 7. Save, Export Cautiously, and Validate
+## 7. Author States and Grid Settings
 
-The menu **File > Export > Battleforge Building (.bmg)** offers static and animated building model types, mesh options, and SKA naming controls. Those UI options do not mean every corresponding BMG export branch is complete.
+Open **N > BMG Editor > Building Authoring & Export**. Selecting a mesh or nested state collection identifies its building; the Outliner does not need to be focused on the root.
 
-For now:
+| Control | Behavior |
+|---|---|
+| Building Grid Settings | Edit name, square half extent, spacing, yaw, pivot mode, ground resource and building effects. |
+| State from Selected Meshes | Copy selected render meshes into the chosen cell and state ID. Common IDs are 0 intact and 2 damaged. |
+| Show | Display one state for that cell, including custom numeric state IDs. |
+| Effects | Edit persistent state FX and the effect triggered on entering that state. |
+| X beside a state | Remove that state from the exported grid and unlink its meshes from the building. Transition effects are separate records and are retained. |
+| Export Building Package | Rebuild the BMG, editable state DRS resources, ground decal and textures. |
 
-1. Save the edited `.blend` file as the authoritative working copy.
-2. Keep the source BMG and every referenced resource unchanged in a separate location.
-3. If testing BMG export, use a disposable folder and inspect the actual files produced. The current save path can produce a `.drs`-suffixed file despite the BMG menu; renaming it alone does not implement the missing building data.
-4. If exporting a component DRS separately, prepare a proper standalone `DRSModel_...` hierarchy and follow the object/unit export guide. A nested state collection is not automatically a standalone export root.
-5. Re-import tests into a separate scene, compare matching states with the same display-axis settings, and verify resources and behavior in game before distributing anything.
+Grid half extent 1 means **3 x 3** cells, 2 means **5 x 5**, and so on. Resizing preserves cell coordinates around the origin and updates state collection indices. Shrinking across a populated cell is rejected. Grid display yaw is removed from state geometry during export and written once in MeshSetGrid. Preview rotation preserves artist object transforms.
 
-### Building checklist
+Each render mesh needs a UV map and a material. Multiple material slots become separate CDsp mesh records. Triangulation and UV/normal discontinuity splitting run on temporary copies. The engine's vertex budget still applies after splitting. Apply modeling modifiers before export; the add-on's WindEffect preview and Armature modifier are handled separately. Material types, flags, textures and parameter lists use the ordinary DRS workflow; Default flow still uses the parameter map's **B channel as its mask**.
 
-- [ ] The original BMG and referenced DRS/XML/DDS/SKA files are backed up.
-- [ ] Each mesh remains in the correct mesh set and state.
-- [ ] New geometry follows the intended GO convention without breaking existing rig/bone parents.
-- [ ] Undamaged, damaged, and debris views were checked separately.
-- [ ] Building-level and state-level collision were not accidentally confused or duplicated.
-- [ ] Grid rotation, pivot, and cell layout were checked after any rebuild.
-- [ ] Export limitations are understood; no completion message was treated as proof of a full building round trip.
+Keep each cell's state IDs unique. State IDs and cell indices are collection properties, independent of Blender's automatic numeric name suffixes. Deleting a collection does not necessarily delete its preserved source record: source-only records intentionally survive. Removing source-only records requires an explicit metadata edit.
+
+## Preview Damage and Destruction
+
+1. Set your **Skylords Reborn Folder** in the add-on preferences.
+2. Select the building and open **BMG Editor → Building Editor**.
+3. Click **Build Damage Preview**, then drag **Damage** from 0% to 100%.
+4. Press **Space** to see debris fall and effects play. **Replay Transition** restarts them at the current frame.
+
+Damage changes cell meshes, their state effects and transition effects, and the building's scratch shading. At 100%, the preview selects the destroyed state and plays the building crush effect. A destroyed state can have no replacement mesh: the falling debris is a separate effect.
+
+Assets and physics are cached when you build the preview. Dragging Damage or scrubbing does not reload them. Use **Update Damage Preview** after changing geometry, materials, state effects or terrain. If playing near the end of your timeline, extend its end frame to leave time for the effect.
+
+This is a preview control, not an exported health setting. **Clear Damage Preview** restores the original materials and visibility. Manual **Show** state controls also clear the damage preview. After reopening a saved preview, rebuild it to animate, or clear it to return to editing.
+
+Scratch needs a scratch map with useful alpha; a white alpha mask causes no visible darkening. Buildings with several cells are damaged in a repeatable cell order. In game, the impact position changes that order. Native default inverse inertia is supported; collision/integration and engine-generated impact/crush impulses remain incomplete. Building damage preview audio is currently disabled. Create or change destruction effects in the external Effect Editor; assign their filenames through **State Effects** or **Building Grid Settings**.
+
+The preview automatically raises Cycles' transparency depth for overlapping smoke sprites. Clearing it restores the previous value, unless you changed it yourself. This prevents black rectangles caused by the renderer ending transparent rays too early; you do not need to change the smoke textures or alpha threshold.
+
+## 8. Export and Validate
+
+1. Save the edited `.blend` as the working copy. Re-import buildings with this version to capture the new state/container snapshots.
+2. Choose an output folder outside the unpacked source assets. Source game files remain read only.
+3. Keep **Model Type: Preserve / Auto** for imported buildings. It keeps their node layout, including unknown chunks. Explicit layouts cannot discard source nodes silently.
+4. Enable **Export All SKA Actions** for edited animations. Prefix options update AnimationSet and EffectSet only for actions actually written. Referenced source SKAs remain dependencies when animations were not imported or exported.
+5. Inspect `<building>.bmg-export.json`. `external_references` lists references not copied into the package; these may be installed-game construction/FX resources or missing assets. Review this list before sharing the export.
+6. Re-import into a separate scene. Check S0/S2, ground decal, materials, animation references and building/state collision independently. Then verify placement, damage transitions, construction and playback in the Skylords Map Editor/in game.
+
+Output contains `<building>.bmg`, `<building>_cellNNN_sID.drs`, optional `<building>_ground.drs`, DDS textures, available SKAs and local dependencies. This is an asset package for the installed game. It does not create a new database entity or a standalone map.
+
+Validation failure leaves previous output files intact. Temporary objects/meshes/collections are removed without globally purging the artist's unused data blocks. Imported collision data stays preserved when collision import was disabled; editing loaded shapes regenerates that payload in game coordinates.
+
+**Remaining preview boundary:** metadata preserves the engine's cell rotation/spacing/pivot rules, but complete viewport placement for all modular/shared-armature cases remains unfinished. Independently authoring a construction BMS or changing a debris XML graph is also outside this exporter. Automated Blender checks cover a new two-state building, Heal Well and Bandits Artillery; live engine playback remains to be checked.
 
 ## Related Guides
 

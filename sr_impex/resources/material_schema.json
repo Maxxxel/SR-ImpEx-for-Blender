@@ -1,0 +1,4534 @@
+{
+  "game": "BattleForge / Skylords Reborn",
+  "binary_sha256": "825c34b9dae45d745b30393cb89c256e2bae995016bcba2cb91a7cb74a47ab6d",
+  "source": "Saved Ghidra constructor registrations; render meanings in docs/drs/material-flags-engine.md",
+  "materials": [
+    {
+      "name": "ActionButton",
+      "id": "0x6162",
+      "constructor": "0x1012bc00",
+      "flags": [
+        {
+          "name": "UseVertexColor",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0xa8",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Multiplies the sampled texture RGBA by COLOR0 before the action-button color/effect processing.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1012b800"
+          ],
+          "requirements": "COLOR0 and color texture"
+        }
+      ],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "ImageMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "GradientMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "ColorTransformAbove1"
+          },
+          {
+            "id": 1668707378,
+            "name": "ColorTransformAbove2"
+          },
+          {
+            "id": 1668707379,
+            "name": "ColorTransformAbove3"
+          },
+          {
+            "id": 1668707380,
+            "name": "ColorTransform1"
+          },
+          {
+            "id": 1668707381,
+            "name": "ColorTransform2"
+          },
+          {
+            "id": 1668707382,
+            "name": "ColorTransform3"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Billboard",
+      "id": "0x818d",
+      "constructor": "0x1013c090",
+      "flags": [
+        {
+          "name": "UseVertexColorDiffuse",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 1,
+          "buffer_offset": "0x54",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered engine control; its buffer field has no established consumer in the inspected SM4 Billboard draw/setup paths. Do not infer a visual effect from the corresponding StatefulParticles flag.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1013a380",
+            "0x10138220",
+            "0x10135ea0",
+            "0x101405b0",
+            "0x10140b90"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "SkipZTest",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x58",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables depth testing through the depth-state lookup.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1013a380",
+            "0x1013fa20",
+            "0x10078970"
+          ],
+          "requirements": "Ordinary/soft path; distortion mode uses a fixed depth state."
+        },
+        {
+          "name": "SkipZWrite",
+          "bit": 18,
+          "mask": "0x00040000",
+          "initial": 0,
+          "buffer_offset": "0x5c",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables depth writes through the depth-state lookup.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1013a380",
+            "0x1013fa20",
+            "0x10078970"
+          ],
+          "requirements": "Ordinary/soft path; distortion mode uses a fixed depth state."
+        },
+        {
+          "name": "UseFog",
+          "bit": 19,
+          "mask": "0x00080000",
+          "initial": 0,
+          "buffer_offset": "0x6c",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered engine control; its buffer field has no established consumer in the inspected SM4 Billboard draw/setup paths. Do not infer a visual effect from the corresponding StatefulParticles flag.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1013a380",
+            "0x10138220",
+            "0x10135ea0",
+            "0x101405b0",
+            "0x10140b90"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "UseVertexColorEmissive",
+          "bit": 20,
+          "mask": "0x00100000",
+          "initial": 0,
+          "buffer_offset": "0x70",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered engine control; its buffer field has no established consumer in the inspected SM4 Billboard draw/setup paths. Do not infer a visual effect from the corresponding StatefulParticles flag.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1013a380",
+            "0x10138220",
+            "0x10135ea0",
+            "0x101405b0",
+            "0x10140b90"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "UseLodBias",
+          "bit": 21,
+          "mask": "0x00200000",
+          "initial": 0,
+          "buffer_offset": "0x74",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Enables PS sample_b using TEXCOORD4.x provided by the billboard VS.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1013a380"
+          ],
+          "requirements": "Billboard vertex bias input; see selected VS for exact packing."
+        },
+        {
+          "name": "UseAlphaMask",
+          "bit": 22,
+          "mask": "0x00400000",
+          "initial": 0,
+          "buffer_offset": "0x78",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Samples separate MaskTexture and multiplies its alpha into the ordinary textured output alpha. RGB is not multiplied by this mask in the inspected variant.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1013a380",
+            "0x10135ea0"
+          ],
+          "requirements": "MaskTexture plus appropriate generated mask UVs."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "GlowAlpha",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510769,
+            "name": "AlphaTestTreshold",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "Alpha",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "DisplayBlend",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "HardnessModifier",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "LodBias",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "Texture"
+          },
+          {
+            "id": 1668510769,
+            "name": "MaskTexture"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "Color"
+          }
+        ],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "DistortionFallOff"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "BlendPreset"
+          },
+          {
+            "id": 0,
+            "name": "DisplayMode"
+          },
+          {
+            "id": 0,
+            "name": "CameraOffsetMode"
+          },
+          {
+            "id": 0,
+            "name": "BillboardMode"
+          },
+          {
+            "id": 0,
+            "name": "Orientation"
+          },
+          {
+            "id": 4294967295,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "BlackHole",
+      "id": "0x6268",
+      "constructor": "0x10142190",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "NoiseSize",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "NoiseSpeed",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "NoiseTurbulence",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "NoiseHardness",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "WarpMass",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "InnerEnvironment"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Cliff",
+      "id": "0x636c",
+      "constructor": "0x1014d030",
+      "flags": [
+        {
+          "name": "SnapIn",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x58",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects a specialized cliff vertex layout. Decodes COLOR0 into instance/segment indices and uses InstanceData, SegmentHeight and TEXCOORD5 to reconstruct/deform world position and basis; this is terrain-segment fitting, not a generic origin toggle.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10148990",
+            "0x10149520"
+          ],
+          "requirements": "Renderer cliff instance data, segment heights and specially packed vertex attributes."
+        }
+      ],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "BaseColorTexture"
+          },
+          {
+            "id": 1852992883,
+            "name": "BaseNormalTexture"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "LayerBlendInfo"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "CliffPreview",
+      "id": "0x6370",
+      "constructor": "0x1014eef0",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Cloud",
+      "id": "0x7272",
+      "constructor": "0x10150430",
+      "flags": [
+        {
+          "name": "WriteAlpha",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x28",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Selects one of two blend-state objects. Their write masks are 0x907 (RGB) and 0x90f (RGBA), so true also permits alpha output writes.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x101501e0",
+            "0x10151690"
+          ],
+          "requirements": ""
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "Scaling",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "DensityMap"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "ColorCube",
+      "id": "0xaa01",
+      "constructor": "0x101520f0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "SceneWeight",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "ColorCubeWeight",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "SceneMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "ColorCubeMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "WindowAndTexelSize"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Debug",
+      "id": "0x6467",
+      "constructor": "0x10156cb0",
+      "flags": [
+        {
+          "name": "EnableAlphaTest",
+          "bit": 0,
+          "mask": "0x00000001",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects the alpha-test pixel-shader variant. Inspected Debug/DiffuseSpecular/Lava shader pairs add a discard against AlphaTestRef; input alpha calculation depends on the material.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x101555c0"
+          ],
+          "requirements": "Meaningful output alpha and an AlphaTestRef setup value; not an alpha-blend enable flag."
+        }
+      ],
+      "parameters": {
+        "scalar": [],
+        "texture": [],
+        "color": [],
+        "vector": [],
+        "integer": [
+          {
+            "id": 0,
+            "name": "ViewMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Default",
+      "id": "0x6466",
+      "constructor": "0x106a56f0",
+      "flags": [
+        {
+          "name": "EnableAlphaTest",
+          "bit": 0,
+          "mask": "0x00000001",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects alpha-test shader variants and affects Default render-category selection.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1049f370",
+            "0x106a8830",
+            "0x106a8950"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "UseParameterMap",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x124",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects parameter-map variants: RGBA replaces scalar smoothness, metalness, reflectivity and emissivity in the inspected Default SM4 pixel shaders.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1049f370",
+            "0x106a8830",
+            "0x106a8950"
+          ],
+          "requirements": "Parameter texture with meaningful RGBA channels."
+        },
+        {
+          "name": "UseNormalMap",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x128",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects normal-map variants.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1049f370",
+            "0x106a8830",
+            "0x106a8950"
+          ],
+          "requirements": "Normal texture and suitable tangent basis."
+        },
+        {
+          "name": "UseEnvironmentMap",
+          "bit": 18,
+          "mask": "0x00040000",
+          "initial": 0,
+          "buffer_offset": "0x12c",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects environment/reflection variants; renderer fallback source exists.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1049f370",
+            "0x106a8830",
+            "0x106a8950"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "DisableReceiveShadows",
+          "bit": 20,
+          "mask": "0x00100000",
+          "initial": 0,
+          "buffer_offset": "0x158",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered field and engine name confirmed. A render consumer/effect has not been established; the previous negative runtime read-watch experiment had unreliable controls and cannot prove global inactivity.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x106a56f0"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "EnableSHLighting",
+          "bit": 21,
+          "mask": "0x00200000",
+          "initial": 0,
+          "buffer_offset": "0x15c",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered field and engine name confirmed. A render consumer/effect has not been established; the previous negative runtime read-watch experiment had unreliable controls and cannot prove global inactivity.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x106a56f0"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "DecalMode",
+          "bit": 1,
+          "mask": "0x00000002",
+          "initial": 0,
+          "buffer_offset": "0x1d8",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects the decal render category/state path; traced Default path suppresses depth writes.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1049f370",
+            "0x106a8830",
+            "0x106a8950"
+          ],
+          "requirements": ""
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "Smoothness",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "Metalness",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "Reflectivity",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "Emissivity",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "RefractionScale",
+            "min": 0.0,
+            "max": 10.0,
+            "default": 1.0
+          },
+          {
+            "id": 1668510774,
+            "name": "DistortionMeshScale",
+            "min": 0.0,
+            "max": 10.0,
+            "default": 0.0
+          },
+          {
+            "id": 1935897704,
+            "name": "Scratch",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510775,
+            "name": "SpecularScale",
+            "min": 0.0,
+            "max": 3.0,
+            "default": 1.5
+          },
+          {
+            "id": 1668510776,
+            "name": "WindResponse",
+            "min": 0.0,
+            "max": 0.1,
+            "default": 0.0
+          },
+          {
+            "id": 1668510777,
+            "name": "WindHeight",
+            "min": 0.0,
+            "max": 10.0,
+            "default": 0.0
+          },
+          {
+            "id": 1935893623,
+            "name": "DepthWriteThreshold",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.5
+          },
+          {
+            "id": 1668510785,
+            "name": "Saturation",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorMap"
+          },
+          {
+            "id": 1936745324,
+            "name": "ParamMap"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalMap"
+          },
+          {
+            "id": 1701738100,
+            "name": "EnvironmentMap"
+          },
+          {
+            "id": 1919116143,
+            "name": "RefractionParamMap"
+          },
+          {
+            "id": 1684628335,
+            "name": "DistortionParamMap"
+          },
+          {
+            "id": 1668510769,
+            "name": "ScratchMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "FluidMap"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "RefractionColor"
+          }
+        ],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "MaxFlowSpeed"
+          },
+          {
+            "id": 1668707378,
+            "name": "MinFlowSpeed"
+          },
+          {
+            "id": 1668707379,
+            "name": "FlowSpeedChange"
+          },
+          {
+            "id": 1668707380,
+            "name": "FlowScale"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "LODLevel"
+          },
+          {
+            "id": 4294967295,
+            "name": "LastUpdate"
+          },
+          {
+            "id": 4294967295,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Depthmap",
+      "id": "0x646d",
+      "constructor": "0x106a94a0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "MaskThreshold",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "Mask"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "DiffuseSpecular",
+      "id": "0x6470",
+      "constructor": "0x106accd0",
+      "flags": [
+        {
+          "name": "EnableAlphaTest",
+          "bit": 0,
+          "mask": "0x00000001",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects the alpha-test pixel-shader variant. Inspected Debug/DiffuseSpecular/Lava shader pairs add a discard against AlphaTestRef; input alpha calculation depends on the material.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x106ac010"
+          ],
+          "requirements": "Meaningful output alpha and an AlphaTestRef setup value; not an alpha-blend enable flag."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "SpecularExponent",
+            "min": 0.0,
+            "max": 16.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510769,
+            "name": "Translucency",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DiffuseMap"
+          },
+          {
+            "id": 1936745324,
+            "name": "SpecularMap"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "DiffuseSpecularAmbientOcclusion",
+      "id": "0x6461",
+      "constructor": "0x106af7a0",
+      "flags": [
+        {
+          "name": "EnableAlphaTest",
+          "bit": 0,
+          "mask": "0x00000001",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_shader_selection",
+          "meaning": "Selects the alpha-test pixel-shader variant. Inspected Debug/DiffuseSpecular/Lava shader pairs add a discard against AlphaTestRef; input alpha calculation depends on the material.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x106af2d0"
+          ],
+          "requirements": "Meaningful output alpha and an AlphaTestRef setup value; not an alpha-blend enable flag."
+        }
+      ],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DiffuseMap"
+          },
+          {
+            "id": 1936745324,
+            "name": "SpecularMap"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "DiffuseSpecularAmbientOcclusionPerVertex",
+      "id": "0x6476",
+      "constructor": "0x106b2c20",
+      "flags": [
+        {
+          "name": "EnableAlphaTest",
+          "bit": 0,
+          "mask": "0x00000001",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_shader_selection",
+          "meaning": "Selects the alpha-test pixel-shader variant. Inspected Debug/DiffuseSpecular/Lava shader pairs add a discard against AlphaTestRef; input alpha calculation depends on the material.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x106b2170"
+          ],
+          "requirements": "Meaningful output alpha and an AlphaTestRef setup value; not an alpha-blend enable flag."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "SpecularExponent",
+            "min": 0.0,
+            "max": 16.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510769,
+            "name": "Translucency",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DiffuseMap"
+          },
+          {
+            "id": 1936745324,
+            "name": "SpecularMap"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "DiffuseSpecularMaskedColor",
+      "id": "0x6426",
+      "constructor": "0x106b7f40",
+      "flags": [
+        {
+          "name": "EnableAlphaTest",
+          "bit": 0,
+          "mask": "0x00000001",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_shader_selection",
+          "meaning": "Selects the alpha-test pixel-shader variant. Inspected Debug/DiffuseSpecular/Lava shader pairs add a discard against AlphaTestRef; input alpha calculation depends on the material.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x106b63a0"
+          ],
+          "requirements": "Meaningful output alpha and an AlphaTestRef setup value; not an alpha-blend enable flag."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1936745324,
+            "name": "SpecularExponent",
+            "min": 0.0,
+            "max": 128.0,
+            "default": 16.0
+          },
+          {
+            "id": 1668510769,
+            "name": "Translucency",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DiffuseMap"
+          },
+          {
+            "id": 1936745324,
+            "name": "SpecularMap"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "MaskedColor"
+          }
+        ],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Distortion",
+      "id": "0xaa02",
+      "constructor": "0x106babb0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "DistortionScale",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "SceneMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "DistortionMap"
+          },
+          {
+            "id": 1668510771,
+            "name": "DepthMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "VertexOffset"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "DisplayMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "DynamicDecal",
+      "id": "0xff03",
+      "constructor": "0x106beee0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "Alpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          },
+          {
+            "id": 1668510770,
+            "name": "GlowAlpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DecalTexture"
+          }
+        ],
+        "color": [
+          {
+            "id": 1684432499,
+            "name": "Color"
+          }
+        ],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "DecalPlaneX"
+          },
+          {
+            "id": 1668707378,
+            "name": "DecalPlaneY"
+          },
+          {
+            "id": 1668707379,
+            "name": "DecalOffset"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "DisplayMode"
+          },
+          {
+            "id": 0,
+            "name": "BlendPreset"
+          },
+          {
+            "id": 4294967295,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "EATextFont",
+      "id": "0x6574",
+      "constructor": "0x106c3700",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "Texture"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Effect",
+      "id": "0x6566",
+      "constructor": "0x109bc520",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "TintFluidBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "SpecularFluidBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "EmissiveFluidBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "RefractionScale",
+            "min": 0.0,
+            "max": 10.0,
+            "default": 1.0
+          },
+          {
+            "id": 1668510773,
+            "name": "ReflectionBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "TintMap"
+          },
+          {
+            "id": 1936745324,
+            "name": "SpecularMap"
+          },
+          {
+            "id": 1701671798,
+            "name": "EmissiveMap"
+          },
+          {
+            "id": 1701738100,
+            "name": "EnvironmentMap"
+          },
+          {
+            "id": 1919116143,
+            "name": "RefractionParamMap"
+          },
+          {
+            "id": 1668510769,
+            "name": "TintRampMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "SpecularRampMap"
+          },
+          {
+            "id": 1668510771,
+            "name": "EmissiveRampMap"
+          },
+          {
+            "id": 1668510772,
+            "name": "BlendMap"
+          },
+          {
+            "id": 1668510773,
+            "name": "Noise1Map"
+          },
+          {
+            "id": 1668510774,
+            "name": "Noise2Map"
+          },
+          {
+            "id": 1668510775,
+            "name": "Noise3Map"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "RefractionColor"
+          }
+        ],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "Noise1Offset"
+          },
+          {
+            "id": 1668707378,
+            "name": "Noise1Scale"
+          },
+          {
+            "id": 1668707379,
+            "name": "Noise2Offset"
+          },
+          {
+            "id": 1668707380,
+            "name": "Noise2Scale"
+          },
+          {
+            "id": 1668707381,
+            "name": "Noise3Offset"
+          },
+          {
+            "id": 1668707382,
+            "name": "Noise3Scale"
+          },
+          {
+            "id": 1668707383,
+            "name": "CPUNoise"
+          },
+          {
+            "id": 1668707385,
+            "name": "TexCoordOffset"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "Noise1Source"
+          },
+          {
+            "id": 0,
+            "name": "Noise2Source"
+          },
+          {
+            "id": 0,
+            "name": "Noise3Source"
+          },
+          {
+            "id": 0,
+            "name": "TintFluidSource"
+          },
+          {
+            "id": 0,
+            "name": "SpecularFluidSource"
+          },
+          {
+            "id": 0,
+            "name": "EmissiveFluidSource"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Emitter",
+      "id": "0xfe02",
+      "constructor": "0x109bfe20",
+      "flags": [
+        {
+          "name": "UseLodBias",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x4c4",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects the VS variant that writes scalar LodBias into TEXCOORD4.x for a downstream particle pixel shader.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x109bf0e0"
+          ],
+          "requirements": "Matching downstream pixel shader that consumes the bias."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "LodBias",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "StartColor"
+          },
+          {
+            "id": 1668707378,
+            "name": "DeltaColor"
+          },
+          {
+            "id": 1668707379,
+            "name": "StartEmissiveColor"
+          },
+          {
+            "id": 1668707380,
+            "name": "DeltaEmissiveColor"
+          },
+          {
+            "id": 1668707381,
+            "name": "StartPositionRandomScale"
+          },
+          {
+            "id": 1668707382,
+            "name": "TimeScalar"
+          },
+          {
+            "id": 1668707383,
+            "name": "Param1"
+          },
+          {
+            "id": 1668707384,
+            "name": "Param2"
+          },
+          {
+            "id": 1668707384,
+            "name": "StartDeltaSize"
+          },
+          {
+            "id": 1668707384,
+            "name": "RandomDirectionScalars"
+          },
+          {
+            "id": 1668707384,
+            "name": "StartEndWeighting"
+          },
+          {
+            "id": 1668707384,
+            "name": "Force"
+          },
+          {
+            "id": 1668707384,
+            "name": "GravityForce"
+          },
+          {
+            "id": 1668707384,
+            "name": "XYRandomScale"
+          },
+          {
+            "id": 1668707384,
+            "name": "Param3"
+          },
+          {
+            "id": 1668707384,
+            "name": "SoftParticleParams"
+          },
+          {
+            "id": 1668707384,
+            "name": "DistortionParticleParams"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "FlatShade",
+      "id": "0x6673",
+      "constructor": "0x109c1d80",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "AlphaTest",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "Mask"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "Color"
+          }
+        ],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Fluid",
+      "id": "0x7466",
+      "constructor": "0x10b18a10",
+      "flags": [
+        {
+          "name": "DynamicFlow",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 1,
+          "buffer_offset": "0x180",
+          "consumer_status": "cpu_render_consumer",
+          "meaning": "Selects a distinct PS permutation and enables three flow/noise texture bindings (falling back to GetLavaNoiseTexture), coordinate transforms and once-per-frame flow-state updates.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10a9fa80",
+            "0x10b1ae50"
+          ],
+          "requirements": "Fluid texture/flow parameters and renderer time."
+        },
+        {
+          "name": "Glow",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x184",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Switches both blend-state and depth-state objects. It is a render-mode toggle; a direct emissivity or bloom-output formula has not been established.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10a9fa80",
+            "0x10b1a6d0"
+          ],
+          "requirements": ""
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "WaterDepth",
+            "min": 0.0,
+            "max": 3.402823e+38,
+            "default": 50.0
+          },
+          {
+            "id": 1668510770,
+            "name": "WaveHeight",
+            "min": 0.0,
+            "max": 3.402823e+38,
+            "default": 0.1
+          },
+          {
+            "id": 1668510771,
+            "name": "WaveSpeed",
+            "min": 0.0,
+            "max": 3.402823e+38,
+            "default": 1.0
+          },
+          {
+            "id": 1668510772,
+            "name": "SpecularFactor",
+            "min": 0.0,
+            "max": 100.0,
+            "default": 50.0
+          },
+          {
+            "id": 1668510773,
+            "name": "ReflectionFactor",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510774,
+            "name": "MultiWavePercent",
+            "min": 0.0,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "FluidMap"
+          },
+          {
+            "id": 1852992883,
+            "name": "FluidNormal"
+          },
+          {
+            "id": 1668510769,
+            "name": "WaveMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "DetailMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "Structure1"
+          },
+          {
+            "id": 1668510771,
+            "name": "Structure2"
+          },
+          {
+            "id": 1668510772,
+            "name": "Structure3"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "WaveDir"
+          },
+          {
+            "id": 1668707378,
+            "name": "Structure1Scale"
+          },
+          {
+            "id": 1668707379,
+            "name": "Structure2Scale"
+          },
+          {
+            "id": 1668707380,
+            "name": "Structure3Scale"
+          },
+          {
+            "id": 1668707381,
+            "name": "StructureBias"
+          },
+          {
+            "id": 1668707382,
+            "name": "StructureBlend"
+          },
+          {
+            "id": 1668707383,
+            "name": "StructureRotation"
+          },
+          {
+            "id": 1668707384,
+            "name": "Structure1MaxFlowSpeed"
+          },
+          {
+            "id": 1668707385,
+            "name": "Structure1MinFlowSpeed"
+          },
+          {
+            "id": 1668707393,
+            "name": "Structure1FlowSpeedChange"
+          },
+          {
+            "id": 1668707394,
+            "name": "Structure2MaxFlowSpeed"
+          },
+          {
+            "id": 1668707395,
+            "name": "Structure2MinFlowSpeed"
+          },
+          {
+            "id": 1668707396,
+            "name": "Structure2FlowSpeedChange"
+          },
+          {
+            "id": 1668707397,
+            "name": "Structure3MaxFlowSpeed"
+          },
+          {
+            "id": 1668707398,
+            "name": "Structure3MinFlowSpeed"
+          },
+          {
+            "id": 1668707399,
+            "name": "Structure3FlowSpeedChange"
+          },
+          {
+            "id": 1668707400,
+            "name": "Emissive"
+          }
+        ],
+        "integer": [
+          {
+            "id": 4294967295,
+            "name": "LastUpdate"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Glow",
+      "id": "0xaa03",
+      "constructor": "0x10b1d8a0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "SceneWeight",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "BlurWeight",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "OverbrightWeight",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "DownsampleFactor",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "AlphaTransformThreshold",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "SceneMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "BlurMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "WindowAndTexelSize"
+          },
+          {
+            "id": 1668707378,
+            "name": "ColorScale"
+          },
+          {
+            "id": 1668707379,
+            "name": "BlurDirectionAndSize"
+          },
+          {
+            "id": 1668707380,
+            "name": "VertexOffset"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "Operation"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Lava",
+      "id": "0x6c76",
+      "constructor": "0x10b21930",
+      "flags": [
+        {
+          "name": "EnableAlphaTest",
+          "bit": 0,
+          "mask": "0x00000001",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects the alpha-test pixel-shader variant. Inspected Debug/DiffuseSpecular/Lava shader pairs add a discard against AlphaTestRef; input alpha calculation depends on the material.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b20850"
+          ],
+          "requirements": "Meaningful output alpha and an AlphaTestRef setup value; not an alpha-blend enable flag."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "ColdRadiance",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "HotRadiance",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "NoiseSize",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "NoiseSpeed",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "NoiseTurbulence",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510774,
+            "name": "NoiseHardness",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510775,
+            "name": "ColorPerturb",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510776,
+            "name": "TemperaturePerturb",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510777,
+            "name": "HDRExponent",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DiffuseMap"
+          },
+          {
+            "id": 1936745324,
+            "name": "SpecularMap"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "ColdColor"
+          },
+          {
+            "id": 1668510770,
+            "name": "HotColor"
+          }
+        ],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "LightRay",
+      "id": "0x4c52",
+      "constructor": "0x101130c0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "GroundDistanceScale",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "SunIntensity",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "GlowFactor",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "Dust",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "DustScale",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 1.0
+          },
+          {
+            "id": 1668510774,
+            "name": "DustSpeed",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "Detail"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "SunColor"
+          }
+        ],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "SunPosition"
+          },
+          {
+            "id": 1668707378,
+            "name": "ScreenDistance"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "MiniMap",
+      "id": "0x6d6d",
+      "constructor": "0x10b24f10",
+      "flags": [
+        {
+          "name": "MouseLight",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x6c",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Applies cursor-centered lighting: distance falloff combines LightColor with AmbientColor; cursor position is supplied by input controls.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b246f0",
+            "0x10b26720"
+          ],
+          "requirements": "Input controls and LightDistance/LightColor/AmbientColor."
+        },
+        {
+          "name": "UseTextureAlpha",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 1,
+          "buffer_offset": "0x8c",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Uses sampled texture alpha multiplied by squared COLOR0 alpha in the inspected variant; disabled variant uses COLOR0 alpha and ignores texture alpha.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b246f0"
+          ],
+          "requirements": "Color texture with meaningful alpha."
+        },
+        {
+          "name": "ShowFow",
+          "bit": 18,
+          "mask": "0x00040000",
+          "initial": 1,
+          "buffer_offset": "0x90",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Samples FowSampler with vertically flipped UV, blends its red/green channels using FowBlend, and modulates output color.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b246f0",
+            "0x10b26720"
+          ],
+          "requirements": "Renderer FOW texture; active color-texture permutation."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "LightDistance",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.2
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorMap"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalMap"
+          },
+          {
+            "id": 1668510769,
+            "name": "FowMap"
+          }
+        ],
+        "color": [
+          {
+            "id": 1684432499,
+            "name": "LightColor"
+          },
+          {
+            "id": 1668510769,
+            "name": "AmbientColor"
+          }
+        ],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "MonoColor",
+      "id": "0xf8f1",
+      "constructor": "0x10b280c0",
+      "flags": [
+        {
+          "name": "SkipZTest",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 1,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Selects depth-test bypass states; inspected ordinary path uses the flag for both the test and write-state selectors.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b27400",
+            "0x10b276a0"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "WireFrame",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x18",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Selects an alternate rasterizer-state group, including wireframe fill (0xb02) in the constructor rather than solid fill (0xb01).",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b27400",
+            "0x10b2aea0"
+          ],
+          "requirements": ""
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510770,
+            "name": "Alpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [],
+        "color": [
+          {
+            "id": 1684432499,
+            "name": "Color"
+          }
+        ],
+        "vector": [],
+        "integer": [
+          {
+            "id": 0,
+            "name": "BlendPreset"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "ParticleSystem",
+      "id": "0x7073",
+      "constructor": "0x10b2f660",
+      "flags": [
+        {
+          "name": "AlphaOnlyTexture",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Uses the texture alpha while replacing sampled RGB with white, then multiplies by the particle color; texture RGB is ignored.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b2ea00"
+          ],
+          "requirements": "Texture alpha and particle color."
+        },
+        {
+          "name": "UseLodBias",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x4",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects PS sample_b with interpolated TEXCOORD4.x instead of ordinary sample.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b2ea00"
+          ],
+          "requirements": "Matching vertex stream supplying TEXCOORD4.x."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "GlowAlpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "LodBias",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "Texture"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [
+          {
+            "id": 0,
+            "name": "ParticleMode"
+          },
+          {
+            "id": 0,
+            "name": "BlendMode"
+          },
+          {
+            "id": 4294967295,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "ReflectRefract",
+      "id": "0x7272",
+      "constructor": "0x10b346b0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "IndexOfRefraction",
+            "min": 0.0,
+            "max": 2.0,
+            "default": 1.0
+          },
+          {
+            "id": 1668510770,
+            "name": "Reflectivity",
+            "min": 0.0,
+            "max": 2.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "TintBlurMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "DecalMap"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "RWMovie",
+      "id": "0x524d",
+      "constructor": "0x1010fa40",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "TextureY"
+          },
+          {
+            "id": 1668510770,
+            "name": "TextureU"
+          },
+          {
+            "id": 1668510771,
+            "name": "TextureV"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Satellite",
+      "id": "0xfe01",
+      "constructor": "0x10b37b70",
+      "flags": [
+        {
+          "name": "UseLodBias",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0xf8",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Selects the VS variant that writes scalar LodBias into TEXCOORD4.x for a downstream particle pixel shader.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b37020"
+          ],
+          "requirements": "Matching downstream pixel shader that consumes the bias."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "LodBias",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "StartColor"
+          },
+          {
+            "id": 1668707378,
+            "name": "EndColor"
+          },
+          {
+            "id": 1668707381,
+            "name": "StartPositionRandomScale"
+          },
+          {
+            "id": 1668707382,
+            "name": "TimeScalar"
+          },
+          {
+            "id": 1668707383,
+            "name": "RandomColorTimeScalar"
+          },
+          {
+            "id": 1668707384,
+            "name": "RandomLuminanceTimeScalar"
+          },
+          {
+            "id": 1668707384,
+            "name": "StartEndSizeSynchrony"
+          },
+          {
+            "id": 1668707384,
+            "name": "ViewRotation"
+          },
+          {
+            "id": 1668707384,
+            "name": "SineScalingValues"
+          },
+          {
+            "id": 1668707384,
+            "name": "StartEndWeighting"
+          },
+          {
+            "id": 1668707384,
+            "name": "CircleVector"
+          },
+          {
+            "id": 1668707384,
+            "name": "XYRandomScale"
+          },
+          {
+            "id": 1668707384,
+            "name": "SoftParticleParams"
+          },
+          {
+            "id": 1668707384,
+            "name": "DistortionParticleParams"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "SelectionDecal",
+      "id": "0x5ede",
+      "constructor": "0x10b396d0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "GlowAlpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "Alpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "Texture"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "SH4",
+      "id": "0x7334",
+      "constructor": "0x10b3b870",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "ColorMap"
+          },
+          {
+            "id": 1668510770,
+            "name": "ParameterMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "FogTransmittance"
+          },
+          {
+            "id": 1668707378,
+            "name": "FogInScatter"
+          },
+          {
+            "id": 1987011187,
+            "name": "ObjectBoxScale"
+          },
+          {
+            "id": 1987011183,
+            "name": "ObjectBoxOffset"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Shadowmap",
+      "id": "0x736d",
+      "constructor": "0x10b3dd00",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "MaskThreshold",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "Mask"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "ShadowMapFilter",
+      "id": "0x5346",
+      "constructor": "0x1010e110",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "BlurMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "WindowAndTexelSize"
+          },
+          {
+            "id": 1668707379,
+            "name": "BlurDirectionAndSize"
+          },
+          {
+            "id": 1668707380,
+            "name": "VertexOffset"
+          },
+          {
+            "id": 1668707381,
+            "name": "DepthScale"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "Operation"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "SimpleTextured",
+      "id": "0x5354",
+      "constructor": "0x101172c0",
+      "flags": [
+        {
+          "name": "UseVertexColor",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x30",
+          "consumer_status": "cpu_shader_selection",
+          "meaning": "Selects the vertex-color vertex shader instead of material Color.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10115ca0"
+          ],
+          "requirements": "Vertex COLOR0"
+        },
+        {
+          "name": "DisableDepthWrite",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x34",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables depth writes through the combined depth-state lookup.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10115ca0",
+            "0x1011a3c0",
+            "0x10078970"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "DisableDepthTest",
+          "bit": 18,
+          "mask": "0x00040000",
+          "initial": 0,
+          "buffer_offset": "0x38",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables the depth test through the combined depth-state lookup.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10115ca0",
+            "0x1011a3c0",
+            "0x10078970"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "UseFog",
+          "bit": 19,
+          "mask": "0x00080000",
+          "initial": 0,
+          "buffer_offset": "0x3c",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Enables the VS distance-fog calculation using ViewWorldPos, FogParams, FogStartColor and FogEndColor.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10115ca0"
+          ],
+          "requirements": "Renderer fog constants"
+        },
+        {
+          "name": "UseFOW",
+          "bit": 20,
+          "mask": "0x00100000",
+          "initial": 0,
+          "buffer_offset": "0x40",
+          "consumer_status": "cpu_shader_selection",
+          "meaning": "Selects the fog-of-war variant when the renderer fog-of-war input is enabled; otherwise setup forces the selector to zero.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1011af00",
+            "0x10115ca0"
+          ],
+          "requirements": "Active renderer fog-of-war data"
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "Alpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          },
+          {
+            "id": 1668510770,
+            "name": "GlowAlpha",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "Texture"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "Color"
+          }
+        ],
+        "vector": [],
+        "integer": [
+          {
+            "id": 0,
+            "name": "SortType"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "SingleColor",
+      "id": "0xf8f0",
+      "constructor": "0x10b43010",
+      "flags": [
+        {
+          "name": "SkipZTest",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 1,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Participates in the depth-state selector and disables depth testing; the other selector input depends on fade/setup state.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b41210",
+            "0x10b443d0"
+          ],
+          "requirements": ""
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510770,
+            "name": "Alpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [],
+        "color": [
+          {
+            "id": 1684432499,
+            "name": "ColorDiffuse"
+          },
+          {
+            "id": 1936745324,
+            "name": "ColorSpecular"
+          },
+          {
+            "id": 1668510769,
+            "name": "ColorEmissive"
+          }
+        ],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Sky",
+      "id": "0x7379",
+      "constructor": "0x100f3f40",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "Texture"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "SSAO",
+      "id": "0x414f",
+      "constructor": "0x101242d0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "RejectRadius",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "Intensity",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "AcceptRadius",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "KernelScale",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "Q",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510774,
+            "name": "QTimesZNear",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510775,
+            "name": "FowBlend",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510771,
+            "name": "DepthMap"
+          },
+          {
+            "id": 1668510772,
+            "name": "FowMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "WindowAndTexelSize"
+          },
+          {
+            "id": 1668707378,
+            "name": "VertexOffset"
+          },
+          {
+            "id": 1668707379,
+            "name": "RTSize"
+          },
+          {
+            "id": 1668707380,
+            "name": "ViewWorldPos"
+          },
+          {
+            "id": 1668707381,
+            "name": "FogParams"
+          },
+          {
+            "id": 1668707382,
+            "name": "WorldToLightMapScaleAndOffset"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "SSAO2",
+      "id": "0x4132",
+      "constructor": "0x10126e80",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "HDAORejectRadius",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "HDAOAcceptRadius",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "HDAOIntensity",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "HDAONormalScale",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "AcceptAngle",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510774,
+            "name": "Q",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510775,
+            "name": "QTimesZNear",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510776,
+            "name": "FowBlend",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510770,
+            "name": "NormZMap"
+          },
+          {
+            "id": 1668510771,
+            "name": "DepthMap"
+          },
+          {
+            "id": 1668510772,
+            "name": "FowMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "WindowAndTexelSize"
+          },
+          {
+            "id": 1668707378,
+            "name": "VertexOffset"
+          },
+          {
+            "id": 1668707379,
+            "name": "RTSize"
+          },
+          {
+            "id": 1668707380,
+            "name": "ViewWorldPos"
+          },
+          {
+            "id": 1668707381,
+            "name": "FogParams"
+          },
+          {
+            "id": 1668707382,
+            "name": "WorldToLightMapScaleAndOffset"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "Samples"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "SSAO2_Blend",
+      "id": "0x4134",
+      "constructor": "0x10128640",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1668510770,
+            "name": "AOFactorMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "WindowAndTexelSize"
+          },
+          {
+            "id": 1668707378,
+            "name": "VertexOffset"
+          },
+          {
+            "id": 1668707379,
+            "name": "RTSize"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "SSAO2_CS",
+      "id": "0x4133",
+      "constructor": "0x1012a330",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "HDAORejectRadius",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "HDAOAcceptRadius",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "HDAOIntensity",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "HDAONormalScale",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "AcceptAngle",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510774,
+            "name": "Q",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510775,
+            "name": "QTimesZNear",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510776,
+            "name": "FowBlend",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1668510770,
+            "name": "NormZMap"
+          },
+          {
+            "id": 1668510771,
+            "name": "DepthMap"
+          },
+          {
+            "id": 1668510772,
+            "name": "FowMap"
+          },
+          {
+            "id": 1668510773,
+            "name": "AOFactor"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "WindowAndTexelSize"
+          },
+          {
+            "id": 1668707378,
+            "name": "VertexOffset"
+          },
+          {
+            "id": 1668707379,
+            "name": "RTSize"
+          },
+          {
+            "id": 1668707380,
+            "name": "ViewWorldPos"
+          },
+          {
+            "id": 1668707381,
+            "name": "FogParams"
+          },
+          {
+            "id": 1668707382,
+            "name": "WorldToLightMapScaleAndOffset"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "Samples"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "StatefulParticles",
+      "id": "0x7370",
+      "constructor": "0x100fbfc0",
+      "flags": [
+        {
+          "name": "UseVertexColorDiffuse",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 1,
+          "buffer_offset": "0x30",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Uses COLOR0 (BGRA swizzled to RGBA) instead of the material Color constant for the diffuse-color input; requires vertex color data.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x100fac50"
+          ],
+          "requirements": "COLOR0"
+        },
+        {
+          "name": "SkipZTest",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x34",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables the depth test through the depth-state lookup; SkipZWrite independently controls depth writes in the ordinary/soft path.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x100fac50",
+            "0x100ff550",
+            "0x10078970"
+          ],
+          "requirements": "BillboardMode 2 distortion path binds a fixed depth state and bypasses these toggles."
+        },
+        {
+          "name": "SkipZWrite",
+          "bit": 18,
+          "mask": "0x00040000",
+          "initial": 0,
+          "buffer_offset": "0x38",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables depth writes through the depth-state lookup.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x100fac50",
+            "0x100ff550",
+            "0x10078970"
+          ],
+          "requirements": "Ordinary/soft path; BillboardMode 2 uses a fixed state."
+        },
+        {
+          "name": "UseFog",
+          "bit": 19,
+          "mask": "0x00080000",
+          "initial": 0,
+          "buffer_offset": "0x48",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Engine label suggests fog participation, but the registered field has no established consumer in the inspected SM4 draw/setup paths; those paths already compute fog independently.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x100fac50",
+            "0x101000e0"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "UseVertexColorEmissive",
+          "bit": 20,
+          "mask": "0x00100000",
+          "initial": 0,
+          "buffer_offset": "0x4c",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Adds COLOR1 to the selected color input (including alpha), before the later particle color/texture operations.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x100fac50"
+          ],
+          "requirements": "COLOR1"
+        },
+        {
+          "name": "UseLodBias",
+          "bit": 21,
+          "mask": "0x00200000",
+          "initial": 0,
+          "buffer_offset": "0x50",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Enables explicit texture mip bias: VS forwards 3 * BLENDWEIGHT0.w; PS uses sample_b with that interpolated bias.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x100fac50"
+          ],
+          "requirements": "Particle vertex BLENDWEIGHT0.w. This is a shader bias, separate from the DRS texture-load bias."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "GlowAlpha",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510769,
+            "name": "AlphaTestTreshold",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "Alpha",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "DisplayBlend",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "HardnessModifier",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "LodBias",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "Texture"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "Color"
+          }
+        ],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "DistortionFallOff"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "BlendPreset"
+          },
+          {
+            "id": 0,
+            "name": "DisplayMode"
+          },
+          {
+            "id": 0,
+            "name": "BillboardMode"
+          },
+          {
+            "id": 0,
+            "name": "Orientation"
+          },
+          {
+            "id": 4294967295,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "StaticDecal",
+      "id": "0x7978",
+      "constructor": "0x10b4b2e0",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "HeightOffset",
+            "min": -1.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorTexture"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalTexture"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "TexGenPlaneU"
+          },
+          {
+            "id": 1668707378,
+            "name": "TexGenPlaneV"
+          },
+          {
+            "id": 1668707379,
+            "name": "AlphaParams"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "BlendMode"
+          },
+          {
+            "id": 4294967295,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "StaticDecalPreview",
+      "id": "0x6463",
+      "constructor": "0x10b4f380",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "AlphaScale",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          },
+          {
+            "id": 1668510770,
+            "name": "AlphaOffset",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "AlphaThreshold",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorTexture"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalTexture"
+          }
+        ],
+        "color": [],
+        "vector": [],
+        "integer": [
+          {
+            "id": 0,
+            "name": "BlendMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Std",
+      "id": "0x7364",
+      "constructor": "0x10b55d40",
+      "flags": [
+        {
+          "name": "EnableAlphaTest",
+          "bit": 0,
+          "mask": "0x00000001",
+          "initial": 0,
+          "buffer_offset": "0x3c",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered at buffer offset 0x3c. No read of that slot was established in the inspected SM4 normal/cobweb draw paths; do not borrow the proven Default or DiffuseSpecular behavior.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b55c80",
+            "0x10b548c0",
+            "0x10b53700"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "EnableCobwebMode",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x40",
+          "consumer_status": "cpu_render_consumer",
+          "meaning": "Routes drawing through the separate cobweb render implementation (different shader/setup tables and fixed blend/depth state). Exact final cobweb surface formula remains undecoded.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b55c80",
+            "0x10b53700"
+          ],
+          "requirements": ""
+        }
+      ],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DiffuseMap"
+          }
+        ],
+        "color": [
+          {
+            "id": 1684432499,
+            "name": "ColorDiffuse"
+          },
+          {
+            "id": 1936745324,
+            "name": "ColorSpecular"
+          }
+        ],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "Terrain",
+      "id": "0x746e",
+      "constructor": "0x10b76770",
+      "flags": [
+        {
+          "name": "IndicateLayerComplexity",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x70",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Enables diagnostic RGB tint: lerp(shadedRGB, DebugColor.rgb, DebugColor.a) in the inspected nonzero-layer PS pair. It does not change mesh LOD.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b6dc90"
+          ],
+          "requirements": "Lit/high-quality terrain path and DebugColor."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "FowBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorTexture"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalTexture"
+          },
+          {
+            "id": 1668510769,
+            "name": "StructureTexture"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707378,
+            "name": "PointLightToStructureScaleAndOffset"
+          },
+          {
+            "id": 1668707379,
+            "name": "DebugColor"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "NumLayers"
+          },
+          {
+            "id": 0,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "TerrainLightmap",
+      "id": "0x746c",
+      "constructor": "0x10b78460",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "AttenuationMap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "PointLightSurfaceScale"
+          },
+          {
+            "id": 1668707378,
+            "name": "PointLightSurfaceOffset"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "TerrainMultipass",
+      "id": "0x746d",
+      "constructor": "0x1011d3b0",
+      "flags": [
+        {
+          "name": "IndicateLayerComplexity",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x70",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered terrain diagnostic label. No consumer of offset 0x70 was established in the inspected SM4 draw, auxiliary-pass and setup functions.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x1011c390",
+            "0x1011c580",
+            "0x1011c6a0",
+            "0x10123bf0"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "FullyOpaque",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0xa0",
+          "consumer_status": "duplicate_mask_unreachable_from_drs",
+          "meaning": "Registered opacity label at offset 0xa0, sharing bit 16 with IndicateLayerComplexity. Generic DRS transfer reaches only the first matching slot; no independent DRS switch or rendering consumer established.",
+          "serialized_selectable": false,
+          "consumer_procedures": [
+            "0x10026630",
+            "0x1003fd40"
+          ],
+          "requirements": "Can only be independently addressed by another API/slot path, if used. Bit 16 alone does not set this slot."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "FowBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorTexture"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalTexture"
+          },
+          {
+            "id": 1668510769,
+            "name": "StructureTexture"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707378,
+            "name": "PointLightToStructureScaleAndOffset"
+          },
+          {
+            "id": 1668707379,
+            "name": "DebugColor"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "NumLayers"
+          },
+          {
+            "id": 0,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "TerrainStripe",
+      "id": "0x7473",
+      "constructor": "0x10b986e0",
+      "flags": [
+        {
+          "name": "IndicateLayerComplexity",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x70",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Enables diagnostic RGB tint: lerp(shadedRGB, DebugColor.rgb, DebugColor.a) in the inspected nonzero-layer PS pair. It does not change mesh LOD.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b8fdf0"
+          ],
+          "requirements": "Lit/high-quality terrain path and DebugColor."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "FowBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorTexture"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalTexture"
+          },
+          {
+            "id": 1668510769,
+            "name": "StructureTexture"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707378,
+            "name": "PointLightToStructureScaleAndOffset"
+          },
+          {
+            "id": 1668707379,
+            "name": "DebugColor"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "NumLayers"
+          },
+          {
+            "id": 0,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "TerrainStripeMultipass",
+      "id": "0x6d73",
+      "constructor": "0x10122670",
+      "flags": [
+        {
+          "name": "IndicateLayerComplexity",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x70",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered terrain diagnostic label. No consumer of offset 0x70 was established in the inspected SM4 draw, auxiliary-pass and setup functions.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10121600",
+            "0x101217d0",
+            "0x10121970",
+            "0x10123bf0"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "FullyOpaque",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0xa0",
+          "consumer_status": "duplicate_mask_unreachable_from_drs",
+          "meaning": "Registered opacity label at offset 0xa0, sharing bit 16 with IndicateLayerComplexity. Generic DRS transfer reaches only the first matching slot; no independent DRS switch or rendering consumer established.",
+          "serialized_selectable": false,
+          "consumer_procedures": [
+            "0x10026630",
+            "0x1003fd40"
+          ],
+          "requirements": "Can only be independently addressed by another API/slot path, if used. Bit 16 alone does not set this slot."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "FowBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorTexture"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalTexture"
+          },
+          {
+            "id": 1668510769,
+            "name": "StructureTexture"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707378,
+            "name": "PointLightToStructureScaleAndOffset"
+          },
+          {
+            "id": 1668707379,
+            "name": "DebugColor"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "NumLayers"
+          },
+          {
+            "id": 0,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Textured",
+      "id": "0xf8f3",
+      "constructor": "0x10b9ecc0",
+      "flags": [
+        {
+          "name": "UseVertexColor",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x30",
+          "consumer_status": "cpu_shader_selection",
+          "meaning": "Selects vertex-color VS variants in ordinary textured paths.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b9c6b0",
+            "0x10b9caf0",
+            "0x10b9cfc0"
+          ],
+          "requirements": "Vertex COLOR0; DisplayMode-specific."
+        },
+        {
+          "name": "DisableDepthWrite",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x34",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables depth writes through the combined depth-state lookup.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b9c6b0",
+            "0x10b9caf0",
+            "0x10b9cfc0",
+            "0x10ba1fc0",
+            "0x10078970"
+          ],
+          "requirements": "DisplayMode-specific; diagnostic modes bind fixed states."
+        },
+        {
+          "name": "DisableDepthTest",
+          "bit": 18,
+          "mask": "0x00040000",
+          "initial": 0,
+          "buffer_offset": "0x5c",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables depth testing through the combined depth-state lookup.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b9c6b0",
+            "0x10b9caf0",
+            "0x10b9cfc0",
+            "0x10ba1fc0",
+            "0x10078970"
+          ],
+          "requirements": "DisplayMode-specific; diagnostic modes bind fixed states."
+        },
+        {
+          "name": "UseFog",
+          "bit": 20,
+          "mask": "0x00100000",
+          "initial": 0,
+          "buffer_offset": "0x78",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Registered at offset 0x78, but no consumer of that field established in the inspected SM4 draw/setup paths. UseVertexFog is a separate, traced toggle.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b9c6b0",
+            "0x10b9cfc0",
+            "0x10ba2b20",
+            "0x10ba2e20"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "UseVertexFog",
+          "bit": 21,
+          "mask": "0x00200000",
+          "initial": 0,
+          "buffer_offset": "0x88",
+          "consumer_status": "cpu_shader_selection",
+          "meaning": "Selects distinct VS and PS variants through offset 0x88 in ordinary textured/fogged paths.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10b9c6b0",
+            "0x10b9cfc0"
+          ],
+          "requirements": "Renderer fog data; DisplayMode-specific."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "GlowAlpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510769,
+            "name": "AlphaTest",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "Alpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 1.0
+          },
+          {
+            "id": 1668510772,
+            "name": "DisplayBlend",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "Texture"
+          },
+          {
+            "id": 1668510769,
+            "name": "Texture2"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "Color"
+          },
+          {
+            "id": 1668510770,
+            "name": "Color2"
+          }
+        ],
+        "vector": [],
+        "integer": [
+          {
+            "id": 0,
+            "name": "BlendPreset"
+          },
+          {
+            "id": 0,
+            "name": "DisplayMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Trail",
+      "id": "0x7472",
+      "constructor": "0x10108b20",
+      "flags": [
+        {
+          "name": "UseVertexColorDiffuse",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 1,
+          "buffer_offset": "0x30",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Uses COLOR0 (BGRA swizzled to RGBA) instead of the material Color constant for the diffuse-color input; requires vertex color data.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10107030"
+          ],
+          "requirements": "COLOR0"
+        },
+        {
+          "name": "SkipZTest",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0x34",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables the depth test through the depth-state lookup; SkipZWrite independently controls depth writes in the ordinary/soft path.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10107030",
+            "0x1010c070",
+            "0x10078970"
+          ],
+          "requirements": "BillboardMode 2 distortion path binds a fixed depth state and bypasses these toggles."
+        },
+        {
+          "name": "SkipZWrite",
+          "bit": 18,
+          "mask": "0x00040000",
+          "initial": 0,
+          "buffer_offset": "0x38",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Disables depth writes through the depth-state lookup.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10107030",
+            "0x1010c070",
+            "0x10078970"
+          ],
+          "requirements": "Ordinary/soft path; BillboardMode 2 uses a fixed state."
+        },
+        {
+          "name": "UseFog",
+          "bit": 19,
+          "mask": "0x00080000",
+          "initial": 0,
+          "buffer_offset": "0x48",
+          "consumer_status": "registered_no_consumer_found",
+          "meaning": "Engine label suggests fog participation, but the registered field has no established consumer in the inspected SM4 draw/setup paths; those paths already compute fog independently.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10107030",
+            "0x1010cc00"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "UseVertexColorEmissive",
+          "bit": 20,
+          "mask": "0x00100000",
+          "initial": 0,
+          "buffer_offset": "0x4c",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Adds COLOR1 to the selected color input (including alpha), before the later particle color/texture operations.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10107030"
+          ],
+          "requirements": "COLOR1"
+        },
+        {
+          "name": "UseLodBias",
+          "bit": 21,
+          "mask": "0x00200000",
+          "initial": 0,
+          "buffer_offset": "0x50",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Enables explicit texture mip bias: VS forwards 3 * BLENDWEIGHT0.w; PS uses sample_b with that interpolated bias.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10107030"
+          ],
+          "requirements": "Particle vertex BLENDWEIGHT0.w. This is a shader bias, separate from the DRS texture-load bias."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "GlowAlpha",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510769,
+            "name": "AlphaTestTreshold",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "Alpha",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "DisplayBlend",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "HardnessModifier",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "LodBias",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "Texture"
+          }
+        ],
+        "color": [
+          {
+            "id": 1668510769,
+            "name": "Color"
+          }
+        ],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "DistortionFallOff"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "BlendPreset"
+          },
+          {
+            "id": 0,
+            "name": "DisplayMode"
+          },
+          {
+            "id": 0,
+            "name": "BillboardMode"
+          },
+          {
+            "id": 4294967295,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "UIBase",
+      "id": "0x7569",
+      "constructor": "0x10ba4360",
+      "flags": [
+        {
+          "name": "MouseLight",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x48",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Applies cursor-centered lighting: distance falloff combines LightColor with AmbientColor; cursor position is supplied by input controls.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10ba3d20",
+            "0x10ba5f20"
+          ],
+          "requirements": "Input controls and LightDistance/LightColor/AmbientColor."
+        },
+        {
+          "name": "UseTextureAlpha",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 1,
+          "buffer_offset": "0x68",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Uses sampled texture alpha multiplied by squared COLOR0 alpha in the inspected variant; disabled variant uses COLOR0 alpha and ignores texture alpha.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10ba3d20"
+          ],
+          "requirements": "Color texture with meaningful alpha."
+        },
+        {
+          "name": "ColorDisable",
+          "bit": 18,
+          "mask": "0x00040000",
+          "initial": 0,
+          "buffer_offset": "0x6c",
+          "consumer_status": "cpu_and_shader",
+          "meaning": "Blends colored RGB toward luminance (0.30 R + 0.59 G + 0.11 B), with COLOR1.alpha controlling the desaturation amount; primary opacity is preserved in the inspected pair.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10ba3d20"
+          ],
+          "requirements": "Second vertex color channel COLOR1; 0 keeps color, 1 gives grayscale."
+        }
+      ],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "LightDistance",
+            "min": -3.402823e+38,
+            "max": 3.402823e+38,
+            "default": 0.2
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "ColorMap"
+          },
+          {
+            "id": 1852992883,
+            "name": "NormalMap"
+          }
+        ],
+        "color": [
+          {
+            "id": 1684432499,
+            "name": "LightColor"
+          },
+          {
+            "id": 1668510769,
+            "name": "AmbientColor"
+          }
+        ],
+        "vector": [],
+        "integer": [],
+        "string": []
+      }
+    },
+    {
+      "name": "VertexColor",
+      "id": "0xf8f2",
+      "constructor": "0x10ba6c00",
+      "flags": [
+        {
+          "name": "DisableDepthTest",
+          "bit": 16,
+          "mask": "0x00010000",
+          "initial": 0,
+          "buffer_offset": "0x0",
+          "consumer_status": "cpu_render_state",
+          "meaning": "Uses the flag for both test/write selectors, bypassing depth testing and selecting the matching write state.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10ba63a0",
+            "0x10ba96d0",
+            "0x10078970"
+          ],
+          "requirements": ""
+        },
+        {
+          "name": "LastPixel",
+          "bit": 17,
+          "mask": "0x00020000",
+          "initial": 0,
+          "buffer_offset": "0xc",
+          "consumer_status": "backend_restricted",
+          "meaning": "Selects rasterizer states with description byte 0x1c set. DX9 copies this to its state and applies render-state 0x10 (LastPixel); DX10/DX11 explicitly return null for these descriptions. It is not a supported DX10/DX11 mesh-appearance feature.",
+          "serialized_selectable": true,
+          "consumer_procedures": [
+            "0x10ba63a0",
+            "0x10ba96d0",
+            "0x10065790",
+            "0x10061a50",
+            "0x10078570",
+            "0x1006bf10"
+          ],
+          "requirements": "Legacy DX9 line rasterization; avoid enabling on DX10/DX11."
+        }
+      ],
+      "parameters": {
+        "scalar": [],
+        "texture": [],
+        "color": [],
+        "vector": [],
+        "integer": [
+          {
+            "id": 0,
+            "name": "CullSense"
+          },
+          {
+            "id": 0,
+            "name": "BlendPreset"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "VolumetricFog",
+      "id": "0x7666",
+      "constructor": "0x10bac340",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "ExtinctionCoefficient",
+            "min": 0.0,
+            "max": 2.0,
+            "default": 0.1
+          },
+          {
+            "id": 1668510770,
+            "name": "DensityMapInfluence",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.1
+          },
+          {
+            "id": 1668510771,
+            "name": "Emissivity",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "ScrollSpeedU",
+            "min": -1.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "ScrollSpeedV",
+            "min": -1.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510774,
+            "name": "ScrollSpeedW",
+            "min": -1.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510775,
+            "name": "DistortionTextureInfluence",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510776,
+            "name": "DistortionTextureScale",
+            "min": 0.0,
+            "max": 2.0,
+            "default": 1.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DensityMap"
+          }
+        ],
+        "color": [
+          {
+            "id": 1684432499,
+            "name": "FogColor"
+          }
+        ],
+        "vector": [],
+        "integer": [
+          {
+            "id": 4294967295,
+            "name": "FowMode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "Water",
+      "id": "0x7774",
+      "constructor": "0x10bb1db0",
+      "flags": [],
+      "parameters": {
+        "scalar": [],
+        "texture": [
+          {
+            "id": 1668510769,
+            "name": "NoiseTexture"
+          },
+          {
+            "id": 1668510770,
+            "name": "DiffuseTexture"
+          },
+          {
+            "id": 1668510770,
+            "name": "Envmap"
+          },
+          {
+            "id": 1668510770,
+            "name": "Envmap2"
+          },
+          {
+            "id": 1668510770,
+            "name": "Lightmap"
+          },
+          {
+            "id": 1668510770,
+            "name": "Ripplemap"
+          },
+          {
+            "id": 1668510770,
+            "name": "Reflectionmap"
+          }
+        ],
+        "color": [],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "DiffuseScaleOffset"
+          },
+          {
+            "id": 1668707378,
+            "name": "LightmapScaleOffset"
+          },
+          {
+            "id": 1668707378,
+            "name": "Time"
+          },
+          {
+            "id": 1668707378,
+            "name": "PhasePlane0"
+          },
+          {
+            "id": 1668707378,
+            "name": "PhasePlane1"
+          },
+          {
+            "id": 1668707378,
+            "name": "PhasePlane2"
+          },
+          {
+            "id": 1668707378,
+            "name": "PhasePlane3"
+          },
+          {
+            "id": 1668707378,
+            "name": "YCoeffs"
+          },
+          {
+            "id": 1668707378,
+            "name": "DydxCoeffs"
+          },
+          {
+            "id": 1668707378,
+            "name": "DydzCoeffs"
+          },
+          {
+            "id": 1668707378,
+            "name": "NoiseFreq0"
+          },
+          {
+            "id": 1668707378,
+            "name": "NoiseFreq1"
+          },
+          {
+            "id": 1668707378,
+            "name": "NoisePos0"
+          },
+          {
+            "id": 1668707378,
+            "name": "NoisePos1"
+          },
+          {
+            "id": 1668707378,
+            "name": "FogBeta"
+          },
+          {
+            "id": 1668707378,
+            "name": "FogScaleBias"
+          },
+          {
+            "id": 1668707378,
+            "name": "XZScaleHeight"
+          },
+          {
+            "id": 1668707378,
+            "name": "ShadowmapPlaneX"
+          },
+          {
+            "id": 1668707378,
+            "name": "ShadowmapPlaneY"
+          },
+          {
+            "id": 1668707378,
+            "name": "ShadowmapPlaneZ"
+          },
+          {
+            "id": 1668707378,
+            "name": "ShadowmapPlaneW"
+          },
+          {
+            "id": 1668707378,
+            "name": "AmbientColor"
+          },
+          {
+            "id": 1668707378,
+            "name": "LightColor"
+          },
+          {
+            "id": 1668707378,
+            "name": "LightDirection"
+          },
+          {
+            "id": 1668707378,
+            "name": "ColdColor"
+          },
+          {
+            "id": 1668707378,
+            "name": "DiffColor"
+          },
+          {
+            "id": 1668707378,
+            "name": "NoiseParams"
+          },
+          {
+            "id": 1668707378,
+            "name": "WaterBeta"
+          },
+          {
+            "id": 1668707378,
+            "name": "WaterColor"
+          },
+          {
+            "id": 1668707378,
+            "name": "RipplePlane0"
+          },
+          {
+            "id": 1668707378,
+            "name": "RipplePlane1"
+          },
+          {
+            "id": 1668707378,
+            "name": "RipplePlane2"
+          },
+          {
+            "id": 1668707378,
+            "name": "RipplePlane3"
+          },
+          {
+            "id": 1668707378,
+            "name": "RippleHeights"
+          },
+          {
+            "id": 1668707378,
+            "name": "ReflectionFocus"
+          },
+          {
+            "id": 1668707378,
+            "name": "LightmapScale"
+          },
+          {
+            "id": 1668707378,
+            "name": "LightmapOffset"
+          },
+          {
+            "id": 1668707378,
+            "name": "DataD0"
+          },
+          {
+            "id": 1668707378,
+            "name": "DataD1"
+          },
+          {
+            "id": 1668707378,
+            "name": "ViewAxisX"
+          },
+          {
+            "id": 1668707378,
+            "name": "ViewAxisY"
+          }
+        ],
+        "integer": [
+          {
+            "id": 0,
+            "name": "Mode"
+          }
+        ],
+        "string": []
+      }
+    },
+    {
+      "name": "WaterDecal",
+      "id": "0x7764",
+      "constructor": "0x10bb6240",
+      "flags": [],
+      "parameters": {
+        "scalar": [
+          {
+            "id": 1668510769,
+            "name": "Alpha",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510770,
+            "name": "GridSizeU",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510771,
+            "name": "GridSizeV",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510772,
+            "name": "WaterHeight",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          },
+          {
+            "id": 1668510773,
+            "name": "AnimTime",
+            "min": 0.0,
+            "max": 1.0,
+            "default": 0.0
+          }
+        ],
+        "texture": [
+          {
+            "id": 1684432499,
+            "name": "DiffuseTexture"
+          },
+          {
+            "id": 1936745324,
+            "name": "SpecularTexture"
+          }
+        ],
+        "color": [
+          {
+            "id": 1684432499,
+            "name": "Color"
+          }
+        ],
+        "vector": [
+          {
+            "id": 1668707377,
+            "name": "DecalPlaneX"
+          },
+          {
+            "id": 1668707378,
+            "name": "DecalPlaneY"
+          },
+          {
+            "id": 1668707379,
+            "name": "DecalOffset"
+          }
+        ],
+        "integer": [],
+        "string": []
+      }
+    }
+  ]
+}

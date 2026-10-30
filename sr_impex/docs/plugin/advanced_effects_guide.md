@@ -1,170 +1,149 @@
 # Advanced Effects Guide
 
-Use `EffectSet` to schedule existing sound and visual-effect resources against skeletal animation clips. Complete the [Unit Creation Guide](unit_creation_buide.md) first; use the [Advanced Abilities Guide](advanced_abilities_guide.md) for Action mappings, markers, and cast/loop segmentation.
+Use **Effect Set Editor** to attach existing effects and sounds to a model's animations. Create new effect assets in the external Effect Editor.
 
-> **Scope:** this editor authors timed resource references in a DRS, not particle systems, sound files, projectile simulation, or gameplay abilities. It does not establish damage, cooldowns, targeting, or spell behavior. The BMG export path has unfinished animation/effect nodes; do not assume it exports the configuration described here.
+For building damage, use **BMG Editor â†’ Building Editor â†’ Build Damage Preview**. Its Damage slider combines mesh states, scratch, destruction debris and FX. See [building damage preview](building_creation_guide.md#preview-damage-and-destruction).
 
-> **Back up imported models before pressing Save.** The current EffectSet UI exposes only animation-keyed entries. Its Save operation rebuilds that subset and does not preserve imported impact/additional sound containers or all header/unknown data. See [round-trip limitations](#7-round-trip-limitations) before editing a working game asset.
+## 1. Set Up the Asset Library
 
-## 1. Understand the Three Levels
+Open **Edit â†’ Preferences â†’ Add-ons â†’ SR ImpEx**.
 
-| Level | Contents | Example authoring intent |
-| --- | --- | --- |
-| Effect entry | An Action / `.ska` reference plus keyframes | Events for the clip used by an existing Attack mapping |
-| Keyframe | Normalized time, type, audio/spatial parameters, resource variants | A sound at the release pose |
-| Variant | File reference and weight | Two alternative existing sounds for that one event |
+- Set **Skylords Reborn Folder** to your game installation.
+- Optionally set **Effects Folder** to a loose effect library, such as `Mods/Unpack/bf1/gfx/effects`. Use this to preview your own assets before installing them.
 
-These variants are independent of AnimationSet variants. One chooses a motion clip; the other supplies candidate resources for a scheduled event. If Attack has two different SKA clips, create/check an EffectSet entry for each clip that needs events. There is no automatic “apply this effect to every Attack variant” link.
+Choose the game installation folder containing `base/pak`, rather than the `pak` folder itself. Both library paths are saved automatically and restored after Blender restarts, even when Blender's automatic preference saving is off. Leave the optional Effects Folder empty if you only use game assets.
 
-An entry is keyed by the **animation filename**, not an ability label, Blender timeline marker, or locator name. Several visual jobs can refer to the same clip; EffectSet does not provide a separate per-ability selector for them.
+The add-on also keeps a shared settings copy outside Blender's version-specific profile. It can recover the paths when that profile is reset or replaced. Clearing a path deliberately clears the saved value too.
 
-Sources: [EffectSet editor state](../../blender/editors/effect_set_editor.py#L180), [binary Keyframe and SkelEff definitions](../../definitions/effect_definitions.py#L44).
+The library reads existing files. It prefers loose assets and can find effects and sounds in the game's current PAK archives. It does not modify the game files.
 
-## 2. Open the Correct Model's Data
+The first search builds a file index and saves it in your user cache. It is reused across models and Blender restarts. Searches and preview builds check file-system metadata: changed folders are scanned again, and changed PAK directories are read again. Unchanged archives are not unpacked or reindexed. All current archives in `base/pak` are eligible, including building assets.
 
-Make the intended `DRSModel_*` root collection active and open **3D Viewport → Sidebar → DRS Editor → EffectSet**. The panel remains visible without a valid root, but shows a selection hint instead of data controls. Save pending edits before changing models, then use `Reset` to load the newly active root's stored state.
+**Refresh Effect Library** forces a fresh index if needed. Corrupt or outdated cache data is rebuilt automatically. The cache contains filenames and archive locations; textures, meshes and sounds are loaded only when needed.
 
-- **Save:** writes the working EffectSet state into the collection's `EffectSetJSON` property. It does not save the `.blend`, export the DRS, or write/copy resource files.
-- **Reset:** reloads stored EffectSet data and discards unsaved panel changes.
-- **Left-list `+` / `−`:** add/remove an Effect entry.
-- **Action:** choose the animation associated with that entry. The dropdown draws from all Actions in the `.blend`; check that it belongs to the intended skeleton/model.
-- **Keyframes `+` / `−`:** add/remove scheduled events. A newly added keyframe starts at `0`, defaults to **FX1**, and includes one empty resource variant.
-- **Up/down arrows:** reorder keyframe records, not their time values. The editor does not automatically sort by Time.
-- **Variants `+` / `−`:** add/remove candidates for the selected event; edit File and Weight below the list.
+## 2. Add an Animation Event
 
-The Action label can be shortened for display; it is not a reliable preview of the exported filename. Imported entries also retain their original SKA name internally. See the Action-retargeting caveat below before changing an imported entry's dropdown.
+1. Select a mesh belonging to your imported model.
+2. Open **DRS Editor â†’ Effect Set Editor**.
+3. Add an entry and choose its **Action**. Each entry belongs to one SKA animation.
+4. Add a keyframe and choose its **Type** below.
+5. Set **Time (0..1)**: `0` is the clip's start, `0.5` its middle and `1` its end.
+6. Add a resource variant. Open **Effect Selector**, search by name, and click **Use Resource**. You can also enter the filename directly.
+7. Keep one variant at **Chance 100%** while testing.
+8. Click **Save**, then save your `.blend` separately.
 
-Sources: [panel controls](../../blender/editors/effect_set_editor.py#L811), [add/save/reset operators](../../blender/editors/effect_set_editor.py#L600).
+Changing the Action retargets the entry. Imported sound containers and header data are retained when you save, although the panel does not yet let you edit every sound container.
 
-## 3. Select the Event Type and Resource
+**Group** filters the shared resource picker using name/path hints such as Fire/Smoke, Water/Ice, Persistent/Ambient and Buildings/Destruction. Resources can belong to several groups. Choose **All Resources** when unsure. The same picker and preview library are available in [Locator Editor](advanced_locators_guide.md#choose-and-preview-an-effect).
 
-| Type shown in the UI | Stored value | Resource category |
-| --- | --- | --- |
-| `Audio (snr/wav)` | `0` | Existing `.snr` or `.wav` sound reference |
-| `FX1 (fxb)` | `1` | Existing `.fxb` visual-effect reference |
-| `FX2 (fxb)` | `2` | Existing `.fxb` visual-effect reference |
-| `Permanent FX1 (fxb)` | `3` | Permanent-effect category, referencing an `.fxb` |
-| `Permanent FX2 (fxb)` | `4` | Permanent-effect category, referencing an `.fxb` |
+### Choose the Event Type
 
-These keyframe types are separate from the type field in the format's **additional sound containers**. Research labels such as `StepSound` refer to that other structure, not to a selectable replacement for keyframe type `0`. The current panel does not author those containers; see [round-trip limitations](#7-round-trip-limitations).
-
-The labels establish supported categories, not a complete explanation of the engine difference between FX1 and FX2 or permanent-effect lifetime/cleanup. Reuse a known working model's type when reproducing an existing effect. Do not infer that type `3` or `4` means a Blender loop or that the add-on simulates its persistence.
-
-### File References and Paths
-
-The **File (.fxb/.wav/.snr)** field is a plain string. Enter the resource reference expected by the game's content layout, following a comparable working asset's naming/path convention. For illustration, `example_attack.wav` or `example_release.fxb` are filenames only, not bundled resources or guaranteed game-valid assets.
-
-- EffectSet export stores the resource string; it does not validate existence, enforce an extension, convert audio, or package the referenced resource.
-- A local Windows path used while editing is not automatically rewritten into a deployable game-resource path. Do not leave an absolute workstation path unless the target workflow explicitly supports it.
-- Preserve the spelling and relative subpath used by known working content. Confirm the files are installed where the game resolves those references.
-- Keep animation `.ska` references separate from sound/FX File fields. The exporter's shared SKA naming map updates animation references, not the names of external `.fxb`/`.wav`/`.snr` resources.
-- Export skips empty resource names. Fill at least one intended resource variant per event and remove empty test events rather than assuming they will produce useful output.
-
-Sources: [type/file properties](../../blender/editors/effect_set_editor.py#L180), [resource serialization](../../blender/editors/effect_set_editor.py#L421), [shared SKA naming](../../utilities/helpers.py#L355).
-
-### SNR/SNS Resources and Sound Registration
-
-An `.snr` is not simply a WAV file with a different extension. EA AudioCore v0 headers describe the codec, channel configuration, sample rate, sample count, and loop metadata. Depending on the storage type, audio can be embedded in a RAM-style resource or use associated `.sns` stream data. Keep the resource set expected by the source asset; copying only the SNR header may omit the actual streamed audio.
-
-For a header whose sample rate and sample count are understood, nominal duration is sample count divided by sample rate. File size is not a reliable substitute, and this audio duration is separate from EffectSet's normalized animation Time.
-
-Research templates also describe a `soundpipeline.bin` sound registry containing name/hash and audio metadata. A historical comment claims unregistered sounds can crash the game, but that registration rule and failure mode are **not verified**. Treat it as an investigation point, not a confirmed engine requirement. This add-on does not create or update a sound-pipeline registry when saving EffectSet, and a file reference alone does not prove a custom sound is registered or usable.
-
-Historical audio-inspection templates include codec-specific XAS assumptions and incomplete optional streaming/prefetch handling. They are not a general-purpose SNR encoder/decoder specification. The EffectSet UI's audio label does not imply that it can encode all listed EA codecs or convert arbitrary WAV files into game resources.
-
-## 4. Align Sound and FX with the Clip
-
-**Time (0..1) is normalized progress through the full clip**, not seconds, milliseconds, or a Blender frame index. For an event at elapsed time $t$ in a clip lasting $D$ seconds:
-
-$$
-\text{Time} = \frac{t}{D}
-$$
-
-For a two-second clip with an event at `0.8` seconds, enter `0.4`. For a five-second Spawn clip, `0.6` means **three seconds**, not `0.6` seconds.
-
-AnimationSet marker Time is also normalized `0..1`. If the same full clip has an Attack marker at `0.4`, using `0.4` for a sound keyframe is a deliberate way to align them. **There is no live synchronization:** changing the marker does not move EffectSet keyframes, and changing an effect keyframe does not update animation timing metadata.
-
-For a cast whose `Cast→Resolve` split is `0.35`, an event intended at that split uses `0.35` on that full clip. Do not renormalize it to the shorter preview segment. Imported clips can carry their own FPS/frame-length metadata, so verify clip duration through `Clip Timing...` in AnimationSet rather than relying only on the current scene's FPS.
-
-### Example: Attack Release Sound
-
-1. In AnimationSet, identify the Action used by the existing `Attack` mapping. Preview its selected variant and note the marker fraction at the desired contact/release pose.
-2. In EffectSet, add a new entry and select that exact Action.
-3. Add a keyframe and **change the default FX1 type to Audio**.
-4. Set Time to the intended fraction, then enter a known working `.snr`/`.wav` reference in its first variant. Keep one variant at weight `100` while diagnosing timing.
-5. Add a separate FX keyframe if a visual resource is also required. Use an appropriate known working FX type and `.fxb` reference; a single keyframe has only one type.
-6. Save both editors, save the `.blend`, export the DRS/SKA files, and test in game. Repeat for every motion variant that needs its own event entry.
-
-### Example: Spawn or Cast Cue
-
-Use the Action from the existing Spawn or cast mapping, not an assumed ability-name match. Set the sound/FX keyframe at the desired normalized moment, checking a Spawn marker or cast split only as a visual reference. This schedules a cue; it does not determine when a unit becomes controllable, when damage resolves, or when a projectile spawns.
-
-Sources: [Time property](../../blender/editors/effect_set_editor.py#L192), [AnimationSet marker and timing controls](../../blender/editors/animation_set_editor.py#L2453).
-
-## 5. Review Parameters Without Guessing Their Semantics
-
-| Field | Practical guidance |
+| Type | Use |
 | --- | --- |
-| `Min Falloff`, `Max Falloff` | Stored falloff parameters. Use values from comparable working audio/effects; the add-on provides no distance preview or documented unit calibration. Keep a sensible minimum/maximum ordering. |
-| `Volume` | Stored floating-point value, defaulting to `1` for newly added keyframes. No Blender audition is provided. Do not assume it is a decibel value. |
-| `Pitch Min`, `Pitch Max` | Stored pitch-shift range. Preserve established values; the UI does not establish whether the engine interprets them as ratios, semitones, or another scale. |
-| `Offset` | Stored XYZ offset. The format source itself marks its spatial interpretation as uncertain; it is not a bone picker or an automatic locator binding. Verify coordinate interpretation in game. |
-| `Interruptable` | Stored boolean flag with this exact UI spelling. Engine interruption behavior is not simulated or fully explained by the editor. |
-| `Condition` | An incompletely understood conditional field. Do not treat it as a gameplay rule editor; preservation is currently unreliable, as described below. |
-| Variant `Weight` | Integer `0..255` in this panel, stored as an unsigned byte. There is no sum validation or normalization despite the `%` list label. |
+| Sound | Play a sound resource. |
+| World FX | Spawn an effect at the model's position at that moment, with an offset. |
+| Linked FX | Use an effect whose setup follows source/target nodes. Attachment depends on the effect itself. |
+| Fade Out Persistent FX | Fade an existing locator effect with the matching resource name. |
+| Fade In Persistent FX | Fade an existing locator effect with the matching resource name back in. |
 
-For a simple two-resource example, `80` and `20` makes intent easy to read, but the panel does not prove exact engine probability semantics. Avoid all-zero sets and verify resource selection in game. Sound/FX weights here have a different UI range from AnimationSet's `0..100` motion weights.
+Fade events operate on an existing effect; they do not spawn another copy. Their **Fade Duration (s)** controls how long the fade takes.
 
-Locators such as spell or projectile attachment points are a separate mechanism. Use the [Advanced Locators Guide](advanced_locators_guide.md) for the actual locator types and parenting controls. Do not assume that an EffectSet Offset or animation marker automatically attaches an FX resource to one of them.
+For ordinary events, **Offset** adjusts placement. It does not select a bone or replace a locator. Reuse a working model/effect setup when you need a particular attachment behavior.
 
-Sources: [editable properties](../../blender/editors/effect_set_editor.py#L180), [binary parameter definitions and uncertainties](../../definitions/effect_definitions.py#L44).
+### Resource Variants
 
-## 6. Preview and Export Boundaries
+Variants are alternative resources for the same event, not simultaneous layers. For two alternatives, use chances such as `80` and `20`, totaling **100**. The engine does not scale these numbers automatically: `4 / 3 / 3` means **90% silence or no effect**, while `40 / 30 / 30` always selects one. The panel shows the unused chance. **Normalize to 100%** scales the current proportions when you want an event every time; imported values stay unchanged until you edit them. Avoid totals above 100, which can make later variants unreachable.
 
-### What Blender Does Not Preview
+To play two effects or sounds together, create **two events at the same Time**, each with its own resource variant.
 
-The registered EffectSet panel has **no sound audition, FX simulation, or effect-timing playback button**. A `Play (Anim Only)` operator exists in the source but is not included in this editor's registered class list or drawn controls; do not expect it as an available panel feature.
+## 3. Check the Resource
 
-Use AnimationSet preview or normal Blender animation playback to inspect motion and note the intended pose/time. That confirms neither resource loading nor engine spatialization, pitch, volume, conditions, permanent-effect behavior, or gameplay synchronization. AnimationSet preview may also choose the control rig, whereas SKA export uses the deform armature; see the [export Action checklist](advanced_abilities_guide.md#7-prepare-the-actual-export-action).
+Open **Effect Selector**. Search at the top or choose a category on the left. Categories such as Fire, Water and Buildings are hints from filenames, not engine effect types.
 
-### Export Checklist
+Select a resource and click **Preview** to audition it on the model. The existing FX preview is paused during the audition and restored when you close the selector. **Cancel** keeps your original resource; **Use Resource** puts the selection in the editable filename field. Save the EffectSet or locator separately to include it in export.
 
-1. Save the EffectSet editor and AnimationSet editor to the correct active root; save the `.blend` separately.
-2. Use a DRS model type that supports the intended animated model. Animated Object exports intentionally remove non-Idle AnimationSet jobs and animation markers/timings; use Animated Unit for those richer unit mappings.
-3. Ensure every required clip exists on disk. **Export All SKA Actions** exports saved AnimationSet references, not Actions appearing only in EffectSet or every Action in the `.blend`.
-4. Choose the SKA prefix strategy deliberately. The shared map rewrites DRS AnimationSet, marker-set and EffectSet animation references consistently when they resolve to the same Action. Missing/ambiguous Action resolution can still produce mismatches; inspect the exported files.
-5. Supply external sound/FX assets separately in the expected game-resource layout. This editor writes references, not the assets themselves.
-6. Reimport a copy of the output, compare its event records with the source, then test audio/FX in the game. Keep the original input and `.blend` until the round trip is verified.
+Sound events show audio resources instead of FXB files. Missing or ambiguous references produce an error when previewing.
 
-Sources: [unregistered animation-only operator and class list](../../blender/editors/effect_set_editor.py#L766), [EffectSet export](../../utilities/drs_utility.py#L5032), [referenced-only SKA export](../../utilities/drs_utility.py#L5060), [model-type filtering](../../utilities/drs_utility.py#L5374).
+### Play the Effects in Blender
 
-## 7. Round-Trip Limitations
+In **Object Mode**, click **Update Preview**, then press **Space** to play the normal scene timeline. Choose an animation entry to preview its scheduled effects. Persistent building/unit locator effects can also be previewed when there is no animation entry. Rebuild after the current render finishes.
 
-These are current implementation boundaries, not settings that can be fixed by guessing different engine values:
+- **Audio** includes sound cues. Multiple cues can overlap. Sound-set loops repeat through the preview range.
+- **Engine Chances** uses the saved chances. The preview makes repeatable random choices without adding an exported seed setting.
+- **Selected Variant** auditions the highlighted variant of the highlighted event, even if its chance is zero. Other events keep their normal chances. This changes only the preview.
+- **Clear Preview** removes generated effects and their audio strips for this model. It leaves your model and unrelated audio alone.
+- **Live Update** is on by default. After the first **Update Preview**, changes to the selected clip, event timing, volume, pitch, FX offset or variants update automatically after a short pause in editing. Playback stays running at its current frame. Large effects can pause briefly while rebuilding; updates wait until rendering finishes. **Clear Preview** stops live rebuilding. Rebuild the preview after reopening a saved `.blend`.
 
-- **Imported sound containers are not editable/preserved by panel Save.** Import conversion captures `impact_sounds` and `additional_sounds`, but the UI state and Save serializer only reconstruct `effects`. Save also reseeds header defaults/checksum rather than merging all imported metadata, despite comments suggesting preservation. Back up before saving an imported EffectSet containing these records.
-- **Retargeting an imported entry can retain its old SKA reference.** Serialization prefers the imported hidden `raw_ska` over the current dropdown Action. To intentionally retarget using the UI, create a fresh entry with the intended Action and recreate its keyframes, then remove the old entry in a backup copy. Check the resulting reference after export.
-- **Condition is not a reliable round-trip control.** The binary class reads/writes `condition`, but the editor's conversion helpers use `uk`. Imported non-default values may be lost and edits may not reach the binary field. The binary field is signed-byte data for applicable EffectSet types, while the UI permits values up to `255`; do not rely on the UI range as a format guarantee.
-- **No automatic repair of resource references or timing.** Invalid names, empty variants, incorrect offsets and mistimed events are not diagnosed by a successful Save. Keyframe order is preserved as edited, not sorted by time.
+A clip without assigned effects is normal: the preview reports this as information. The same applies when Audio is off for a sound-only clip, or when the preview picks the unused part of the event's chances. Missing files and effects without supported preview components remain errors; the message names the resource, and the model's **Effect Preview Report** in Blender's Text Editor contains details. A persistent locator effect does not need an imported Action unless you also preview timed animation events.
 
-Sources: [state-only serializer](../../blender/editors/effect_set_editor.py#L253), [header defaults](../../blender/editors/effect_set_editor.py#L109), [import conversion](../../blender/editors/effect_set_editor.py#L309), [export conversion](../../blender/editors/effect_set_editor.py#L421), [actual Condition field](../../definitions/effect_definitions.py#L44).
+For sound events, **Pitch Min/Max** are rate shifts: `0` leaves playback unchanged, `0.1` adds 10%, and `-0.1` subtracts 10%. The preview picks a repeatable value between them. Both pitch and sound duration change. Values must produce a positive playback rate to be previewed.
 
-## 8. Troubleshooting
+Controls marked **Export Only** are saved for the game but do not affect the Blender preview: falloff needs positional audio, Interruptible needs gameplay animation interruptions, and Stored Condition is retained without a verified filtering effect in this timeline path. Editing these fields does not rebuild the preview. Use the Map Editor to check gameplay-dependent behavior.
 
-| Symptom | Checks |
+Generated previews live outside the model's export collection. They are not exported as extra meshes. Do not edit those generated objects; edit the model's EffectSet or the original effect in the external Effect Editor.
+
+Switching to another model or importing a new model stops the previous model's preview audio. Sound strips you added yourself are kept. Build the selected model's preview again to hear its effects.
+
+Cycles transparency depth is adjusted automatically for overlapping effect sprites, and restored when the last preview is cleared. Very dense overlaps can reach Blender's hard limit; the preview report lists this case. This setting fixes early ray termination without changing the material's transparency.
+
+Legacy flame emitters, including Firedancer's head and hands, use smooth transparency automatically in EEVEE. They should look like soft overlapping flames rather than a cloud of dotted pixels during playback. After updating the add-on, click **Update Preview** to rebuild older preview materials. The source textures and exported effects stay unchanged.
+
+### What You Can Check
+
+| Part of the effect | Blender preview |
 | --- | --- |
-| No sound/FX in Blender | Expected: the panel does not audition resources or simulate FX. Verify motion separately and test the exported content in game. |
-| No event in game | Confirm the game uses that exact SKA, the entry has keyframes/nonempty resources, type matches resource category, edits were saved, and assets are deployed. |
-| Sound at the wrong pose | Check normalized full-clip Time, clip duration/FPS metadata, and whether the marker/split changed independently. |
-| Only one attack variant has effects | Add/check entries for all required SKA clips; motion and effect variants are separate. |
-| New Action chosen but old clip still referenced | Imported `raw_ska` takes precedence; recreate the entry rather than trusting the dropdown alone. |
-| SKA missing although EffectSet names it | Add the required motion mapping in AnimationSet, or export the clip separately. EffectSet-only references do not trigger automatic SKA output. |
-| FX appears at an unexpected position | Compare Offset and the existing effect's own configuration; locator attachment and marker Position are separate mechanisms. Do not guess coordinate conventions. |
-| Imported impact/extra sounds or Condition disappear | Current preservation limitations; restore the backup and use a workflow that retains those records. A UI Save is not a lossless pass-through. |
+| Lights, billboards and nested effects | Placement, animation, color and opacity. Light brightness is approximate. |
+| Effect meshes | Geometry and the supported DRS material shading. Animated effect meshes also play their SKA through the effect's animation curve. Default refraction meshes sample the background in camera renders and follow the FX fade. The viewport uses a simpler refraction shader. |
+| Material animation | Supported scalar and color curves drive the existing material preview. Parameters without a visual route are listed in the report. |
+| SFP particles | Starting colors, size, lifetime, rotation, weighted atlas tiles and render ramps. Particles keep their placement at emission and use the stored mass and system damping. Counts, random sampling and reduced motion caches remain bounded approximations. |
+| Legacy emitters and satellites | Legacy emitters use traced particle motion, color, opacity, size and supported blend controls. Each component follows its own activation window. Distortion-only particles do not produce colored flames; their heat haze is not reproduced. Scene fog and satellite-specific motion remain incomplete. |
+| SFP force fields | Cached attraction, inner/outer sphere boundaries, distortion, uniform drift and vortex motion. The random generator and integration are preview substitutes. |
+| Trails | A ribbon from cached attachment motion, with start/end width, lifetime and fade. Spline interpolation, trail ramps and distortion are not reproduced. |
+| Audio | Overlapping cues, sound-set loops and pitch variation, and effect volume curves. Spatial falloff and changing pitch during a cue are not reproduced. |
+| Persistent locator effects | Named source-bone attachments and fade events. The special Health Bar and Projectile Spawn source slots use model locators; when several match, the preview uses the first. Advanced source/target links still need an engine comparison. |
+| Terrain decals | A subdivided surface follows the cached scene terrain. Static decals can also project onto stationary model surfaces. Projection and shading remain approximations of the game. |
+| Water decals | Animated 3D DDS texture slices follow the effect's animation-time curve. Placement uses a flat water surface; scene waves, fog and shadow variants are not reproduced. |
+| Physics pieces | Cached falling, force, mass, torque and collision motion. Box-based inertia/contact proxies substitute for the game's collision shapes and solver. |
+| Physics groups and point forces | Ground offsets, within-group collisions, and attraction/repulsion through range and power curves. |
+| Legacy wind Force nodes | Retained in the resource report; they do not drive the preview simulation yet. |
+| Camera shake | Reported without moving the artist's camera. |
 
-## Related Guides
+Additive, screen, multiply and alpha blending have separate preview paths. Premultiplied alpha and blends that depend on the already rendered background remain approximations.
 
-- [Advanced Abilities Guide](advanced_abilities_guide.md): attack/cast labels, markers, segmented clips, deform-rig and naming checks.
-- [Advanced Locators Guide](advanced_locators_guide.md): attachment and parenting details.
-- [Unit Creation Guide](unit_creation_buide.md): the base unit workflow.
-- [Building Creation Guide](building_creation_guide.md): building-specific scope and BMG export limitations.
+Effects with glow automatically receive a separate render pass and Blender bloom. No extra artist controls are needed. The preview copies your compositor and restores the original when cleared; a replacement you select yourself is kept. Set up your render before clicking **Update Preview**. Blender's bloom shape and brightness differ from the game, so check the final glow in the Map Editor.
+
+Water volume textures are decoded when the preview is built. Playback and scrubbing reuse cached slices. Large volumes use fewer slices to bound memory; the report lists this reduction. Ordinary 2D water textures use a static fallback. Water lighting is approximate.
+
+To preview terrain contacts, place a terrain mesh outside the model's export collection, then click **Update Preview**. The preview snapshots visible environment meshes without changing them. Without an environment surface, physics and terrain decals use a flat ground plane at the model origin. Static decals can project onto stationary model surfaces; animated figures are excluded to prevent stretched projections. Rebuild after changing the environment geometry.
+
+Physics uses the traced default gravity and force scaling, but its box inertia and collision response differ from the game. Check final contacts, stacking, advanced links and unsupported shader behavior in the Map Editor. Continue editing the effect itself in the external Effect Editor; the Blender tools edit the model's EffectSet references and timing.
+
+SFP particles, trails, force fields and physics cache motion when you click **Update Preview**. Rebuild after changing the model animation. Playback and scrubbing reuse that cache. Unchanged decal projections are reused too. Long clips or large particle systems use reduced sampling to keep memory use bounded. A model preview is capped at 8,192 particle sprites and 64 simulated debris pieces; the report tells you when a limit reduces the preview.
+
+SFP flames that produce no glow use smooth transparency automatically. Emitters that produce glow keep the separate glow pass. These choices come from the effect data and need no artist controls. Rebuild older previews after updating the add-on.
+
+For refraction meshes inside effects, click **Update Preview**, use **Add Render** if your model has no camera or lights, then press **F12**. The render automatically uses the refraction texture to distort the background, including the effect's animated fade. The normal viewport still uses a simpler glass-like shader. A visible background makes the distortion easier to judge. The extra render passes take more render time and are removed with **Clear Preview**; the previous compositor is preserved. Only the frontmost distortion surface is sampled, and the texture's blur/mip control is not reproduced. Compare overlapping haze and final lighting with the Map Editor.
+
+Check **Effect Preview Report** in Blender's Text Editor for the selected assets' limits. Always test the exported result in the Map Editor; the Blender preview is not yet a visual match for every effect type.
+
+A successful inspection confirms that the file can be read. It does not prove that every dependency is installed or that the effect will attach correctly in game.
+
+## 4. Export and Test
+
+1. Save EffectSet and AnimationSet changes, then save the `.blend`.
+2. Export the model and its required SKA clips. An EffectSet reference alone does not export its SKA; add the appropriate AnimationSet mapping or export that clip separately.
+3. Install any custom effect, texture and sound assets separately. The DRS stores references; it does not bundle them.
+4. Reimport a copy of the export and check its entries. Then test it in the Map Editor.
+
+## Common Problems
+
+| Problem | Check |
+| --- | --- |
+| No effect visible in Blender | Click Update Preview, check the resource paths and current animation time, then read Effect Preview Report for missing dependencies or unsupported components. |
+| Resource not found | Check the library folders and filename. A sound may reference an XML sound set or require an SNR/SNS pair. |
+| Resource name is ambiguous | Use a unique resource name or remove duplicate test assets from your configured library. |
+| Event happens at the wrong pose | Time is a fraction of the entire clip, not seconds or a frame number. |
+| Only one animation variant has an effect | Add entries for each SKA clip that needs the event. |
+| Fade does nothing | Confirm that an existing persistent locator effect uses that resource name. |
+
+For animation mappings, see the [Advanced Abilities Guide](advanced_abilities_guide.md). For effect attachment points, see the [Advanced Locators Guide](advanced_locators_guide.md).

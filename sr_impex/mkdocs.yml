@@ -1,5 +1,5 @@
-site_name: Battleforge Blender Plugin & DRS Format Documentation
-site_description: Official documentation for the DRS file format & the Blender Import/Export Plugin. Includes the DRS format manual (subclasses, attributes) and tutorials for installation, import, and export.
+site_name: Skylords Reborn Blender Artist Guides
+site_description: Artist guides for creating, painting, animating and exporting Skylords Reborn models in Blender.
 site_author: Maxxxel
 site_url: https://maxxxel.github.io/SR-ImpEx-for-Blender/
 repo_url: https://github.com/Maxxxel/SR-ImpEx-for-Blender/
@@ -44,34 +44,19 @@ theme:
 nav:
   - Overview: index.md
   - Plugin Guides:
-      - Object Creation Guide: plugin/object_creation_guide.md
+      - Artist Model Pipeline: plugin/model_artist_pipeline.md
+      - Static Object Guide: plugin/object_creation_guide.md
       - Unit Creation Guide: plugin/unit_creation_buide.md
       - Building Creation Guide: plugin/building_creation_guide.md
+      - Advanced Object Setup: plugin/object_setup_reference.md
       - Advanced Shading Guide: plugin/advanced_shading_guide.md
+      - Default Material Guide: plugin/material_artist_workflow.md
       - Advanced Locators Guide: plugin/advanced_locators_guide.md
       - Advanced Abilities Guide: plugin/advanced_abilities_guide.md
       - Advanced Effects Guide: plugin/advanced_effects_guide.md
-  - DRS Structures:
-      - Header: drs/header.md
-      - Common: drs/common.md
-  - Geometry:
-      - CGeoMesh: drs/cgeomesh.md
-      - CGeoPrimitiveContainer: drs/cgeoprimitivecontainer.md
-      - CGeoOBBTree: drs/cgeoobbtree.md
-      - collisionShape: drs/collisionshape.md
-      - CDspMeshFile: drs/cdspmeshfile.md
-  - Animation & Effects:
-      - CSkSkinInfo: drs/cskskininfo.md
-      - CSkSkeleton: drs/cskskeleton.md
-      - CDspJointMap: drs/cdspjointmap.md
-      - CDrwLocatorList: drs/cdrwlocatorlist.md
-      - AnimationSet: drs/animationset.md
-      - AnimationTimings: drs/animationtimings.md
-      - EffectSet: drs/effectset.md
-  - Miscellaneous:
-      - DrwResourceMeta: drs/drwresourcemeta.md
-  - Reference:
-      - Glossary (Enums): glossary.md
+
+hooks:
+  - docs_public.py
 
 plugins:
   - search

@@ -11,6 +11,7 @@ import json
 import uuid
 from typing import Dict, List, Optional
 import bpy
+from bpy.app.handlers import persistent
 from bpy.props import (
     StringProperty,
     IntProperty,
@@ -39,9 +40,51 @@ UID_KEY = "_cdrw_uid"
 LOCATOR_PREFIX = "Locator_"
 SLOCATORS_COLLECTION_NAME = "SLocators_Collection"
 
+_LOCATOR_LABELS = {
+    0: "Health Bar", 1: "Model Attachment", 2: "Construction",
+    3: "Turret / Weapon Animation", 4: "Figure State FX",
+    5: "Wheel / Terrain Attachment", 6: "Persistent Building FX",
+    7: "Building Hit Offset", 8: "Persistent Figure FX",
+    9: "Damage Flame: Small", 10: "Damage Flame: Small + Smoke",
+    11: "Damage Flame: Large", 12: "Damage Smoke", 13: "Damage Flame: Huge",
+    14: "Unverified (14)", 15: "Unverified (15)", 16: "Figure Hit Offset",
+    17: "Spell Hit", 18: "Spell Cast (retained name only)", 29: "Projectile Spawn",
+}
+_LOCATOR_NOTES = {
+    14: "No class-specific BF/SR consumer verified. Not SpellCast; preserve ID 14 unchanged.",
+    15: "No class-specific BF/SR consumer verified. Not SpellHitAll; preserve ID 15 unchanged.",
+    17: "Active slot lookup: Spell Hit / SpellHit. Retained name: SpellHitAll. Spell-event usage is untested.",
+    18: "SpellCast is a retained engine name at ID 18; no active BF/SR slot consumer verified.",
+}
 LOCATOR_TYPE_ENUM = [
-    (str(k), v, "") for k, v in sorted(LocatorClass.items(), key=lambda kv: kv[0])
+    (str(k), _LOCATOR_LABELS.get(k, v), _LOCATOR_NOTES.get(k, f"BattleForge / Skylords locator class {k}"), k)
+    for k, v in sorted(LocatorClass.items()) if k not in {14, 15}
 ]
+_LOCATOR_ENUM_CACHE = {}
+_REFRESHING = False
+_PENDING_MODEL = None
+
+
+def _locator_type_items(item, _context):
+    cid = item.class_id
+    if cid in LocatorClass and cid not in {14, 15}:
+        return LOCATOR_TYPE_ENUM
+    # Keep the strings alive, and preserve unknown numeric classes unchanged.
+    if cid not in _LOCATOR_ENUM_CACHE:
+        _LOCATOR_ENUM_CACHE[cid] = LOCATOR_TYPE_ENUM + [
+            (str(cid), f"Unknown ({cid}, preserved)", "Unverified locator class", cid)
+        ]
+    return _LOCATOR_ENUM_CACHE[cid]
+
+
+def _resolve_model(name, session_uid):
+    if not name or not session_uid:
+        return None
+    col = bpy.data.collections.get(name)
+    if col is not None and str(col.session_uid) == session_uid:
+        return col
+    # Renaming a collection must not discard a locator-editing draft.
+    return next((c for c in bpy.data.collections if str(c.session_uid) == session_uid), None)
 
 # ---- Basic helpers -----------------------------------------------------------
 
@@ -64,19 +107,14 @@ def _m3_from_list(r9: List[float]) -> Matrix:
 
 def _active_top_drsmodel(context=None) -> Optional[bpy.types.Collection]:
     ctx = context or bpy.context
-    alc = ctx.view_layer.active_layer_collection.collection if ctx.view_layer else None
-    if not isinstance(alc, bpy.types.Collection):
-        return None
-    if not alc.name.startswith("DRSModel_"):
-        return None
-    # only accept top-level children of the scene (the “right” DRSModel)
-    for top in ctx.scene.collection.children:
-        if top == alc:
-            return alc
-    return None
+    from sr_impex.utilities.artist_context import find_model
+    model=find_model(ctx)
+    return model if model and model in list(ctx.scene.collection.children) else None
 
 
 def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
+    if col is None:
+        return None
     def visit(c: bpy.types.Collection) -> Optional[bpy.types.Object]:
         for o in c.objects:
             if o.type == "ARMATURE" and "Control_Rig" not in o.name:
@@ -169,54 +207,52 @@ def _object_by_uid(root: bpy.types.Collection, uid: str) -> Optional[bpy.types.O
 def _draw_editor_body(layout: bpy.types.UILayout):
     st = _state()
     col = st.model
+    if col is None:
+        layout.label(text="Select a model to edit its locators.", icon="INFO")
+        return
     arm = _find_armature(col)
 
-    root = layout.column(align=True)
-
-    # --- Top: list + actions (full width) ------------------------------------
-    root.template_list(
-        "DRS_UL_LocatorList", "", st, "items", st, "active_index", rows=12
+    root = layout.column()
+    root.use_property_decorate = False
+    if not st.items:
+        root.label(text='This model has no locators.',icon='INFO')
+        root.operator('drs.locator_add',text='Add Locator',icon='ADD')
+        return
+    listing = root.row()
+    listing.template_list(
+        "DRS_UL_LocatorList", "", st, "items", st, "active_index", rows=4
     )
-
-    actions = root.row(align=True)
-    actions.operator("drs.locator_add", text="Add", icon="ADD")
-    actions.operator("drs.locator_remove", text="Remove", icon="REMOVE")
-    actions.operator("drs.locator_sync", text="Sync from Scene", icon="FILE_REFRESH")
-    root.separator()
-
-    # --- Bottom: details of selected item (full width) -----------------------
+    actions = listing.column(align=True)
+    actions.operator("drs.locator_add", text="", icon="ADD")
+    actions.operator("drs.locator_remove", text="", icon="REMOVE")
     if 0 <= st.active_index < len(st.items):
         it = st.items[st.active_index]
-
-        box = root.box()
-        box.label(text="Selected Locator", icon="OUTLINER_OB_EMPTY")
-
-        # nicer property layout in a narrow panel
-        box.use_property_split = True
-        box.use_property_decorate = False
-
-        box.prop(it, "type", text="Type")
-        box.prop(it, "file", text="File")
-        if arm:
-            box.prop_search(it, "parent_bone", arm.data, "bones", text="Parent")
-            # Show checkbox only when no parent bone is selected
-            if not it.parent_bone:
-                box.prop(it, "use_parent_minus_two")
-        else:
-            row = box.row()
-            row.alert = True
-            row.label(text="No armature in this model", icon="INFO")
-
-        row = box.row(align=True)
-        op = row.operator(
-            "drs.locator_save_item",
-            text="Update parent and remove transformations",
-            icon="CHECKMARK",
-        )
-        op.uid = it.uid
-        op.idx = st.active_index
+        fields=root.column(align=True)
+        _field(fields,'Type').prop(it,'type',text='')
+        _field(fields,'Attach to').prop(it,'attachment_mode',text='')
+        if it.attachment_mode=='BONE':
+            if arm:_field(fields,'Bone').prop_search(it,'parent_bone',arm.data,'bones',text='')
+            else:fields.label(text='Import a skeleton to choose a bone.',icon='INFO')
+        cid=int(it.type)
+        if cid in (1,2,3,4,5,6,8) or it.file:
+            is_fx=cid in (4,6,8) or it.file.lower().endswith('.fxb')
+            resource=_field(fields,'Effect' if is_fx else 'Resource')
+            resource.prop(it,'file',text='')
+            if is_fx:resource.operator('drs.effect_selector',text='',icon='VIEWZOOM').target='LOCATOR'
+        save=root.row(align=True)
+        op=save.operator('drs.locator_save_item',text='Apply Changes',icon='CHECKMARK')
+        op.uid=it.uid;op.idx=st.active_index
+        save.operator('drs.locator_sync',text='Save Placement',icon='ORIENTATION_LOCAL')
+        _draw_fx_tools(root,it)
     else:
         root.label(text="Select a locator to edit its details.", icon="INFO")
+
+
+def _field(layout,label):
+    """Native compact fields with consistent, left-aligned labels."""
+    split=layout.row(align=True).split(factor=.24,align=True)
+    split.column().label(text=label)
+    return split.row(align=True)
 
 
 def _select_object(obj: Optional[bpy.types.Object]) -> None:
@@ -237,7 +273,7 @@ def _select_locator_by_uid(root: bpy.types.Collection, uid: str) -> None:
 # ---- Core: apply/capture/remove ---------------------------------------------
 
 
-def apply_blob_to_scene(root: bpy.types.Collection) -> None:
+def apply_blob_to_scene(root: bpy.types.Collection, only_uid=None) -> None:
     """Materialize blob to scene. Create/match by UID. Parent & set transforms by rule."""
     blob = _read_blob(root)
     arm = _find_armature(root)
@@ -245,6 +281,7 @@ def apply_blob_to_scene(root: bpy.types.Collection) -> None:
     go = _find_game_orientation(root)  # default parent for non-bone locators
 
     for entry in blob["locators"]:
+        if only_uid is not None and entry.get('uid')!=only_uid:continue
         uid = entry.get("uid") or str(uuid.uuid4())
         entry["uid"] = uid
         obj = _object_by_uid(root, uid)
@@ -349,7 +386,7 @@ def update_blob_from_scene(root: bpy.types.Collection, add_new: bool = True) -> 
         else:
             # Non-bone -> store WORLD IN GAME SPACE
             # Preserve use_parent_minus_two setting when syncing from scene
-            use_minus_two = entry.get("use_parent_minus_two", False)
+            use_minus_two = entry.get("use_parent_minus_two", entry.get('bone_id')==-2)
             entry["bone_id"] = -2 if use_minus_two else -1
             if go and obj.parent == go:
                 # Remove GO rotation: game_mw = GO^-1 * world
@@ -427,15 +464,32 @@ def blob_to_cdrw(blob: Dict) -> CDrwLocatorList:
 # ---- UI state ---------------------------------------------------------------
 
 
+def _attachment_changed(item,_context):
+    if _REFRESHING:return
+    if item.attachment_mode!='BONE':
+        item.parent_bone=''
+        item.use_parent_minus_two=item.attachment_mode=='SKELETON'
+
+
+def _parent_changed(item,_context):
+    if not _REFRESHING and item.parent_bone:item.attachment_mode='BONE'
+
+
 class LocatorItemPG(bpy.types.PropertyGroup):
     uid: StringProperty(name="UID", default="")  # type: ignore
     class_id: IntProperty(name="Class ID", default=0)  # type: ignore
-    type: EnumProperty(name="Type", items=LOCATOR_TYPE_ENUM, default="0")  # type: ignore
+    type: EnumProperty(name="Type", items=_locator_type_items, default=0)  # type: ignore
     file: StringProperty(name="File", subtype="FILE_PATH", default="")  # type: ignore
-    parent_bone: StringProperty(name="Parent", default="")  # type: ignore
+    parent_bone: StringProperty(name="Bone", default="",update=_parent_changed)  # type: ignore
+    attachment_mode: EnumProperty(name='Attach to',default='MODEL',update=_attachment_changed,items=[
+        ('MODEL','Model','Attach to the model node'),
+        ('SKELETON','Skeleton','Use the skeleton-aware FX attachment, without selecting one bone. Keep this for effects that use their own bone links'),
+        ('BONE','Bone','Follow one selected bone')])  # type: ignore
     bone_id: IntProperty(name="Bone ID", default=-1)  # type: ignore
+    uk_int: IntProperty(name="Sub ID", default=-1)  # type: ignore
+    rot3x3: FloatVectorProperty(name="Stored orientation", size=9, default=(1, 0, 0, 0, 1, 0, 0, 0, 1))  # type: ignore
     pos: FloatVectorProperty(name="Position", size=3, default=(0.0, 0.0, 0.0), subtype="TRANSLATION")  # type: ignore
-    use_parent_minus_two: BoolProperty(name="If None set Parent to -2", default=False, description="When enabled, sets bone parent to -2 instead of -1 if no parent bone is specified. This allows attachment to any bone specified in an Effect")  # type: ignore
+    use_parent_minus_two: BoolProperty(default=False,options={'HIDDEN'})  # type: ignore
 
     def to_dict(self) -> Dict:
         return {
@@ -444,6 +498,8 @@ class LocatorItemPG(bpy.types.PropertyGroup):
             "type_name": LocatorClass.get(int(self.class_id), "Unknown"),
             "file": self.file or "",
             "bone_id": int(self.bone_id),
+            "uk_int": int(self.uk_int),
+            "rot3x3": list(self.rot3x3),
             "pos": list(self.pos),
             "use_parent_minus_two": bool(self.use_parent_minus_two),
         }
@@ -478,15 +534,17 @@ class LocatorItemPG(bpy.types.PropertyGroup):
         # Load the use_parent_minus_two property; detect from bone_id == -2
         if self.bone_id == -2:
             self.use_parent_minus_two = True
-            self.bone_id = -1  # Display as -1 in UI since no parent bone
         else:
             self.use_parent_minus_two = bool(d.get("use_parent_minus_two", False))
+        self.attachment_mode='BONE' if self.bone_id>=0 else 'SKELETON' if self.use_parent_minus_two else 'MODEL'
 
 
 class LocatorEditorState(bpy.types.PropertyGroup):
     items: CollectionProperty(type=LocatorItemPG)  # type: ignore
 
     def _on_active_index_changed(self, _ctx):
+        if _REFRESHING:
+            return
         try:
             if not self.model or not 0 <= self.active_index < len(self.items):
                 return
@@ -497,21 +555,120 @@ class LocatorEditorState(bpy.types.PropertyGroup):
             pass
 
     active_index: IntProperty(default=0, update=_on_active_index_changed)  # type: ignore
-    model: PointerProperty(type=bpy.types.Collection)  # type: ignore
+    # Never retain an ID pointer in WindowManager UI state. It can outlive a
+    # collection through deletion/undo/file reload (the reported IDP_AssignID crash).
+    model_name: StringProperty(options={"HIDDEN", "SKIP_SAVE"})  # type: ignore
+    model_session_uid: StringProperty(options={"HIDDEN", "SKIP_SAVE"})  # type: ignore
+    notice: StringProperty(options={"HIDDEN", "SKIP_SAVE"})  # type: ignore
+
+    @property
+    def model(self):
+        return _resolve_model(self.model_name, self.model_session_uid)
+
+    @model.setter
+    def model(self, col):
+        self.model_name = col.name if col is not None else ""
+        self.model_session_uid = str(col.session_uid) if col is not None else ""
 
 
 def _state() -> LocatorEditorState:
     return bpy.context.window_manager.drs_locator_state
 
 
+def selected_fx_item(context):
+    state=_state();model=state.model
+    if not model or _active_top_drsmodel(context)!=model:raise ValueError('Select this model in Locator Editor')
+    if not 0<=state.active_index<len(state.items):raise ValueError('Select an effect locator')
+    item=state.items[state.active_index]
+    if int(item.type) not in (4,6,8) and not item.file.lower().endswith('.fxb'):
+        raise ValueError('This locator does not reference an FX resource')
+    return model,item
+
+
+def preview_resource_blob(model):
+    """Preview draft resource edits without changing exported locator records."""
+    blob=_read_blob(model);state=_state()
+    if state.model==model:
+        drafts={item.uid:item for item in state.items}
+        for row in blob.get('locators',[]):
+            item=drafts.get(row.get('uid'))
+            if item and row.get('class_id') in (6,8):row['file']=item.file
+    return blob
+
+
+def _draw_fx_tools(layout,item):
+    cid=int(item.type)
+    if cid not in (4,6,8) and not item.file.lower().endswith('.fxb'):return
+    from . import effect_set_editor as effects
+    state=effects._state()
+    if cid not in (6,8):
+        return
+    row=layout.row(align=True)
+    row.operator('drs.effect_build_preview',text='Update Preview',icon='FILE_REFRESH').source='LOCATOR'
+    row.operator('drs.effect_clear_preview',text='',icon='X')
+    options=layout.row(align=True)
+    options.prop(state,'preview_audio',text='Audio')
+    options.prop(state,'preview_live',text='Live Update')
+    model=_state().model
+    if (model and effects._live_target==(bpy.context.scene.as_pointer(),model.as_pointer())
+            and effects._live_status and effects._live_status not in ('Live preview updated','Preview ready')):
+        layout.label(text=effects._live_status,icon='INFO')
+
+
 def _refresh_state_from_blob(col: bpy.types.Collection):
+    global _REFRESHING
     st = _state()
-    st.items.clear()
-    arm = _find_armature(col)
-    blob = _read_blob(col)
-    for e in blob.get("locators", []):
-        it = st.items.add()
-        it.from_dict(e, arm)
+    _REFRESHING = True
+    try:
+        st.items.clear()
+        arm = _find_armature(col)
+        blob = _read_blob(col)
+        for e in blob.get("locators", []):
+            it = st.items.add()
+            it.from_dict(e, arm)
+        st.active_index = max(0, min(st.active_index, len(st.items) - 1))
+        st.notice = ""
+    finally:
+        _REFRESHING = False
+
+
+def _request_model_refresh(col):
+    global _PENDING_MODEL
+    _PENDING_MODEL = (col.name, str(col.session_uid))
+    if not bpy.app.timers.is_registered(_apply_pending_refresh):
+        bpy.app.timers.register(_apply_pending_refresh, first_interval=0.0)
+
+
+def _apply_pending_refresh():
+    global _PENDING_MODEL
+    token, _PENDING_MODEL = _PENDING_MODEL, None
+    if token is None:
+        return None
+    col = _resolve_model(*token)
+    # Selection may have moved while the UI draw was finishing.
+    if col is None or _active_top_drsmodel() != col:
+        return None
+    st = _state()
+    st.model = col
+    try:
+        _refresh_state_from_blob(col)
+    except Exception as exc:
+        st.notice = f"Could not load locators: {exc}"
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            area.tag_redraw()
+    return None
+
+
+@persistent
+def _invalidate_locator_state(*_args):
+    global _PENDING_MODEL
+    _PENDING_MODEL = None
+    for wm in bpy.data.window_managers:
+        if hasattr(wm, "drs_locator_state"):
+            st = wm.drs_locator_state
+            st.model = None
+            st.notice = ""
 
 
 # ---- UI list ----------------------------------------------------------------
@@ -521,10 +678,7 @@ class DRS_UL_LocatorList(bpy.types.UIList):
     bl_idname = "DRS_UL_LocatorList"
 
     def draw_item(self, _ctx, layout, _data, item: LocatorItemPG, _icon, _active, _flt):
-        row = layout.row(align=True)
-        row.label(text=LocatorClass.get(int(item.class_id), "Unknown"))
-        if item.file:
-            row.label(text=item.file, icon="FILE")
+        layout.label(text=_LOCATOR_LABELS.get(int(item.type), f"Unknown ({item.type})"))
 
 
 # ---- Operators: core buttons ------------------------------------------------
@@ -532,14 +686,14 @@ class DRS_UL_LocatorList(bpy.types.UIList):
 
 class DRS_OT_OpenLocatorEditor(bpy.types.Operator):
     bl_idname = "drs.open_locator_editor"
-    bl_label = "CDrwLocatorList Editor"
-    bl_description = "Open the Locator Editor to view and edit CDrwLocatorList"
+    bl_label = "Locator Editor"
+    bl_description = "Edit locator attachments, resources and placement"
     bl_options = {"REGISTER", "INTERNAL"}
 
     def invoke(self, context, _event):
         col = _active_top_drsmodel(context)
         if not col:
-            self.report({"ERROR"}, "Select a DRSModel_* collection in the Outliner.")
+            self.report({"ERROR"}, "Select a model to edit its locators.")
             return {"CANCELLED"}
 
         st = _state()
@@ -547,48 +701,14 @@ class DRS_OT_OpenLocatorEditor(bpy.types.Operator):
         _refresh_state_from_blob(col)
         bpy.ops.object.select_all(action="DESELECT")
 
-        return context.window_manager.invoke_popup(self, width=780)
+        return context.window_manager.invoke_popup(self, width=400)
 
     def draw(self, context):
-        layout = self.layout
-        st = _state()
-        col = st.model
-        arm = _find_armature(col)
-
-        split = layout.split(factor=0.47)
-        left = split.column()
-        left.template_list(
-            "DRS_UL_LocatorList", "", st, "items", st, "active_index", rows=12
-        )
-        r = left.row(align=True)
-        r.operator("drs.locator_add", text="Add", icon="ADD")
-        r.operator("drs.locator_remove", text="Remove", icon="REMOVE")
-        r.operator("drs.locator_sync", text="Sync from Scene", icon="FILE_REFRESH")
-
-        right = split.column()
-        if 0 <= st.active_index < len(st.items):
-            it = st.items[st.active_index]
-            right.prop(it, "type", text="Type")
-            right.prop(it, "file", text="File")
-            if arm:
-                right.prop_search(it, "parent_bone", arm.data, "bones", text="Parent")
-                # Show checkbox only when no parent bone is selected
-                if not it.parent_bone:
-                    right.prop(it, "use_parent_minus_two")
-            else:
-                right.label(text="No armature in this model", icon="INFO")
-            right.prop(it, "pos", text="Position (view)")
-            row = right.row(align=True)
-            s = row.operator(
-                "drs.locator_save_item",
-                text="Update parent and remove transformations",
-                icon="CHECKMARK",
-            )
-            s.uid = it.uid
-            s.idx = st.active_index
+        _draw_editor_body(self.layout)
 
 
 class DRS_OT_LocatorAdd(bpy.types.Operator):
+    bl_description = 'Add an attachment point of the selected type to this model'
     bl_idname = "drs.locator_add"
     bl_label = "Add Locator"
     bl_options = {"INTERNAL"}
@@ -604,6 +724,9 @@ class DRS_OT_LocatorAdd(bpy.types.Operator):
     def execute(self, context):
         st = _state()
         col = st.model
+        if col is None:
+            self.report({"ERROR"}, "Select a model to edit its locators.")
+            return {"CANCELLED"}
         blob = _read_blob(col)
 
         uid = str(uuid.uuid4())
@@ -628,12 +751,15 @@ class DRS_OT_LocatorAdd(bpy.types.Operator):
 
 
 class DRS_OT_LocatorRemove(bpy.types.Operator):
+    bl_description = 'Remove the selected locator and its attachment helper'
     bl_idname = "drs.locator_remove"
     bl_label = "Remove Locator"
     bl_options = {"INTERNAL"}
 
     def execute(self, _context):
         st = _state()
+        if st.model is None:
+            return {"CANCELLED"}
         if not 0 <= st.active_index < len(st.items):
             return {"CANCELLED"}
         uid = st.items[st.active_index].uid
@@ -645,14 +771,16 @@ class DRS_OT_LocatorRemove(bpy.types.Operator):
 
 class DRS_OT_LocatorSync(bpy.types.Operator):
     bl_idname = "drs.locator_sync"
-    bl_label = "Sync From Scene"
+    bl_label = "Save Placement"
     bl_description = (
-        "Capture scene changes into the blob (appends new locators, never removes)"
+        "Save locator positions and rotations from the viewport"
     )
     bl_options = {"INTERNAL"}
 
     def execute(self, _context):
         st = _state()
+        if st.model is None:
+            return {"CANCELLED"}
         update_blob_from_scene(st.model, add_new=True)
         # After capturing, re-apply to ensure parenting/transform rule consistency
         apply_blob_to_scene(st.model)
@@ -660,12 +788,34 @@ class DRS_OT_LocatorSync(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class DRS_OT_LocatorSaveResource(bpy.types.Operator):
+    """Save the selected locator's resource without changing its attachment or transform."""
+    bl_idname='drs.locator_save_resource'
+    bl_label='Save Locator Resource'
+    bl_options={'REGISTER','UNDO'}
+
+    def execute(self,context):
+        try:
+            model,item=selected_fx_item(context)
+            blob=_read_blob(model)
+            row=next((r for r in blob['locators'] if r.get('uid')==item.uid),None)
+            if row is None:raise ValueError('Locator was removed; reload the Locator Editor')
+            row['file']=item.file
+            _write_blob(model,blob)
+            obj=_object_by_uid(model,item.uid)
+            if obj:obj['_file']=item.file
+        except ValueError as exc:
+            self.report({'ERROR'},str(exc));return {'CANCELLED'}
+        return {'FINISHED'}
+
+
 class DRS_OT_LocatorSaveItem(bpy.types.Operator):
     """Apply detail changes (type/file/parent/pos) to blob and scene for the selected item."""
 
     bl_idname = "drs.locator_save_item"
-    bl_label = "Save Locator Item"
-    bl_options = {"INTERNAL"}
+    bl_label = "Apply Changes"
+    bl_description = "Save type, resource and attachment. A changed attachment starts at its origin; position it in the viewport and Save Placement"
+    bl_options = {"INTERNAL","UNDO"}
 
     uid: bpy.props.StringProperty()
     idx: bpy.props.IntProperty(default=0)
@@ -673,6 +823,8 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
     def execute(self, _context):
         st = _state()
         col = st.model
+        if col is None:
+            return {"CANCELLED"}
         if not 0 <= self.idx < len(st.items):
             return {"CANCELLED"}
 
@@ -686,6 +838,9 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
             if (arm and it.parent_bone)
             else -1
         )
+        if it.attachment_mode=='BONE' and bone_idx<0:
+            self.report({'ERROR'},'Choose a bone for this attachment');return {'CANCELLED'}
+        changed_parent=False
 
         for e in blob["locators"]:
             if e.get("uid") == self.uid:
@@ -695,21 +850,20 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
                 # Store the use_parent_minus_two property
                 e["use_parent_minus_two"] = bool(it.use_parent_minus_two)
 
-                if bone_idx >= 0:
-                    # Switching to a bone: ALWAYS reset local transform (ignore previous world/GO transform)
-                    e["bone_id"] = int(bone_idx)
-                    e["pos"] = [0.0, 0.0, 0.0]
-                    e["rot3x3"] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
-                else:
-                    # Clearing bone: reset to origin in GAME space (will appear at GO origin in scene)
-                    # Use -2 if the checkbox is enabled, otherwise -1
-                    e["bone_id"] = -2 if it.use_parent_minus_two else -1
+                parent=int(bone_idx) if bone_idx>=0 else -2 if it.use_parent_minus_two else -1
+                changed_parent=parent!=e.get('bone_id',-1)
+                e['bone_id']=parent
+                if changed_parent:
                     e["pos"] = [0.0, 0.0, 0.0]
                     e["rot3x3"] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
                 break
 
         _write_blob(col, blob)
-        apply_blob_to_scene(col)
+        if changed_parent:apply_blob_to_scene(col,only_uid=self.uid)
+        obj=_object_by_uid(col,self.uid)
+        if obj:
+            obj['_file']=it.file
+            obj['_class_id']=int(it.type)
         _refresh_state_from_blob(col)
         st.active_index = min(self.idx, len(st.items) - 1)
         return {"FINISHED"}
@@ -717,7 +871,8 @@ class DRS_OT_LocatorSaveItem(bpy.types.Operator):
 
 # ---- Simple launcher panel in N-panel ---------------------------------------
 class DRS_PT_LocatorEditorDock(bpy.types.Panel):
-    bl_label = "CDrwLocatorList"
+    bl_order = 40
+    bl_label = "Locator Editor"
     bl_idname = "DRS_PT_LocatorEditorDock"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -734,15 +889,17 @@ class DRS_PT_LocatorEditorDock(bpy.types.Panel):
 
         if not model:
             box = layout.box()
-            box.label(text="No valid DRSModel selected.", icon="INFO")
-            box.label(text="Select a TOP-LEVEL collection named 'DRSModel_*' in the Outliner.")
-            box.label(text="Tip: make it the active Layer Collection (View Layer).")
+            box.label(text="Select a model to edit its locators.", icon="INFO")
             return
 
         st = _state()
         if st.model != model:
-            st.model = model
-            _refresh_state_from_blob(model)
+            _request_model_refresh(model)
+            layout.label(text="Loading locatorsâ€¦", icon="TIME")
+            return
+        if st.notice:
+            layout.label(text=st.notice, icon="ERROR")
+            return
 
         _draw_editor_body(layout)
 
@@ -758,6 +915,7 @@ _classes = (
     DRS_OT_LocatorRemove,
     DRS_OT_LocatorSync,
     DRS_OT_LocatorSaveItem,
+    DRS_OT_LocatorSaveResource,
     DRS_PT_LocatorEditorDock,
 )
 
@@ -766,9 +924,19 @@ def register():
     for c in _classes:
         bpy.utils.register_class(c)
     bpy.types.WindowManager.drs_locator_state = PointerProperty(type=LocatorEditorState)
+    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if _invalidate_locator_state not in handlers:
+            handlers.append(_invalidate_locator_state)
 
 
 def unregister():
+    global _PENDING_MODEL
+    _PENDING_MODEL = None
+    if bpy.app.timers.is_registered(_apply_pending_refresh):
+        bpy.app.timers.unregister(_apply_pending_refresh)
+    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if _invalidate_locator_state in handlers:
+            handlers.remove(_invalidate_locator_state)
     del bpy.types.WindowManager.drs_locator_state
     for c in reversed(_classes):
         bpy.utils.unregister_class(c)

@@ -3,17 +3,19 @@ name: Deploy documentation
 on:
   push:
     branches:
-      - master
+      - dev
     paths:
       - "sr_impex/docs/**"
       - "sr_impex/mkdocs.yml"
+      - "sr_impex/docs_public.py"
+      - "sr_impex/verify_public_docs.py"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: documentation-master
+  group: documentation-dev
   cancel-in-progress: true
 
 jobs:
@@ -22,6 +24,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -40,6 +44,9 @@ jobs:
 
       - name: Build documentation
         run: mkdocs build --config-file sr_impex/mkdocs.yml
+
+      - name: Verify public guides only
+        run: python sr_impex/verify_public_docs.py sr_impex/site
 
       - name: Deploy documentation to gh-pages
         run: mkdocs gh-deploy --force --config-file sr_impex/mkdocs.yml

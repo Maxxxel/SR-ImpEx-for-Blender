@@ -1,6 +1,7 @@
 class FileReader:
     def __init__(self, file_name: str):
-        self.file = open(file_name, 'rb')
+        from io import BytesIO
+        self.file = BytesIO(file_name) if isinstance(file_name,(bytes,bytearray)) else open(file_name, 'rb')
 
     def read(self, size: int):
         return self.file.read(size)

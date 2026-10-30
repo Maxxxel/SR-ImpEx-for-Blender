@@ -1,7 +1,7 @@
 from typing import Dict, Any
 
-# This dictionary contains abilities that are fundamental for almost any unit
-# to function correctly in the game engine.
+# Historical base authoring catalog, not a universal engine requirement.
+# Consumers have different fallback policies; see the local missing-mapping audit.
 must_have_abilities: Dict[str, Dict[str, Any]] = {
     "Idle": {
         "description": "The default, non-active state of the unit.",

@@ -156,6 +156,14 @@ class DRS_OT_material_add_environment_cubemap(bpy.types.Operator):
             self.report({"ERROR"}, "Failed to add environment cubemap.")
             return {"CANCELLED"}
 
+        from .material_editor import modern, sync_material
+        obj=context.object
+        if obj and modern(obj.active_material):
+            material=obj.active_material
+            image=get_environment_cubemap_image(source_collection)
+            for row in material.drs_settings.textures:
+                if 'environment' in row.name.lower():row.image=image;row.enabled=True
+            sync_material(material,obj)
         self.report({"INFO"}, "Environment cubemap added to model.")
         return {"FINISHED"}
 
@@ -246,60 +254,37 @@ class DRS_OT_material_debug_export_environment_cubemap(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class DRS_PT_material_environment_cubemap(bpy.types.Panel):
-    bl_label = "Cubemap Helper"
-    bl_idname = "DRS_PT_material_environment_cubemap"
-    bl_parent_id = "DRS_PT_Material"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "DRS Editor"
-    bl_options = {"DEFAULT_CLOSED"}
+def environment_controls_relevant(context):
+    obj=context.object
+    if not obj or obj.type!='MESH' or not hasattr(obj,'drs_material'):return False
+    from .material_editor import modern, schema
+    material=obj.active_material
+    if modern(material):
+        definition=schema(name=material.drs_settings.material_type)
+        flag=next((f for f in definition['flags'] if f['name']=='UseEnvironmentMap'),None)
+        return bool(flag and (int(obj.drs_material.bool_parameter)&(1<<flag['bit'])))
+    return bool(int(obj.drs_material.bool_parameter)&(1<<18))
 
-    @classmethod
-    def poll(cls, _context):
-        return True
 
-    def draw(self, context):
-        layout = self.layout
-        if not _is_material_editor_mesh_selected(context):
-            box = layout.box()
-            box.label(
-                text="Select a Mesh inside 'Meshes_Collection' to edit cubemap.",
-                icon="INFO",
-            )
-            return
-
-        source_collection = _find_active_drs_model_collection(context)
-        if source_collection is None:
-            box = layout.box()
-            box.label(text="Could not resolve parent DRSModel_* collection.", icon="ERROR")
-            return
-
-        box = layout.box()
-        box.label(text="Model Cubemap", icon="WORLD")
-
-        has_env = bool(source_collection and _has_env_cubemap(source_collection))
-        box.label(
-            text="Assigned" if has_env else "Not Assigned",
-            icon="CHECKMARK" if has_env else "X",
-        )
-        box.operator(
-            "drs.material_add_environment_cubemap",
-            text="Add Cubemap (Earth Base)",
-            icon="ADD",
-        )
-        box.operator(
-            "drs.material_remove_environment_cubemap",
-            text="Remove Cubemap",
-            icon="TRASH",
-        )
-        row = box.row()
-        row.enabled = has_env
-        row.operator(
-            "drs.material_debug_export_environment_cubemap",
-            text="Debug Export Cubemap",
-            icon="EXPORT",
-        )
+def draw_environment_settings(layout,context):
+    if not environment_controls_relevant(context):return
+    source=_find_active_drs_model_collection(context)
+    if source is None:return
+    from .material_editor import modern
+    material=context.object.active_material
+    debug=modern(material) and material.drs_settings.technical_controls
+    env_rows=[r for r in material.drs_settings.textures if 'environment' in r.name.lower()] if modern(material) else []
+    # The material image picker is already the primary artist control.
+    assigned=any(r.enabled and r.image for r in env_rows)
+    if assigned and not debug:return
+    box=layout.box();box.label(text='Environment Map',icon='WORLD')
+    has_env=_has_env_cubemap(source)
+    if not assigned:
+        box.operator('drs.material_add_environment_cubemap',text='Use Bundled Environment',icon='WORLD')
+    if debug:
+        box.label(text='Model environment: '+('Assigned' if has_env else 'Not assigned'))
+        if has_env:box.operator('drs.material_remove_environment_cubemap',text='Remove Model Environment',icon='X')
+        if has_env:box.operator('drs.material_debug_export_environment_cubemap',text='Export Environment Diagnostic',icon='EXPORT')
 
 
 _CLASSES = (
@@ -308,7 +293,6 @@ _CLASSES = (
     DRS_OT_material_add_environment_cubemap,
     DRS_OT_material_remove_environment_cubemap,
     DRS_OT_material_debug_export_environment_cubemap,
-    DRS_PT_material_environment_cubemap,
 )
 
 

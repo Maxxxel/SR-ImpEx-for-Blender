@@ -38,6 +38,9 @@ from sr_impex.definitions.abilities import (
 from sr_impex.definitions.enums import AnimationType as DRS_ANIM_TYPE
 
 from sr_impex.utilities.drs_resolvers import resolve_action_from_blob_name as _resolve_action_name
+from sr_impex.utilities.animation_profiles import (
+    BASIC_DEFAULTS, FLOAT32_MAX, PROFILE_ITEMS, starter_abilities,
+)
 
 
 _ANIMTYPE_BY_ID = {v: k for k, v in DRS_ANIM_TYPE.items()}
@@ -101,7 +104,7 @@ def _ensure_action_name_props(act: bpy.types.Action) -> str:
 
 def _actions_sig():
     try:
-        names = sorted(a.name for a in bpy.data.actions)
+        names = sorted(a.name for a in bpy.data.actions if not a.get("_sr_flow_preview"))
         # small & stable
         return hashlib.sha1(("\n".join(names)).encode("utf-8")).hexdigest()
     except Exception:  # pylint: disable=broad-exception-caught
@@ -123,6 +126,7 @@ def _actions_enum(_self, _ctx):
         # baue (identifier, label)-Paare
         pairs = []
         for act in acts:
+            if act.get("_sr_flow_preview"):continue
             ui = _ensure_action_name_props(act)
             ident = act.name           # technischer Schlüssel bleibt der echte Action-Name
             label = ui or ident        # UI-Label
@@ -189,10 +193,21 @@ def _draw_editor_ui(layout):
     if not col:
         box = layout.box()
         box.label(
-            text="Select the main DRSModel_* collection (it must be ACTIVE).",
+            text="Select a model mesh to edit its settings.",
             icon="INFO",
         )
         return
+    if not col.get(ANIM_BLOB_KEY) and not st.mode_keys:
+        layout.label(text='This model has no Animation Set.',icon='INFO')
+        layout.operator('drs.animset_reinit',text='Initialize Animation Set',icon='ADD')
+        return
+
+    from .ska_editor import draw_skin_tools
+    scene = bpy.context.scene
+    layout.prop(scene, 'sr_ska_debug_view',
+                text='Debug View' if scene.sr_ska_debug_view else 'Artist View',
+                icon='CONSOLE' if scene.sr_ska_debug_view else 'BRUSH_DATA', toggle=True)
+    draw_skin_tools(layout, bpy.context)
 
     # Header bar
     hdr = layout.row(align=True)
@@ -206,20 +221,26 @@ def _draw_editor_ui(layout):
 
     layout.separator()
 
-    # Basics (compact, two columns)
+    # Runtime unit motion is separate from Blender's clip preview.
     basics = layout.box()
     basics.label(text="Basics", icon="ANIM_DATA")
-    g = basics.grid_flow(
-        row_major=True, columns=2, even_columns=True, even_rows=True, align=True
-    )
-    g.prop(st, "default_walk_speed")
-    g.prop(st, "fly_bank_scale")
-    g.prop(st, "default_run_speed")
-    g.prop(st, "fly_accel_scale")
-    g.prop(st, "mode_change_type")
-    g.prop(st, "fly_hit_scale")
-    g.prop(st, "hovering_ground")
-    g.prop(st, "align_to_terrain")
+    profile = col.get('_sr_animation_profile', '')
+    if not profile or profile == 'UNIT' or scene.sr_ska_debug_view:
+        row = basics.row(align=True)
+        row.prop(st, "default_walk_speed")
+        row.prop(st, "default_run_speed")
+        basics.prop(st, "mode_change_type")
+        basics.prop(st, "align_to_terrain")
+        basics.prop(st, 'show_flight_settings', text='Flight',
+                    icon='TRIA_DOWN' if st.show_flight_settings else 'TRIA_RIGHT', emboss=False)
+        if st.show_flight_settings:
+            flight = basics.column(align=True)
+            flight.prop(st, 'hovering_ground')
+            flight.prop(st, 'fly_bank_scale')
+            flight.prop(st, 'fly_accel_scale')
+            flight.prop(st, 'fly_hit_scale')
+    else:
+        basics.label(text='Unit motion settings are available in Debug View.', icon='INFO')
 
     layout.separator()
 
@@ -323,6 +344,7 @@ def _draw_editor_ui(layout):
 
             btn = box.row(align=True)
             op = btn.operator("drs.animset_play_range", text="Play Cast", icon="PLAY")
+            op.playback_mode = "ONCE"
             op.mode_key_index, op.start, op.end = (
                 st.active_mode_key,
                 0.0,
@@ -331,6 +353,7 @@ def _draw_editor_ui(layout):
             op = btn.operator(
                 "drs.animset_play_range", text="Play Resolve", icon="PLAY"
             )
+            op.playback_mode = "ONCE"
             op.mode_key_index, op.start, op.end = (
                 st.active_mode_key,
                 mk.cast_to_resolve,
@@ -384,8 +407,10 @@ def _draw_editor_ui(layout):
 
             btn = box.row(align=True)
             op = btn.operator("drs.animset_play_range", text="Start", icon="PLAY")
+            op.playback_mode = "ONCE"
             op.mode_key_index, op.start, op.end = s_idx, 0.0, s_mk.start_to_loop
             op = btn.operator("drs.animset_play_range", text="Loop", icon="PLAY")
+            op.playback_mode = "LOOP"
             op.mode_key_index, op.start, op.end = (
                 l_idx,
                 s_mk.start_to_loop,
@@ -394,6 +419,7 @@ def _draw_editor_ui(layout):
             if end:
                 e_idx, _ = end
                 op = btn.operator("drs.animset_play_range", text="End", icon="PLAY")
+                op.playback_mode = "ONCE"
                 op.mode_key_index, op.start, op.end = e_idx, s_mk.loop_to_end, 1.0
 
         _draw_variant_editor(
@@ -819,14 +845,7 @@ ANIM_BLOB_KEY = "AnimationSetJSON"
 
 def _empty_blob() -> Dict:
     return {
-        "default_run_speed": 4.8,
-        "default_walk_speed": 2.4,
-        "mode_change_type": 0,
-        "hovering_ground": False,
-        "fly_bank_scale": 1.0,
-        "fly_accel_scale": 0.0,
-        "fly_hit_scale": 1.0,
-        "align_to_terrain": False,
+        **BASIC_DEFAULTS,
         "mode_keys": [],
         "marker_sets": [],
         "timings": [],
@@ -859,16 +878,8 @@ _last = {"col_name": None, "blob_sig": None}
 
 
 def _active_top_drsmodel(context=None):
-    ctx = context or bpy.context
-    alc = ctx.view_layer.active_layer_collection.collection if ctx.view_layer else None
-    if not isinstance(alc, bpy.types.Collection):
-        return None
-    if not alc.name.startswith("DRSModel_"):
-        return None
-    for top in ctx.scene.collection.children:
-        if top == alc:
-            return alc
-    return None
+    from sr_impex.utilities.artist_context import find_model
+    return find_model(context or bpy.context)
 
 
 def _blob_sig(col: bpy.types.Collection) -> str | None:
@@ -1184,6 +1195,8 @@ def _on_variant_marker_time_changed(self, _context):
 
 
 class AnimVariantPG(bpy.types.PropertyGroup):
+    show_clip_settings: BoolProperty(name="Clip Settings", default=True, options={'SKIP_SAVE'})
+    show_ska_advanced: BoolProperty(name="Advanced SKA Data", default=False, options={'SKIP_SAVE'})
     weight: IntProperty(name="Weight", default=100, min=0, max=100)  # type: ignore
     start: FloatProperty(name="Start", default=0.0, min=0.0, max=1.0)  # type: ignore
     end: FloatProperty(name="End", default=1.0, min=0.0, max=1.0)  # type: ignore
@@ -1252,15 +1265,30 @@ class ModeKeyPG(bpy.types.PropertyGroup):
 
 class AnimSetState(bpy.types.PropertyGroup):
     # Basics
-    default_run_speed: FloatProperty(name="Run Speed", default=5.0, description="Default run speed for the character")  # type: ignore
-    default_walk_speed: FloatProperty(name="Walk Speed", default=2.0, description="Default walk speed for the character")  # type: ignore
-    fly_bank_scale: FloatProperty(name="Fly Bank Scale", default=0.0, description="Fly bank scale for the character")  # type: ignore
-    fly_accel_scale: FloatProperty(name="Fly Accel Scale", default=0.0, description="Fly acceleration scale for the character")  # type: ignore
-    fly_hit_scale: FloatProperty(name="Fly Hit Scale", default=0.0, description="Fly hit scale for the character")  # type: ignore
+    default_run_speed: FloatProperty(name="Run Reference Speed", default=BASIC_DEFAULTS['default_run_speed'],
+        min=-FLOAT32_MAX, max=FLOAT32_MAX, soft_min=0.0, soft_max=10.0,
+        description="Speed the run clip was authored for. The engine scales playback with movement and model scale, and uses the walk/run midpoint to choose the clip. Does not set gameplay speed. Use a positive value; zero prevents starting the movement clip")  # type: ignore
+    default_walk_speed: FloatProperty(name="Walk Reference Speed", default=BASIC_DEFAULTS['default_walk_speed'],
+        min=-FLOAT32_MAX, max=FLOAT32_MAX, soft_min=0.0, soft_max=10.0,
+        description="Speed the walk clip was authored for. The engine scales playback with movement and model scale, and uses the walk/run midpoint to choose the clip. Does not set gameplay speed. Use a positive value; zero prevents starting the movement clip")  # type: ignore
+    fly_bank_scale: FloatProperty(name="Turn Banking", default=BASIC_DEFAULTS['fly_bank_scale'],
+        min=-FLOAT32_MAX, max=FLOAT32_MAX, soft_min=0.0, soft_max=5.0,
+        description="Scales the flying unit's lean during turns. Zero removes this banking contribution; negative values reverse it. The resulting bank angle is limited by the engine, not this setting. Runtime effect; not a Blender clip modifier")  # type: ignore
+    fly_accel_scale: FloatProperty(name="Movement Pitch", default=BASIC_DEFAULTS['fly_accel_scale'],
+        min=-FLOAT32_MAX, max=FLOAT32_MAX, soft_min=0.0, soft_max=5.0,
+        description="Scales the flying unit's speed-dependent pitch. The engine also changes the response with acceleration. Zero removes this contribution. Runtime effect; not a Blender clip modifier")  # type: ignore
+    fly_hit_scale: FloatProperty(name="Hit Displacement", default=BASIC_DEFAULTS['fly_hit_scale'],
+        min=-FLOAT32_MAX, max=FLOAT32_MAX, soft_min=0.0, soft_max=5.0,
+        description="Scales the spatial hit-response offset of flying units. Zero removes this offset, not the hit animation; negative values reverse its direction. Runtime effect; not a Blender clip modifier")  # type: ignore
 
-    mode_change_type: IntProperty(name="Mode Change Type", default=0, min=0, max=1, description="Whether the mode change is of a specific type")  # type: ignore
-    hovering_ground: BoolProperty(name="Hovering Ground", default=False, description="Whether the character is hovering above the ground")  # type: ignore
-    align_to_terrain: BoolProperty(name="Align to Terrain", default=False, description="Whether the character aligns to the terrain")  # type: ignore
+    mode_change_type: BoolProperty(name="Partial Mode Change", default=False,
+        description="Play the mode-change clip as an additional animation while the main animation continues. Disabled: use the mode-change clip as the main animation. Needs the game's mode setup and a Mode Change mapping")  # type: ignore
+    hovering_ground: BoolProperty(name="Hovering Ground Unit", default=False,
+        description="Enables the unit's hovering/flying motion path, including flight lean and hit offsets, and changes the flying death trajectory handling. Does not set a flight height or make a unit fly in gameplay")  # type: ignore
+    align_to_terrain: BoolProperty(name="Align to Terrain", default=False,
+        description="Tilt a ground unit to follow the terrain slope. This alignment path is skipped for flying units. Does not change collision, navigation or the mesh in Blender")  # type: ignore
+    show_flight_settings: BoolProperty(name="Flight", default=False,
+        description="Runtime motion settings for flying and hovering units")  # type: ignore
 
     # Mode (Dynamic))
     show_mode: EnumProperty(name="Mode", items=_mode_items, default=0)  # type: ignore
@@ -1276,16 +1304,7 @@ class AnimSetState(bpy.types.PropertyGroup):
 
 
 def _active_model() -> Optional[bpy.types.Collection]:
-    # Selected collection in Outliner preferred; else active layer collection.
-    col = None
-    ctx = bpy.context
-    col = getattr(ctx, "collection", None)
-    if isinstance(col, bpy.types.Collection) and col.name.startswith("DRSModel_"):
-        return col
-    alc = ctx.view_layer.active_layer_collection.collection if ctx.view_layer else None
-    if alc and alc.name.startswith("DRSModel_"):
-        return alc
-    return None
+    return _active_top_drsmodel()
 
 
 def _find_armature(col: bpy.types.Collection) -> Optional[bpy.types.Object]:
@@ -1319,14 +1338,14 @@ def _state() -> AnimSetState:
 def _refresh_state_from_blob(col: bpy.types.Collection):
     st = _state()
     b = _read_blob(col)
-    st.default_run_speed = float(b.get("default_run_speed", 5.0))
-    st.default_walk_speed = float(b.get("default_walk_speed", 2.0))
-    st.mode_change_type = int(b.get("mode_change_type", 0))
-    st.fly_bank_scale = float(b.get("fly_bank_scale", 0.0))
-    st.fly_accel_scale = float(b.get("fly_accel_scale", 0.0))
-    st.fly_hit_scale = float(b.get("fly_hit_scale", 0.0))
-    st.hovering_ground = bool(b.get("hovering_ground", 0))
-    st.align_to_terrain = bool(b.get("align_to_terrain", 0))
+    st.default_run_speed = float(b.get("default_run_speed", BASIC_DEFAULTS['default_run_speed']))
+    st.default_walk_speed = float(b.get("default_walk_speed", BASIC_DEFAULTS['default_walk_speed']))
+    st.mode_change_type = int(b.get("mode_change_type", 0)) == 1
+    st.fly_bank_scale = float(b.get("fly_bank_scale", BASIC_DEFAULTS['fly_bank_scale']))
+    st.fly_accel_scale = float(b.get("fly_accel_scale", BASIC_DEFAULTS['fly_accel_scale']))
+    st.fly_hit_scale = float(b.get("fly_hit_scale", BASIC_DEFAULTS['fly_hit_scale']))
+    st.hovering_ground = int(b.get("hovering_ground", 0)) == 1
+    st.align_to_terrain = int(b.get("align_to_terrain", 0)) == 1
 
     st.mode_keys.clear()
     # First pass: build entries
@@ -1815,46 +1834,33 @@ def _write_state_to_blob(col: bpy.types.Collection):
 # ---------------------------------------------------------------------------
 
 
+def _initialize_profile(col, profile, replace_existing=False):
+    """Populate normal Add Ability entries so markers/timings get the same defaults."""
+    st = _state()
+    if replace_existing:
+        st.mode_keys.clear()
+        st.active_mode_key = 0
+    for ability in starter_abilities(profile, _find_armature(col) is not None):
+        bpy.ops.drs.modekey_add_ability(ability=ability, mode=0)
+    col['_sr_animation_profile'] = profile
+    st.show_mode = '0'
+    _redraw_ui()
+
+
 class DRS_OT_AnimSet_InitUnit(bpy.types.Operator):
-    """Initialize base animations for the selected unit."""
+    """Compatibility entry point for scripts creating a unit starter layout."""
 
     bl_idname = "drs.animset_init_unit"
-    bl_label = "Init Base Animations"
-    bl_options = {"INTERNAL"}
+    bl_label = "Init Unit Animations"
+    bl_options = {"INTERNAL", "UNDO"}
 
     def execute(self, _ctx):
-        st = _state()
-        # uniquess: don't add duplicates
-        existing = {(int(m.vis_job), int(m.special_mode)) for m in st.mode_keys}
-        for (
-            ability_name,
-            data,
-        ) in (
-            must_have_abilities.items()
-        ):  # base set only :contentReference[oaicite:3]{index=3}
-            for comp in data.get("components", []):
-                vis = int(comp.get("vis_job_id", -1))
-                if vis < 0:
-                    continue
-                key = (vis, 0)
-                if key in existing:
-                    continue
-                mk = st.mode_keys.add()
-                mk.vis_job = str(vis)
-                mk.ability_name = ability_name
-                mk.role = comp.get("role", "")
-                mk.special_mode = 0
-                v = mk.variants.add()
-                v.weight, v.start, v.end, v.allows_ik, v.file, v.force_no_blend = (
-                    100,
-                    0.0,
-                    1.0,
-                    True,
-                    "NONE",
-                    False,
-                )
-                existing.add(key)
-        return {"FINISHED"}
+        col = _active_model()
+        if col is None:
+            self.report({'ERROR'}, 'Select a model first')
+            return {'CANCELLED'}
+        _initialize_profile(col, 'UNIT')
+        return {'FINISHED'}
 
 
 class DRS_OT_AnimSet_ClearAll(bpy.types.Operator):
@@ -1873,20 +1879,57 @@ class DRS_OT_AnimSet_ClearAll(bpy.types.Operator):
 
 
 class DRS_OT_AnimSet_Reinit(bpy.types.Operator):
-    """Initialize base animations for the selected unit."""
+    """Choose a model type and add its animation starter layout."""
 
     bl_idname = "drs.animset_reinit"
-    bl_label = "Reinitialize"
-    bl_options = {"INTERNAL"}
+    bl_label = "Initialize Animation Set"
+    bl_options = {"INTERNAL", "UNDO"}
+
+    profile: EnumProperty(name='Model Type', items=PROFILE_ITEMS, default='STATIC')  # type: ignore
+    replace_existing: BoolProperty(name='Replace Existing Mappings', default=False,
+        description='Remove existing mappings before adding the starter layout. Actions are kept')  # type: ignore
+    target_collection: StringProperty(options={'HIDDEN'})  # type: ignore
+
+    @classmethod
+    def poll(cls, context):
+        return _active_top_drsmodel(context) is not None
+
+    def invoke(self, context, _event):
+        col = _active_top_drsmodel(context)
+        self.target_collection = col.name
+        fallback = 'BUILDING' if 'sr_impex_meshgrid_blob' in col else (
+            'UNIT' if _find_armature(col) is not None else 'STATIC')
+        self.profile = col.get('_sr_animation_profile', fallback)
+        return context.window_manager.invoke_props_dialog(self, width=420)
+
+    def draw(self, _context):
+        self.layout.prop(self, 'profile')
+        col = bpy.data.collections.get(self.target_collection) if self.target_collection else _active_model()
+        abilities = starter_abilities(self.profile, col is not None and _find_armature(col) is not None)
+        self.layout.label(text=', '.join(abilities) if abilities else 'No skeletal animation mappings needed.')
+        self.layout.prop(self, 'replace_existing')
+        if abilities:
+            self.layout.label(text='Assign an Action to each new entry, then Save.', icon='INFO')
 
     def execute(self, _ctx):
+        col = _active_model()
+        if col is None or (self.target_collection and col.name != self.target_collection):
+            self.report({'ERROR'}, 'Select the model this dialog was opened for')
+            return {'CANCELLED'}
+        if self.profile in {'UNIT', 'ANIMATED_OBJECT'} and _find_armature(col) is None:
+            self.report({'ERROR'}, 'This model type needs an armature. Add or import its skeleton first')
+            return {'CANCELLED'}
         _invalidate_actions_enum()
-        bpy.ops.drs.animset_clear_all()
-        bpy.ops.drs.animset_init_unit()
-        return {"FINISHED"}
+        _initialize_profile(col, self.profile, self.replace_existing)
+        if starter_abilities(self.profile, _find_armature(col) is not None):
+            self.report({'INFO'}, 'Starter layout ready. Assign Actions and Save the AnimationSet')
+        else:
+            self.report({'INFO'}, 'No skeletal mappings needed. Save to keep this AnimationSet')
+        return {'FINISHED'}
 
 
 class DRS_OT_ModeKey_AddAbility(bpy.types.Operator):
+    bl_description = 'Add an animation mapping for a gameplay action such as Idle or Walk'
     bl_idname = "drs.modekey_add_ability"
     bl_label = "Add Ability"
     bl_options = {"INTERNAL"}
@@ -1952,6 +1995,7 @@ class DRS_OT_ModeKey_AddAbility(bpy.types.Operator):
 
 
 class DRS_OT_ModeKey_Remove(bpy.types.Operator):
+    bl_description = 'Remove the selected animation mapping; keep its Blender Action'
     bl_idname = "drs.modekey_remove"
     bl_label = "Remove"
     bl_options = {"INTERNAL"}
@@ -1971,16 +2015,20 @@ class DRS_OT_ModeKey_Remove(bpy.types.Operator):
 _playback = {"handler": None, "end": None, "start_subframe": 0.0, "end_subframe": 0.0}
 
 
+def _clear_playback():
+    # Remove old registrations before resetting the stored handler reference.
+    while _on_frame in bpy.app.handlers.frame_change_post:
+        bpy.app.handlers.frame_change_post.remove(_on_frame)
+    _playback.update(handler=None, end=None, start_subframe=0.0, end_subframe=0.0)
+
+
 def _on_frame(scene, _deps):
     endf = _playback.get("end")
     if endf is not None and scene.frame_current >= endf:
         if bpy.context.screen and bpy.context.screen.is_animation_playing:
-            bpy.context.scene.frame_current = endf
-            bpy.context.scene.frame_subframe = _playback.get("end_subframe", 0.0)
-            _playback["end"] = None
-            _playback["handler"] = None
-            _playback["start_subframe"] = 0.0
-            _playback["end_subframe"] = 0.0
+            subframe = _playback.get("end_subframe", 0.0)
+            _clear_playback()
+            scene.frame_set(endf, subframe=subframe)
             bpy.ops.screen.animation_play()
 
 
@@ -1992,6 +2040,7 @@ def _assign_action(arm: bpy.types.Object, act: bpy.types.Action):
 
 
 class DRS_OT_PlayRange(bpy.types.Operator):
+    bl_description = 'Play the selected animation and its saved clip range on the scene timeline'
     bl_idname = "drs.animset_play_range"
     bl_label = "Play"
     bl_options = {"INTERNAL"}
@@ -1999,6 +2048,9 @@ class DRS_OT_PlayRange(bpy.types.Operator):
     mode_key_index: IntProperty(default=-1)  # type: ignore
     start: FloatProperty(default=0.0)  # type: ignore
     end: FloatProperty(default=1.0)  # type: ignore
+    playback_mode: EnumProperty(items=[('AUTO', 'Clip', 'Use SKA Loop/Clamp setting'),
+        ('LOOP', 'Loop', 'Repeat the selected preview segment'),
+        ('ONCE', 'Once', 'Play the selected segment once')], default='AUTO', options={'HIDDEN'})
 
     def execute(self, context):
         st = _state()
@@ -2049,23 +2101,14 @@ class DRS_OT_PlayRange(bpy.types.Operator):
             # Set the scene fps to the original fps of the animation
             _set_scene_effective_fps(context.scene, float(original_fps))
 
-        # Reset any existing playback state
-        _playback["end"] = None
-        _playback["handler"] = None
-        _playback["start_subframe"] = 0.0
-        _playback["end_subframe"] = 0.0
-
-        try:
-            bpy.app.handlers.frame_change_post.remove(_playback["handler"])
-        except:  # pylint: disable=bare-except
-            pass
+        _clear_playback()
 
         # Stop any Existing Playback
         if bpy.context.screen and bpy.context.screen.is_animation_playing:
             bpy.ops.screen.animation_play()
 
         span = float(_action_span_frames(act))
-        f0 = int(act.frame_range[0])
+        f0 = float(act.get("ska_start_frame", act.frame_range[0]))
 
         start_clamped = max(0.0, min(float(self.start), 1.0))
         end_clamped = max(0.0, min(float(self.end), 1.0))
@@ -2086,9 +2129,17 @@ class DRS_OT_PlayRange(bpy.types.Operator):
         context.scene.frame_current = start_frame
         context.scene.frame_start = start_frame
         context.scene.frame_end = end_frame
+        if context.scene.use_preview_range:
+            context.scene.frame_preview_start = start_frame
+            context.scene.frame_preview_end = end_frame
         context.scene.frame_subframe = start_sub_frame
 
-        if not _playback["handler"]:
+        should_loop = self.playback_mode == 'LOOP' or (
+            self.playback_mode == 'AUTO' and int(act.get('repeat', 0)) == 1)
+        from sr_impex.blender.animation_utils import configure_clip_playback
+        configure_clip_playback(context.scene,act,loop=should_loop,start=start_clamped,end=end_clamped)
+        # Blender already loops its scene range; only one-shot previews need a stop handler.
+        if not should_loop:
             _playback["handler"] = _on_frame
             _playback["end"] = end_frame
             _playback["start_subframe"] = start_sub_frame
@@ -2103,6 +2154,7 @@ class DRS_OT_PlayRange(bpy.types.Operator):
 
 
 class DRS_OT_ShowMarker(bpy.types.Operator):
+    bl_description = 'Show the timing marker for the selected animation variant'
     bl_idname = "drs.animset_show_marker"
     bl_label = "Display Marker"
     bl_options = {"INTERNAL"}
@@ -2180,6 +2232,7 @@ class DRS_OT_ShowMarker(bpy.types.Operator):
 
 
 class DRS_OT_VariantSetActionFps(bpy.types.Operator):
+    bl_description = 'Edit clip timing and playback mode; apply the updated timeline range when confirmed'
     bl_idname = "drs.variant_set_action_fps"
     bl_label = "Edit Action Clip Timing"
     bl_options = {"INTERNAL", "UNDO"}
@@ -2352,6 +2405,7 @@ def _available_abilities_for_mode(mode_val: int) -> list[str]:
 
 
 class DRS_OT_SelectAbility(bpy.types.Operator):
+    bl_description = 'Select this gameplay animation mapping'
     bl_idname = "drs.animset_select_ability"
     bl_label = "Select"
     bl_options = {"INTERNAL"}
@@ -2420,23 +2474,13 @@ def _draw_variant_editor(
         det = box.box()
         det.use_property_split = True
         det.use_property_decorate = False
-        det.prop(v, "file", text="Action")
-        r_fps = det.row(align=True)
-        op_fps = r_fps.operator("drs.variant_set_action_fps", text="Clip Timing...", icon="TIME")
-        op_fps.mode_key_index = mk_index
-        op_fps.variant_index = mk.active_variant
-        act_for_fps = bpy.data.actions.get((v.file or "").strip()) if v.file and v.file != "NONE" else None
-        if act_for_fps:
-            fl = _action_span_frames(act_for_fps)
-            efps = _action_effective_fps(act_for_fps)
-            try:
-                dur_raw = act_for_fps.get("original_duration", None)
-                dur = float(dur_raw) if dur_raw is not None else (fl / max(1e-6, efps))
-            except Exception:
-                dur = fl / max(1e-6, efps)
-            r_fps.label(text=f"{efps:.3f} fps | {int(fl)} fr | {dur:.4f}s")
+        det.prop(v, "file", text="Animation (SKA)")
+        clip = bpy.data.actions.get((v.file or "").strip()) if v.file and v.file != "NONE" else None
+        if clip:
+            from .ska_editor import draw_clip_settings
+            draw_clip_settings(det, bpy.context, clip, v)
         else:
-            r_fps.label(text=f"Scene fallback: {_scene_effective_fps():.3f} fps")
+            det.label(text="Choose an animation to edit its clip settings.", icon="INFO")
         det.prop(v, "weight")
         det.prop(v, "allows_ik")
         det.prop(v, "force_no_blend")
@@ -2479,6 +2523,7 @@ def _draw_variant_editor(
 
             btn = mbox.row(align=True)
             op = btn.operator("drs.animset_play_range", text="Play Marker", icon="PLAY")
+            op.playback_mode = "ONCE"
             op.mode_key_index, op.start, op.end = (
                 mk_index,
                 0,
@@ -2555,6 +2600,7 @@ class DRS_UL_Variants(bpy.types.UIList):
 
 
 class DRS_OT_VariantAdd(bpy.types.Operator):
+    bl_description = 'Add another animation choice to the selected mapping'
     bl_idname = "drs.variant_add"
     bl_label = "Add Variant"
     bl_options = {"INTERNAL"}
@@ -2593,6 +2639,7 @@ class DRS_OT_VariantAdd(bpy.types.Operator):
 
 
 class DRS_OT_VariantRemove(bpy.types.Operator):
+    bl_description = 'Remove the selected animation choice; keep its Blender Action'
     bl_idname = "drs.variant_remove"
     bl_label = "Remove Variant"
     bl_options = {"INTERNAL"}
@@ -2613,10 +2660,11 @@ class DRS_OT_VariantRemove(bpy.types.Operator):
 
 class DRS_PT_AnimSetEditorDock(bpy.types.Panel):
     bl_idname = "DRS_PT_AnimSetEditorDock"
-    bl_label = "AnimationSet Editor"
+    bl_label = "Animation Set Editor"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "DRS Editor"
+    bl_order = 20
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, _ctx):
@@ -2722,6 +2770,7 @@ class DRS_UL_AbilityPicker(bpy.types.UIList):
 
 
 class DRS_OT_OpenAbilityPicker(bpy.types.Operator):
+    bl_description = 'Choose gameplay animation types to add to this model'
     bl_idname = "drs.open_ability_picker"
     bl_label = "Add Ability…"
     bl_options = {"REGISTER", "INTERNAL"}
@@ -2823,6 +2872,7 @@ def register():
 
 
 def unregister():
+    _clear_playback()
     del bpy.types.WindowManager.drs_anim_state
     for c in reversed(_classes):
         bpy.utils.unregister_class(c)

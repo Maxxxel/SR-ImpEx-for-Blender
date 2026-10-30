@@ -2,35 +2,63 @@
 
 Configure attack, casting, and channeling **animation metadata** after completing the [Unit Creation Guide](unit_creation_buide.md). For timed audio and visual resources, use the [Advanced Effects Guide](advanced_effects_guide.md); for attachment points, use the [Advanced Locators Guide](advanced_locators_guide.md).
 
-> **Scope:** an entry called an “Ability” in this editor maps a visual job to an animation. It does not create a gameplay ability, projectile behavior, damage, targeting rules, cooldown, or resource cost. Those must already be configured in the game's data. The workflows below concern **DRS** export; BMG animation/effect export is incomplete and is not an equivalent route.
+> **Scope:** an entry called an “Ability” in this editor maps a visual job to an animation. It does not create a gameplay ability, projectile behavior, damage, targeting rules, cooldown, or resource cost. Those must already be configured in the game's data. The workflows below concern **DRS** export. For a building's root AnimationSet and state resources, use the [BMG package workflow](building_creation_guide.md#8-export-and-validate).
 
 ## 1. Know Which Data You Are Editing
 
 | Data | What it contains | Where it is authored |
 | --- | --- | --- |
-| Blender Action / `.ska` | Bone motion and clip timing | Action Editor; `Clip Timing...` for timing metadata |
-| `AnimationSet` | Visual job (`vis_job`), mode, weighted Action variants, clip segments, markers | `AnimationSet Editor` |
+| Blender Action / `.ska` | Bone motion and clip timing | Action Editor; **Clip Settings** for timing metadata |
+| `AnimationSet` | Visual job (`vis_job`), mode, weighted Action variants, clip segments, markers | `Animation Set Editor` |
 | `AnimationTimings` | Timing category/tag, variant index, millisecond timings, direction, marker reference | Generated through the editor's per-variant `Timing` section |
 | `EffectSet` | Audio/FX references scheduled against a named SKA clip | `EffectSet` panel |
 | Locators | Model or bone attachment points | `CDrwLocatorList Editor` |
 
 An animation marker, a locator, and an EffectSet keyframe are separate records. Matching their time or position does **not** automatically link them or create an in-game event.
 
-### Templates Are Not Universal Requirements
+### Choose a Starter Layout
 
-`Init` populates the catalog's base template: `Idle`, `Walk`, `Run`, `Spawn`, `HitFromBack`, `Cheer / Emote`, `HitFromFront`, `Die`, `HitFromLeft`, `HitFromRight`, and `PushBackStandUp` (Start/Loop/End). This is a useful starting point for many units, not an exporter-enforced checklist for every model. Choose mappings required by the existing unit/game configuration; do not add empty entries just to match this list.
+Click **Init**, choose **Model Type**, then confirm:
 
-An animated prop may need only `Idle`. The **Animated Object** DRS export types retain only visual job `0` (Idle) and remove animation markers and timings. Use **Animated Unit** when the exported model needs attack/cast mappings and their timing data.
+| Model type | New entries |
+| --- | --- |
+| Static Object | None. Wind and flowing textures do not need skeletal animation clips. |
+| Animated Object | Idle |
+| Unit | Idle, Walk, Run, Spawn, Die |
+| Building | Idle if the model has an armature; none for a static building |
 
-Sources: [ability catalog](../../definitions/abilities.py), [editor initialization](../../blender/editors/animation_set_editor.py#L1818), [DRS model-type filtering](../../utilities/drs_utility.py#L5374).
+Existing mappings are kept. Enable **Replace Existing Mappings** only to clear the list first; it does not delete Actions. New entries have no Action assigned. Choose an Action for each entry you need, then click **Save**.
 
-## 2. Work Safely in the AnimationSet Editor
+These are small starting layouts, not a universal list required by the engine. For an animated unit, always assign a usable **Idle in Base mode**: several actions use it as a fallback. A file loading successfully does not guarantee safe playback when that fallback is missing. A fallback Idle does not replace the intended walk, spawn or death motion. Add attack, hit, mode-change and other animations when the existing game configuration uses them. Building damage states and construction are configured through the building tools, not by this template. The type choice does not change the export type or create gameplay behavior.
 
-Make the intended `DRSModel_*` root collection active, then open **3D Viewport → Sidebar → DRS Editor → AnimationSet Editor**. When switching between models, save the current model's edits first and use `Reset` to load the newly active model's stored data.
+An animated prop may need only Idle. The **Animated Object** DRS export types retain only Idle and remove animation markers and timings. Use **Animated Unit** when the exported model needs attack/cast mappings and timing data. Units and animated objects need an armature before initialization.
+
+### Basics: Motion in the Game
+
+For a unit, open **Basics**. Keep the imported settings unless you intend to change its motion. These settings are exported; Blender's **Play** previews the Action and does not simulate the game's movement, terrain or hit reactions.
+
+| Setting | What it changes |
+| --- | --- |
+| Walk / Run Reference Speed | The movement speed each clip was authored for. The game adjusts playback to movement and model scale, and uses the midpoint of these two speeds to choose walk or run. This does not set gameplay movement speed. Use positive values; zero prevents that movement clip from starting. |
+| Partial Mode Change | Runs the mode-change animation alongside the main animation. Disabled: the mode-change animation becomes the main animation. This needs the game's mode setup and a matching animation mapping. |
+| Align to Terrain | Tilts a ground unit to the terrain slope. The flying motion path skips this alignment. |
+| Flight → Hovering Ground Unit | Uses the hovering/flying motion path for a unit near the ground, including lean and hit offsets, with different death-trajectory handling. It does not make the unit fly in gameplay or set its height. |
+| Flight → Turn Banking | How strongly a flying unit leans in a turn. Zero removes this contribution. |
+| Flight → Movement Pitch | How strongly a flying unit tilts with its movement speed and acceleration. Zero removes this contribution. |
+| Flight → Hit Displacement | Strength of a flying unit's spatial hit response. Zero removes this offset, not its hit animation. |
+
+New sets use reference speeds **2.3 / 4.8**, Turn Banking **2**, Movement Pitch **0.4** and Hit Displacement **1**. The three checkboxes start disabled. Existing values are retained.
+
+Dragging uses convenient ranges: **0–10** for reference speeds and **0–5** for flight scales. These are editing ranges, not engine limits; you can type other finite values. Negative flight scales can reverse a contribution. The file stores 32-bit floats and the loader does not impose a general 0–1 clamp. Unit motion settings are hidden for other initialized model types; **Debug View** makes them available when needed.
+
+
+## 2. Work Safely in the Animation Set Editor
+
+Select your model or its root collection, then open **3D Viewport → Sidebar → DRS Editor → Animation Set Editor**. When switching between models, save the current model's edits first and use `Reset` to load the newly active model's stored data.
 
 | Control | Actual behavior |
 | --- | --- |
-| `Init` | Clears the current editor list, then creates the base template. It is not a harmless refresh. |
+| `Init` | Choose a model type and add its starter mappings. Keeps existing entries unless Replace Existing Mappings is enabled. |
 | `Remove All` | Clears the working list. Save afterward only if that removal is intended. |
 | `Save` | Writes working state to the active collection's `AnimationSetJSON`; does not export files or save the `.blend`. |
 | `Reset` | Reloads the active collection's stored data, discarding unsaved editor changes. |
@@ -41,7 +69,6 @@ Make the intended `DRSModel_*` root collection active, then open **3D Viewport �
 
 Save a backup before editing imported metadata: the editor reconstructs its supported schema, not every possible unknown field in an original file.
 
-Source: [editor controls and persistence](../../blender/editors/animation_set_editor.py).
 
 ## 3. Choose an Existing Visual Mapping
 
@@ -65,7 +92,6 @@ Ground-only and ground/air cast entries share visual-job IDs, so they are not in
 
 **Mode switching is not a supported recipe.** The catalog explicitly calls its entry `ModeSwitch (Not yet Supported)`. `SwitchToSpecial` and `SwitchToNormal` are internal component roles sharing job `7`, not independent supported animation types. Although `ModeSwitch` exists in the timing-category enum, that alone does not implement a complete transition workflow. Preserve known working data rather than treating the presence of a label as proof of support.
 
-Sources: [catalog labels, IDs and tags](../../definitions/abilities.py), [timing-category enum](../../definitions/enums.py#L21), [ID-based grouping](../../blender/editors/animation_set_editor.py#L154).
 
 ## 4. Assign and Check Every Variant
 
@@ -77,7 +103,6 @@ Sources: [catalog labels, IDs and tags](../../definitions/abilities.py), [timing
 
 A variant with `<None>`/an empty Action is skipped when constructing the exported AnimationSet. Merely creating an Action or NLA strip does not add it to an ability mapping.
 
-Sources: [variant properties and UI](../../blender/editors/animation_set_editor.py#L1186), [variant export filtering](../../utilities/drs_utility.py#L4736).
 
 ## 5. Place Markers and Understand Time Units
 
@@ -94,7 +119,7 @@ The catalog enables the `Marker` section for `Spawn`, `Attack`, and selected spe
 
 For a five-second clip, marker `0.6` is at **three seconds**. To place an event at `0.6` seconds in that clip, use `0.12`. EffectSet keyframe times use the same normalized `0..1` convention, so matching fractions aligns the scheduled moments only when both refer to the same full clip.
 
-Keep these editor units separate from unverified game-tick behavior. Historical notes about 100-ms quantization, a 200-ms Spawn minimum, a six-entry limit, and resolve-phase duration are **research hypotheses**, not confirmed authoring rules. See [AnimationTimings research status](../drs/animationtimings.md#research-notes-are-not-confirmed-engine-limits) before interpreting exported millisecond fields.
+Keep these editor units separate from unverified game-tick behavior. Historical notes about 100-ms quantization, a 200-ms Spawn minimum, a six-entry limit, and resolve-phase duration are **research hypotheses**, not confirmed authoring rules. See AnimationTimings research status before interpreting exported millisecond fields.
 
 For a weapon or hand event, inspect the pose with `Display Marker`, then edit the marker's numeric Position/Direction. Markers are not bone-bound locators, and dragging the helper arrow is not a supported “sync back” workflow: the stored UI values remain authoritative. A marker can be near a projectile attachment point, but neither creates nor automatically links that locator. Retain imported armature/locator parenting; do not reparent bones or locators just to match the helper arrow.
 
@@ -109,7 +134,6 @@ For timing recomputation, the editor uses the Action's `frame_length` and `origi
 
 These are the add-on's calculations, not proof that a specific game-side damage/projectile event uses either field in a particular way. Some older format documentation describes different meanings and editable timing fields; the current editor code is authoritative for these controls.
 
-Sources: [marker controls and timing display](../../blender/editors/animation_set_editor.py#L2453), [timing recomputation](../../blender/editors/animation_set_editor.py#L1119), [timing serialization](../../blender/editors/animation_set_editor.py#L1750), [binary marker fields](../../definitions/animation_definitions.py#L170).
 
 ## 6. Cast/Resolve and Start/Loop/End Workflows
 
@@ -130,7 +154,6 @@ For `PushBackStandUp`, `Heal Channel`, or another catalog Start/Loop/End group, 
 
 **Range caveat:** linked Action selection and preview buttons are not a guarantee that every hidden component's exported Start/End values have been synchronized. Current drawing logic updates only the first Start/Loop variants' ranges, and cast previews compute their Resolve range separately. Reimport and check the exported component ranges, especially End/Resolve and additional variants, before relying on segmented playback.
 
-Sources: [cast and loop previews](../../blender/editors/animation_set_editor.py#L314), [linked Action assignment](../../blender/editors/animation_set_editor.py#L960).
 
 ## 7. Prepare the Actual Export Action
 
@@ -138,21 +161,32 @@ A **control rig** is an authoring aid; the **deform/game armature** supplies the
 
 The SKA writer reads the selected Action's bone **location and quaternion rotation F-curves**. It does not bake evaluated IK/constraints, the NLA stack, Euler rotation, or scale into motion automatically. Bake/convert the intended final motion onto the deform armature's bones before export when the source relies on those systems. Preserve the existing skeleton/rest-pose relationships and bone names; the writer derives bone IDs from known names or its fallback name hash.
 
-Prefer zero-based clip keyframes for new work: SKA sample times are calculated from absolute keyframe numbers divided by clip length, without subtracting an arbitrary Action start offset. A clip moved to a later timeline position can preview correctly yet export shifted times.
+New clips can start at a later frame: export subtracts the clip's recorded first frame before normalizing its key times. After moving the keys, use **Edit Settings → OK** to update the recorded range.
 
-Use `Clip Timing...` to inspect or set per-Action FPS/duration metadata. The dialog offers fixed-frame FPS retiming, duration-to-FPS calculation, FPS/duration-to-frame-length calculation, and scene fallback. These operations set timing metadata; they do not rescale or bake the Action's F-curves. Imported `frame_length`, `original_fps`, and `original_duration` can override later scene changes, so review them after changing a clip's length. Preview can also change scene FPS and timeline limits.
+Use **Animation Set Editor > selected animation > Clip Settings > Edit Settings**
+to set per-Action FPS, first frame, duration, time addressing and interpolation.
+**OK** automatically derives the range from existing keyframes while keeping the imported clip's leading/trailing time; no separate fit button is needed. Timing edits do not
+rescale or bake F-curves. FPS and frame length determine duration. Imported
+`frame_length`, `original_fps`, and `original_duration` can override later scene
+changes, so review Clip Settings after changing the keyed range. Playback matches
+the selected clip's scene FPS and timeline limits. Settings belong to the Action
+and are shared by all variants that reference it.
 
-Sources: [preview armature lookup](../../blender/editors/animation_set_editor.py#L1295), [export armature lookup](../../utilities/ska_utility.py#L61), [SKA writer](../../utilities/ska_utility.py#L325), [Clip Timing dialog](../../blender/editors/animation_set_editor.py#L2182).
+The last stored key is not necessarily the clip's end. For example, Firedancer Idle1 has 78 samples at 24 FPS and lasts **3.250 seconds**, even though its last key is at frame 77. Loop playback uses frames **0–77**; including frame 78 would add an extra frame every loop. The preview enables Frame Dropping to keep real-time speed when Blender cannot draw every frame.
+
+Looping tracks continue smoothly from their last key back to their first key. Each bone's last key can occur well before the clip ends. The plugin creates boundary copies to show this motion in Blender, refreshes them when the active Action changes, and leaves them out of SKA export. Edit the original keys rather than these generated copies. After updating the plugin, **Play** also repairs loop previews in older imported Actions.
+
+
 
 ### SKA Metadata Is Not an AnimationSet Mode
 
-The full track/keyframe path in the current [SKA reader/writer](../../definitions/ska_definitions.py) is implemented for file types **6 and 7**. [New SKA exports](../../utilities/ska_utility.py#L657) are generated as **type 7**; a research template describing types 2–5 does not establish equivalent add-on support for them.
+The full track/keyframe path in the current SKA reader/writer is implemented for file types **6 and 7**. New SKA exports are generated as **type 7**; a research template describing types 2–5 does not establish equivalent add-on support for them.
 
 - Track headers distinguish **position (`0`)** from **quaternion rotation (`1`)** and bind tracks to skeleton bone IDs. Renaming a clip does not retarget its skeleton.
 - Each keyframe stores four values and four tangent components. This layout is not a generic export path for arbitrary Blender scale, Euler, or constraint animation.
 - Both supported layouts store duration, repeat/stutter metadata, frame length, and trailing integers; type 7 includes an extra integer before frame length. Do not assign guessed meanings to unknown fields. This is not a lossless byte-for-byte rewrite: the current exporter generates three trailing zeros, so keep the original clip as a reference.
 - The writer uses the Action's `repeat` value when present, otherwise `0`, and its `stutter_mode` when present, otherwise `2`. These file-level settings are distinct from AnimationSet's Start/Loop/End clip ranges.
-- Historical notes call frame length “unused” or describe particular stutter values as smooth. Those engine effects remain unverified. The add-on still uses frame-length/FPS metadata for timing calculations; do not discard it or treat it as a guaranteed in-game speed control. Use `Clip Timing...` and round-trip the result.
+- Historical notes call frame length “unused” or describe particular stutter values as smooth. Those engine effects remain unverified. The add-on still uses frame-length/FPS metadata for timing calculations; do not discard it or treat it as a guaranteed in-game speed control. Use **Clip Settings** and round-trip the result.
 
 ## 8. Save, Export, and Round-Trip Check
 
@@ -175,11 +209,9 @@ The full track/keyframe path in the current [SKA reader/writer](../../definition
 | Marker display is right but game event is wrong | Compare exported marker IDs to `AnimationTimings` references and confirm the game actually invokes the intended job/tag. Marker-set IDs are regenerated on Save separately from timing IDs; do not assume those links round-trip unchanged. |
 | Existing data changes after Save | Work on a copy; schema reconstruction is not lossless preservation of unknown fields or unsupported mappings. |
 
-Sources: [referenced-only SKA export](../../utilities/drs_utility.py#L5060), [export naming](../../utilities/helpers.py#L355), [DRS export options](../../__init__.py#L430), [Action resolver](../../utilities/drs_resolvers.py#L32), [marker/timing serialization](../../blender/editors/animation_set_editor.py#L1649).
 
 ## Related Reading
 
 - [Advanced Effects Guide](advanced_effects_guide.md): audio/FX configuration and preservation caveats.
 - [Advanced Locators Guide](advanced_locators_guide.md): attachment types and bone relationships.
 - [Unit Creation Guide](unit_creation_buide.md): shared unit setup, without repeating it here.
-- [AnimationSet format](../drs/animationset.md) and [AnimationTimings format](../drs/animationtimings.md): binary structure references; consult the source links above for current UI behavior.

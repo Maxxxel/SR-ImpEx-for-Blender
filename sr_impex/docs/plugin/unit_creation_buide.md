@@ -19,7 +19,30 @@ A unit or animated object needs:
 - vertex groups that match the intended deform bones, with valid skin weights;
 - Blender actions and animation metadata appropriate to the target asset.
 
-Each vertex can use up to `4` bone influences. Clean up and normalize weights intentionally; limiting the influence count during export is not a substitute for checking the deformation.
+Each vertex can use up to `4` bone influences. On the temporary export copy,
+the exporter excludes groups that do not match skeleton bones, keeps the four
+strongest bone weights and normalizes their sum. The original Blender mesh and
+its modifier-mask groups remain unchanged. Review export warnings: unweighted
+vertices are not automatically assigned a guessed bone. Check deformation
+after a fresh import, since limiting weights can change the result.
+
+To check before exporting, select the skinned mesh or meshes in Object Mode
+and choose **DRS Editor > Animation Set Editor > Skinning > Check Skin Weights**.
+The panel reports vertices with no matching bone weights, more than four bone
+influences, non-normalized bone weights and non-bone groups. Non-bone groups
+may be intentional modifier masks; the export copy excludes them, but the
+inspector does not remove or modify anything. The result is a snapshot: run
+the check again after editing weights or changing the selection. After a
+check, the **Unweighted**, **Over 4**, and **Unnormalized** buttons select the
+matching vertices on the active skinned mesh and enter Edit Mode so you can
+locate them. These buttons replace that mesh's current vertex selection and
+deselect other meshes before entering Edit Mode, but do not alter weights.
+
+The CGeo collision/query mesh welds coincident positions. If those positions
+have different bone weights, its skin record can keep only one weight set; the
+export log warns and retains the first weighted set. Make the corresponding
+weights agree or separate the positions, then verify collision/query behavior
+in the editor. Render meshes still have their own per-mesh skin streams.
 
 The new-scene operator creates the shared object collections, not a finished character rig. Put the deform armature in a direct child collection named `Armature_Collection` and render meshes directly in `Meshes_Collection`. Start from an imported, compatible skeleton when possible; changing a skeleton/rest pose without checking the skin and animations can break their agreement.
 
@@ -27,7 +50,7 @@ The new-scene operator creates the shared object collections, not a finished cha
 
 > **Recommended practice:** Keep the armature and meshes in one consistent model coordinate convention. When using `GameOrientation` (GO), leave the armature under the model's helper and keep skinned meshes attached to their deform armature. Parenting before modeling is convenient, not a required order of operations.
 
-Do not reparent every skinned mesh directly to GO just because a static mesh can be authored that way. Bone-attached locators also stay attached to bones. Avoid applying transforms to GO, the armature, or an existing bound rig as a blanket rotation fix; changes to a rig need animation and skin validation, not just a still-frame check. See [Object Creation Guide, step 3](object_creation_guide.md#3-understand-gameorientation-recommended-practice) for the distinction between collections, parenting, and baked mesh rotation.
+Do not reparent every skinned mesh directly to GO just because a static mesh can be authored that way. Bone-attached locators also stay attached to bones. Avoid applying transforms to GO, the armature, or an existing bound rig as a blanket rotation fix; changes to a rig need animation and skin validation, not just a still-frame check. See [Object Creation Guide, step 3](object_setup_reference.md#orientation-and-parenting) for the distinction between collections, parenting, and baked mesh rotation.
 
 ![Armature, skeleton, and skin overview](https://i.gyazo.com/883689b7da73bc1a30636faf6d42d121.png)
 
@@ -61,6 +84,20 @@ See the [Advanced Locators Guide](advanced_locators_guide.md) for supported type
 
 ## 2. Understand Units vs. Animated Objects
 
+For the selected animation variant, **DRS Editor > Animation Set Editor**
+provides Clip Settings and playback. Text events and Target IDs are in the
+collapsed **Advanced SKA Data** section; their usage is not fully verified. **Play** sets
+the Blender scene range and frame rate automatically; **OK** in Clip Settings automatically fits the stored clip
+range to include the keyed subframes without moving keys. Review the range afterward, especially
+when retiming an imported action. SKA text markers are separate from the
+AnimationSet markers described below: neither event system is executed by the
+Blender preview. See the [Advanced Abilities Guide](advanced_abilities_guide.md).
+
+For cubic curves, SKA has one tangent per key while Blender can use different
+incoming and outgoing handle slopes. Prefer aligned handles, and reimport the
+exported clip to check motion between keys, especially after adjusting handle
+lengths or using keys close together on subframes.
+
 A unit usually has multiple animation modes. The current animated-object export path keeps the `Idle` visibility job and removes unit-style markers/timings; selecting `Animated Object` is not a way to export a unit with fewer requirements.
 
 The editor's initialization template provides a useful starting list, not an exporter-enforced guarantee that every unit needs exactly these animations:
@@ -79,18 +116,18 @@ The editor's initialization template provides a useful starting list, not an exp
 
 Loop animations have three parts: start, loop, and end. The loop section should be the repeated part. A good example is a unit being pushed back continuously by wind and staying inside the same repeated motion.
 
-There are more animation types available. Check the **AnimationSet Editor** and a comparable working asset for the relevant set. Entries marked **Not yet Supported**, such as ModeSwitch, are not an authoring promise.
+There are more animation types available. Check the **Animation Set Editor** and a comparable working asset for the relevant set. Entries marked **Not yet Supported**, such as ModeSwitch, are not an authoring promise.
 
 ### Actions and saved metadata are separate
 
 1. Create or import the Blender actions on the deform rig, then choose their references in the AnimationSet rows.
-2. Use **Init** only when you intentionally want to clear and repopulate the current editor setup; do not use it as a harmless refresh on imported metadata.
+2. Use **Init → Unit** to add the Idle, Walk, Run, Spawn and Die starter mappings. Existing entries are kept unless you enable **Replace Existing Mappings**. Assign an Action to each entry you need.
 3. Choose animation modes, variants, weights, and any markers, then click **Save** in the AnimationSet editor to persist them to the model collection.
 4. Save the `.blend` file as well. **Reset** reloads saved metadata; it does not save pending edits.
 
 An action existing in Blender's Action list does not mean it is referenced by the saved AnimationSet or will be included in `Export All SKA Actions`.
 
-![AnimationSet Editor](https://i.gyazo.com/973918d3bf7244dfcfdc5057d3266531.png)
+![Animation Set Editor](https://i.gyazo.com/973918d3bf7244dfcfdc5057d3266531.png)
 
 ## 3. Add Animation Variants
 
@@ -197,3 +234,4 @@ If the mesh is rotated correctly but the animation is not, inspect the deform ac
 - [Advanced Abilities Guide](advanced_abilities_guide.md)
 - [Advanced Effects Guide](advanced_effects_guide.md)
 - [Advanced Shading Guide](advanced_shading_guide.md)
+- [Artist Material Workflow](material_artist_workflow.md)

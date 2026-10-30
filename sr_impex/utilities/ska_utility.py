@@ -7,6 +7,8 @@ import bpy
 
 from sr_impex.definitions.ska_definitions import SKA, SKAHeader, SKAKeyframe
 from sr_impex.core.message_logger import MessageLogger
+from sr_impex.utilities.bone_ids import generate_bone_id, resolve_bone_ids
+from sr_impex.utilities.skeleton_metadata import export_bone_identities, super_parent_matrix
 
 # Resources are in sr_impex/resources, need to go up one level from utilities/
 resource_dir = dirname(dirname(realpath(__file__))) + "/resources"
@@ -166,14 +168,6 @@ def get_actions(current_collection: bpy.types.Collection = None) -> List[str]:
     return sorted_actions
 
 
-def generate_bone_id(bone_name: str) -> int:
-    """Generate a unique bone ID based on the bone name."""
-    # Generate a unique ID for the bone based on its name
-    # This is a simple hash function, you can replace it with a more complex one if needed
-    bone_id = sum(ord(char) for char in bone_name) % (2**32 - 1)
-    return bone_id
-
-
 # invert Bézier→Hermite for each axis
 def invert_bezier_hermite_for_axis(fc: bpy.types.FCurve, i: int, total_frames: float) -> float:
     """Convert Blender Bezier handle slope to a Hermite tangent.
@@ -187,39 +181,38 @@ def invert_bezier_hermite_for_axis(fc: bpy.types.FCurve, i: int, total_frames: f
         if i < 0 or (i + 1) >= len(kps):
             return 0.0
         p = kps[i]
-        n = kps[i + 1]
-        df = n.co[0] - p.co[0]
+        df = p.handle_right.x - p.co.x
         if df == 0.0:
             return 0.0
-        return 3.0 * (p.handle_right.y - p.co[1]) * total_frames / df
+        return (p.handle_right.y - p.co.y) * total_frames / df
     except Exception:
         return 0.0
 
 
-def invert_bezier_hermite_for_axis_any(fc: bpy.types.FCurve, i: int, total_frames: float) -> float:
+def invert_bezier_hermite_for_axis_any(fc: bpy.types.FCurve, i: int, total_frames: float, points=None) -> float:
     """
     Return Hermite tangent at key i:
     - for i < last: from handle_right vs next key
     - for i == last: from handle_left vs previous key
     """
-    kps = fc.keyframe_points
+    kps = fc.keyframe_points if points is None else points
     if not kps:
         return 0.0
 
     # last key: derive from incoming (handle_left, previous key)
     if i >= len(kps) - 1:
         if len(kps) < 2:
-            return 0.0
-        p = kps[-2]
+            point=kps[0];dx=point.handle_right.x-point.co.x
+            return (point.handle_right.y-point.co.y)*total_frames/dx if dx else 0.
         n = kps[-1]
-        df = n.co.x - p.co.x
+        df = n.co.x - n.handle_left.x
         if df == 0.0:
             return 0.0
-        # handle_left.y = P - (M * dt_n)/3  =>  M = 3*(P - handle_left.y)/dt_n
-        return 3.0 * (n.co.y - n.handle_left.y) * total_frames / df
+        return (n.co.y - n.handle_left.y) * total_frames / df
 
     # normal case: outgoing (handle_right, next key)
-    return invert_bezier_hermite_for_axis(fc, i, total_frames)
+    point=kps[i];dx=point.handle_right.x-point.co.x
+    return (point.handle_right.y-point.co.y)*total_frames/dx if dx else 0.
 
 
 def _hermite_tangent_from_sampled_series(
@@ -307,27 +300,35 @@ def _hermite_tangent_from_fcurve(
     """
     if fcurve is None:
         return 0.0
-    kps = fcurve.keyframe_points
+    from sr_impex.blender.ska_loop import authored_points
+    kps = authored_points(fcurve.id_data,fcurve)
     if not kps:
         return 0.0
 
-    # Check if frame matches an existing keyframe (within half-frame tolerance)
+    # Match the actual key, not a neighboring subframe less than half a frame
+    # away. Blender stores these coordinates as single-precision values.
     for idx, kp in enumerate(kps):
-        if abs(kp.co.x - frame) < 0.5:
-            return invert_bezier_hermite_for_axis_any(fcurve, idx, total_frames)
+        if abs(kp.co.x - frame) < 1e-5:
+            return invert_bezier_hermite_for_axis_any(fcurve, idx, total_frames,points=kps)
 
     # No keyframe match — compute numerical derivative
+    nearest=min(abs(kp.co.x-frame) for kp in kps)
+    eps=min(eps,nearest*.25)
+    if eps<=1e-8:return 0.0
     v_plus = fcurve.evaluate(frame + eps)
     v_minus = fcurve.evaluate(frame - eps)
     return (v_plus - v_minus) * total_frames / (2.0 * eps)
 
 
-def export_ska(context: bpy.types.Context, filepath: str, action_name: str, export_tangents: bool = False) -> None:
+def export_ska(context: bpy.types.Context, filepath: str, action_name: str, export_tangents: bool = False,
+               armature: bpy.types.Object = None) -> None:
     """Export the current scene to a .ska file."""
     # Find the Animation Data by the given action name in the current context
     action = bpy.data.actions.get(action_name)
     if action is None:
         raise ValueError(f"Action '{action_name}' not found in the current context.")
+    from sr_impex.blender.ska_loop import sync,authored_points
+    sync(action)
 
     try:
         frame_length = action["frame_length"]
@@ -369,11 +370,15 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
     frame_length = int(max(1, round(float(frame_length))))
 
     duration = frame_length / fps
+    start_frame = float(action.get('ska_start_frame',0.0))
 
     # Get the Bones of the Armature
-    armature = get_current_armature()
+    armature = armature or get_current_armature()
     if armature is None:
         raise ValueError("No armature selected.")
+
+    bone_ids = {name: record["key"] for name, record in
+                export_bone_identities(armature.data.bones, bones_list).items()}
 
     location_fcurves: dict[str, list[bpy.types.FCurve]] = defaultdict(list)
     rotation_fcurves: dict[str, list[bpy.types.FCurve]] = defaultdict(list)
@@ -415,7 +420,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                 axis_index = fcurve.array_index
                 assert axis_index < 3, f"Invalid axis {axis_index}"
                 fcurves_by_axis[axis_index] = fcurve
-                for kp in fcurve.keyframe_points:
+                for kp in authored_points(action,fcurve):
                     all_frames.add(kp.co[0])
 
             # Sort frames to maintain consistent ordering
@@ -426,7 +431,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
             for frame in sorted_frames:
                 assert duration > 0, f"Duration is zero: {action.frame_range[1]} / {fps}"
                 assert fps > 0, "FPS is zero"
-                t = (frame / fps) / duration
+                t = (frame - start_frame) / frame_length
                 bone_lib[bone_name]["loc_per_time"]["times"].append(t)
                 bone_lib[bone_name]["loc_per_time"]["frames"].append(frame)
 
@@ -462,7 +467,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                 axis_index = fcurve.array_index
                 assert axis_index < 4, f"Invalid axis {axis_index}"
                 fcurves_by_axis[axis_index] = fcurve
-                for kp in fcurve.keyframe_points:
+                for kp in authored_points(action,fcurve):
                     all_frames.add(kp.co[0])
 
             # Sort frames to maintain consistent ordering
@@ -471,7 +476,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
             # Evaluate each axis at all frame times
             coords = [[], [], [], []]
             for frame in sorted_frames:
-                t = (frame / fps) / duration
+                t = (frame - start_frame) / frame_length
                 bone_lib[bone_name]["rot_per_time"]["times"].append(t)
                 bone_lib[bone_name]["rot_per_time"]["frames"].append(frame)
 
@@ -528,7 +533,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
 
     try:
         for bone_name, data in bone_lib.items():
-            bone_id = bones_list.get(bone_name, generate_bone_id(bone_name))
+            bone_id = bone_ids[bone_name]
 
             # Retrieve the bone from the armature's rest data
             try:
@@ -539,7 +544,8 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                         @ armature_bone.matrix_local
                     )
                 else:
-                    bind_matrix = armature_bone.matrix_local
+                    bind_matrix = (super_parent_matrix(armature.data).inverted_safe()
+                                   @ armature_bone.matrix_local)
             except KeyError as e:
                 # We maybe deleted a bone in edit we dont use anymore in the original animation, skip it.
                 logger.log(
@@ -570,7 +576,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                     loc_keyframe = SKAKeyframe()
                     loc_keyframe.w = 1.0
                     loc_keyframe.x, loc_keyframe.y, loc_keyframe.z = original_loc[:]
-                    can_compute_tangents = len(data["loc_per_time"]["vec"]) >= 2
+                    can_compute_tangents = len(data["loc_per_time"]["vec"]) >= 1
 
                     if export_tangents and can_compute_tangents:
                         frame = data["loc_per_time"]["frames"][i]
@@ -620,7 +626,7 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
                         original_quat.z,
                     )
 
-                    can_compute_tangents = len(quats_fixed) >= 2
+                    can_compute_tangents = len(quats_fixed) >= 1
 
                     if export_tangents and can_compute_tangents:
                         frame = data["rot_per_time"]["frames"][i]
@@ -656,18 +662,55 @@ def export_ska(context: bpy.types.Context, filepath: str, action_name: str, expo
 
     # Create a new SKA file and write the action data to it
     ska_file = SKA()
-    ska_file.type = 7
+    ska_file.type = int(action.get('ska_version',7))
+    if ska_file.type not in (6,7):
+        raise ValueError('Only SKA 6 and 7 are supported for artist export')
     ska_file.duration = duration
     ska_file.repeat = action["repeat"] if "repeat" in action else 0
     ska_file.stutter_mode = action.get("stutter_mode", 2)
     ska_file.unused1 = action.get("unused1", 0)
     ska_file.zeroes = [0, 0, 0]
+    if "ska_tail_metadata" in action:
+        try:
+            metadata = json.loads(action["ska_tail_metadata"])
+            ska_file.target_ids = [int(value) for value in metadata["target_ids"]]
+            ska_file.text_markers = [bytes.fromhex(value) for value in metadata["text_markers_hex"]]
+            ska_file.annotation_bytes = bytes.fromhex(metadata["annotation_hex"])
+            if any(len(marker) != 8 for marker in ska_file.text_markers):
+                raise ValueError("Text markers must contain exactly 8 bytes")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid preserved SKA metadata on action '{action.name}': {exc}") from exc
     ska_file.header_count = len(headers)
     ska_file.headers = headers
     ska_file.time_count = len(times)
     ska_file.times = times
     ska_file.keyframes = keyframes
     ska_file.frame_length = frame_length
+    from sr_impex.utilities.ska_artist import ALPHA_ID, ALPHA_PATH, RAW_TRACKS, append_preserved_tracks
+    preserved = json.loads(action.get(RAW_TRACKS,'[]'))
+    alpha = next((fc for fc in _iter_action_fcurves(action) if fc.data_path==ALPHA_PATH),None)
+    represented = {(h.bone_id,h.type) for h in ska_file.headers}
+    if not action.get('ska_write_alpha',True):
+        preserved=[r for r in preserved if r['bone_id']!=ALPHA_ID]
+    if alpha and alpha.keyframe_points and action.get('ska_write_alpha',True):
+        original = next((r for r in preserved if r['bone_id']==ALPHA_ID and r['type']==0),None)
+        points=authored_points(action,alpha)
+        header = SKAHeader(tick=len(ska_file.times), interval=len(points),type=0,bone_id=ALPHA_ID)
+        ska_file.headers.append(header)
+        for point in points:
+            time = (point.co.x-start_frame)/frame_length
+            values = [0.0]*8
+            if original:
+                source = next((i for i,t in enumerate(original['times']) if abs(t-time)<1e-6),None)
+                if source is not None: values=list(original['keyframes'][source])
+            values[0] = float(point.co.y)
+            if export_tangents:values[4] = _hermite_tangent_from_fcurve(alpha,point.co.x,frame_length)
+            ska_file.times.append(time);ska_file.keyframes.append(SKAKeyframe(*values))
+        represented.add((ALPHA_ID,0))
+    append_preserved_tracks(ska_file,preserved,represented)
+    from sr_impex.utilities.ska_artist import reorder_tracks
+    if 'ska_track_order' in action:
+        reorder_tracks(ska_file,json.loads(action['ska_track_order']))
     # Write the SKA file to disk
     # Assure filepath has the .ska extension
     if not filepath.endswith(".ska"):

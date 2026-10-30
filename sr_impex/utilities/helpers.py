@@ -101,6 +101,8 @@ def verify_collections(
             )
 
             if collision_collection is None:
+                if source_collection.get('_sr_preserved_collision'):
+                    continue
                 logger.log(
                     "No Collision Collection found! But is required for a model with collision shapes!",
                     "Error",
@@ -184,6 +186,8 @@ def copy(
 
     def _copy(parent, collection, linked=False) -> bpy.types.Collection:
         cc = bpy.data.collections.new(collection.name)
+        for key in collection.keys():
+            cc[key] = collection[key]
         copy_objects(collection, cc, linked, dupe_lut)
 
         for c in collection.children:

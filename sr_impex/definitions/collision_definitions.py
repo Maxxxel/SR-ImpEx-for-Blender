@@ -142,7 +142,7 @@ class CollisionShape:
     cylinders: List[CylinderShape] = field(default_factory=list)
 
     def read(self, file: BinaryIO) -> "CollisionShape":
-        self.version = unpack("B", file.read(1))
+        self.version = unpack("B", file.read(1))[0]
         self.box_count = unpack("I", file.read(4))[0]
         self.boxes = [BoxShape().read(file) for _ in range(self.box_count)]
         self.sphere_count = unpack("I", file.read(4))[0]

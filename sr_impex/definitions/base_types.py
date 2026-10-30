@@ -122,8 +122,13 @@ class Matrix4x4:
         return self
 
     def write(self, file: BinaryIO) -> None:
-        for i in range(4):
-            file.write(pack("4f", *self.matrix[i]))
+        # read() returns a flat tuple; authored defaults use four rows.
+        values = tuple(self.matrix)
+        if len(values) == 4:
+            values = tuple(value for row in values for value in row)
+        if len(values) != 16:
+            raise ValueError("Matrix4x4 requires exactly 16 components")
+        file.write(pack("<16f", *values))
 
     def size(self) -> int:
         return 64
@@ -297,3 +302,29 @@ class BaseContainer:
     nodes: List[Union[RootNode, Node]] = field(default_factory=lambda: [RootNode()])
     node_informations: List[Union[NodeInformation, RootNodeInformation]] = field(default_factory=lambda: [RootNodeInformation()])
     model_type: str = None
+
+    def is_collision_primitive_child(self, info_index: int) -> bool:
+        """Distinguish primitive, geometry and OBB children with the same node name."""
+        info = self.node_informations[info_index]
+        if info.magic != 268607026:
+            return False
+        parent = unpack("<i", pack("4b", *info.spacer[:4]))[0]
+        return (0 < parent < len(self.node_informations) and
+                self.node_informations[parent].magic == 1396683476)
+
+    def link_collision_primitive_child(self) -> None:
+        """Write the tree links used by CGeoPrimitiveContainer/collisionShape lookup.
+
+        Children occupy contiguous ranges in the CRC-sorted node-info table.
+        The current export layouts put the collisionShape child last.
+        """
+        indices = {info.node_name: i for i, info in enumerate(self.node_informations) if i}
+        parent = indices.get("CGeoPrimitiveContainer")
+        child = indices.get("collisionShape")
+        if parent is None or child is None:
+            return
+        if child != len(self.node_informations) - 1:
+            raise ValueError("collisionShape must follow all root-level node-info entries")
+        self.node_informations[0].node_information_count = len(indices) - 1
+        self.node_informations[parent].spacer = list(unpack("16b", pack("<4i", 0, child, 1, 0)))
+        self.node_informations[child].spacer = list(unpack("16b", pack("<4i", parent, 0, 0, 0)))

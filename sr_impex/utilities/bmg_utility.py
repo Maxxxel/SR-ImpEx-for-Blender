@@ -7,6 +7,7 @@ BMG files define building layouts with modular grids and state-based meshes.
 
 import os
 import json
+from io import BytesIO
 import time
 from typing import Tuple, Dict, Optional
 import xml.etree.ElementTree as ET
@@ -19,16 +20,13 @@ from sr_impex.definitions.bmg_definitions import BMG, BMS
 from sr_impex.definitions.drs_definitions import DRS
 from sr_impex.definitions.ska_definitions import SKA
 from sr_impex.definitions.locator_definitions import SLocator
-from sr_impex.definitions.grid_definitions import MeshGridModule, MeshSetGrid, StateBasedMeshSet
-from sr_impex.definitions.base_types import ExportError
-from sr_impex.definitions.enums import InformationIndices
+from sr_impex.definitions.grid_definitions import StateBasedMeshSet
 
 from sr_impex.blender.editors.animation_set_editor import ANIM_BLOB_KEY
 from sr_impex.blender.editors.effect_set_editor import (
     EFFECT_BLOB_KEY,
 )
 from sr_impex.blender.editors.bmg_state_editor import MESHGRID_BLOB_KEY, switch_meshset_state
-from sr_impex.utilities.helpers import verify_collections, abort, copy, build_ska_export_name_map
 
 # Import required functions from drs_utility
 # These are shared between DRS and BMG import/export
@@ -156,6 +154,7 @@ def create_meshset_structure(
     armature_object: bpy.types.Object = None,
     import_collision_shape: bool = False,
     import_s0_collision_shapes: bool = False,
+    import_debris: bool = True,
 ) -> tuple[bpy.types.Collection, bpy.types.Object]:
     """
     Create organized hierarchical structure for a single MeshSet with all states.
@@ -186,6 +185,9 @@ def create_meshset_structure(
     """
     # Create MeshSet container
     meshset_col = bpy.data.collections.new(f"MeshSet_{meshset_index}")
+    meshset_col["bmg_cell_index"] = meshset_index
+    meshset_col["bmg_transitions_json"] = json.dumps([
+        {"state_id": item.target_state, "fx_file": item.fx_file} for item in destruction_states])
     parent_collection.children.link(meshset_col)
 
     # Create States subcollection (hidden by default) with unique name
@@ -196,11 +198,15 @@ def create_meshset_structure(
 
     # Import each mesh state (S0, S2, etc.)
     for mesh_state in mesh_states:
-        if mesh_state.has_files:
+        if mesh_state.version == 1 and mesh_state.resource_file:
             state_name = f"S{mesh_state.state_num}_{'Undamaged' if mesh_state.state_num == 0 else 'Damaged'}"
             state_col = bpy.data.collections.new(state_name)
             state_col["state_type"] = f"S{mesh_state.state_num}"
             state_col["mesh_set_index"] = meshset_index
+            state_col["bmg_cell_index"] = meshset_index
+            state_col["bmg_state_id"] = mesh_state.state_id
+            state_col["bmg_state_fx"] = mesh_state.fx_file
+            state_col["bmg_resource_file"] = mesh_state.resource_file
             states_col.children.link(state_col)
 
             # Create Meshes subcollection
@@ -208,7 +214,10 @@ def create_meshset_structure(
             state_col.children.link(meshes_col)
 
             # Load DRS file
-            drs_file: DRS = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
+            resource_path = os.path.join(dir_name, mesh_state.drs_file)
+            drs_file: DRS = DRS().read(resource_path)
+            from sr_impex.utilities.building_export import persist_resource
+            persist_resource(state_col, resource_path, drs_file)
 
             # Import collision shapes if present
             # S0 (undamaged): only import if import_s0_collision_shapes is True (BMG-level shapes apply to all S0)
@@ -222,13 +231,16 @@ def create_meshset_structure(
 
             if should_import_collision:
                 import_collision_shapes(state_col, drs_file)
+                from sr_impex.utilities.building_export import child
+                from sr_impex.utilities.resource_container import payload_bytes
+                child(state_col, 'CollisionShapes_Collection')['_bmg_collision_payload'] = payload_bytes(drs_file.collision_shape).hex()
 
             # Import meshes
             for mesh_index in range(drs_file.cdsp_mesh_file.mesh_count):
                 mesh_object, _ = create_mesh_object(
                     drs_file,
                     mesh_index,
-                    dir_name,
+                    os.path.dirname(resource_path),
                     base_name,
                     armature_object,
                 )
@@ -236,7 +248,7 @@ def create_meshset_structure(
                 meshes_col.objects.link(mesh_object)
 
     # Create Debris subcollection
-    if destruction_states and len(destruction_states) > 0:
+    if import_debris and destruction_states and len(destruction_states) > 0:
         debris_col = bpy.data.collections.new("Debris_Collection")
         states_col.children.link(debris_col)
         debris_col.hide_viewport = True
@@ -261,6 +273,8 @@ def create_meshset_structure(
     active_marker = bpy.data.objects.new(f"Active_State_MeshSet_{meshset_index}", None)
     active_marker.empty_display_type = 'CUBE'
     active_marker.empty_display_size = 0.5
+    active_marker.hide_viewport = True  # State bookkeeping only; keep the meshes visible.
+    active_marker.hide_render = True
     active_marker["active_state"] = "S0"  # Default to undamaged
     active_marker["mesh_set_index"] = meshset_index
     meshset_col.objects.link(active_marker)
@@ -279,7 +293,15 @@ def persist_meshgrid_blob_on_collection(
         return
 
     grid = bmg_file.mesh_set_grid
+    snapshot = BytesIO()
+    grid.write(snapshot)
     blob = {
+        "source_grid_payload_hex": snapshot.getvalue().hex(),
+        "revision": grid.revision,
+        "name": grid.name,
+        "uuid": grid.uuid,
+        "debris_effect": grid.debris_effect,
+        "destruction_effect": grid.destruction_effect,
         "rows": grid.grid_height,
         "columns": grid.grid_width,
         "orientation": grid.grid_rotation if hasattr(grid, "grid_rotation") else 0,
@@ -293,6 +315,7 @@ def persist_meshgrid_blob_on_collection(
         cell = {
             "index": i,
             "has_mesh_set": module.has_mesh_set,
+            "rotation": module.rotation,
             "mesh_object_name": "",  # Will be filled during import
         }
         blob["cells"].append(cell)
@@ -325,7 +348,7 @@ def import_state_based_mesh_set(
     )
     source_collection.children.link(mesh_collection)
     for mesh_set in state_based_mesh_set.mesh_states:
-        if mesh_set.has_files:
+        if mesh_set.version == 1 and mesh_set.resource_file:
             # Create a new Collection for the State
             state_collection_name = f"{prefix}Mesh_State_{mesh_set.state_num}"
             state_collection = find_or_create_collection(
@@ -477,7 +500,7 @@ def import_mesh_set_grid(
             if armature_object is None:
                 # Try to get skeleton from first available mesh state
                 for mesh_state in module.state_based_mesh_set.mesh_states:
-                    if mesh_state.has_files:
+                    if mesh_state.version == 1 and mesh_state.resource_file:
                         file_path = os.path.join(dir_name, mesh_state.drs_file)
                         drs_file = DRS().read(file_path)
                         if drs_file.csk_skeleton is not None:
@@ -491,12 +514,13 @@ def import_mesh_set_grid(
                 parent_collection=mesh_set_grid_collection,
                 meshset_index=module_index,
                 mesh_states=module.state_based_mesh_set.mesh_states,
-                destruction_states=module.state_based_mesh_set.destruction_states if import_debris else [],
+                destruction_states=module.state_based_mesh_set.destruction_states,
                 dir_name=dir_name,
                 base_name=base_name,
                 armature_object=armature_object,
                 import_collision_shape=import_collision_shape,
                 import_s0_collision_shapes=import_s0_collision_shapes,
+                import_debris=import_debris,
             )
 
             # Store reference to first mesh object for grid mapping
@@ -529,7 +553,7 @@ def import_mesh_set_grid(
             # Handle IK atlas if needed
             if import_ik_atlas and armature_object is not None and bone_list is not None:
                 for mesh_state in module.state_based_mesh_set.mesh_states:
-                    if mesh_state.has_files:
+                    if mesh_state.version == 1 and mesh_state.resource_file:
                         file_path = os.path.join(dir_name, mesh_state.drs_file)
                         drs_file = DRS().read(file_path)
                         if (
@@ -579,10 +603,24 @@ def load_bmg(
     )
     context.collection.children.link(source_collection)
     bmg_file: BMG = BMG().read(filepath)
+    from sr_impex.blender.effect_preview import stop_other_audio
+    stop_other_audio(context.scene)
+
+    from sr_impex.utilities.building_export import persist_resource
+    from sr_impex.utilities.drs_utility import persist_effect_blob_on_collection, persist_locator_blob_on_collection
+    from types import SimpleNamespace
+    persist_resource(source_collection, filepath)
 
     # persist_locator_blob_on_collection(source_collection, bmg_file)
     persist_animset_blob_on_collection(source_collection, bmg_file)
     persist_meshgrid_blob_on_collection(source_collection, bmg_file)
+    persist_effect_blob_on_collection(source_collection, bmg_file)
+    persist_locator_blob_on_collection(source_collection,
+        SimpleNamespace(cdrw_locator_list=bmg_file.mesh_set_grid.cdrw_locator_list))
+    from sr_impex.blender.editors.locator_editor import BLOB_KEY
+    for key in (ANIM_BLOB_KEY, EFFECT_BLOB_KEY, BLOB_KEY):
+        if key in source_collection:
+            source_collection["_bmg_original_" + key] = source_collection[key]
 
     # Models share the same Skeleton Files, so we only need to create one Armature and share it across all sub-modules!
     armature_object = None
@@ -599,6 +637,8 @@ def load_bmg(
         ground_decal: DRS = DRS().read(
             os.path.join(dir_name, bmg_file.mesh_set_grid.ground_decal)
         )
+        persist_resource(ground_decal_collection,
+            os.path.join(dir_name, bmg_file.mesh_set_grid.ground_decal), ground_decal)
         # Load the Meshes
         for mesh_index in range(ground_decal.cdsp_mesh_file.mesh_count):
             # Create the Mesh Data
@@ -638,12 +678,6 @@ def load_bmg(
                 bmg_file.collision_shape.boxes[_], _
             )
             box_collection.objects.link(box_object)
-            # TODO: WORKAROUND: Make the Box's Z-Location negative to flip the Axis
-            box_object.location = (
-                box_object.location.x,
-                box_object.location.y,
-                -box_object.location.z,
-            )
 
         # Create a Sphere Collection to store the Sphere Objects
         sphere_collection: bpy.types.Collection = bpy.data.collections.new(
@@ -668,6 +702,11 @@ def load_bmg(
             cylinder_collection.objects.link(cylinder_object)
 
     # Import Mesh Set Grid
+    if bmg_file.collision_shape is not None and import_collision_shape:
+        from sr_impex.utilities.building_export import child
+        from sr_impex.utilities.resource_container import payload_bytes
+        child(source_collection, 'CollisionShapes_Collection')['_bmg_collision_payload'] = payload_bytes(bmg_file.collision_shape).hex()
+
     if bmg_file.mesh_set_grid is not None:
         armature_object, bone_list, module_mesh_map = import_mesh_set_grid(
             bmg_file,
@@ -702,7 +741,7 @@ def load_bmg(
         )
         source_collection.children.link(slocator_collection)
         for slocator in bmg_file.mesh_set_grid.cdrw_locator_list.slocators:
-            if slocator.file_name_length > 0 and slocator.class_type == "Construction":
+            if slocator.file_name_length > 0 and slocator.class_id == 2:
                 location = (
                     slocator.cmat_coordinate_system.position.x,
                     slocator.cmat_coordinate_system.position.y,
@@ -779,9 +818,10 @@ def load_bmg(
                     )
             elif slocator.file_name_length > 0:
                 logger.log(
-                    f"Slocator {slocator.file_name} is not a Construction file (but {slocator.class_type}). Skipping it.",
-                    "Error",
-                    "ERROR",
+                    f"Locator {slocator.file_name} ({slocator.class_type}) is not construction geometry. "
+                    "Its reference is retained; this construction importer does not preview it.",
+                    "Locator Preview",
+                    "INFO",
                 )
 
     # Import Animation
@@ -807,7 +847,29 @@ def load_bmg(
                     )
 
     # Apply the Transformations to the Source Collection
+    context.view_layer.update()
+    from sr_impex.utilities.building_export import raw_game_matrix
+    for obj in source_collection.all_objects:
+        if obj.type == 'MESH':
+            obj['_bmg_import_transform'] = [v for row in raw_game_matrix(obj) for v in row]
     parent_under_game_axes(source_collection, apply_transform)
+    # BMG vertices, skeletons and primitives are already in game-local space.
+    # Canceling GO with a parent-inverse leaves the whole building Y-up in a
+    # Z-up Blender scene. Apply GO once and record the resulting display basis.
+    for obj in source_collection.all_objects:
+        if obj.parent and obj.parent.name.startswith('GameOrientation'):
+            obj.matrix_parent_inverse.identity()
+    # Remember the importer's display basis. Parent-inverse matrices in older
+    # scenes cancel GameOrientation; unchanged geometry must retain game bytes.
+    context.view_layer.update()
+    from sr_impex.utilities.building_export import raw_game_matrix
+    for obj in source_collection.all_objects:
+        if obj.type == 'MESH':
+            obj["_bmg_import_basis"] = [v for row in raw_game_matrix(obj) for v in row]
+    from sr_impex.utilities.building_export import collision_fingerprint
+    for col in source_collection.children_recursive:
+        if col.name.startswith('CollisionShapes_Collection'):
+            col['_bmg_collision_fingerprint'] = collision_fingerprint(col)
 
     # Print the Time Measurement
     logger.log(
@@ -851,199 +913,36 @@ def _safe_blob_center_pivoted(value, fallback: int = 1) -> int:
     return 1 if bool(value) else 0
 
 
-def create_mesh_set_grid(source_collection: bpy.types.Collection = None):
-    _mesh_set_grid = MeshSetGrid()
-
-    if source_collection is not None:
-        blob_data = source_collection.get(MESHGRID_BLOB_KEY)
-        if blob_data:
-            try:
-                blob = json.loads(blob_data)
-            except Exception:
-                blob = None
-
-            if isinstance(blob, dict):
-                grid_width = _safe_blob_int(
-                    blob.get("grid_width", blob.get("columns", _mesh_set_grid.grid_width)),
-                    _mesh_set_grid.grid_width,
-                )
-                grid_height = _safe_blob_int(
-                    blob.get("grid_height", blob.get("rows", _mesh_set_grid.grid_height)),
-                    _mesh_set_grid.grid_height,
-                )
-                _mesh_set_grid.grid_width = max(0, min(127, grid_width))
-                _mesh_set_grid.grid_height = max(0, min(127, grid_height))
-                _mesh_set_grid.grid_rotation = _safe_blob_int(
-                    round(
-                        _safe_blob_float(
-                            blob.get("grid_rotation", blob.get("orientation", _mesh_set_grid.grid_rotation)),
-                            float(_mesh_set_grid.grid_rotation),
-                        )
-                    ),
-                    _mesh_set_grid.grid_rotation,
-                )
-                _mesh_set_grid.module_distance = _safe_blob_float(
-                    blob.get("module_distance", _mesh_set_grid.module_distance),
-                    _mesh_set_grid.module_distance,
-                )
-                _mesh_set_grid.is_center_pivoted = _safe_blob_center_pivoted(
-                    blob.get("is_center_pivoted", _mesh_set_grid.is_center_pivoted),
-                    _mesh_set_grid.is_center_pivoted,
-                )
-
-    # TODO: Calculate grid_width and grid_height based on model boundaries
-    # TODO: Check if UUID needs to be generated
-    # TODO: Check if we have a ground_decal in blender to use here
-    # TODO: Check how effect_gen_debris is used and make it an export option (only nature and fire)
-    # TODO: Create the total Cells based on the Mesh Size, and fill the cell(s) with the geiven mesh(es). Check if we need multi-cell setups anyway.
-    _total_cells = (_mesh_set_grid.grid_width * 2 + 1) * (_mesh_set_grid.grid_height * 2 + 1)
-    for _ in range(_total_cells):
-        _mesh_grid_module: MeshGridModule = MeshGridModule()
-        # TODO: Logic to select the cell for the model, for now we use center cell (0, 0)
-        if _ == _total_cells // 2 + 1:
-            _mesh_grid_module.has_mesh_set = 1
-            # TODO: Assign the mesh to the cell
-            # _mesh_grid_module.state_based_mesh_set =
-            # We can break here as we try the 1 cell setup
-            break
-    # TODO: Create the Locators here, we dont need a separate outside Locator class for buildings it seems
-    return _mesh_set_grid
+def create_mesh_set_grid(source_collection=None):
+    """Reconstruct the complete grid, including preserved non-rendered records."""
+    from sr_impex.utilities.building_export import create_grid
+    if source_collection is None:
+        raise ValueError("Select a building collection before export")
+    return create_grid(source_collection)
 
 
-def save_bmg(
-    context: bpy.types.Context,
-    filepath: str,
-    split_mesh_by_uv_islands: bool,
-    flip_normals: bool,
-    keep_debug_collections: bool,
-    model_type: str,
-    model_name: str,
-    export_all_ska_actions: bool,
-    set_model_name_prefix: str,
-    auto_fix_quad_faces: bool,
-    mip_maps: str = "auto",
-):
-    """
-    Save the current Blender scene as a BMG (Building Mesh Grid) file.
-
-    BMG files contain building layouts with modular grids and state-based meshes.
-    Each grid cell can contain different mesh states (undamaged, damaged, destroyed)
-    and debris physics objects.
-    """
-    # === PRE-VALIDITY CHECKS =================================================
-    # Ensure active collection is valid
-    source_collection = bpy.context.view_layer.active_layer_collection.collection
-    if not verify_collections(source_collection, model_type):
-        return abort(keep_debug_collections, None)
-
-    # Create a safe copy of the collection for export
+def save_bmg(context, filepath, split_mesh_by_uv_islands=True, flip_normals=False,
+             keep_debug_collections=False, model_type="AUTO", model_name="",
+             export_all_ska_actions=True, set_model_name_prefix="keep_existing",
+             auto_fix_quad_faces=True, mip_maps="auto"):
+    """Export state meshes, textures and BMG metadata as a validated package."""
+    from sr_impex.utilities.building_export import export_building
     try:
-        source_collection_copy = copy(context.scene.collection, source_collection)
-        source_collection_copy.name += ".copy"
-    except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Failed to duplicate collection: {e}. Type {type(e)}", "ERROR")
-        return abort(keep_debug_collections, None)
-
-    # Copy the AnimationSet blob from the source into the export copy (full fidelity)
-    try:
-        raw_blob = source_collection.get(ANIM_BLOB_KEY)
-        if raw_blob:
-            source_collection_copy[ANIM_BLOB_KEY] = raw_blob
-    except Exception:
-        pass
-
-    # Copy the EffectSet blob from the source into the export copy (full fidelity)
-    try:
-        raw_effect_blob = source_collection.get(EFFECT_BLOB_KEY)
-        if raw_effect_blob:
-            source_collection_copy[EFFECT_BLOB_KEY] = raw_effect_blob
-    except Exception:
-        pass
-
-    # Copy the action resolution map so blob names can still be resolved on the copy
-    try:
-        raw_action_map = source_collection.get("_drs_action_map")
-        if raw_action_map:
-            source_collection_copy["_drs_action_map"] = raw_action_map
-    except Exception:
-        pass
-
-    # TODO: Check if we need to get the Locators in MeshSet or somewhere to be checked here with a blob or later when we create the output
-
-    # We need to run checks for several Meshes (states/debris). Maybe we should make the save_drs function more modular, so we can reuse parts here as we need?
-
-    # === Action name strategy for export =========================================
-    export_prefix: str | None
-    if set_model_name_prefix == "model_name":
-        export_prefix = model_name
-    elif set_model_name_prefix == "folder_name":
-        export_prefix = os.path.basename(os.path.dirname(filepath))
-        # assure there are no spaces
-        export_prefix = export_prefix.replace(" ", "_")
-    elif set_model_name_prefix == "none":
-        export_prefix = ""
-    else:  # keep_existing
-        export_prefix = None
-
-    # Build name mapping once so AnimationSet, EffectSet and SKA files share consistent naming
-    # ska_name_map = build_ska_export_name_map(source_collection_copy, export_prefix)
-
-    # === CREATE DRS STRUCTURE ====================
-    folder_path = os.path.dirname(filepath)
-
-    # Create the base layout of our bmg file
-    new_bmg_file: BMG = BMG(model_type=model_type)
-
-    # First thing we always need to build is the MeshSetGrid
-    mesh_set_grid = create_mesh_set_grid(source_collection_copy)
-
-    # Now we save the Nodes in Order
-    nodes = InformationIndices[model_type]
-    for node in nodes:
-        if node == "MeshSetGrid":
-            new_bmg_file.mesh_set_grid = mesh_set_grid
-            new_bmg_file.push_node_infos("MeshSetGrid", new_bmg_file.mesh_set_grid)
-        elif node == "AnimationSet":
-            pass
-        elif node == "AnimationTimings":
-            pass
-        elif node == "EffectSet":
-            pass
-        elif node == "CGeoPrimitiveContainer":
-            # its an empty
-            pass
-        elif node == "collisionShape":
-            # We take the ones we are given at top level, same as state0 collision shapes
-            pass
-        # TODO: Check if we should support additional types. Maybe they are not used/wrongly exported in existing models
-
-    new_bmg_file.update_offsets()
-
-    # === SAVE THE BMG FILE ====================================================
-    try:
-        new_bmg_file.save(os.path.join(folder_path, model_name + ".drs"))
-    except ExportError as e:
-        logger.log(str(e), "Export Error", "ERROR")
-        return abort(keep_debug_collections, source_collection_copy)
-    except Exception as e:
-        logger.log(f"Unexpected error during save: {e}", "Export Error", "ERROR")
-        return abort(keep_debug_collections, source_collection_copy)
-
-    # === Export of SKA Actions ==============================================
-
-    # === CLEANUP & FINALIZE ===================================================
-    if not keep_debug_collections:
-        bpy.data.collections.remove(source_collection_copy)
-
-    logger.log("Export completed successfully.", "Export Complete", "INFO")
+        manifest = export_building(context, filepath,
+            split_mesh_by_uv_islands=split_mesh_by_uv_islands,
+            flip_normals=flip_normals, model_type=model_type,
+            export_all_ska_actions=export_all_ska_actions,
+            set_model_name_prefix=set_model_name_prefix,
+            auto_fix_quad_faces=auto_fix_quad_faces, mip_maps=mip_maps)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        logger.log(str(exc), "Building Export Error", "ERROR")
+        logger.display()
+        return {"CANCELLED"}
+    external = len(manifest["external_references"])
+    logger.log(f"Exported {len(manifest['states'])} building states. "
+               f"{external} installed-game references listed in export manifest.",
+               "Building Export", "INFO")
     logger.display()
-
-    # Cleanup variables
-    # ska_name_map = None
-    mesh_set_grid = None
-    new_bmg_file = None
-    source_collection_copy = None
-
     return {"FINISHED"}
-
-# endregion

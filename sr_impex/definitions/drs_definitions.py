@@ -68,6 +68,7 @@ class DRS(BaseContainer):
                 if node_name == "CGeoPrimitiveContainer":
                     node_info.node_size = 0
                 self.node_informations[info_index] = node_info
+            self.link_collision_primitive_child()
 
     def push_node_infos(self, class_name: str, data_object: object):
         # Get the right node from self.node_informations
@@ -181,6 +182,11 @@ class DRS(BaseContainer):
             if node_info is None:
                 raise TypeError(f"Node {node.name} not found")
 
+            # The engine opens a path, not a globally unique "collisionShape" name.
+            # CGeoMesh and CGeoOBBTree children have different payload layouts.
+            if node.name == "collisionShape" and not self.is_collision_primitive_child(node.info_index):
+                continue
+
             reader.seek(node_info.offset)
             node_name = node_map.get(node.name, None).replace("_node", "")
             if node_map is None:
@@ -192,6 +198,14 @@ class DRS(BaseContainer):
 
             if val == "FxMaster":
                 self.fx_master = FxMaster().read(reader)
+                continue
+
+            if val == "CGdLocatorList":
+                # Its payload is not yet modeled. Keep it opaque rather than
+                # failing before artists can access the render geometry.
+                self.gd_locator_list_raw = reader.read(node_info.node_size)
+                if len(self.gd_locator_list_raw) != node_info.node_size:
+                    raise ValueError('Truncated CGdLocatorList payload')
                 continue
 
             setattr(self, node_name, globals()[val]().read(reader))

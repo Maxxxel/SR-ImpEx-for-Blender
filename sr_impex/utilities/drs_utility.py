@@ -23,13 +23,20 @@ import bmesh
 import numpy as np
 
 from sr_impex.core.message_logger import MessageLogger
+from sr_impex.utilities.bone_ids import generate_bone_id, resolve_bone_ids
+from sr_impex.utilities.skeleton_metadata import (
+    SOURCE_NAME, SOURCE_KEY, SOURCE_INDEX, DISPLAY_NAME, EXTRA_WORDS, SUPER_PARENT, RESOURCE_META,
+    INV_REF_XYZ, IMPORTED_REST, SOURCE_CHILDREN,
+    display_bone_name, export_bone_identities, super_parent_matrix,
+)
+from sr_impex.utilities.drs_material_metadata import METADATA_KEY, capture_metadata, missing_texture_ids, restore_metadata
 
 from sr_impex.definitions.animation_definitions import AnimationSet, IKAtlas, AnimationTimings, AnimationTiming, TimingVariant, Timing, AnimationMarkerSet, ModeAnimationKey, AnimationSetVariant, AnimationMarker
 from sr_impex.definitions.skeleton_definitions import BoneMatrix, DRSBone, JointGroup, CSkSkeleton, CSkSkinInfo, BoneWeight, CDspJointMap, Bone, BoneVertex
 from sr_impex.definitions.base_types import Matrix3x3, Vector3, Face, CMatCoordinateSystem, Vector4
 from sr_impex.definitions.locator_definitions import SLocator, CDrwLocatorList
 from sr_impex.definitions.effect_definitions import EffectSet
-from sr_impex.definitions.mesh_definitions import BattleforgeMesh, CDspMeshFile, CGeoMesh, MeshData, Vertex, Texture, LevelOfDetail, EmptyString, Refraction, Flow, Textures, VertexData, Materials
+from sr_impex.definitions.mesh_definitions import BattleforgeMesh, CDspMeshFile, CGeoMesh, MeshData, Vertex, Texture, LevelOfDetail, EmptyString, Refraction, Flow, Textures, VertexData, Materials, bounds_from_positions, combined_mesh_bounds
 from sr_impex.definitions.collision_definitions import CollisionShape, BoxShape, SphereShape, CylinderShape, CGeoAABox, CGeoSphere, CGeoCylinder
 from sr_impex.definitions.obb_definitions import CGeoOBBTree, OBBNode
 from sr_impex.definitions.resource_definitions import Constraint, DrwResourceMeta
@@ -472,6 +479,8 @@ def split_meshes_by_uv_islands(meshes_collection: bpy.types.Collection) -> None:
 
 
 def set_origin_to_world_origin(meshes_collection: bpy.types.Collection) -> None:
+    cursor=bpy.context.scene.cursor.location.copy()
+    bpy.context.scene.cursor.location=(0.,0.,0.)
     for obj in meshes_collection.objects:
         if obj.type == "MESH":
             # Set the object's active scene to the current scene
@@ -483,37 +492,17 @@ def set_origin_to_world_origin(meshes_collection: bpy.types.Collection) -> None:
             # Deselect the object
             obj.select_set(False)
     # Move the cursor back to the world origin
-    bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
+    bpy.context.scene.cursor.location=cursor
 
 
 def get_bb(obj) -> Tuple[Vector3, Vector3]:
     """Get the Bounding Box of an Object. Returns the minimum and maximum Vector of the Bounding Box."""
-    bb_min = Vector3(0, 0, 0)
-    bb_max = Vector3(0, 0, 0)
-
-    if obj.type == "MESH":
-        for _vertex in obj.data.vertices:
-            _vertex = _vertex.co
-
-            if _vertex.x < bb_min.x:
-                bb_min.x = _vertex.x
-            if _vertex.y < bb_min.y:
-                bb_min.y = _vertex.y
-            if _vertex.z < bb_min.z:
-                bb_min.z = _vertex.z
-            if _vertex.x > bb_max.x:
-                bb_max.x = _vertex.x
-            if _vertex.y > bb_max.y:
-                bb_max.y = _vertex.y
-            if _vertex.z > bb_max.z:
-                bb_max.z = _vertex.z
-
-    return bb_min, bb_max
+    return bounds_from_positions(vertex.co for vertex in obj.data.vertices) if obj.type == "MESH" else bounds_from_positions(())
 
 
-def create_new_bf_scene(scene_type: str, collision_support: bool):
+def create_new_bf_scene(scene_type: str, collision_support: bool, model_name: str = ''):
     # Create the main collection with a name based on the scene type.
-    main_collection_name = f"DRSModel_{scene_type}_CHANGENAME"
+    main_collection_name = 'DRSModel_'+(model_name or f"{scene_type}_CHANGENAME")
     main_collection = bpy.data.collections.new(main_collection_name)
     bpy.context.scene.collection.children.link(main_collection)
 
@@ -538,44 +527,9 @@ def create_new_bf_scene(scene_type: str, collision_support: bool):
     # Add the empty object to the main collection.
     create_empty(main_collection)
 
-    list_paths = [
-        ("Battleforge Assets", resource_dir + "/assets"),
-    ]
-
-    offset = len(bpy.context.preferences.filepaths.asset_libraries)
-    index = offset
-
-    try:
-        for path in list_paths:
-            if offset == 0:
-                # Add them without any Checks
-                bpy.ops.preferences.asset_library_add(directory=path[1])
-                # give a name to your asset dir
-                bpy.context.preferences.filepaths.asset_libraries[index].name = path[0]
-                index += 1
-                logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
-            else:
-                for _, user_path in enumerate(
-                    bpy.context.preferences.filepaths.asset_libraries
-                ):
-                    if user_path.name != path[0]:
-                        bpy.ops.preferences.asset_library_add(directory=path[1])
-                        # give a name to your asset dir
-                        bpy.context.preferences.filepaths.asset_libraries[
-                            index
-                        ].name = path[0]
-                        index += 1
-                        logger.log(f"Added Asset Library: {path[0]}", "Info", "INFO")
-                        break
-                    else:
-                        logger.log(
-                            "Asset Library already exists: " + path[0], "Info", "INFO"
-                        )
-                        break
-    except Exception as e:  # pylint: disable=broad-except
-        logger.log(f"Error while adding Asset Libraries: {e}", "Error", "ERROR")
-
-    logger.display()
+    # Modern DRS materials are created by the Material Editor. The bundled
+    # legacy .blend asset library is not needed for a new model.
+    return main_collection
 
 
 def get_base_transform(coord_system) -> Matrix:
@@ -617,14 +571,6 @@ def get_base_transform_transposed(coord_system) -> Matrix:
     return transform
 
 
-def generate_bone_id(bone_name: str) -> int:
-    """Generate a unique bone ID based on the bone name."""
-    # Generate a unique ID for the bone based on its name
-    # This is a simple hash function, you can replace it with a more complex one if needed
-    bone_id = sum(ord(char) for char in bone_name) % (2**32 - 1)
-    return bone_id
-
-
 def load_static_bms_module(
     file_name: str, dir_name: str, parent_collection: bpy.types.Collection
 ):
@@ -649,12 +595,14 @@ def load_static_bms_module(
     # We shall have only one State Mesh
     if bms_file.state_based_mesh_set.num_mesh_states > 1:
         logger.log(
-            f"Warning [load_static_bms_module]: Multiple state meshes found in {file_name}. Only the first one will be used.",
+            f"Warning [load_static_bms_module]: Multiple state meshes found in {file_name}. Only initial state 0 will be imported.",
             "Warning",
             "WARNING",
         )
 
     for mesh_state in bms_file.state_based_mesh_set.mesh_states:
+        if mesh_state.state_id != 0 or mesh_state.version != 1 or not mesh_state.resource_file:
+            continue
         drs_file = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
         mesh_object, _ = create_mesh_object(
             drs_file, 0, dir_name, f"State_{mesh_state.state_num}", None
@@ -689,12 +637,14 @@ def load_animated_bms_module(
     # We shall have only one State Mesh
     if bms_file.state_based_mesh_set.num_mesh_states > 1:
         logger.log(
-            f"Warning [load_animated_bms_module]: Multiple state meshes found in {file_name}. Only the first one will be used.",
+            f"Warning [load_animated_bms_module]: Multiple state meshes found in {file_name}. Only initial state 0 will be imported.",
             "Warning",
             "WARNING",
         )
 
     for mesh_state in bms_file.state_based_mesh_set.mesh_states:
+        if mesh_state.state_id != 0 or mesh_state.version != 1 or not mesh_state.resource_file:
+            continue
         drs_file = DRS().read(os.path.join(dir_name, mesh_state.drs_file))
         armature_object, bone_list = setup_armature(
             mesh_state_collection, drs_file, "Locator_Wheel_"
@@ -783,18 +733,18 @@ def process_slocator_import(
     world_rot = local_rot.copy()
 
     # Depending on the Type we create a Marker or load a drs-file or ska-file
-    if slocator.class_type == "DestructiblePart" and slocator.file_name_length > 0:
+    if slocator.class_id == 1 and slocator.file_name_length > 0:
         locator_object = load_static_bms_module(
             slocator.file_name, dir_name, source_collection
         )
-    elif slocator.class_type == "Wheel":
+    elif slocator.class_id == 5:
         locator_object = load_animated_bms_module(
             slocator.file_name,
             dir_name,
             source_collection,
             smooth_animation,
         )
-    elif slocator.class_type == "Turret" and slocator.file_name_length > 0:
+    elif slocator.class_id == 3 and slocator.file_name_length > 0:
         load_turret_animation(
             slocator.file_name,
             dir_name,
@@ -851,7 +801,7 @@ def process_slocator_import(
         #             "WARNING"
                 # )
 
-    if not locator_object and slocator.class_type != "Turret":
+    if not locator_object and slocator.class_id != 3:
         logger.log(
             f"Warning [process_slocator_import]: Locator object for {slocator.class_type} not found, file: {slocator.file_name}."
         )
@@ -916,86 +866,29 @@ def export_meshset_state(meshset_collection: bpy.types.Collection, state_type: s
 
 
 def save_image_copy_as_png(img: bpy.types.Image, output_path: str, file_ending: str = None) -> None:
+    """Save a temporary RGBA copy, preserving independent data-map channels.
+
+    Never change the artist image's filepath, format, alpha mode or pixels.
+    Parameter maps loaded from DDS need the same copy path as generated maps.
     """
-    Save a COPY of `img` to `output_path` as PNG, without mutating `img`.
-    Uses numpy + foreach_get/foreach_set for speed and avoids odd states
-    in the original image by rebuilding a fresh 8-bit sRGB image.
-
-    Raises:
-        RuntimeError on failure (with a useful message).
-    """
-    # Ensure the image actually has pixel data
+    width, height = map(int, img.size[:])
+    if width <= 0 or height <= 0:
+        raise RuntimeError("Invalid image size")
+    pixels = np.empty(width * height * 4, dtype=np.float32)
+    img.pixels.foreach_get(pixels)
+    temporary = bpy.data.images.new("__drs_png_copy__", width=width, height=height,
+                                    alpha=True, float_buffer=False)
     try:
-        if hasattr(img, "reload") and not file_ending:
-            img.reload()
-    except Exception:
-        # non-fatal; continue
-        pass
-
-
-    created_temp_image = False
-    if file_ending == "_par":
-        new_img = img # we already have a copy
-    else:
-        if img.size[0] <= 0 or img.size[1] <= 0:
-            raise RuntimeError("Invalid image size.")
-
-        width, height = int(img.size[0]), int(img.size[1])
-
-        # Blender stores pixels as RGBA float32 in [0..1]; foreach_get is fastest with numpy
-        numel = width * height * 4  # RGBA
-        buf = np.empty(numel, dtype=np.float32)
-        img.pixels.foreach_get(buf)
-
-        # Create a new 8-bit image (PNG-friendly) and copy pixels
-        new_img = bpy.data.images.new(
-            name=f"__tmp_copy__{os.path.basename(output_path)}",
-            width=width,
-            height=height,
-            alpha=True,        # keep alpha; PNG supports it and RGBA buffer expects it
-            float_buffer=False # 8-bit per channel
-        )
-        created_temp_image = True
-
-    try:
-        if file_ending != "_par":
-            # Override Alpha Mode to Straight to avoid premult issues
-            new_img.alpha_mode = "STRAIGHT"
-
-            # colorspace: default to sRGB; try to mirror source if possible
-            try:
-                src_cs = getattr(img, "colorspace_settings", None)
-                if src_cs and src_cs.name:
-                    new_img.colorspace_settings.name = src_cs.name
-                else:
-                    new_img.colorspace_settings.name = "sRGB"
-            except Exception:
-                # best-effort; sRGB is fine
-                pass
-
-            new_img.pixels.foreach_set(buf)  # fast vectorized copy
-
-            # Save as PNG without touching the original image
-            new_img.file_format = "PNG"
-            # Older Blender versions may use color_mode to ensure alpha is written
-            try:
-                new_img.color_mode = "RGBA"
-            except Exception:
-                pass
-
+        temporary.colorspace_settings.name = img.colorspace_settings.name
+        temporary.alpha_mode = 'CHANNEL_PACKED'
+        temporary.file_format = 'PNG'
+        temporary.pixels.foreach_set(pixels)
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        new_img.save(filepath=os.path.abspath(output_path))
-
-        # Basic post-check to ensure file materialized
-        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-            raise RuntimeError("PNG not created or empty after save().")
+        temporary.save(filepath=os.path.abspath(output_path))
+        if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
+            raise RuntimeError("PNG was not created")
     finally:
-        # Clean up the temporary datablock
-        if created_temp_image:
-            try:
-                bpy.data.images.remove(new_img, do_unlink=True)
-            except Exception:
-                pass
+        bpy.data.images.remove(temporary)
 
 
 def _extract_cubemap_faces_to_pngs(
@@ -1261,7 +1154,6 @@ def convert_image_to_dds(
     args.extend(
         [
             "-y",
-            output_filename + ".dds",
             "-o",
             folder_path,
             temp_path,
@@ -1272,7 +1164,7 @@ def convert_image_to_dds(
 
     try:
         result = subprocess.run(
-            final_cmd,
+            args,
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -1291,11 +1183,10 @@ def convert_image_to_dds(
     # Construct the expected output DDS file path.
     output_path = os.path.join(folder_path, output_filename + ".dds")
 
-    # Check if output file exists; if so, override the return code to 0.
-    if os.path.exists(output_path):
-        ret_code = 0
-    else:
-        ret_code = result.returncode
+    # An older file must not hide a failed conversion.
+    ret_code = result.returncode
+    if ret_code == 0 and not os.path.exists(output_path):
+        ret_code = 1
 
     # Clean up the temporary PNG file.
     if os.path.exists(temp_path):
@@ -1363,7 +1254,8 @@ def get_converted_texture(
 ):
     # Select the appropriate cache based on the file ending.
     cache = get_cache_for_type(file_ending)
-    key = compute_texture_key(img)
+    key = (compute_texture_key(img), dxt_format, tuple(extra_args or ()),
+           str(mip_maps), os.path.abspath(folder_path), img.colorspace_settings.name)
 
     # print(f"Generating Key for {model_name} {file_ending}: {key}")
     if key in cache:
@@ -1967,12 +1859,15 @@ def add_skin_weights_to_mesh(
         )
         return
 
+    names_by_joint = {bone.get(SOURCE_INDEX, index): bone.name
+                      for index, bone in enumerate(armature_object.data.bones)}
     for vertex_index, vertex in enumerate(skined_vertices_data):
         for i in range(4):
             if vertex.raw_weights[i] > 0:
                 joint_index = vertex.bone_indices[i]
                 bone_index = joint_group.joints[joint_index]
-                bone_name = armature_object.data.bones[bone_index].name
+                # Blender's hierarchy order can differ from the DRS joint order.
+                bone_name = names_by_joint[bone_index]
                 if bone_name not in mesh_object.vertex_groups:
                     vertex_group = mesh_object.vertex_groups.new(name=bone_name)
                     vertex_group.add([vertex_index], vertex.raw_weights[i] / 255, "ADD")
@@ -1992,6 +1887,8 @@ def record_bind_pose(bone_list: list[DRSBone], armature: bpy.types.Armature) -> 
             matrix_local = (
                 armature_bone.parent.matrix_local.inverted_safe() @ matrix_local
             )
+        else:
+            matrix_local = super_parent_matrix(armature).inverted_safe() @ matrix_local
 
         bone_data.bind_loc = matrix_local.to_translation()
         bone_data.bind_rot = matrix_local.to_quaternion()
@@ -2031,6 +1928,8 @@ def create_bone_tree(armature_data: bpy.types.Armature,bone_list: list[DRSBone],
 
 def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
     bone_list: list[DRSBone] = []
+    skeleton_data.validate()
+    display_names = set()
 
     # Init the Bone List with empty DRSBone Objects
     for i in range(skeleton_data.bone_count):
@@ -2088,29 +1987,22 @@ def init_bones(skeleton_data: CSkSkeleton, suffix: str = None) -> list[DRSBone]:
         bone_list_item: DRSBone = bone_list[bone_data.identifier]
         bone_list_item.ska_identifier = bone_data.version
         bone_list_item.identifier = bone_data.identifier
-        bone_list_item.name = bone_data.name + (f"_{suffix}" if suffix else "")
+        display_name = display_bone_name(bone_data.name, bone_data.version)
+        if display_name in display_names:
+            prefix = display_name.encode("utf8")[:48].decode("utf8", errors="ignore")
+            display_name = f"{prefix}_{bone_data.version:08x}"
+        display_names.add(display_name)
+        bone_list_item.name = display_name + (f"_{suffix}" if suffix else "")
+        bone_list_item.source_name = bone_data.name
+        bone_list_item.extra_words = [bone_vertices[2].parent, bone_vertices[3].parent]
+        bone_list_item.parent = bone_vertices[0].parent
         bone_list_item.bone_matrix = bone_matrix
 
         # Set the Bone Children
         bone_list_item.children = bone_data.children
 
-        # Set the Bones Children's Parent ID
-        for j in range(bone_data.child_count):
-            child_id = bone_data.children[j]
-            bone_list[child_id].parent = bone_data.identifier
-
     # Order the Bones by Parent ID
     bone_list.sort(key=lambda x: x.identifier)
-
-    # Go through the Bone List find the bones without a parent
-    for bone in bone_list:
-        if bone.parent == -1 and bone.identifier != 0:
-            bone.parent = 0
-            logger.log(
-                "Bone {bone.name} has no parent, setting it to the root bone.",
-                "Info",
-                "INFO",
-            )
 
     # Return the BoneList
     return bone_list
@@ -2168,12 +2060,18 @@ def import_csk_skeleton(
     armature_collection.objects.link(armature_object)
     # Create the Skeleton
     bone_list = init_bones(drs_file.csk_skeleton)
+    values = tuple(drs_file.csk_skeleton.super_parent.matrix)
+    if len(values) == 4:
+        values = tuple(value for row in values for value in row)
+    armature_data[SUPER_PARENT] = list(values)
     # Directly set armature data to edit mode
     bpy.context.view_layer.objects.active = armature_object
 
     with ensure_mode("EDIT"):
         # Create the Bone Tree without using bpy.ops or context
-        create_bone_tree(armature_data, bone_list, bone_list[0])
+        for root_bone in bone_list:
+            if root_bone.parent == -1:
+                create_bone_tree(armature_data, bone_list, root_bone)
         # Parent the bones using the parent_index from the DRSBone objects
         edit_bones = armature_data.edit_bones
 
@@ -2188,7 +2086,20 @@ def import_csk_skeleton(
                 if child_bone and parent_bone:
                     child_bone.parent = parent_bone
 
-    # Your bind pose recording function is correct and should be called at the end.
+    for bone_data in bone_list:
+        bone = armature_data.bones[bone_data.name]
+        bone[SOURCE_NAME] = bone_data.source_name
+        bone[SOURCE_KEY] = f"{bone_data.ska_identifier:08x}"
+        bone[SOURCE_INDEX] = bone_data.identifier
+        if bone_data.children:
+            bone[SOURCE_CHILDREN] = list(bone_data.children)
+        bone[DISPLAY_NAME] = bone.name
+        bone[EXTRA_WORDS] = bone_data.extra_words
+        joint = drs_file.csk_skeleton.bone_matrices[bone_data.identifier]
+        bone[INV_REF_XYZ] = [value for row in joint.bone_vertices
+                             for value in (row.position.x, row.position.y, row.position.z)]
+        bone[IMPORTED_REST] = [value for row in bone.matrix_local for value in row]
+
     record_bind_pose(bone_list, armature_data)
 
     # auto_align_tails(armature_object)
@@ -2238,9 +2149,13 @@ def create_static_mesh(mesh_file: CDspMeshFile, mesh_index: int) -> bpy.types.Me
         vertices.append(vertex.position)
         normals.append(vertex.normal)
         # Negate the UVs Y Axis before adding them
-        uv_list.append((vertex.texture[0], -vertex.texture[1]))
+        uv_list.append((vertex.texture[0], -vertex.texture[1]) if len(vertex.texture) >= 2 else (0.0, 0.0))
 
     mesh_data.from_pydata(vertices, [], faces)
+    if battleforge_mesh_data.mesh_data[0].revision == 0x28001:
+        from sr_impex.utilities.vertex_colors import import_color_stream
+        import_color_stream(mesh_data,battleforge_mesh_data.mesh_data[0].vertices)
+        mesh_data['_sr_color_stream_count']=battleforge_mesh_data.mesh_count
     mesh_data.polygons.foreach_set("use_smooth", [True] * len(mesh_data.polygons))
     if bpy.app.version[:2] in [
         (3, 3),
@@ -2322,9 +2237,40 @@ def create_mesh_object(
     return mesh_object, mesh_data
 
 
+def _material_control_states(mesh_object):
+    flow = getattr(mesh_object, 'drs_flow', None)
+    wind = getattr(mesh_object, 'drs_wind', None)
+    flow_state = None if flow is None else {
+        'use_flow': bool(flow.use_flow),
+        'max_flow_speed': list(flow.max_flow_speed),
+        'min_flow_speed': list(flow.min_flow_speed),
+        'flow_speed_change': list(flow.flow_speed_change),
+        'flow_scale': list(flow.flow_scale),
+    }
+    wind_state = None if wind is None else {
+        'wind_response': float(wind.wind_response),
+        'wind_height': float(wind.wind_height),
+    }
+    material = getattr(mesh_object, 'active_material', None)
+    color_node = _find_by_label(material, 'RGB', 'Refraction Color')
+    image_node = _find_by_label(material, 'TEX_IMAGE', 'Refraction Map (_ref)')
+    image = getattr(image_node, 'image', None) if image_node else None
+    flags = getattr(mesh_object, 'drs_material', None)
+    refraction_state = {
+        'color': list(color_node.outputs[0].default_value) if color_node and color_node.outputs else None,
+        'image_name': image.name if image else None,
+        'image_path': image.filepath if image else None,
+        'use_ref_map': bool(getattr(flags, 'use_ref_map', False)) if flags else False,
+        'use_env_map': bool(getattr(flags, 'use_env_map', False)) if flags else False,
+        'bit_18': bool(int(getattr(flags, 'bool_parameter', 0)) & (1 << 18)) if flags else False,
+    }
+    return flow_state, wind_state, refraction_state
+
+
 def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh_index: int):
     # after you've created `mesh_object` for mesh index `mesh_index`…
     # Seed Material flags + Flow custom props on the object so users can edit them.
+    mesh_object["_drs_material_importing"] = True
     try:
         bf_mesh = drs_file.cdsp_mesh_file.meshes[mesh_index]
         # bool_parameter
@@ -2339,8 +2285,11 @@ def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh
         # flow
         if hasattr(mesh_object, "drs_flow") and mesh_object.drs_flow:
             fl = bf_mesh.flow
-            # flow.length==4 indicates it is present in -86061050 branch
-            use = int(getattr(fl, "length", 0) or 0) == 4
+            # Flow is a generic vector list; only the Default handler uses these
+            # four IDs as flow controls. Older blocks do not contain this list.
+            use = (bf_mesh.material_id & 0xffff) == 0x6466 and bf_mesh.material_parameters == -86061050 and any(
+                identifier in (1668707377,1668707378,1668707379,1668707380)
+                for identifier, _ in fl.entries)
             mesh_object.drs_flow.use_flow = use
             if use:
                 mesh_object.drs_flow.max_flow_speed = (
@@ -2370,7 +2319,7 @@ def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh
 
             _update_flow_nodes(mesh_object.drs_flow)
         # wind
-        if hasattr(mesh_object, "drs_wind") and mesh_object.drs_wind:
+        if (bf_mesh.material_id & 0xffff) == 0x6466 and hasattr(mesh_object, "drs_wind") and mesh_object.drs_wind:
             # get data from materials list
             wind_response = 0.0
             wind_height = 0.0
@@ -2384,8 +2333,17 @@ def setup_material_parameters(mesh_object: bpy.types.Object, drs_file: DRS, mesh
             # Update geometry nodes with imported values
             _update_wind_nodes(mesh_object.drs_wind)
     except Exception:
-        # keep import robust if the PGs are not available for some reason
+        # Keep import robust if legacy property groups are unavailable.
         pass
+    finally:
+        from sr_impex.blender.editors.material_editor import modern, hydrate_object_flow
+        if modern(mesh_object.active_material):
+            hydrate_object_flow(mesh_object, drs_file.cdsp_mesh_file.meshes[mesh_index])
+        if "_drs_material_importing" in mesh_object:
+            del mesh_object["_drs_material_importing"]
+    from sr_impex.blender.editors.material_editor import modern, sync_object
+    if modern(mesh_object.active_material):
+        sync_object(mesh_object)
 
 
 def setup_armature(source_collection, drs_file: DRS, locator_prefix: str = ""):
@@ -2440,9 +2398,11 @@ def create_material(
                 case 1668510770:
                     drs_material.set_flumap(texture.name, dir_name)
 
-    if mesh_object:
+    if mesh_object and (mesh_data.material_id & 0xffff) == 0x6466:
         drs_material.create_wind_nodes(mesh_object)
 
+    from sr_impex.blender.editors.material_editor import import_settings
+    import_settings(drs_material.material, mesh_data, dir_name)
     return drs_material.material
 
 
@@ -2495,6 +2455,7 @@ def create_collision_shape_box_object(
 
     # Display the object as wired
     box_object.display_type = "WIRE"
+    box_object.hide_render = True
 
     return box_object
 
@@ -2527,6 +2488,7 @@ def create_collision_shape_sphere_object(
 
     # Display the object as wired
     sphere_object.display_type = "WIRE"
+    sphere_object.hide_render = True
 
     return sphere_object
 
@@ -2571,6 +2533,7 @@ def create_collision_shape_cylinder_object(
 
     # Display the object as wired
     cylinder_object.display_type = "WIRE"
+    cylinder_object.hide_render = True
 
     return cylinder_object
 
@@ -2591,12 +2554,6 @@ def import_collision_shapes(
             drs_file.collision_shape.boxes[_], _
         )
         box_collection.objects.link(box_object)
-        # TODO: WORKAROUND: Make the Box's Z-Location negative to flip the Axis
-        box_object.location = (
-            box_object.location.x,
-            box_object.location.y,
-            -box_object.location.z,
-        )
 
     # Create a Sphere Collection to store the Sphere Objects
     sphere_collection: bpy.types.Collection = bpy.data.collections.new(
@@ -2899,14 +2856,28 @@ def load_drs(
     dir_name = os.path.dirname(filepath)
     drs_file: DRS = DRS().read(filepath)
 
+    from sr_impex.blender.effect_preview import stop_other_audio
+    stop_other_audio(context.scene)
     source_collection: bpy.types.Collection = bpy.data.collections.new(
         "DRSModel_" + base_name
     )
     context.scene.collection.children.link(source_collection)
 
     persist_locator_blob_on_collection(source_collection, drs_file)
+    from sr_impex.utilities.building_export import persist_resource
+    persist_resource(source_collection,filepath,drs_file)
+    source_collection['_sr_format']='DRS'
+    source_collection['_sr_node_inventory']=json.dumps([n.name for n in drs_file.nodes[1:]])
+    if drs_file.collision_shape is not None:
+        from sr_impex.utilities.resource_container import payload_bytes
+        source_collection['_sr_preserved_collision']=payload_bytes(drs_file.collision_shape).hex()
     persist_animset_blob_on_collection(source_collection, drs_file)
     persist_effect_blob_on_collection(source_collection, drs_file)
+    if drs_file.drw_resource_meta is not None:
+        meta = drs_file.drw_resource_meta
+        source_collection[RESOURCE_META] = json.dumps({
+            "version": meta.version, "resource_class": meta.resource_class, "identifier": meta.hash,
+        })
 
     armature_object, bone_list = setup_armature(source_collection, drs_file)
 
@@ -2921,6 +2892,13 @@ def load_drs(
             drs_file, mesh_index, dir_name, base_name, armature_object
         )
         setup_material_parameters(mesh_object, drs_file, mesh_index)
+        try:
+            flow_state, wind_state, refraction_state = _material_control_states(mesh_object)
+            mesh_object[METADATA_KEY] = capture_metadata(
+                drs_file.cdsp_mesh_file.meshes[mesh_index], flow_state, wind_state, refraction_state
+            )
+        except (ValueError, TypeError, OSError) as exc:
+            logger.log(f"Could not preserve imported material data for {mesh_object.name}: {exc}", "Warning", "WARNING")
         mesh_collection.objects.link(mesh_object)
         imported_mesh_objects.append(mesh_object)
 
@@ -3200,7 +3178,7 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
     def pca_axes(points: np.ndarray):
         c = points.mean(axis=0)
         xx = points - c
-        _uu, _ss, vt = np.linalg.svd(xx, full_matrices=False)
+        _uu, _ss, vt = np.linalg.svd(xx, full_matrices=len(points)<3)
         aa = vt.T
         if np.linalg.det(aa) < 0:
             aa[:, 2] *= -1.0
@@ -3353,13 +3331,14 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
         node.second_child_index = 0
         node.skip_pointer = 0
         node.node_depth = depth
-        node.triangle_offset = 0
+        node.triangle_offset = len(face_order)
         node.total_triangles = int(len(face_idx))
 
         my = len(nodes)
         nodes.append(node)
 
         if len(face_idx) <= MIN_TRIS or depth >= MAX_DEPTH:
+            face_order.extend(face_idx.tolist())
             return my
 
         axis_id = int(np.argmax(eeee))
@@ -3374,6 +3353,7 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
             order = np.argsort(vals)
             half = len(order) // 2
             if half == 0:
+                face_order.extend(face_idx.tolist())
                 return my
             left_idx = face_idx[order[:half]]
             right_idx = face_idx[order[half:]]
@@ -3385,15 +3365,23 @@ def create_cgeo_obb_tree(unified_mesh: bpy.types.Mesh) -> CGeoOBBTree:
         return my
 
     nodes: list[OBBNode] = []
+    face_order=[]
     all_faces = np.arange(tri_count, dtype=np.int32)
     build(all_faces, 0, nodes)
+    if len(nodes)>65535:raise ValueError('OBB tree exceeds the 16-bit node index limit')
+    def wire(index,skip):
+        node=nodes[index];node.skip_pointer=skip
+        if node.first_child_index:
+            wire(node.first_child_index,node.second_child_index)
+            wire(node.second_child_index,skip)
+    wire(0,0)
 
     tree = CGeoOBBTree()
     tree.matrix_count = len(nodes)
     tree.obb_nodes = nodes
     tree.triangle_count = tri_count
     out_faces = []
-    for a, b, c in tris:
+    for a, b, c in tris[face_order]:
         _face = Face()
         _face.indices = [int(a), int(b), int(c)]
         out_faces.append(_face)
@@ -3713,13 +3701,27 @@ def create_mesh(
     new_mesh.face_count = len(mesh.data.polygons)
     new_mesh.faces = []
 
-    new_mesh.mesh_count = 2 if not add_skin_mesh else 3
+    from sr_impex.utilities.vertex_colors import COLOR_ATTRIBUTE,COLOR_STREAM_KEY,color_stream_bytes
+    use_color_stream=bool(mesh.data.get(COLOR_STREAM_KEY,False))
+    color_attribute=mesh.data.color_attributes.get(COLOR_ATTRIBUTE) if use_color_stream else None
+    if use_color_stream and (not color_attribute or color_attribute.domain!='POINT'):
+        raise ValueError(f"{mesh.name}: SR Color0 must be a point-domain color attribute")
+    if use_color_stream and add_skin_mesh:
+        raise ValueError(f"{mesh.name}: skinned 0x28001 color streams are not yet verified")
+    if use_color_stream and mesh.data.get('_sr_color_stream_count',1)!=1:
+        raise ValueError(f"{mesh.name}: multi-stream 0x28001 export is not yet verified")
+    if use_color_stream:
+        from sr_impex.blender.editors.material_editor import modern
+        material=mesh.active_material
+        if not modern(material) or material.drs_settings.material_type not in ('Textured','SimpleTextured'):
+            raise ValueError(f"{mesh.name}: 0x28001 export currently requires Textured or SimpleTextured material")
+    new_mesh.mesh_count = 1 if use_color_stream else (2 if not add_skin_mesh else 3)
     new_mesh.mesh_data = []
 
     _mesh_0_data = MeshData()
     _mesh_0_data.vertices = [Vertex() for _ in range(new_mesh.vertex_count)]
-    _mesh_0_data.revision = 133121
-    _mesh_0_data.vertex_size = 32
+    _mesh_0_data.revision = 163841 if use_color_stream else 133121
+    _mesh_0_data.vertex_size = 24 if use_color_stream else 32
 
     _mesh_1_data = MeshData()
     _mesh_1_data.vertices = [Vertex() for _ in range(new_mesh.vertex_count)]
@@ -3743,7 +3745,8 @@ def create_mesh(
             uv = mesh.data.uv_layers.active.data[index].uv.copy()
             uv.y = -uv.y
             _mesh_0_data.vertices[vertex.vertex_index] = Vertex(
-                position=position, normal=normal, texture=uv
+                position=position, normal=normal, texture=uv,
+                diffuse=color_stream_bytes(color_attribute,vertex.vertex_index) if use_color_stream else [0,0,0,0]
             )
 
             if new_mesh.mesh_count > 1:
@@ -3758,12 +3761,16 @@ def create_mesh(
             if add_skin_mesh:
                 weights = []
                 bone_indices = []
+                weight_sum = 0.0
+                influence_count = 0
                 for group in vertex2.groups:
                     # only if weight > 0.0
                     if group.weight <= 0.0:
                         continue
                     # Weight is between 0.0 and 1.0, we need to convert it to 0-255
                     weight = int(group.weight * 255)
+                    weight_sum += group.weight
+                    influence_count += 1
                     bone_name = mesh.vertex_groups[group.group].name
                     local_index = group.group
                     # We need to use local_index and bone_name and map them into the JointMap
@@ -3789,6 +3796,13 @@ def create_mesh(
                         weights.pop(min_weight_index)
                         bone_indices.pop(min_weight_index)
 
+                # Keep a normalized float skin normalized after conversion to
+                # UNORM8. Assign only the rounding remainder to the strongest
+                # influence; unweighted or non-normalized inputs are not guessed.
+                if influence_count <= 4 and abs(weight_sum-1.0)<1e-5 and sum(weights):
+                    strongest=max(range(4),key=lambda i:weights[i])
+                    weights[strongest]+=255-sum(weights)
+
                 _mesh_2_data.vertices[vertex.vertex_index] = Vertex(
                     raw_weights=weights, bone_indices=bone_indices
                 )
@@ -3798,7 +3812,7 @@ def create_mesh(
         new_mesh.faces.append(new_face)
 
     new_mesh.mesh_data.append(_mesh_0_data)
-    new_mesh.mesh_data.append(_mesh_1_data)
+    if not use_color_stream:new_mesh.mesh_data.append(_mesh_1_data)
     if add_skin_mesh:
         new_mesh.mesh_data.append(_mesh_2_data)
 
@@ -3807,6 +3821,10 @@ def create_mesh(
         new_mesh.bounding_box_lower_left_corner,
         new_mesh.bounding_box_upper_right_corner,
     ) = get_bb(mesh)
+    from sr_impex.blender.editors.material_editor import modern, export_material
+    if modern(mesh.active_material):
+        export_material(mesh, new_mesh, mesh_index, model_name, folder_path, mip_maps, get_converted_texture)
+        return new_mesh, per_mesh_bone_data
     new_mesh.material_id = 25702
 
     # Gather user flags
@@ -3880,6 +3898,14 @@ def create_mesh(
     has_refraction_map = ref_img_node is not None
     has_env_cubemap = env_cubemap_image is not None
     effective_bit_18 = (use_refraction_map and has_refraction_map) or (use_env_map and has_env_cubemap)
+
+    if use_refraction_map and has_refraction_map and not use_env_map:
+        logger.log(
+            f"Mesh {mesh.name}: exporting the refraction map also sets bit 18, "
+            "which the Default engine material registers as UseEnvironmentMap. "
+            "Review the resulting material in the editor.",
+            "Warning", "WARNING",
+        )
 
     if use_refraction_map and not has_refraction_map:
         logger.log(
@@ -3987,7 +4013,9 @@ def create_mesh(
     # --- SR override Flow from UI (only when enabled)
     try:
         fp = getattr(mesh, "drs_flow", None)
-        if fp and bool(fp.use_flow):
+        if fp and not bool(fp.use_flow):
+            new_mesh.flow.length = 0
+        elif fp and bool(fp.use_flow):
             new_mesh.flow.length = 4
             # push vectors
             v = new_mesh.flow
@@ -4037,7 +4065,7 @@ def create_mesh(
     new_mesh.refraction = refraction
 
     # Materials
-    # Almost no material data is used in the game, so we set it to defaults
+    # Defaults are used for new meshes; imported values are restored below.
     new_mesh.materials = Materials()
 
     # --- SR override Wind from UI
@@ -4056,6 +4084,28 @@ def create_mesh(
             "Warning",
             "WARNING",
         )
+
+    if METADATA_KEY in mesh:
+        try:
+            flow_state, wind_state, refraction_state = _material_control_states(mesh)
+            missing = missing_texture_ids(new_mesh, mesh[METADATA_KEY])
+            if missing:
+                ids = ', '.join(f'0x{identifier & 0xffffffff:08X}' for identifier in missing)
+                logger.log(
+                    f"Mesh {mesh.name}: original named texture slots {ids} are absent from the export. "
+                    "Some may have been deliberately disabled; check the material and texture settings.",
+                    "Warning", "WARNING",
+                )
+            restored = restore_metadata(new_mesh, mesh[METADATA_KEY], flow_state, wind_state, refraction_state)
+            if not restored:
+                source_id = json.loads(mesh[METADATA_KEY]).get('material_id')
+                logger.log(
+                    f"Mesh {mesh.name} used original material type {source_id}; export uses type {new_mesh.material_id}. "
+                    "The original material-specific parameters were not reused because their meaning may differ.",
+                    "Warning", "WARNING",
+                )
+        except (ValueError, TypeError, KeyError, OSError) as exc:
+            raise ValueError(f"Could not restore imported material data for {mesh.name}: {exc}") from exc
 
     return new_mesh, per_mesh_bone_data
 
@@ -4101,35 +4151,8 @@ def create_cdsp_mesh_file(
         )
         return None, None
 
-    _cdsp_meshfile.bounding_box_lower_left_corner = Vector3(0, 0, 0)
-    _cdsp_meshfile.bounding_box_upper_right_corner = Vector3(0, 0, 0)
-
-    for _mesh in _cdsp_meshfile.meshes:
-        _cdsp_meshfile.bounding_box_lower_left_corner.x = min(
-            _cdsp_meshfile.bounding_box_lower_left_corner.x,
-            _mesh.bounding_box_lower_left_corner.x,
-        )
-        _cdsp_meshfile.bounding_box_lower_left_corner.y = min(
-            _cdsp_meshfile.bounding_box_lower_left_corner.y,
-            _mesh.bounding_box_lower_left_corner.y,
-        )
-        _cdsp_meshfile.bounding_box_lower_left_corner.z = min(
-            _cdsp_meshfile.bounding_box_lower_left_corner.z,
-            _mesh.bounding_box_lower_left_corner.z,
-        )
-
-        _cdsp_meshfile.bounding_box_upper_right_corner.x = max(
-            _cdsp_meshfile.bounding_box_upper_right_corner.x,
-            _mesh.bounding_box_upper_right_corner.x,
-        )
-        _cdsp_meshfile.bounding_box_upper_right_corner.y = max(
-            _cdsp_meshfile.bounding_box_upper_right_corner.y,
-            _mesh.bounding_box_upper_right_corner.y,
-        )
-        _cdsp_meshfile.bounding_box_upper_right_corner.z = max(
-            _cdsp_meshfile.bounding_box_upper_right_corner.z,
-            _mesh.bounding_box_upper_right_corner.z,
-        )
+    (_cdsp_meshfile.bounding_box_lower_left_corner,
+     _cdsp_meshfile.bounding_box_upper_right_corner) = combined_mesh_bounds(_cdsp_meshfile.meshes)
 
     return _cdsp_meshfile, mesh_bone_data
 
@@ -4396,6 +4419,9 @@ def create_collision_shape(meshes_collection: bpy.types.Collection) -> Collision
     collision_collection = get_collection(
         meshes_collection, "CollisionShapes_Collection"
     )
+    if collision_collection is None:
+        raw=meshes_collection.get('_sr_preserved_collision')
+        return CollisionShape().read(BytesIO(bytes.fromhex(raw))) if raw else CollisionShape()
     for child in collision_collection.children:
         if child.name.startswith("Boxes_Collection"):
             if len(child.objects) > 0:
@@ -4424,7 +4450,7 @@ def create_skin_info(
     unified_mesh: bpy.types.Mesh,
     meshes_collection: bpy.types.Collection,
     bone_map: Dict[str, Dict[str, int]],
-) -> CSkSkinInfo:
+) -> Optional[CSkSkinInfo]:
     """Create CSkSkinInfo by matching vertices in the same space as unified_mesh."""
     skin_info = CSkSkinInfo()
     skin_info.vertex_count = len(unified_mesh.vertices)
@@ -4440,12 +4466,11 @@ def create_skin_info(
         )
         if key in unified_hashtable:
             logger.log(
-                f"Duplicate vertex found in unified mesh: {v.co}", "Error", "ERROR"
+                f"Vertices in the unified mesh have indistinguishable rounded positions: {v.co}. "
+                "Separate or merge these vertices before export; skin data cannot be matched safely.",
+                "Skin Info Error", "ERROR"
             )
-            skin_info.vertex_data = [
-                VertexData(bone_indices=[0, 0, 0, 0], weights=[0.0, 0.0, 0.0, 0.0])
-            ] * skin_info.vertex_count
-            return skin_info
+            return None
         unified_hashtable[key] = v.index
 
     # Build KDTree as a robust fallback (handles tiny weld shifts from remove_doubles)
@@ -4456,6 +4481,7 @@ def create_skin_info(
 
     vertex_data: list[VertexData | None] = [None] * skin_info.vertex_count
     misses = 0
+    conflicting = 0
 
     for obj in meshes_collection.objects:
         if obj.type != "MESH":
@@ -4484,9 +4510,7 @@ def create_skin_info(
                     continue
                 idx = kd_idx
 
-            if vertex_data[idx] is None:
-                vertex_data[idx] = VertexData(bone_indices=[], weights=[])
-
+            candidate = {}
             for g in v.groups:
                 if g.weight <= 0.0:
                     continue
@@ -4500,9 +4524,19 @@ def create_skin_info(
                     )
                     continue
                 bone_id = bone_info["id"]
-                if bone_id not in vertex_data[idx].bone_indices:
-                    vertex_data[idx].bone_indices.append(bone_id)
-                    vertex_data[idx].weights.append(g.weight)
+                candidate[bone_id] = g.weight
+            current=vertex_data[idx]
+            if current is None:
+                vertex_data[idx]=VertexData(bone_indices=list(candidate),weights=list(candidate.values()))
+            else:
+                existing=dict(zip(current.bone_indices,current.weights))
+                if set(existing)!=set(candidate) or any(abs(existing[bone]-weight)>1e-5
+                                                        for bone,weight in candidate.items() if bone in existing):
+                    conflicting+=1
+                    # An empty first occurrence should not discard a weighted
+                    # occurrence; otherwise retain the first complete weight set.
+                    if not existing and candidate:
+                        vertex_data[idx]=VertexData(bone_indices=list(candidate),weights=list(candidate.values()))
 
     if misses > 20:
         logger.log(
@@ -4510,6 +4544,12 @@ def create_skin_info(
             "Warning",
             "WARNING",
         )
+
+    if conflicting:
+        logger.log(f"{conflicting} coincident vertices have different bone weights. "
+                   "The welded CGeo skin can store only one set at each position; "
+                   "the first weighted set is used. Check the collision/query mesh in the editor.",
+                   "Skin Weight Conflict", "WARNING")
 
     # Normalize to 4 influences per vertex (pad/truncate) — unchanged
     for i, vd in enumerate(vertex_data):
@@ -4544,12 +4584,11 @@ def create_skeleton(
 
     # bones are ordered by their version number, starting with the lowest version number
     unordered_bones = []
+    identities = export_bone_identities(armature_object.data.bones, bones_list)
+    if SUPER_PARENT in armature_object.data:
+        csk_skeleton.super_parent.matrix = tuple(armature_object.data[SUPER_PARENT])
     for bone in armature_object.data.bones:
-        # Get the Version from the version List
-        version = bones_list.get(bone.name, -1)
-        if version == -1:
-            # Create a new version number for the bone
-            version = generate_bone_id(bone.name)
+        version = identities[bone.name]["key"]
         # Insert the bone into the list, sorted by version number
         unordered_bones.append((bone.name, version))
     # Sort the bones by version number
@@ -4559,8 +4598,8 @@ def create_skeleton(
     for bone_name, version in unordered_bones:
         drs_bone = Bone()
         armature_bone: bpy.types.Bone = armature_object.data.bones[bone_name]
-        drs_bone.name = bone_name
-        drs_bone.name_length = len(bone_name)
+        drs_bone.name = identities[bone_name]["name"]
+        drs_bone.name_length = len(drs_bone.name.encode("utf-8"))
         drs_bone.version = version
         drs_bone.identifier = bone_map[bone_name]["id"]
         drs_bone.child_count = len(armature_bone.children)
@@ -4568,10 +4607,17 @@ def create_skeleton(
         drs_bone.children = [
             bone_map[child.name]["id"] for child in armature_bone.children
         ]
+        original_children = armature_bone.get(SOURCE_CHILDREN)
+        if (original_children is not None and
+                armature_bone.get(SOURCE_INDEX) == drs_bone.identifier and
+                all(child.get(SOURCE_INDEX) == bone_map[child.name]["id"]
+                    for child in armature_bone.children) and
+                sorted(original_children) == sorted(drs_bone.children)):
+            drs_bone.children = list(original_children)
         csk_skeleton.bones.append(drs_bone)
         csk_skeleton.bone_count += 1
 
-    for bone_name, _ in bone_map.items():
+    for bone_name, _ in sorted(bone_map.items(), key=lambda item: item[1]["id"]):
         # Get the Bone from the armature object
         armature_bone: bpy.types.Bone = armature_object.data.bones[bone_name]
         if armature_bone is None:
@@ -4589,6 +4635,16 @@ def create_skeleton(
         vec_0 = rot[0].copy()
         vec_1 = rot[1].copy()
         vec_2 = rot[2].copy()
+        # Blender reconstructs orientation from head/tail/roll and can round it.
+        # Preserve the original engine inverse reference if the rest bone is untouched.
+        imported_rest = armature_bone.get(IMPORTED_REST)
+        original_xyz = armature_bone.get(INV_REF_XYZ)
+        current_rest = tuple(value for row in rest_mat for value in row)
+        if (imported_rest is not None and tuple(imported_rest) == current_rest and
+                original_xyz is not None and len(original_xyz) == 12):
+            vec_0, vec_1, vec_2, vec_3 = (
+                Vector(original_xyz[i:i + 3]) for i in range(0, 12, 3)
+            )
 
         bone_vertex_0 = BoneVertex()
         bone_vertex_0.position = Vector3(vec_0.x, vec_0.y, vec_0.z)
@@ -4612,7 +4668,7 @@ def create_skeleton(
         # Here we need the index of the bone in our csk_skeleton.bones Array
         bone_name = armature_bone.name
         bone_index = next(
-            (i for i, b in enumerate(csk_skeleton.bones) if b.name == bone_name),
+            (i for i, b in enumerate(csk_skeleton.bones) if b.identifier == bone_map[bone_name]["id"]),
             None,
         )
         if bone_index is None:
@@ -4627,11 +4683,12 @@ def create_skeleton(
 
         bone_vertex_2 = BoneVertex()
         bone_vertex_2.position = Vector3(vec_2.x, vec_2.y, vec_2.z)
-        bone_vertex_2.parent = 0  # Maybe always 0?
+        extra_words = armature_bone.get(EXTRA_WORDS, (0, 0))
+        bone_vertex_2.parent = int(extra_words[0])
 
         bone_vertex_3 = BoneVertex()
         bone_vertex_3.position = Vector3(vec_3.x, vec_3.y, vec_3.z)
-        bone_vertex_3.parent = 0  # Maybe always 0?
+        bone_vertex_3.parent = int(extra_words[1])
 
         bone_matrix = BoneMatrix()
         bone_matrix.bone_vertices = [
@@ -4679,15 +4736,10 @@ def create_animation_set(model_name: str, armature_object: bpy.types.Object, bon
     anim.mode_animation_keys = []
     anim.mode_animation_key_count = 0
 
-    # sensible defaults (these are the same values you previously emitted)
-    anim.default_run_speed = 4.8
-    anim.default_walk_speed = 2.3
-    anim.mode_change_type = 0
-    anim.hovering_ground = 0
-    anim.fly_bank_scale = 1.0
-    anim.fly_accel_scale = 0.0
-    anim.fly_hit_scale = 1.0
-    anim.allign_to_terrain = 0
+    # Match the runtime constructors, including attributes absent in old revisions.
+    from sr_impex.utilities.animation_profiles import BASIC_DEFAULTS
+    for name, value in BASIC_DEFAULTS.items():
+        setattr(anim, 'allign_to_terrain' if name == 'align_to_terrain' else name, value)
 
     # ---- try to read blob from the active model --------------------------------------------------
     col = source_collection_for_blob
@@ -4847,8 +4899,9 @@ def create_animation_set(model_name: str, armature_object: bpy.types.Object, bon
     anim.atlas_count = len(atlases)
 
 
-    # ---- Fallback if no blob or no valid variants -----------------------------------------------
-    if anim.mode_animation_key_count == 0:
+    # Auto-discover only for legacy models without authored AnimationSet data.
+    # An explicit empty set (or unassigned starter layout) must stay empty.
+    if not blob:
         # previous behavior: pick actions by name and synthesize a single key
         all_actions = get_actions()
         available_action: list[str] = []
@@ -4895,7 +4948,7 @@ def create_animation_set(model_name: str, armature_object: bpy.types.Object, bon
     return anim
 
 
-def create_animation_timings() -> Optional[AnimationTimings]:
+def create_animation_timings(source_collection=None) -> Optional[AnimationTimings]:
     """
     Build AnimationTimings for export from the AnimationSetJSON blob.
     Returns None if no timings are present so the caller can skip writing.
@@ -4930,14 +4983,14 @@ def create_animation_timings() -> Optional[AnimationTimings]:
         except Exception:
             return {}
 
-    col = _active_top_drsmodel()
+    col = source_collection or _active_top_drsmodel()
     if not col:
         return None
 
     blob = _read_blob(col)
     timings_list = blob.get("timings") or []
     if not timings_list:
-        return None
+        return AnimationTimings()
 
     # Use the existing helper to map blob -> AnimationTimings
     return blob_to_animationtimings({"timings": timings_list})
@@ -4949,18 +5002,18 @@ def create_bone_map(
     """Create a bone map from the armature object."""
     # We need to start at the root bone and go down the hierarchy
     bone_map = {}
+    source_indices = [bone.get(SOURCE_INDEX, -1) for bone in armature_object.data.bones]
+    if (sorted(source_indices) == list(range(len(source_indices))) and
+            all(not bone.parent or bone.parent[SOURCE_INDEX] < bone[SOURCE_INDEX]
+                for bone in armature_object.data.bones)):
+        for bone in sorted(armature_object.data.bones, key=lambda bone: bone[SOURCE_INDEX]):
+            bone_map[bone.name] = {"id": bone[SOURCE_INDEX],
+                                   "parent": bone.parent[SOURCE_INDEX] if bone.parent else -1}
+        return bone_map
     root_bones = [bone for bone in armature_object.data.bones if not bone.parent]
     if not root_bones:
         logger.log("No root bone found in the armature.", "Error", "ERROR")
         return bone_map
-    if len(root_bones) > 1:
-        logger.log(
-            "Multiple root bones found in the armature. Only the first one will be used.",
-            "Warning",
-            "WARNING",
-        )
-
-    root_bone = root_bones[0]
     index = 0
 
     def traverse_bone(bone: bpy.types.Bone, parent_id: Optional[int]):
@@ -4973,8 +5026,40 @@ def create_bone_map(
         for child in bone.children:
             traverse_bone(child, current_id)
 
-    traverse_bone(root_bone, -1)
+    for root_bone in root_bones:
+        traverse_bone(root_bone, -1)
     return bone_map
+
+
+def prepare_export_skin_weights(mesh_object, bone_names):
+    """Normalize up to four skeleton influences on the temporary export mesh.
+
+    Vertex groups used for masks or other Blender modifiers are not bone
+    influences. Remove them only from this export copy, so they cannot displace
+    a bone when limiting weights or enter either DRS skin representation.
+    Returns counts for artist-facing diagnostics; unweighted vertices are not
+    assigned a guessed bone.
+    """
+    groups=mesh_object.vertex_groups
+    removed=[group.name for group in groups if group.name not in bone_names]
+    for group in list(groups):
+        if group.name not in bone_names:groups.remove(group)
+    limited=normalized=unweighted=0
+    for vertex in mesh_object.data.vertices:
+        influences=sorted(((membership.group,membership.weight) for membership in vertex.groups
+                           if membership.weight>0.0),key=lambda item:(-item[1],item[0]))
+        if not influences:
+            unweighted+=1
+            continue
+        selected=influences[:4]
+        total=sum(weight for _,weight in selected)
+        if len(influences)>4:
+            limited+=1
+            for index,_ in influences[4:]:groups[index].remove([vertex.index])
+        if abs(total-1.0)>1e-6:
+            normalized+=1
+            for index,weight in selected:groups[index].add([vertex.index],weight/total,'REPLACE')
+    return {'removed_groups':removed,'limited':limited,'normalized':normalized,'unweighted':unweighted}
 
 
 def update_mesh_file_root_reference(
@@ -5089,6 +5174,7 @@ def export_ska_actions_all(
     context: bpy.types.Context,
     ska_name_map: dict[str, str] | None = None,
     export_tangents: bool = True,
+    armature: bpy.types.Object = None,
 ):
     """
     Exportiere alle SKA-Dateien, die im Animation-Blob referenziert werden.
@@ -5123,9 +5209,30 @@ def export_ska_actions_all(
         mapped_name = (ska_name_map or {}).get(export_key)
         final_base = mapped_name or base
 
-        export_ska(context, os.path.join(folder_path, final_base), act_name, export_tangents=export_tangents)
+        export_ska(context, os.path.join(folder_path, final_base), act_name,
+                   export_tangents=export_tangents, armature=armature)
 
 
+def _isolated_export(function):
+    from functools import wraps
+    @wraps(function)
+    def run(context,*args,**kwargs):
+        selected=list(context.selected_objects);active=context.view_layer.objects.active
+        cursor=context.scene.cursor.location.copy()
+        # Blender edit/origin operators act on selected objects, not only the
+        # active export copy. Never leave source meshes in that selection.
+        for obj in selected:obj.select_set(False)
+        try:return function(context,*args,**kwargs)
+        finally:
+            for obj in list(context.selected_objects):obj.select_set(False)
+            for obj in selected:
+                if bpy.data.objects.get(obj.name)==obj:obj.select_set(True)
+            if active and bpy.data.objects.get(active.name)==active:context.view_layer.objects.active=active
+            context.scene.cursor.location=cursor
+    return run
+
+
+@_isolated_export
 def save_drs(
     context: bpy.types.Context,
     filepath: str,
@@ -5142,9 +5249,18 @@ def save_drs(
 ):
     """Save the DRS file."""
     global texture_cache_col, texture_cache_nor, texture_cache_par, texture_cache_ref, texture_cache_flu, texture_cache_env  # pylint: disable=global-statement
+    from pathlib import Path
+    output_path = Path(filepath).resolve()
+    if any(parent.name.lower() == 'unpack' for parent in output_path.parents):
+        logger.log('Choose an export folder outside the unpacked source assets.', 'Export Error', 'ERROR')
+        return abort(keep_debug_collections, None)
     # === PRE-VALIDITY CHECKS =================================================
     # Ensure active collection is valid
-    source_collection = bpy.context.view_layer.active_layer_collection.collection
+    from sr_impex.utilities.artist_context import find_model
+    source_collection = find_model(context,kind='DRS')
+    if source_collection is None:
+        logger.log('Select a mesh belonging to one Skylords model before exporting.', 'Export Error', 'ERROR')
+        return abort(keep_debug_collections,None)
     if not verify_collections(source_collection, model_type):
         return abort(keep_debug_collections, None)
 
@@ -5155,6 +5271,9 @@ def save_drs(
     except Exception as e:  # pylint: disable=broad-except
         logger.log(f"Failed to duplicate collection: {e}. Type {type(e)}", "ERROR")
         return abort(keep_debug_collections, None)
+
+    if RESOURCE_META in source_collection:
+        source_collection_copy[RESOURCE_META] = source_collection[RESOURCE_META]
 
     # Copy the AnimationSet blob from the source into the export copy (full fidelity)
     try:
@@ -5242,10 +5361,16 @@ def save_drs(
                 if obj.type == "ARMATURE" and "Control_Rig" not in obj.name:
                     armature_object = obj
                     add_skin_mesh = True
-                    # Limit the Weights to max. 4 bones per vertex
-                    bpy.ops.object.vertex_group_limit_total(limit=4)
-                    # Create a bone map from the armature
                     bone_map = create_bone_map(armature_object)
+                    for mesh_obj in meshes_collection.objects:
+                        if mesh_obj.type == 'MESH':
+                            result=prepare_export_skin_weights(mesh_obj,set(bone_map))
+                            if result['limited'] or result['normalized'] or result['unweighted'] or result['removed_groups']:
+                                logger.log(f"{mesh_obj.name}: export copy skin weights: "
+                                    f"{result['limited']} vertices limited to four bones, "
+                                    f"{result['normalized']} normalized, {result['unweighted']} unweighted; "
+                                    f"{len(result['removed_groups'])} non-bone groups excluded.",
+                                    'Skin Weights', 'WARNING')
                     break
             if armature_object is None:
                 logger.log(
@@ -5332,6 +5457,11 @@ def save_drs(
             new_drs_file.push_node_infos("CDspMeshFile", new_drs_file.cdsp_mesh_file)
         elif node == "DrwResourceMeta":
             new_drs_file.drw_resource_meta = DrwResourceMeta()
+            if RESOURCE_META in source_collection_copy:
+                meta = json.loads(source_collection_copy[RESOURCE_META])
+                new_drs_file.drw_resource_meta.version = int(meta["version"])
+                new_drs_file.drw_resource_meta.resource_class = int(meta["resource_class"])
+                new_drs_file.drw_resource_meta.hash = meta["identifier"]
             new_drs_file.push_node_infos(
                 "DrwResourceMeta", new_drs_file.drw_resource_meta
             )
@@ -5357,6 +5487,9 @@ def save_drs(
         elif node == "AnimationSet":
             # Empty Set and use external EntityEditor
             new_drs_file.animation_set = create_animation_set(model_name, armature_object, bone_map, source_collection_copy)
+            from sr_impex.utilities.resource_editing import preserve_metadata
+            new_drs_file.animation_set = preserve_metadata(source_collection_copy,'AnimationSet',
+                new_drs_file.animation_set,armature_object,bone_map)
             if new_drs_file.animation_set is None:
                 logger.log(
                     "Failed to create AnimationSet.", "Animation Set Error", "ERROR"
@@ -5388,7 +5521,9 @@ def save_drs(
             new_drs_file.push_node_infos("AnimationSet", new_drs_file.animation_set)
         elif node == "AnimationTimings":
             # Empty Set and use external EntityEditor
-            new_drs_file.animation_timings = create_animation_timings()
+            new_drs_file.animation_timings = create_animation_timings(source_collection_copy)
+            from sr_impex.utilities.resource_editing import preserve_metadata
+            new_drs_file.animation_timings = preserve_metadata(source_collection_copy,'AnimationTimings',new_drs_file.animation_timings)
             if new_drs_file.animation_timings is None:
                 logger.log(
                     "Failed to create AnimationTimings.",
@@ -5408,6 +5543,8 @@ def save_drs(
             new_drs_file.cdrw_locator_list = create_cdrw_locator_list(
                 source_collection_copy
             )
+            from sr_impex.utilities.resource_editing import preserve_metadata
+            new_drs_file.cdrw_locator_list = preserve_metadata(source_collection_copy,'CDrwLocatorList',new_drs_file.cdrw_locator_list)
             if new_drs_file.cdrw_locator_list is None:
                 logger.log(
                     "Failed to create CDrwLocatorList.",
@@ -5420,6 +5557,8 @@ def save_drs(
             )
         elif node == "EffectSet":
             new_drs_file.effect_set = create_effect_set(model_name + ".drs", source_collection_copy)
+            from sr_impex.utilities.resource_editing import preserve_metadata
+            new_drs_file.effect_set = preserve_metadata(source_collection_copy,'EffectSet',new_drs_file.effect_set)
             if new_drs_file.effect_set is None:
                 logger.log(
                     "Failed to create EffectSet.", "Effect Set Error", "ERROR"
@@ -5450,7 +5589,17 @@ def save_drs(
 
     # === SAVE THE DRS FILE ====================================================
     try:
-        new_drs_file.save(os.path.join(folder_path, model_name + ".drs"))
+        import tempfile
+        from sr_impex.utilities.resource_editing import apply_node_policy,preserve_opaque_nodes
+        destination=Path(folder_path)/(model_name+'.drs')
+        with tempfile.TemporaryDirectory(prefix='sr-drs-validate-') as staging:
+            candidate=Path(staging)/destination.name
+            new_drs_file.save(str(candidate))
+            patched=apply_node_policy(candidate.read_bytes(),source_collection_copy)
+            patched=preserve_opaque_nodes(patched,source_collection_copy)
+            candidate.write_bytes(patched)
+            DRS().read(str(candidate))
+            destination.write_bytes(patched)
     except ExportError as e:
         logger.log(str(e), "Export Error", "ERROR")
         return abort(keep_debug_collections, source_collection_copy)

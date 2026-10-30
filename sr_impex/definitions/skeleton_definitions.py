@@ -28,7 +28,7 @@ from sr_impex.definitions.mesh_definitions import VertexData
 
 @dataclass(eq=False, repr=False)
 class Bone:
-    version: int = 0  # uint
+    version: int = 0  # uint32 joint lookup key, not a format version
     identifier: int = 0
     name_length: int = field(default=0, init=False)
     name: str = ""
@@ -36,52 +36,33 @@ class Bone:
     children: List[int] = field(default_factory=list)
 
     def __post_init__(self):
-        self.name_length = len(self.name)
+        self.name_length = len(self.name.encode("utf-8", errors="surrogateescape"))
 
     def read(self, file: BinaryIO) -> "Bone":
-        self.version = unpack("I", file.read(4))[0]
-        self.identifier = unpack("i", file.read(4))[0]
-        self.name_length = unpack("i", file.read(4))[0]
-        self.name = (
-            unpack(f"{self.name_length}s", file.read(calcsize(f"{self.name_length}s")))[
-                0
-            ]
-            .decode("utf-8")
-            .strip("\x00")
-        )
-        # Bone Name Fixes
-        self.name = self.name.replace("building_bandits_air_defense_launcher_", "")
-        self.name = self.name.replace("building_frost_fortress_", "")
-        self.name = self.name.replace("building_twilight_XL_spawn_shell_", "")
-        
-        if self.name.startswith("building_nature_versatile_tower_"):
-            self.name = self.name.replace("building_nature_versatile_tower_", "")
-            if "|" in self.name:
-                # Check if the name contains "_jnt1"
-                contains_jnt1 = "_jnt1" in self.name
-                self.name = self.name.split("|")[-1]
-                if contains_jnt1:
-                    self.name = self.name.replace("_jnt", "_end")
-
-        if len(self.name) > 63:
-            print(f"Falling back to hashed bone name for bone {self.name} due to length > 63")
-            self.name = str(hash(self.name))
-        self.child_count = unpack("i", file.read(4))[0]
+        self.version, self.identifier, self.name_length = unpack("<IiI", file.read(12))
+        raw_name = file.read(self.name_length)
+        if len(raw_name) != self.name_length:
+            raise ValueError("Truncated skeleton bone name")
+        # Names are length-delimited engine bytes. Blender aliases belong in the UI layer.
+        self.name = raw_name.decode("utf-8", errors="surrogateescape")
+        self.child_count = unpack("<I", file.read(4))[0]
         self.children = list(
-            unpack(f"{self.child_count}i", file.read(calcsize(f"{self.child_count}i")))
+            unpack(f"<{self.child_count}i", file.read(calcsize(f"<{self.child_count}i")))
         )
         return self
 
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("I", self.version))
-        file.write(pack("i", self.identifier))
-        file.write(pack("i", self.name_length))
-        file.write(pack(f"{self.name_length}s", self.name.encode("utf-8")))
-        file.write(pack("i", self.child_count))
-        file.write(pack(f"{self.child_count}i", *self.children))
+        raw_name = self.name.encode("utf-8", errors="surrogateescape")
+        if self.child_count != len(self.children):
+            raise ValueError("Skeleton bone child count does not match children")
+        self.name_length = len(raw_name)
+        file.write(pack("<IiI", self.version, self.identifier, self.name_length))
+        file.write(raw_name)
+        file.write(pack("<I", self.child_count))
+        file.write(pack(f"<{self.child_count}i", *self.children))
 
     def size(self) -> int:
-        return 12 + self.name_length + 4 + calcsize(f"{self.child_count}i")
+        return 16 + len(self.name.encode("utf-8", errors="surrogateescape")) + 4 * len(self.children)
 
 
 @dataclass(eq=False, repr=False)
@@ -102,17 +83,22 @@ class BoneMatrix:
 
 @dataclass(eq=False, repr=False)
 class BoneVertex:
+    """One joint row: xyz plus a non-float word. Only row 0 stores a parent.
+
+    Row 1 stores the sorted joint-metadata index. Rows 2/3 are preserved raw
+    auxiliary words, not additional parents or homogeneous matrix components.
+    """
     position: "Vector3" = field(default_factory=Vector3)
     parent: int = 0
 
     def read(self, file: BinaryIO) -> "BoneVertex":
         self.position = Vector3().read(file)
-        self.parent = unpack("i", file.read(4))[0]
+        self.parent = unpack("<i", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
         self.position.write(file)
-        file.write(pack("i", self.parent))
+        file.write(pack("<i", self.parent))
 
     def size(self) -> int:
         return self.position.size() + 4
@@ -153,28 +139,67 @@ class CSkSkeleton:
     )
 
     def read(self, file: BinaryIO) -> "CSkSkeleton":
-        self.magic, self.version, self.bone_matrix_count = unpack("iii", file.read(12))
+        self.magic, self.version, self.bone_matrix_count = unpack("<III", file.read(12))
+        if self.magic != 0x5CE1E704:
+            raise ValueError(f"Invalid CSkSkeleton magic 0x{self.magic:08x}")
+        if self.version not in (2, 3):
+            raise ValueError(f"Unsupported CSkSkeleton version {self.version}; expected 2 or 3")
         self.bone_matrices = [BoneMatrix().read(file) for _ in range(self.bone_matrix_count)]
-        self.bone_count = unpack("i", file.read(4))[0]
+        self.bone_count = unpack("<I", file.read(4))[0]
         self.bones = [Bone().read(file) for _ in range(self.bone_count)]
-        self.super_parent = Matrix4x4().read(file)
+        self.super_parent = (Matrix4x4().read(file) if self.version == 3 else
+                             Matrix4x4(((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))))
+        self.validate()
         return self
 
+    def validate(self) -> None:
+        n = self.bone_matrix_count
+        if n != len(self.bone_matrices) or self.bone_count != len(self.bones) or n != self.bone_count:
+            raise ValueError("Skeleton joint/matrix counts do not match")
+        keys = [bone.version for bone in self.bones]
+        if keys != sorted(keys) or len(keys) != len(set(keys)):
+            raise ValueError("Skeleton joint keys must be unique and sorted as uint32")
+        if sorted(bone.identifier for bone in self.bones) != list(range(n)):
+            raise ValueError("Skeleton joint indices must cover 0..joint_count-1")
+        parents_from_children = {}
+        for bone in self.bones:
+            if bone.child_count != len(bone.children):
+                raise ValueError("Skeleton bone child count does not match children")
+            for child in bone.children:
+                if not 0 <= child < n or child in parents_from_children:
+                    raise ValueError("Skeleton child index is invalid or has multiple parents")
+                parents_from_children[child] = bone.identifier
+        for index, matrix in enumerate(self.bone_matrices):
+            if len(matrix.bone_vertices) != 4:
+                raise ValueError("Skeleton joint record requires four xyz/word rows")
+            parent = matrix.bone_vertices[0].parent
+            reverse = matrix.bone_vertices[1].parent
+            if parent < -1 or parent >= index:
+                raise ValueError("Skeleton parents must precede children, or be -1 for a root")
+            if parent != parents_from_children.get(index, -1):
+                raise ValueError("Skeleton matrix parents disagree with metadata children")
+            if not 0 <= reverse < n or self.bones[reverse].identifier != index:
+                raise ValueError("Skeleton matrix metadata index does not point back to its joint")
+
     def write(self, file: BinaryIO) -> None:
-        file.write(pack("iii", self.magic, self.version, self.bone_matrix_count))
+        if self.magic != 0x5CE1E704 or self.version not in (2, 3):
+            raise ValueError("Unsupported CSkSkeleton header")
+        self.validate()
+        file.write(pack("<III", self.magic, self.version, self.bone_matrix_count))
         for bone_matrix in self.bone_matrices:
             bone_matrix.write(file)
-        file.write(pack("i", self.bone_count))
+        file.write(pack("<I", self.bone_count))
         for bone in self.bones:
             bone.write(file)
-        self.super_parent.write(file)
+        if self.version == 3:
+            self.super_parent.write(file)
 
     def size(self) -> int:
         return (
             16
             + sum(bone_matrix.size() for bone_matrix in self.bone_matrices)
             + sum(bone.size() for bone in self.bones)
-            + self.super_parent.size()
+            + (self.super_parent.size() if self.version == 3 else 0)
         )
 
 

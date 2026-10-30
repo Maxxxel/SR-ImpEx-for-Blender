@@ -20,6 +20,16 @@ MESHGRID_FIXED_CELL_SIZE = 2.0
 
 _rotation_sync_state = {"locked": False}
 
+
+def stop_damage_preview(context,model=None):
+    """Manual authoring controls must not compete with a damage preview."""
+    from sr_impex.blender.building_damage_preview import TAG,SESSIONS
+    from sr_impex.blender.effect_preview import clear
+    roots=[model] if model else list(_iter_bmg_models())
+    for root in roots:
+        if any(s.model==root and s.scene==context.scene for s in SESSIONS.values()) or any(TAG+'_visibility' in c for c in root.children_recursive):
+            clear(context.scene,root)
+
 def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state: str):
     """
     Switch which state is visible/active for editing in a MeshSet.
@@ -51,6 +61,7 @@ def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state:
 
     # First, make States_Collection itself visible (parent must be visible)
     states_col.hide_viewport = False
+    states_col.hide_render = False
 
     # Hide all child states first
     for col in states_col.children_recursive:
@@ -60,20 +71,20 @@ def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state:
     # Show requested state(s)
     if target_state == "S0":
         for child in states_col.children:
-            if child.name.startswith("S0_Undamaged"):
+            if child.get('bmg_state_id') == 0 or child.name.startswith("S0_Undamaged"):
                 show_collection_recursive(child)
                 break
 
     elif target_state == "S2":
         for child in states_col.children:
-            if child.name.startswith("S2_Damaged"):
+            if child.get('bmg_state_id') == 2 or child.name.startswith("S2_Damaged"):
                 show_collection_recursive(child)
                 break
 
     elif target_state == "S2_with_debris":
         # Show S2 damaged state
         for child in states_col.children:
-            if child.name.startswith("S2_Damaged"):
+            if child.get('bmg_state_id') == 2 or child.name.startswith("S2_Damaged"):
                 print(f"[BMG State] Showing S2_Damaged: {child.name}")
                 show_collection_recursive(child)
                 break
@@ -109,11 +120,21 @@ def switch_meshset_state(meshset_collection: bpy.types.Collection, target_state:
         states_col.hide_viewport = False
         for col in states_col.children_recursive:
             col.hide_viewport = False
+            col.hide_render = False
+
+    elif target_state.startswith('S') and target_state[1:].isdigit():
+        for child in states_col.children:
+            if child.get('bmg_state_id') == int(target_state[1:]):
+                show_collection_recursive(child)
+                break
 
     # Update active marker
     for obj in meshset_collection.objects:
         if obj.type == 'EMPTY' and "active_state" in obj:
             obj["active_state"] = target_state
+            # Also hide markers from scenes imported with older plugin versions.
+            obj.hide_viewport = True
+            obj.hide_render = True
 
 
 def _find_parent_collection(
@@ -226,7 +247,9 @@ def _normalize_meshgrid_blob(blob: dict) -> dict:
     width = _sanitize_grid_axis(int(blob.get("grid_width", blob.get("columns", 0)) or 0))
     height = _sanitize_grid_axis(int(blob.get("grid_height", blob.get("rows", 0)) or 0))
     width, height = _coerce_square_grid_axes(width, height)
-    module_distance = MESHGRID_FIXED_CELL_SIZE
+    module_distance = _safe_float(blob.get("module_distance", MESHGRID_FIXED_CELL_SIZE), MESHGRID_FIXED_CELL_SIZE)
+    if not math.isfinite(module_distance) or module_distance <= 0:
+        module_distance = MESHGRID_FIXED_CELL_SIZE
     rotation = _safe_float(blob.get("grid_rotation", blob.get("orientation", 0.0)), 0.0)
     is_center_pivoted = _safe_center_pivoted(blob.get("is_center_pivoted", 1), 1)
 
@@ -235,7 +258,9 @@ def _normalize_meshgrid_blob(blob: dict) -> dict:
     cells = _build_default_cells(total_cells)
     for idx in range(min(total_cells, len(old_cells))):
         old = old_cells[idx] if isinstance(old_cells[idx], dict) else {}
-        cells[idx]["has_mesh_set"] = int(bool(old.get("has_mesh_set", 0)))
+        cells[idx].update(old)  # Retain imported rotation and future metadata.
+        cells[idx]["index"] = idx
+        cells[idx]["has_mesh_set"] = int(old.get("has_mesh_set", 0))
         cells[idx]["mesh_object_name"] = str(old.get("mesh_object_name", "") or "")
 
     blob["grid_width"] = width
@@ -654,13 +679,12 @@ def _apply_rotation_to_targets(
             continue
         if any(col.name.endswith("_GridVis") for col in getattr(target, "users_collection", []) or []):
             continue
-        axis_index, target_rot = _target_rotation_radians_for_object(
-            model_collection,
-            target,
-            float(rotation_degrees),
-        )
-        if abs(target.rotation_euler[axis_index] - target_rot) > 1e-6:
-            target.rotation_euler[axis_index] = target_rot
+        # Keep artist transforms, and replace only the previous grid-display
+        # yaw. Export removes this tagged transform before writing state DRSs.
+        previous = float(target.get('_bmg_display_yaw', 0.0))
+        base = Matrix.Rotation(math.radians(previous), 4, 'Y') @ target.matrix_basis
+        target.matrix_basis = Matrix.Rotation(-math.radians(float(rotation_degrees)), 4, 'Y') @ base
+        target["_bmg_display_yaw"] = float(rotation_degrees)
 
 
 def _ensure_meshgrid_collection(model_collection: bpy.types.Collection) -> tuple[bpy.types.Collection, str]:
@@ -974,14 +998,9 @@ def _sync_meshgrid_rotation_controller(_depsgraph):
         _remove_rotation_controller(model)
         blob_degrees = _safe_float(blob.get("grid_rotation", blob.get("orientation", 0.0)), 0.0)
 
-        for target in _iter_rotation_targets(model):
-            if target.get(MESHGRID_ROT_CTRL_TAG):
-                continue
-            if any(col.name.endswith("_GridVis") for col in getattr(target, "users_collection", []) or []):
-                continue
-            axis_index, target_radians = _target_rotation_radians_for_object(model, target, blob_degrees)
-            if abs(target.rotation_euler[axis_index] - target_radians) > 1e-6:
-                target.rotation_euler[axis_index] = target_radians
+        targets = list(_iter_rotation_targets(model))
+        if any(abs(float(target.get('_bmg_display_yaw', 0.0)) - blob_degrees) > 1e-6 for target in targets):
+            _apply_rotation_to_targets(model, blob_degrees)
 
 class BMG_OT_SwitchMeshState(Operator):
     """Switch the visible state of a MeshSet"""
@@ -1030,6 +1049,7 @@ class BMG_OT_SwitchMeshState(Operator):
             return {'CANCELLED'}
 
         # Switch the state
+        stop_damage_preview(context)
         switch_meshset_state(meshset_collection, self.state)
 
         # Update viewport
@@ -1070,6 +1090,7 @@ class BMG_OT_SwitchAllMeshSetsState(Operator):
 
     def execute(self, context):
         count = 0
+        stop_damage_preview(context)
         # Find all DRSModel collections first, then look for MeshSetGrid children
         for col in bpy.data.collections:
             if col.name.startswith("DRSModel_"):
@@ -1128,6 +1149,23 @@ class BMG_OT_CreateMeshGridForActiveModel(Operator):
             rotation_degrees=0.0,
             is_center_pivoted=use_origin_pivot,
         )
+        if MESHGRID_BLOB_KEY in model:
+            # Fit existing buildings through the same validated resize as the
+            # authoring panel; replacing the JSON would discard state/FX data.
+            from sr_impex.utilities.building_export import create_grid
+            previous = create_grid(model)
+            try:
+                result = bpy.ops.bmg.building_settings(
+                    name_value=previous.name, half_extent=blob['grid_width'],
+                    spacing=previous.module_distance, yaw=previous.grid_rotation,
+                    shared_origin=bool(previous.is_center_pivoted),
+                    ground_decal=previous.ground_decal, debris_effect=previous.debris_effect,
+                    destruction_effect=previous.destruction_effect)
+            except RuntimeError as exc:
+                _apply_rotation_to_targets(model, previous.grid_rotation)
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
+            return result
         _set_meshgrid_blob(model, blob)
 
         _set_model_rotation(model, 0.0, rebuild_grid=True)
@@ -1202,7 +1240,7 @@ class BMG_OT_RemoveMeshGridForActiveModel(Operator):
 
 class BMG_PT_MeshStateEditor(Panel):
     """Panel for controlling BMG building mesh states"""
-    bl_label = "BMG Mesh State Editor"
+    bl_label = "BMG State Editor"
     bl_idname = "BMG_PT_mesh_state_editor"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -1212,7 +1250,7 @@ class BMG_PT_MeshStateEditor(Panel):
     def poll(cls, _context):
         """Only show panel if a BMG model is present"""
         for col in bpy.data.collections:
-            if col.name.startswith("DRSModel_"):
+            if col.name.startswith("DRSModel_") and ('sr_impex_meshgrid_blob' in col or col.get('_sr_format')=='BMG'):
                 return True
         return False
 

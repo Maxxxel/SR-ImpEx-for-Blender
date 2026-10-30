@@ -2,8 +2,8 @@
 Resource and primitive container class definitions for DRS files.
 
 This module contains classes related to resource metadata:
-- DrwResourceMeta: Resource metadata with version, unknown field, and hash
-- CGeoPrimitiveContainer: Empty primitive container class
+- DrwResourceMeta: Versioned resource class and authoring identifier string
+- CGeoPrimitiveContainer: Empty DRS parent for the collisionShape child payload
 - Constraint: Bone constraint with angle and damping parameters
 - IKAtlas: IK constraint atlas
 """
@@ -17,32 +17,55 @@ from typing import BinaryIO, List
 @dataclass(eq=False, repr=False)
 class DrwResourceMeta:
     version: int = 1
-    unknown: int = 1  # Units: 1, 0 - 3 are possible
+    unknown: int = 1  # Compatibility name for CDrwResource::GetClass() value.
     length: int = 0
     hash: str = ""
 
+    @property
+    def resource_class(self) -> int:
+        return self.unknown
+
+    @resource_class.setter
+    def resource_class(self, value: int) -> None:
+        self.unknown = value
+
     def read(self, file: BinaryIO) -> "DrwResourceMeta":
         """Reads the DrwResourceMeta from the buffer"""
-        self.version, self.unknown = unpack("2i", file.read(8))
-        self.length = unpack("i", file.read(4))[0]
-        self.hash = file.read(self.length).decode("utf-8").strip("\x00")
+        self.version = unpack("<I", file.read(4))[0]
+        if self.version not in (0, 1):
+            raise ValueError(f"Unsupported DrwResourceMeta version {self.version}")
+        self.unknown = unpack("<I", file.read(4))[0] if self.version == 1 else 0
+        self.length = unpack("<I", file.read(4))[0]
+        raw = file.read(self.length)
+        if len(raw) != self.length:
+            raise ValueError("Truncated DrwResourceMeta identifier")
+        self.hash = raw.decode("utf-8", errors="surrogateescape")
         return self
 
     def write(self, file: BinaryIO) -> None:
         """Writes the DrwResourceMeta to the buffer"""
-        file.write(pack("i", self.version))
-        file.write(pack("i", self.unknown))
-        file.write(pack("i", self.length))
-        file.write(self.hash.encode("utf-8"))
+        if self.version not in (0, 1):
+            raise ValueError(f"Unsupported DrwResourceMeta version {self.version}")
+        raw = self.hash.encode("utf-8", errors="surrogateescape")
+        self.length = len(raw)
+        file.write(pack("<I", self.version))
+        if self.version == 1:
+            file.write(pack("<I", self.unknown))
+        file.write(pack("<I", self.length))
+        file.write(raw)
 
     def size(self) -> int:
         """Returns the size of the DrwResourceMeta"""
-        return calcsize(f"2ii{self.length}s")
+        return (12 if self.version == 1 else 8) + len(self.hash.encode("utf-8", errors="surrogateescape"))
 
 
 @dataclass(eq=False, repr=False)
 class CGeoPrimitiveContainer:
-    """CGeoPrimitiveContainer class"""
+    """Zero-byte parent node; collisionShape holds the serialized primitives.
+
+    The runtime CGeoPrimitiveContainer is not empty: it owns box/sphere/cylinder
+    arrays. DRS NodeInformation must link this parent to the collisionShape child.
+    """
 
     def read(self, _: BinaryIO) -> "CGeoPrimitiveContainer":
         """Reads the CGeoPrimitiveContainer from the buffer"""
@@ -110,15 +133,27 @@ class Constraint:
 
 
 @dataclass(eq=False, repr=False)
-class IKAtlas:
-    """IKAtlas"""
+class IKJointConstraint:
+    """One CSkIKJointConstraint entry, prefixed by its skeleton joint index.
 
-    identifier: int = 0  # BoneID
+    ``IKAtlas`` remains a compatibility alias; the actual atlas is the outer
+    version/count container in AnimationSet.
+    """
+
+    identifier: int = 0  # Skeleton joint index, not the CRC animation joint key
     version: int = 2
     axis: int = 2  # Always 2
     chain_order: int = 0  # Order of Execution in the Bone Chain
     constraints: List[Constraint] = field(default_factory=list)  # Always 3!
     purpose_flags: int = 0  # 1, 2, 3, 6, 7: mostly 3, but what is it used for?
+
+    @property
+    def joint_index(self) -> int:
+        return self.identifier
+
+    @joint_index.setter
+    def joint_index(self, value: int) -> None:
+        self.identifier = value
 
     def read(self, file: BinaryIO) -> "IKAtlas":
         """Reads the IKAtlas from the buffer"""
@@ -128,11 +163,13 @@ class IKAtlas:
             self.axis, self.chain_order = unpack("ii", file.read(8))
             self.constraints = [Constraint().read(file) for _ in range(3)]
             if self.version >= 2:
-                self.purpose_flags = unpack("h", file.read(2))[0]
+                self.purpose_flags = unpack("H", file.read(2))[0]
         return self
 
     def write(self, file: BinaryIO):
         """Writes the IKAtlas to the buffer"""
+        if self.version >= 1 and len(self.constraints) != 3:
+            raise ValueError("An IK joint constraint requires exactly three axis constraints")
         file.write(pack("i", self.identifier))
         file.write(pack("h", self.version))
         if self.version >= 1:
@@ -140,7 +177,7 @@ class IKAtlas:
             for constraint in self.constraints:
                 constraint.write(file)
             if self.version >= 2:
-                file.write(pack("h", self.purpose_flags))
+                file.write(pack("H", self.purpose_flags))
 
     def size(self) -> int:
         """Returns the size of the IKAtlas"""
@@ -150,3 +187,6 @@ class IKAtlas:
             if self.version >= 2:
                 base += 2
         return base
+
+
+IKAtlas = IKJointConstraint

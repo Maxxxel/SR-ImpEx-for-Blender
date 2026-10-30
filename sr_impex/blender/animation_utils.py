@@ -2,6 +2,7 @@
 from typing import List, Dict, Tuple
 import os
 import json
+import math
 from mathutils import Quaternion, Vector
 import bpy
 
@@ -9,6 +10,32 @@ from sr_impex.definitions.ska_definitions import SKA, SKAKeyframe
 from sr_impex.definitions.skeleton_definitions import DRSBone
 
 IS_44_PLUS = bpy.app.version >= (4, 4, 0)
+
+
+def clip_frame_range(clip):
+    """Logical time interval, independent of the last stored pose sample."""
+    start=float(clip.get('ska_start_frame',clip.frame_range[0]))
+    return start,start+float(clip.get('frame_length',max(1.,clip.frame_range[1]-clip.frame_range[0])))
+
+
+def configure_clip_playback(scene,clip,loop=None,start=0.,end=1.):
+    """Blender range ends are inclusive; looping clip time is half-open."""
+    if 'frame_length' in clip:
+        from sr_impex.blender.ska_loop import sync
+        sync(clip)
+    first,last=clip_frame_range(clip);span=last-first
+    first,last=first+start*span,first+end*span
+    fps=float(clip.get('original_fps',scene.render.fps/scene.render.fps_base))
+    base=max(1,min(120,round(fps)))
+    scene.render.fps=base;scene.render.fps_base=base/max(fps,.001)
+    loop=int(clip.get('repeat',0))==1 if loop is None else loop
+    scene.frame_start=round(first)
+    scene.frame_end=max(scene.frame_start,math.ceil(last-1e-6)-1 if loop else round(last))
+    if scene.use_preview_range:
+        scene.frame_preview_start=scene.frame_start;scene.frame_preview_end=scene.frame_end
+    # Keep wall-clock speed when a heavy preview cannot draw every frame.
+    scene.sync_mode='FRAME_DROP'
+    return first,last
 
 
 def assign_action_compat(arm_obj: bpy.types.Object, action: bpy.types.Action) -> None:
@@ -157,6 +184,10 @@ def insert_hermite_bezier_curve(
     # Also set endpoint handles so endpoint tangents survive round-trips.
     # Blender doesn't need them for evaluation outside the curve range,
     # but SKA stores tangents for *every* keyframe, including endpoints.
+    if n == 1:
+        point=fcurve.keyframe_points[0];width=duration*fps/3
+        point.handle_left=(frames[0]-width,values[0]-tangents[0]/3)
+        point.handle_right=(frames[0]+width,values[0]+tangents[0]/3)
     if n >= 2:
         # First key: set LEFT handle from tangent[0] using first segment length
         f0, f1 = frames[0], frames[1]
@@ -206,18 +237,36 @@ def import_ska_animation(
         print(f"Warning: Action name '{name}' is too long, truncating to 63 chars.")
         name = name[:63]
 
-    # Check if Action with this name already exists
+    from sr_impex.utilities.ska_artist import capture_track
+    import hashlib
+    signature = hashlib.sha256(json.dumps([
+        ska_file.type,ska_file.duration,ska_file.frame_length,ska_file.repeat,ska_file.stutter_mode,
+        ska_file.unused1,ska_file.target_ids,[m.hex() for m in ska_file.text_markers],ska_file.annotation_bytes.hex(),
+        [capture_track(ska_file,h) for h in ska_file.headers],
+        [(b.ska_identifier,b.name,list(b.bind_loc),list(b.bind_rot)) for b in bone_list]],
+        separators=(',',':')).encode()).hexdigest()
+    # Reuse only identical animation/bind data, not unrelated short filenames.
     existing_action = bpy.data.actions.get(name)
-    if existing_action is not None:
+    if existing_action is not None and existing_action.get('ska_import_signature')==signature:
         # Just assign it and return
         assign_action_compat(arm_obj, existing_action)
+        if map_collection is not None:
+            mapping=json.loads(map_collection.get('_drs_action_map','{}'))
+            for key in (blob_key_original,os.path.basename(blob_key_original),
+                        os.path.splitext(blob_key_original)[0],os.path.splitext(os.path.basename(blob_key_original))[0]):
+                mapping[key]=existing_action.name
+            map_collection['_drs_action_map']=json.dumps(mapping)
         print(f"Info: Action '{name}' already exists, assigned existing action.")
         return
 
-    action = create_action(arm_obj, name=name, cyclic=ska_file.repeat > 1)
+    action = create_action(arm_obj, name=name, cyclic=ska_file.repeat == 1)
     duration = ska_file.duration
     frame_length = ska_file.frame_length
+    if duration <= 0 or frame_length <= 0:
+        raise ValueError('SKA duration and frame count must be greater than zero')
     original_fps = frame_length / duration
+    from sr_impex.utilities.ska_artist import ALPHA_ID, ALPHA_PATH, RAW_TRACKS, capture_track
+    preserved = []
 
     # ---- Mapping: blob filename -> actual Action name ----
     # Store on the model collection as JSON (ID props are fine, but JSON keeps it simple)
@@ -269,9 +318,25 @@ def import_ska_animation(
 
     # Process each channel header
     for hdr in ska_file.headers:
+        if hdr.bone_id == ALPHA_ID and hdr.type == 0:
+            preserved.append(capture_track(ska_file,hdr))
+            arm_obj['sr_ska_alpha'] = 1.0
+            curve = ensure_fcurve_compat(action,arm_obj,ALPHA_PATH)
+            seq = [(ska_file.times[i],ska_file.keyframes[i])
+                   for i in range(hdr.tick,hdr.tick+hdr.interval)]
+            frames = [t*frame_length for t,_ in seq]
+            values, tangents = [k.x for _,k in seq], [k.tan_x for _,k in seq]
+            if ska_file.stutter_mode == 2 and use_bezier:
+                insert_hermite_bezier_curve(curve,frames,values,tangents,duration,original_fps)
+            else:
+                for frame,value in zip(frames,values):
+                    insert_or_replace_key(curve,frame,value,
+                        interpolation='CONSTANT' if ska_file.stutter_mode==0 else 'LINEAR')
+            continue
         bone = bone_map.get(hdr.bone_id)
         fcs = curves_map.get(hdr.bone_id)
-        if bone is None or fcs is None:
+        if bone is None or fcs is None or hdr.type not in (0,1):
+            preserved.append(capture_track(ska_file,hdr))
             continue
         # Choose extraction
         if hdr.type == 0:
@@ -292,7 +357,7 @@ def import_ska_animation(
         ]
         seq.sort(key=lambda tk: tk[0])
         times_norm = [t for t, _ in seq]
-        frames = [round(t * frame_length) for t in times_norm]
+        frames = [t * frame_length for t in times_norm]
         # For each component axis
         for idx, ax in enumerate(axes):
             # Values and tangents
@@ -301,23 +366,45 @@ def import_ska_animation(
             fcurve = fcs[f"{prefix}_{ax}"]
             if not vals:
                 continue
-            if use_bezier:
+            if use_bezier and ska_file.stutter_mode == 2:
                 insert_hermite_bezier_curve(
                     fcurve, frames, vals, tans, duration, original_fps
                 )
             else:
                 for fr, v in zip(frames, vals):
-                    insert_or_replace_key(fcurve, fr, v, interpolation="LINEAR")
+                    insert_or_replace_key(fcurve, fr, v, interpolation="CONSTANT" if ska_file.stutter_mode==0 else "LINEAR")
     # Add NLA track strip
     track = arm_obj.animation_data.nla_tracks.new()
     track.strips.new(action.name, 0, action)
     track.name = action.name
+    track.mute = True  # The selected active action plays; other imported clips do not stack.
     # Save Original Duration in the Action
     action["original_duration"] = duration
     action["original_fps"] = original_fps
     action["frame_length"] = ska_file.frame_length
     action["repeat"] = ska_file.repeat
     action["stutter_mode"] = ska_file.stutter_mode
+    action['ska_version'] = ska_file.type
+    action['ska_start_frame'] = 0.0
+    # Compressed SKA tracks often stop at sample N-1. Keep that final interval
+    # when fitting edited keys; last-key time is not the clip duration.
+    from sr_impex.utilities.ska_utility import _iter_action_fcurves
+    key_times=[p.co.x for c in _iter_action_fcurves(action) for p in c.keyframe_points]
+    if key_times:
+        action['ska_fit_padding']=[float(min(key_times)),float(frame_length-max(key_times))]
+    from sr_impex.blender.ska_loop import sync
+    sync(action)
+    action[RAW_TRACKS] = json.dumps(preserved)
+    action['ska_track_order'] = json.dumps([[h.bone_id,h.type] for h in ska_file.headers])
+    action['ska_import_signature'] = signature
+    # Preserve nonempty version 6/7 tail blocks through Blender actions.
+    # Marker offsets refer to raw bytes in the shared annotation buffer.
+    if ska_file.target_ids or ska_file.text_markers or ska_file.annotation_bytes:
+        action["ska_tail_metadata"] = json.dumps({
+            "target_ids": ska_file.target_ids,
+            "text_markers_hex": [marker.hex() for marker in ska_file.text_markers],
+            "annotation_hex": ska_file.annotation_bytes.hex(),
+        })
     if ska_file.type == 7:
         action["unused1"] = ska_file.unused1
     action["prefix"] = parent_folder

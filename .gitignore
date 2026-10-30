@@ -1,5 +1,5 @@
 /.pylintrc
-/tests/*
+/tests/
 /.vscode
 /__pycache__
 /env
@@ -19,3 +19,6 @@ output.json
 !/sr_impex/resources/vgmstream/*.*
 /sr_impex/resources/asset_cache
 sr_impex/site
+/.codex*
+/research
+/artifacts/

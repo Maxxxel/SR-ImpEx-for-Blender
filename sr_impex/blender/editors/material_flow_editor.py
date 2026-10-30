@@ -13,13 +13,22 @@ KNOWN_MATERIAL_FLAGS = {
     1: "Decal Mode",
     16: "Use Parameter Map",
     17: "Use Normal Map",
-    18: "Use Refraction / Env Map Flag",
+    18: "Use Environment Map (also used by Refraction preview)",
     20: "Disable Receive Shadows",
     21: "Enable SH Lighting",
     # Unknowns are auto-filled as "Unknown Bitflag #N"
 }
 _MAX_BITS = 32
 _REF_ENV_DEBUG = False
+
+
+def _modern_update(obj):
+    from sr_impex.blender.editors.material_editor import modern, sync_object
+    if obj and modern(getattr(obj, 'active_material', None)):
+        if not obj.get('_drs_material_importing'):
+            sync_object(obj)
+        return True
+    return False
 
 # --- Material flags PG --------------------------------------------------------
 _UPDATING_FLAGS = False  # guard to avoid recursive updates
@@ -44,6 +53,8 @@ def _update_flow_nodes_logic(drs_flow_pg):
     Finds the active material's node group and updates the named
     flow nodes with values from the property group.
     """
+    if _modern_update(drs_flow_pg.id_data):
+        return
     if not drs_flow_pg:
         return
 
@@ -90,6 +101,8 @@ def _update_flow_nodes_logic(drs_flow_pg):
 
 def _update_alpha_connection(obj):
     """Update the alpha connection in DRS Material based on Enable Alpha Test flag."""
+    if _modern_update(obj):
+        return
     if not obj or obj.type != 'MESH':
         return
     if not obj.active_material or not obj.active_material.use_nodes:
@@ -163,6 +176,8 @@ def _find_node_by_label_or_name(node_tree, node_type, label_or_name):
 
 def _update_parameter_connection(obj):
     """Bit 16: toggles links from Parameter Map image to the group inputs."""
+    if _modern_update(obj):
+        return
     if not obj or obj.type != 'MESH' or not obj.active_material or not obj.active_material.use_nodes:
         return
     mat = obj.active_material
@@ -209,6 +224,8 @@ def _update_parameter_connection(obj):
 
 def _update_normal_connection(obj):
     """Bit 17: toggles links from Normal Map image to the group input and keeps Normal flat when off."""
+    if _modern_update(obj):
+        return
     if not obj or obj.type != 'MESH' or not obj.active_material or not obj.active_material.use_nodes:
         return
     mat = obj.active_material
@@ -243,6 +260,8 @@ def _update_normal_connection(obj):
 
 def _update_refraction_connection(obj):
     """Bit 18: toggles the refraction branch back to Opaque BSDF when off, and reinstates it when on."""
+    if _modern_update(obj):
+        return
     if not obj or obj.type != 'MESH' or not obj.active_material or not obj.active_material.use_nodes:
         return
     mat = obj.active_material
@@ -294,6 +313,8 @@ def _update_flu_apply_mask_state(obj):
       - At least one Flu Map Layer (1 or 2) has an image.
     Otherwise the node is muted (acts as passthrough of Color Map).
     """
+    if _modern_update(obj):
+        return
     try:
         if not obj or obj.type != 'MESH' or not obj.active_material or not obj.active_material.use_nodes:
             return
@@ -333,64 +354,27 @@ def _get_wind_height_extent(obj: bpy.types.Object) -> float:
     return extent if extent > 0 else 1.0
 
 def _update_wind_nodes_logic(drs_wind_pg):
-    """
-    Finds the GN modifier and updates the named nodes
-    with values from the property group.
-    """
-    if not drs_wind_pg:
-        return
+    if not drs_wind_pg:return
+    obj=drs_wind_pg.id_data
+    if not obj or obj.type!='MESH':return
+    modifier=_find_wind_modifier(obj)
+    if not modifier or not modifier.node_group:return
+    tree=modifier.node_group
+    if tree.get('_sr_engine_wind_version')!=2:
+        # Replace only the plugin's old approximation; preserve the modifier slot.
+        old=tree
+        modifier.node_group=_engine_wind_tree(obj)
+        if old.users==0:bpy.data.node_groups.remove(old)
+        tree=modifier.node_group
+    tree.nodes['Wind Response'].outputs[0].default_value=drs_wind_pg.wind_response
+    tree.nodes['Wind Height'].outputs[0].default_value=drs_wind_pg.wind_height
 
-    # id_data is the object (e.g., Mesh) that owns this PropertyGroup
-    obj = drs_wind_pg.id_data
-    if not obj or obj.type != 'MESH':
-        return
-
-    # Get the values from the property group
-    wind_response = drs_wind_pg.wind_response
-    wind_height = drs_wind_pg.wind_height
-
-    # Recompute the local mesh height so the wind fade range stays in sync
-    # after the user edits the mesh and then changes the wind settings.
-    max_height = _get_wind_height_extent(obj)
-
-    # Find the GN modifier
-    geo_mod = None
-    for mod in obj.modifiers:
-        # Check for name to be safe, in case of multiple GN mods
-        if mod.type == 'NODES' and "WindEffect" in mod.name:
-            geo_mod = mod
-            break
-
-    if not geo_mod or not geo_mod.node_group:
-        return
-
-    node_tree = geo_mod.node_group
-
-    # Find the named "Wind Response" node and set its value
-    response_node = node_tree.nodes.get("Wind Response")
-    if response_node:
-        response_node.inputs[1].default_value = wind_response
-
-    # Find the named "Wind Height" node and set its value
-    height_node = node_tree.nodes.get("Wind Height")
-    if height_node and "From Min" in height_node.inputs:
-        # 'wind_height' from DRS is the minimum height for the effect.
-        height_node.inputs["From Min"].default_value = wind_height
-        if "From Max" in height_node.inputs:
-            height_node.inputs["From Max"].default_value = max_height
-        if "Value" in height_node.inputs:
-            incoming_links = list(height_node.inputs["Value"].links)
-            for link in incoming_links:
-                from_node = link.from_node
-                if from_node and from_node.type == 'SEPXYZ' and "Y" in from_node.outputs:
-                    if link.from_socket.name != "Y":
-                        node_tree.links.remove(link)
-                        node_tree.links.new(from_node.outputs["Y"], height_node.inputs["Value"])
-                    break
 
 def _update_wind_geometry_nodes(self, _ctx):
     """This is the update callback for the UI properties."""
     _update_wind_nodes_logic(self) # 'self' is the drs_wind_pg
+    from sr_impex.blender.editors.material_editor import sync_wind
+    sync_wind(self.id_data)
 
 def _update_wind_nodes(drs_wind_pg):
     """This is the function called by the importer in drs_utility.py."""
@@ -419,7 +403,7 @@ def _on_raw_changed(self, _ctx):
     _UPDATING_FLAGS = False
     # Update alpha connection if bit 0 changed
     new_bit_0 = getattr(self, 'bit_0', False)
-    obj = _ctx.object if hasattr(_ctx, 'object') else None
+    obj = _resolve_owner_object(self, _ctx)
     if old_bit_0 != new_bit_0:
         _update_alpha_connection(obj)
     if obj is not None and old_bit_18 != getattr(self, 'bit_18', False):
@@ -436,8 +420,9 @@ def _on_bit_changed(self, _ctx):
     for i in range(_MAX_BITS):
         if getattr(self, f"bit_{i}", False):
             v |= 1 << i
-    self.bool_parameter = v
+    self.bool_parameter = v if v < 0x80000000 else v - 0x100000000
     _UPDATING_FLAGS = False
+    _modern_update(_resolve_owner_object(self, _ctx))
 
 def _on_bit_0_changed(self, ctx):
     """Special handler for bit 0 (Enable Alpha Test) that updates shader graph."""
@@ -481,6 +466,8 @@ def _on_bit_18_changed(self, ctx):
 
     _on_bit_changed(self, ctx)
     obj = _resolve_owner_object(self, ctx)
+    if _modern_update(obj):
+        return
 
     if bool(getattr(self, "bit_18", False)):
         has_refraction_image = _has_refraction_map_for_object(obj)
@@ -633,13 +620,15 @@ def _set_bit_state(flags_pg: bpy.types.PropertyGroup, idx: int, enabled: bool) -
 
     _UPDATING_FLAGS = True
     try:
-        flags_pg.bool_parameter = target_raw
+        flags_pg.bool_parameter = target_raw if target_raw < 0x80000000 else target_raw - 0x100000000
         for i in range(_MAX_BITS):
             setattr(flags_pg, f"bit_{i}", bool((target_raw >> i) & 1))
     finally:
         _UPDATING_FLAGS = False
 
 def _initialize_ref_env_toggles_from_import(obj: bpy.types.Object, ctx: bpy.types.Context | None = None) -> None:
+    if _modern_update(obj):
+        return
     global _UPDATING_FLAGS
     if obj is None or obj.type != 'MESH' or not hasattr(obj, "drs_material") or obj.drs_material is None:
         return
@@ -728,18 +717,19 @@ class DRS_MaterialFlagsPG(PropertyGroup):
         name="Raw bool_parameter",
         description="32-bit integer of material flags",
         default=0,
-        min=0,
+        min=-2147483648,
+        max=2147483647,
         update=_on_raw_changed,
     )  # type: ignore
     use_env_map: BoolProperty(
         name="Use Env/Cube Map",
-        description="Treat environment cubemap as refraction flag source on export when available",
+        description="Set the environment map flag when an environment cubemap is available",
         default=False,
         update=_on_use_env_map_changed,
     )  # type: ignore
     use_ref_map: BoolProperty(
         name="Use Refraction Map",
-        description="Use Refraction Map (_ref) image as bit 18 source",
+        description="Enable the refraction preview and currently also set the environment flag on export",
         default=False,
         update=_on_use_ref_map_changed,
     )  # type: ignore
@@ -755,11 +745,12 @@ class DRS_FlowPG(PropertyGroup):
         name="Write Flow",
         description="Enable writing Flow to the mesh material block on export",
         default=False,
+        update=_update_flow_props,
     )  # type: ignore
-    max_flow_speed: FloatVectorProperty(name="Max Flow Speed", size=4, default=(0, 0, 0, 0), update=_update_flow_props)  # type: ignore
-    min_flow_speed: FloatVectorProperty(name="Min Flow Speed", size=4, default=(0, 0, 0, 0), update=_update_flow_props)  # type: ignore
-    flow_speed_change: FloatVectorProperty(name="Flow Speed Change", size=4, default=(0, 0, 0, 0), update=_update_flow_props)  # type: ignore
-    flow_scale: FloatVectorProperty(name="Flow Scale", size=4, default=(0, 0, 0, 0), update=_update_flow_props)  # type: ignore
+    max_flow_speed: FloatVectorProperty(name="Max Flow Speed", size=4, default=(0, 1, 0, 0), update=_update_flow_props)  # type: ignore
+    min_flow_speed: FloatVectorProperty(name="Min Flow Speed", size=4, default=(0, 0.5, 0, 0), update=_update_flow_props)  # type: ignore
+    flow_speed_change: FloatVectorProperty(name="Flow Speed Change", size=4, default=(0, 0.1, 0, 0), update=_update_flow_props)  # type: ignore
+    flow_scale: FloatVectorProperty(name="Flow Scale", size=4, default=(1, 1, 1, 0), update=_update_flow_props)  # type: ignore
 
 class DRS_WindPG(PropertyGroup):
     wind_response: FloatProperty(
@@ -793,7 +784,7 @@ def _highest_relevant_bit(value: int) -> int:
 
 def _active_mesh(ctx) -> bpy.types.Object | None:
     o = getattr(ctx, "object", None)
-    if o and o.type == "MESH" and (_in_meshes_collection(o) or _in_ground_decal_collection(o)):
+    if o and o.type == "MESH" and o.select_get():
         return o
     return None
 
@@ -805,100 +796,66 @@ def _find_wind_modifier(obj: bpy.types.Object) -> bpy.types.Modifier | None:
             return mod
     return None
 
+def _engine_wind_tree(obj):
+    """Default VS wind displacement and CDrwWindForce constructor environment.
+
+    Material callbacks 106a88e0/106a8950 and VS37/VS11 establish the position
+    formula. 100ab010/100ab060 establish default time/position phases.
+    Map-specific wind settings and point emitters are external to DRS.
+    """
+    tree=bpy.data.node_groups.new('SR Engine Wind','GeometryNodeTree')
+    tree.interface.new_socket(name='Geometry',in_out='INPUT',socket_type='NodeSocketGeometry')
+    tree.interface.new_socket(name='Geometry',in_out='OUTPUT',socket_type='NodeSocketGeometry')
+    tree['_sr_engine_wind_version']=2
+    nodes,links=tree.nodes,tree.links
+    def node(kind,name,x,y):
+        n=nodes.new(kind);n.name=n.label=name;n.location=(x,y);return n
+    def math_node(name,operation,left,right,x,y):
+        n=node('ShaderNodeMath',name,x,y);n.operation=operation
+        for i,value in enumerate((left,right)):
+            if hasattr(value,'node'):links.new(value,n.inputs[i])
+            else:n.inputs[i].default_value=value
+        return n.outputs[0]
+    inp=node('NodeGroupInput','Geometry',-1000,500)
+    out=node('NodeGroupOutput','Output',1200,500)
+    pos=node('GeometryNodeInputPosition','Local Position',-1000,300)
+    height=node('ShaderNodeSeparateXYZ','Local Height',-800,300);links.new(pos.outputs[0],height.inputs[0])
+    threshold=node('ShaderNodeValue','Wind Height',-800,150)
+    response=node('ShaderNodeValue','Wind Response',-300,100)
+    excess=math_node('Height Above Anchor','SUBTRACT',height.outputs['Y'],threshold.outputs[0],-550,300)
+    excess=math_node('Anchored Height','MAXIMUM',excess,0.,-300,300)
+    strength=math_node('Height Times Response','MULTIPLY',excess,response.outputs[0],-50,300)
+    own=node('GeometryNodeSelfObject','Model Object',-1000,-100)
+    info=node('GeometryNodeObjectInfo','Model Transform',-800,-100);info.transform_space='ORIGINAL'
+    links.new(own.outputs[0],info.inputs['Object'])
+    location=node('ShaderNodeSeparateXYZ','World Position',-550,-150);links.new(info.outputs['Location'],location.inputs[0])
+    time=node('GeometryNodeInputSceneTime','Engine Time',-800,-500)
+    # Defaults from CDrwWindForce. Named value nodes remain inspectable in Debug View.
+    components=[]
+    for i,(axis,frequency,operation) in enumerate((('X',1.,'SINE'),('Y',.75,'COSINE'))):
+        y=-150-i*450
+        phase=math_node('Spatial Phase '+axis,'MULTIPLY',location.outputs[axis],.5,-300,y)
+        phase=math_node('Time Plus Phase '+axis,'ADD',time.outputs['Seconds'],phase,-50,y)
+        phase=math_node('Wind Frequency '+axis,'MULTIPLY',phase,frequency,150,y)
+        oscillation=math_node('Wind Oscillation '+axis,operation,phase,0.,350,y)
+        components.append(oscillation)
+    wind=node('ShaderNodeCombineXYZ','Scene Wind XZ',550,-100)
+    links.new(components[0],wind.inputs['X']);links.new(components[1],wind.inputs['Z'])
+    scale=node('ShaderNodeVectorMath','World Wind Offset',550,300);scale.operation='SCALE'
+    links.new(wind.outputs[0],scale.inputs[0]);links.new(strength,scale.inputs['Scale'])
+    inverse=node('FunctionNodeInvertMatrix','World To Object',350,550);links.new(info.outputs['Transform'],inverse.inputs[0])
+    local=node('FunctionNodeTransformDirection','Local Wind Offset',800,300)
+    links.new(scale.outputs[0],local.inputs['Direction']);links.new(inverse.outputs[0],local.inputs['Transform'])
+    deform=node('GeometryNodeSetPosition','Engine Wind Deformation',1000,500)
+    links.new(inp.outputs['Geometry'],deform.inputs['Geometry']);links.new(local.outputs[0],deform.inputs['Offset'])
+    links.new(deform.outputs['Geometry'],out.inputs['Geometry'])
+    return tree
+
+
 def _create_wind_modifier(obj: bpy.types.Object) -> bool:
-    """Create the WindEffect geometry-nodes modifier on a mesh if it does not exist."""
-    if not obj or obj.type != 'MESH':
-        return False
-    if _find_wind_modifier(obj):
-        return False
-
-    modifier = obj.modifiers.new(name="WindEffect", type="NODES")
-    node_group = bpy.data.node_groups.new("WindEffectTree", "GeometryNodeTree")
-
-    if bpy.app.version[0] >= 4:
-        node_group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-        node_group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
-    else:
-        node_group.inputs.new("NodeSocketGeometry", "Geometry")
-        node_group.outputs.new("NodeSocketGeometry", "Geometry")
-
-    modifier.node_group = node_group
-    links = node_group.links
-
-    inp = node_group.nodes.new("NodeGroupInput")
-    inp.location = (0, 0)
-
-    outp = node_group.nodes.new("NodeGroupOutput")
-    outp.location = (1350, -300)
-
-    scene_time = node_group.nodes.new("GeometryNodeInputSceneTime")
-    scene_time.location = (0, -300)
-
-    mult_node = node_group.nodes.new("ShaderNodeMath")
-    mult_node.name = "Wind Response"
-    mult_node.label = "Wind Response"
-    mult_node.location = (150, -300)
-    mult_node.operation = "MULTIPLY"
-    mult_node.inputs[1].default_value = 0.0
-    links.new(scene_time.outputs["Seconds"], mult_node.inputs[0])
-
-    noise = node_group.nodes.new("ShaderNodeTexNoise")
-    noise.location = (300, -300)
-    noise.noise_dimensions = '1D'
-    links.new(mult_node.outputs["Value"], noise.inputs["W"])
-
-    subtract = node_group.nodes.new("ShaderNodeVectorMath")
-    subtract.location = (450, -300)
-    subtract.operation = "SUBTRACT"
-    subtract.inputs[1].default_value = (0.5, 0.5, 0.5)
-    links.new(noise.outputs["Color"], subtract.inputs[0])
-
-    sep_xyz = node_group.nodes.new("ShaderNodeSeparateXYZ")
-    sep_xyz.location = (600, -300)
-    links.new(subtract.outputs["Vector"], sep_xyz.inputs["Vector"])
-
-    comb_xyz = node_group.nodes.new("ShaderNodeCombineXYZ")
-    comb_xyz.location = (750, -300)
-    links.new(sep_xyz.outputs["X"], comb_xyz.inputs["X"])
-
-    pos_node = node_group.nodes.new("GeometryNodeInputPosition")
-    pos_node.location = (450, 0)
-
-    sep_y = node_group.nodes.new("ShaderNodeSeparateXYZ")
-    sep_y.location = (600, 0)
-    links.new(pos_node.outputs["Position"], sep_y.inputs["Vector"])
-
-    map_range = node_group.nodes.new("ShaderNodeMapRange")
-    map_range.name = "Wind Height"
-    map_range.label = "Wind Height"
-    map_range.location = (750, 0)
-    map_range.data_type = 'FLOAT'
-    map_range.clamp = True
-
-    map_range.inputs["From Min"].default_value = 0.0
-    map_range.inputs["From Max"].default_value = _get_wind_height_extent(obj)
-    map_range.inputs["To Min"].default_value = 0.0
-    map_range.inputs["To Max"].default_value = 1.0
-    links.new(sep_y.outputs["Y"], map_range.inputs["Value"])
-
-    scale_node = node_group.nodes.new("ShaderNodeVectorMath")
-    scale_node.location = (900, -300)
-    scale_node.operation = "SCALE"
-    links.new(comb_xyz.outputs["Vector"], scale_node.inputs[0])
-    links.new(map_range.outputs["Result"], scale_node.inputs['Scale'])
-
-    strength_scale = node_group.nodes.new("ShaderNodeVectorMath")
-    strength_scale.location = (1050, -300)
-    strength_scale.operation = "SCALE"
-    strength_scale.inputs[1].default_value = (1.0, 1.0, 1.0)
-    links.new(scale_node.outputs[0], strength_scale.inputs[0])
-
-    set_pos = node_group.nodes.new("GeometryNodeSetPosition")
-    set_pos.location = (1200, -300)
-    links.new(inp.outputs[0], set_pos.inputs["Geometry"])
-    links.new(strength_scale.outputs[0], set_pos.inputs["Offset"])
-    links.new(set_pos.outputs["Geometry"], outp.inputs[0])
-
+    if not obj or obj.type!='MESH' or _find_wind_modifier(obj):return False
+    modifier=obj.modifiers.new(name='WindEffect',type='NODES')
+    modifier.node_group=_engine_wind_tree(obj)
     return True
 
 
@@ -931,11 +888,21 @@ class DRS_OT_AddWindModifier(Operator):
         return {'FINISHED'}
 
 # --- Panels -------------------------------------------------------------------
+def _legacy_material_selected(context):
+    from .material_editor import modern
+    obj=_active_mesh(context)
+    material=obj.active_material if obj else None
+    return bool(material and not modern(material) and material.use_nodes and
+                any(n.type=='GROUP' and n.node_tree and n.node_tree.name.startswith('DRSMaterial')
+                    for n in material.node_tree.nodes))
+
+
 class DRS_PT_Material(Panel):
-    bl_label = "Material"
+    bl_label = "Material Editor"
     bl_category = "DRS Editor"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_order = 10
 
     @classmethod
     def poll(cls, _ctx):
@@ -943,13 +910,11 @@ class DRS_PT_Material(Panel):
 
     def draw(self, ctx):
         layout = self.layout
-        o = _active_mesh(ctx)
-        if not o:
-            box = layout.box()
-            box.label(text="Select a Mesh inside 'Meshes_Collection' to edit material properties.", icon="INFO")
+        from sr_impex.blender.editors.material_editor import draw_settings
+        draw_settings(layout, ctx)
 
 class DRS_PT_MaterialFlags(Panel):
-    bl_label = "Flags (bool_parameter)"
+    bl_label = "Material Flags"
     bl_parent_id = "DRS_PT_Material"
     bl_category = "DRS Editor"
     bl_space_type = "VIEW_3D"
@@ -958,7 +923,7 @@ class DRS_PT_MaterialFlags(Panel):
 
     @classmethod
     def poll(cls, _ctx):
-        return True
+        return _legacy_material_selected(_ctx)
 
     def draw(self, ctx):
         layout = self.layout
@@ -968,6 +933,10 @@ class DRS_PT_MaterialFlags(Panel):
             box.label(text="Select a Mesh inside 'Meshes_Collection' to edit material flags.", icon="INFO")
             return
 
+        from sr_impex.blender.editors.material_editor import modern, draw_flags
+        if modern(o.active_material):
+            draw_flags(layout, o)
+            return
         flags = o.drs_material
         layout.prop(flags, "bool_parameter")
 
@@ -1010,7 +979,7 @@ class DRS_PT_Flow(Panel):
 
     @classmethod
     def poll(cls, _ctx):
-        return True
+        return _legacy_material_selected(_ctx)
 
     def draw(self, ctx):
         layout = self.layout
@@ -1040,7 +1009,7 @@ class DRS_PT_Wind(Panel):
 
     @classmethod
     def poll(cls, _ctx):
-        return True
+        return _legacy_material_selected(_ctx)
 
     def draw(self, ctx):
         layout = self.layout

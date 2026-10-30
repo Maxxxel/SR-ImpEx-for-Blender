@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 MagicValues = {
+    "MeshSetGrid": 154295579,
+    "StateBasedMeshSet": 120902304,
     "CDspJointMap": -1340635850,
     "CGeoMesh": 100449016,
     "CGeoOBBTree": -933519637,
@@ -12,6 +14,8 @@ MagicValues = {
     "CGeoPrimitiveContainer": 1396683476,
     "CSkSkeleton": -2110567991,
     "CDrwLocatorList": 735146985,
+    "CGdLocatorList": -196433635,
+    "FxMaster": -1424862619,
     "AnimationSet": -475734043,
     "AnimationTimings": -1403092629,
     "EffectSet": 688490554,
@@ -28,23 +32,25 @@ AnimationType = {
 
 LocatorClass = {
     0: "HealthBar",
-    1: "DestructiblePart",
+    1: "ModelAttachment",
     2: "Construction",
     3: "Turret",
-    4: "FxbIdle",
+    4: "FigureStateFX",
     5: "Wheel",
-    6: "StaticPerm",
-    7: "Unknown7",
-    8: "DynamicPerm",
+    6: "PersistentBuildingFX",
+    7: "BuildingHitOffset",
+    8: "PersistentFigureFX",
     9: "DamageFlameSmall",
     10: "DamageFlameSmallSmoke",
     11: "DamageFlameLarge",
     12: "DamageSmokeOnly",
     13: "DamageFlameHuge",
-    14: "SpellCast",
-    15: "SpellHitAll",
+    14: "Unverified14",
+    15: "Unverified15",
     16: "Hit",
-    29: "Projectile_Spawn",
+    17: "SpellHit",
+    18: "SpellCastRetained",
+    29: "ProjectileSpawn",
 }
 
 SoundType = {

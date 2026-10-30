@@ -226,6 +226,71 @@ class Track:
 
 
 @dataclass(eq=False, repr=False)
+class MaterialTrack:
+    """CFxMaterial track; its semantic is NOT an EFxTrackData number.
+
+    Foundation 10DE4A80/10DE2AD0: scalar=0, vector=1, color=2.
+    No evaluation_type word is stored in this layout.
+    """
+    version: int = 1
+    parameter_type: int = 0
+    semantic: int = 0
+    length: float = 1.0
+    track_dim: int = 0
+    track_mode: int = 2
+    interpolation_type: int = 0
+    vector_prefix: int = 0  # Extra word in vector tracks; meaning still under audit.
+    entries: List[TrackKeyframe] = field(default_factory=list)
+    control_points: List[TrackKeyframe] = field(default_factory=list)
+
+    def read(self, file: BinaryIO) -> "MaterialTrack":
+        header, self.version, self.parameter_type, self.semantic = unpack('<4I', file.read(16))
+        if header != 0xF876AC30 or self.version != 1 or self.parameter_type not in (0, 1, 2):
+            raise ValueError('Unsupported FXB material track header/version/type')
+        self.length, self.track_dim, self.track_mode, self.interpolation_type = unpack('<f3I', file.read(16))
+        if self.parameter_type == 1:
+            self.vector_prefix = unpack('<I', file.read(4))[0]
+        width = (1, 4, 3)[self.parameter_type]
+        key_header = 0xF87EF70A if width == 1 else 0xF87E7EC7
+        cp_start = 0xF87EFC95 if width == 1 else 0xF87E7C95
+        cp_header = 0xF87EF7C9 if width == 1 else 0xF87E7EC9
+        def entries(header):
+            result = []
+            while unpack('<I', file.peek(4))[0] == header:
+                file.read(4)
+                values = unpack('<'+'f'*(width+1), file.read(4*(width+1)))
+                result.append(TrackKeyframe(frame=values[0], data=values[1] if width == 1 else tuple(values[1:])))
+            return result
+        self.entries = entries(key_header)
+        if unpack('<I', file.peek(4))[0] == cp_start:
+            file.read(4)
+            self.control_points = entries(cp_header)
+        end = unpack('<I', file.read(4))[0]
+        if end != 0xF876AC3E:
+            raise ValueError(f'Invalid FXB material track end: {end:#x}')
+        return self
+
+
+@dataclass(eq=False, repr=False)
+class MaterialBlock:
+    """MAT override, separate from the containing node's transform tracks."""
+    version: int = 0
+    material_id: int = 0
+    tracks: List[MaterialTrack] = field(default_factory=list)
+
+    def read(self, file: BinaryIO) -> "MaterialBlock":
+        header, self.version, self.material_id = unpack('<3I', file.read(12))
+        if header != 0xF84D4154 or self.version != 0:
+            raise ValueError('Unsupported FXB material block')
+        while unpack('<I', file.peek(4))[0] == 0xF876AC30:
+            self.tracks.append(MaterialTrack().read(file))
+        end = unpack('<I', file.read(4))[0]
+        if end != 0xF876E2D0:
+            raise ValueError(f'Invalid FXB material block end: {end:#x}')
+        return self
+
+
+@dataclass(eq=False, repr=False)
 class NodeLink:
     header: int = 0xF82D712E
     version: int = 0
@@ -245,13 +310,13 @@ class NodeLink:
     def read(self, file: BinaryIO) -> "NodeLink":
         self.header = unpack("I", file.read(4))[0]
         assert self.header == 0xF82D712E, f"Invalid NodeLink header: {self.header}"
-        version = unpack("I", file.read(4))[0]
+        version = self.version = unpack("I", file.read(4))[0]
         assert version in [1, 2, 3], f"Unsupported NodeLink version: {version}"
-        parent_length = unpack("I", file.read(4))[0]
+        parent_length = self.parent_length = unpack("I", file.read(4))[0]
         self.parent = file.read(parent_length).decode("utf-8").strip("\x00")
-        slot_length = unpack("I", file.read(4))[0]
+        slot_length = self.slot_length = unpack("I", file.read(4))[0]
         self.slot = file.read(slot_length).decode("utf-8").strip("\x00")
-        destination_slot_length = unpack("I", file.read(4))[0]
+        destination_slot_length = self.destination_slot_length = unpack("I", file.read(4))[0]
         self.destination_slot = file.read(destination_slot_length).decode("utf-8").strip("\x00")
         (self.world, self.node, self.floor, self.aim, self.span) = unpack("IIIII", file.read(20))
         if version > 2:
@@ -290,6 +355,7 @@ class Element:
     end_element_header = 0xF8E75E2D
     static_tracks: List[Static] = field(default_factory=list)
     tracks: List[Track] = field(default_factory=list)
+    materials: List[MaterialBlock] = field(default_factory=list)
     start_element_children_header = 0xF876E2D0
     parent: Optional["Element"] = field(default=None)
     children: List["Element"] = field(default_factory=list)
@@ -320,20 +386,21 @@ class Element:
         end_element_header = unpack("I", file.read(4))[0]
         assert end_element_header == self.end_element_header, f"Invalid end element header: {end_element_header}"
 
-        track_counter = 0
-        current_header = unpack("I", file.peek(4))[0]
-        while current_header == Track().start_track_header:
-            _ = unpack("I", file.read(4))[0]
-            track_counter += 1
-            current_header = unpack("I", file.peek(4))[0]
-
-        if track_counter != 2 and self.element_type_header not in [0xF8A23E54, 0xF8534D4D]:
-            raise ValueError(
-                f"Element must have exactly 2 tracks, found {track_counter}. Element name: {self.name}, Type: {hex(self.element_type_header)}"
-            )
-
-        self.static_tracks = _read_static_tracks(file)
-        self.tracks = _read_tracks(file)
+        # F8575767 separates parameter sections; it is not a track count.
+        # Material nodes insert MAT between their two parameter separators.
+        self.static_tracks, self.tracks, self.materials = [], [], []
+        while True:
+            current_header = unpack('<I', file.peek(4))[0]
+            if current_header == Track.start_track_header:
+                file.read(4)
+            elif current_header == Static.header:
+                self.static_tracks.append(Static().read(file))
+            elif current_header == Track.header:
+                self.tracks.append(Track().read(file))
+            elif current_header == 0xF84D4154:
+                self.materials.append(MaterialBlock().read(file))
+            else:
+                break
 
         self.start_element_children_header = unpack("I", file.read(4))[0]
         assert self.start_element_children_header == 0xF876E2D0, f"Invalid start_element_children_header: {self.start_element_children_header}"
@@ -358,6 +425,8 @@ class Element:
                     if depth != 0:
                         raise ValueError("Element parent is None but depth is not zero")
                 depth -= 1
+            if depth == -1:
+                return self
             current_header = unpack("I", file.peek(4))[0]
 
         if depth == -1:
@@ -369,20 +438,22 @@ class Element:
 @dataclass(eq=False, repr=False)
 class Light(Element):
     header: int = 0xF8716470
-    range: int = 0
-    radinace: float = 0.0
+    version: int = 1
+    range: float = 0.0
 
     def read(self, file: BinaryIO) -> "Light":
         (self.header,) = unpack("I", file.read(4))
         assert self.header == 0xF8716470, f"Invalid Light header: {self.header}"
-        self.range = unpack("I", file.read(4))[0]
-        self.radinace = unpack("f", file.read(4))[0]
+        self.version = unpack("I", file.read(4))[0]
+        # ParseElementLight reads but does not branch on this word. Custom
+        # shipped effects also contain 5 with the same following float layout.
+        self.range = unpack("f", file.read(4))[0]
         return self
 
     def write(self, file: BinaryIO) -> None:
         file.write(pack("I", self.header))
-        file.write(pack("I", self.range))
-        file.write(pack("f", self.radinace))
+        file.write(pack("I", self.version))
+        file.write(pack("f", self.range))
 
     def size(self) -> int:
         return 12
@@ -490,8 +561,9 @@ class Emitter(Element):
     particle_count: int = 0
 
     def read(self, file: BinaryIO) -> "Emitter":
+        expected_header = type(self).header
         (self.header,) = unpack("I", file.read(4))
-        assert self.header == 0xF8E31777, f"Invalid Emitter header: {self.header}"
+        assert self.header == expected_header, f"Invalid {type(self).__name__} header: {self.header}"
         (self.version,) = unpack("I", file.read(4))
         assert self.version == 1, f"Unsupported Emitter version: {self.version}"
         self.emitter_file_length = unpack("I", file.read(4))[0]
@@ -736,8 +808,9 @@ class AnimatedMesh(Element):
     animation_file: str = ""
 
     def read(self, file: BinaryIO) -> "AnimatedMesh":
+        expected_header = type(self).header
         (self.header,) = unpack("I", file.read(4))
-        assert self.header == 0xF8A23E54, f"Invalid AnimatedMesh header: {self.header}"
+        assert self.header == expected_header, f"Invalid {type(self).__name__} header: {self.header}"
         (self.version,) = unpack("I", file.read(4))
         assert self.version == 1, f"Unsupported AnimatedMesh version: {self.version}"
         self.mesh_file_length = unpack("I", file.read(4))[0]
@@ -759,17 +832,17 @@ class AnimatedMesh(Element):
 
 
 @dataclass(eq=False, repr=False)
-class AnimatedMeshMaterial(Element):
+class MeshMaterial(Element):
     header: int = 0xF8534D4D
     version: int = 1
     mesh_material_file_length: int = 0
     mesh_material_file: str = ""
 
-    def read(self, file: BinaryIO) -> "AnimatedMeshMaterial":
+    def read(self, file: BinaryIO) -> "MeshMaterial":
         (self.header,) = unpack("I", file.read(4))
-        assert self.header == 0xF8534D4D, f"Invalid AnimatedMeshMaterial header: {self.header}"
+        assert self.header == 0xF8534D4D, f"Invalid MeshMaterial header: {self.header}"
         (self.version,) = unpack("I", file.read(4))
-        assert self.version == 1, f"Unsupported AnimatedMeshMaterial version: {self.version}"
+        assert self.version == 1, f"Unsupported MeshMaterial version: {self.version}"
         self.mesh_material_file_length = unpack("I", file.read(4))[0]
         self.mesh_material_file = file.read(self.mesh_material_file_length).decode("utf-8").strip("\x00")
         return self
@@ -876,12 +949,25 @@ class SfpForceField(Element):
         return 8
 
 
+@dataclass(eq=False, repr=False)
+class Satellite(Emitter):
+    """Legacy satellite particle node, separate from the standard emitter."""
+    header: int = 0xF85A7717
+
+
+@dataclass(eq=False, repr=False)
+class AnimatedMeshMaterial(AnimatedMesh):
+    """Skeletal mesh + SKA resource and MAT override section."""
+    header: int = 0xF8414D4D
+
+
 _element_type_map = {
     0xF8716470: Light,
     0xF85DECA7: StaticDecal,
     0xF850C5D0: Sound,
     0xF88177BD: Billboard,
     0xF8E31777: Emitter,
+    0xF85A7717: Satellite,
     0xF8C5AAEE: CameraShake,
     0xF83E5400: EffectMesh,
     0xF8EFFE37: Effect,
@@ -892,7 +978,8 @@ _element_type_map = {
     0xF8466F72: Force,
     0xF8504650: ForcePoint,
     0xF8A23E54: AnimatedMesh,
-    0xF8534D4D: AnimatedMeshMaterial,
+    0xF8534D4D: MeshMaterial,
+    0xF8414D4D: AnimatedMeshMaterial,
     0xF8ADECA7: WaterDecal,
     0xF85F6575: SfpSystem,
     0xF85F6E31: SfpEmitter,
@@ -990,6 +1077,10 @@ class FxMaster:
         assert self.start_element_children_header == 0xF876E2D0, f"Invalid start_element_children_header: {self.start_element_children_header}"
         self.special_effect = SpecialEffect()
         _read_element(file, self.special_effect)
+        # Empty root trees return before consuming their closing delimiters.
+        # Nonempty trees normally consume these while unwinding Element.read.
+        while file.peek(4) == pack('<I', Element.end_element_children_header):
+            file.read(4)
         return self
 
     def write(self, file: BinaryIO) -> None:
