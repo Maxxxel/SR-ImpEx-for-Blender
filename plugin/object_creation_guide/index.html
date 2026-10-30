@@ -994,26 +994,20 @@ Keep your original foreign rig intact.</p>
 </details>
 <details class="tip">
 <summary>Advanced: play another animation from a map script</summary>
-<p>For a gate that opens when a lever is used:</p>
+<p><strong>Gate setup:</strong></p>
+<ul>
+<li><strong>Decorative gate:</strong> keep the frame and door in one model.</li>
+<li><strong>Gate that opens a passage:</strong> export the frame and door as separate models,
+  each with its own collision shape. Place them separately in the map.</li>
+</ul>
+<p>To control the door:</p>
 <ol>
 <li>Create the opening motion as a separate Action.</li>
 <li>Export it with <strong>File → Export → Battleforge Animation (.ska)</strong>.</li>
-<li>Give the filename to the map author. Their map script plays that file
-   at the chosen event, once or in a loop.</li>
+<li>Give the SKA filename to the map author. Their script plays it on the door
+   and switches the door's blocking when opening or closing the passage.</li>
 </ol>
-<p>Keep Idle in AnimationSet. Do not add an Attack or Walk mapping for this clip.
-The plugin does not create the map script.</p>
-<p><strong>For a usable gate, coordinate the blocking with the map author:</strong></p>
-<ul>
-<li>Keep the frame's permanent blocker separate from the door's switchable blocker.</li>
-<li>A simple custom setup uses a static frame asset and a separate moving-door asset,
-  placed as separate entities. The map author must set up the gate or blocker logic.</li>
-<li>Two meshes inside one DRS do not create separate blockers. The native gate command
-  switches its gate entity's whole obstacle, not a named mesh or collision shape.</li>
-<li>Playing the opening SKA changes the visible motion only. The passage also needs
-  to be unblocked by the map's gameplay logic.</li>
-</ul>
-<p>Two visible model files are a convenient setup, not a requirement for every gate.</p>
+<p>Keep Idle in AnimationSet. Do not add an Attack or Walk mapping for this clip.</p>
 </details>
 <p><span id="7-export"></span></p>
 <h2 id="8-export">8. Export<a class="headerlink" href="#8-export" title="Permanent link">&para;</a></h2>
@@ -1118,7 +1112,7 @@ The plugin does not create the map script.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 20:39:13 UTC">October 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 30, 2026 20:52:40 UTC">October 30, 2026</span>
   </span>
 
     
