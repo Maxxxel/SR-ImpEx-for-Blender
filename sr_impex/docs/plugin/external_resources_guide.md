@@ -140,9 +140,10 @@ files in the game to import or preview it in Blender.
 
 ### Install for a game test
 
-Copy **AdditionalFiles/bf1** into **Skylords Reborn/Mods/Unpack**, preserving
-`bf1/...`, as listed in **INSTALL.txt**. Keep the model's local files together
-in their dedicated model folder. Test the complete package in the Map Editor.
+Keep the model's local files together in their dedicated model folder. Install
+the files in **AdditionalFiles** using your project's game asset workflow,
+preserving their `bf1/...` paths. Then test the complete package in the Map
+Editor.
 
 ??? tip "Advanced: export choices"
     **Local + Custom** includes local module/state/destruction resources and
