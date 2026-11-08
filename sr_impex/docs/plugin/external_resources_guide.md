@@ -117,7 +117,6 @@ textures.dds
 meshes/
     debris_piece.drs
 AdditionalFiles/
-    INSTALL.txt
     bf1/gfx/effects/…
     bf1/sound/…
 my_building.assets.json
