@@ -15,28 +15,25 @@
         <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_shading_guide/">
       
       
-        <link rel="prev" href="../building_creation_guide/">
+        <link rel="prev" href="../external_resources_guide/">
       
       
         <link rel="next" href="../material_artist_workflow/">
       
       
-        
-      
-      
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.22">
     
     
       
-        <title>Advanced Shading Guide - Skylords Reborn Blender Artist Guides</title>
+        <title>Shading Recipes - Skylords Reborn Blender Artist Guides</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -63,6 +60,7 @@
 
     
     
+    
   </head>
   
   
@@ -82,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#advanced-shading-guide" class="md-skip">
+        <a href="#shading-recipes" class="md-skip">
           Skip to content
         </a>
       
@@ -117,7 +115,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Advanced Shading Guide
+              Shading Recipes
             
           </span>
         </div>
@@ -271,14 +269,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Overview
-  
-
     
   </span>
-  
   
 
       </a>
@@ -296,6 +289,10 @@
   
     
     
+      
+        
+      
+        
       
         
       
@@ -336,14 +333,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Plugin Guides
-  
-
     
   </span>
-  
   
 
             <span class="md-nav__icon md-icon"></span>
@@ -352,11 +344,7 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
-            
-  
-    Plugin Guides
-  
-
+            Plugin Guides
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -372,14 +360,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Artist Model Pipeline
-  
-
     
   </span>
-  
   
 
       </a>
@@ -400,14 +383,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Object Guide
-  
-
     
   </span>
-  
   
 
       </a>
@@ -428,14 +406,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Unit Creation Guide
-  
-
+    Unit Guide
     
   </span>
-  
   
 
       </a>
@@ -456,14 +429,32 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Building Creation Guide
-  
-
+    Building Guide
     
   </span>
   
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../external_resources_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Modules, Debris & Resources
+    
+  </span>
   
 
       </a>
@@ -493,14 +484,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Shading Guide
-  
-
+    Shading Recipes
     
   </span>
-  
   
 
           <span class="md-nav__icon md-icon"></span>
@@ -511,14 +497,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Shading Guide
-  
-
+    Shading Recipes
     
   </span>
-  
   
 
       </a>
@@ -539,118 +520,65 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-start-with-the-drs-material-layout" class="md-nav__link">
+  <a href="#cut-out-leaves-fences-and-fabric" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        1. Start with the DRS material layout
-      
+      Cut-out leaves, fences and fabric
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-texture-suffixes-and-channels" class="md-nav__link">
+  <a href="#a-simple-surface-with-smooth-transparency" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        2. Texture suffixes and channels
-      
+      A simple surface with smooth transparency
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-material-flags-supported-controls-versus-unknowns" class="md-nav__link">
+  <a href="#lava-and-other-flowing-surfaces" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        3. Material flags: supported controls versus unknowns
-      
+      Lava and other flowing surfaces
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-normal-maps" class="md-nav__link">
+  <a href="#reflections" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        4. Normal maps
-      
+      Reflections
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-refraction-and-environment-cubemaps" class="md-nav__link">
+  <a href="#refraction-and-a-soft-edged-waterfall" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        5. Refraction and environment cubemaps
-      
+      Refraction and a soft-edged waterfall
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-flow-animation" class="md-nav__link">
+  <a href="#vertex-painted-color" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        6. Flow animation
-      
+      Vertex-painted color
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-wind" class="md-nav__link">
+  <a href="#before-sharing" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        7. Wind
-      
+      Before sharing
     </span>
   </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#8-export-and-verification-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        8. Export and verification checklist
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#soft-transparency-for-a-simple-surface" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Soft transparency for a simple surface
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Soft transparency for a simple surface">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#keep-flow-on-a-soft-edged-waterfall" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Keep flow on a soft-edged waterfall
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -675,14 +603,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Default Material Guide
-  
-
     
   </span>
-  
   
 
       </a>
@@ -703,14 +626,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Locators Guide
-  
-
+    Locator Guide
     
   </span>
-  
   
 
       </a>
@@ -731,14 +649,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Abilities Guide
-  
-
+    Animation Set Guide
     
   </span>
-  
   
 
       </a>
@@ -759,17 +672,139 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Effects Guide
-  
-
+    Effect Set Guide
     
   </span>
   
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_11" id="__nav_2_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Advanced Tutorials
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_11">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../animation_advanced_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Animation
+    
+  </span>
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../effects_advanced_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Effects
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ik_advanced_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    IK
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -792,7 +827,6 @@
           
           
             <div class="md-content" data-md-component="content">
-              
               <article class="md-content__inner md-typeset">
                 
                   
@@ -802,70 +836,194 @@
   
 
 
-<h1 id="advanced-shading-guide">Advanced Shading Guide<a class="headerlink" href="#advanced-shading-guide" title="Permanent link">&para;</a></h1>
-<p>For the current Blender 5 material system, use the <a href="../material_artist_workflow/">Artist Material Workflow</a>. This page is a practical overview; this guide covers extra painting and shading tasks and preview limits.</p>
-<h2 id="1-start-with-the-drs-material-layout">1. Start with the DRS material layout<a class="headerlink" href="#1-start-with-the-drs-material-layout" title="Permanent link">&para;</a></h2>
-<p>Select the render mesh and open <strong>DRS Editor &gt; Material Editor</strong>. Choose <strong>Create / Upgrade DRS Material</strong> when needed. An upgrade creates a new material; keep the previous version until you have checked the result. Choose the appropriate engine material handler and assign its textures and parameters. An arbitrary Blender node graph is not baked into a game shader.</p>
-<h2 id="2-texture-suffixes-and-channels">2. Texture suffixes and channels<a class="headerlink" href="#2-texture-suffixes-and-channels" title="Permanent link">&para;</a></h2>
-<p>For inspected Default variants, the parameter map uses <strong>R smoothness, G metalness, B flow mask or reflection input depending on the shader variant, and A emissivity</strong>. The same texture identifier has other meanings in legacy specular handlers, so use the selected material type rather than guessing from a filename. Color-map opacity is separate from parameter-map alpha.</p>
-<p>When using separate artist maps, the current packer converts roughness to <code>1 - roughness</code> for R, writes metalness to G, the flow/reflection input to B and emissivity to A. Use matching dimensions; missing separate maps fall back to the packed map or zero.</p>
-<h2 id="3-material-flags-supported-controls-versus-unknowns">3. Material flags: supported controls versus unknowns<a class="headerlink" href="#3-material-flags-supported-controls-versus-unknowns" title="Permanent link">&para;</a></h2>
-<p>Flag labels depend on the material handler; a bit does not necessarily have a universal meaning. <strong>Calculate Map Flags</strong> or <strong>Auto map flags</strong> calculates the Default material's parameter and normal map bits from enabled images while retaining other bits. Preserve unknown imported flags unless you have a reason to change them. Review the resulting material in the game.</p>
-<h2 id="4-normal-maps">4. Normal maps<a class="headerlink" href="#4-normal-maps" title="Permanent link">&para;</a></h2>
-<p>Assign the normal image to its supported texture slot and enable the appropriate flag. Treat it as non-color data. The exporter calculates geometry tangents from the active UV layer; check UV seams and compare a fresh import.</p>
-<h2 id="5-refraction-and-environment-cubemaps">5. Refraction and environment cubemaps<a class="headerlink" href="#5-refraction-and-environment-cubemaps" title="Permanent link">&para;</a></h2>
-<p>Default refraction uses a refraction texture, color and scale. For the inspected shader, RG shifts a screen-color sample, B influences mip bias and alpha contributes the filtered background. The camera compositor reproduces part of this behavior; its B-channel blur, render ordering, lighting and edge behavior are incomplete. Viewport refraction is a separate approximation. Refraction does not automatically enable an environment-map flag. Validate this effect in the Map Editor.</p>
-<p>Environment map handling also varies by material; Blender's environment response is an approximation of the game's renderer. Test it with the intended game resources.</p>
-<h2 id="6-flow-animation">6. Flow animation<a class="headerlink" href="#6-flow-animation" title="Permanent link">&para;</a></h2>
-<p>Assign a fluid map and parameter map, adjust the Default Flow controls, and play or scrub the timeline. Parameter-map B is the flow mask in the inspected flow shader. The preview uses recovered turbulence math and a deterministic animation sequence; game random history, texture format, shading coordinates and lighting can differ. <strong>Write Flow</strong> controls whether the named flow vectors are serialized, not whether the presence of a fluid map selects the game shader's flow path. Use the Custom Flow Settings controls to change movement.</p>
-<p>Flow uses the mesh's rest positions and advances while the timeline plays. Moving a bone should not drag the procedural fluid pattern through the surface; keeping the body still should not stop the flow. The plugin supplies the rest-position attribute automatically and upgrades older flow graphs when the timeline advances.</p>
-<p>During playback, flow continues when the SKA animation loops. Pausing holds the fluid; pressing Space again resumes it. Changing clips or clip FPS does not restart its motion. Scrubbing while paused sets the fluid to that timeline time. Renders use timeline time too, so rendering the same frame gives the same fluid pattern. This can differ from the continuously running viewport after several clip loops.</p>
-<p>The preview integrates flow at a fixed 60 updates per second. This is a repeatable Blender preview policy; the game's shared random state and rendering history can still produce a different pattern.</p>
-<h2 id="7-wind">7. Wind<a class="headerlink" href="#7-wind" title="Permanent link">&para;</a></h2>
-<p>In Default <strong>Material Parameters</strong>, enable WindResponse and WindHeight.
-The preview modifier is managed automatically. Play the timeline to see the
-movement. The engine uses height along local game Y and a world-space wind
-displacement. The preview follows the default engine wind field; individual
-maps can supply different wind. Wind pauses while painting and resumes when leaving Texture Paint.</p>
-<h2 id="8-export-and-verification-checklist">8. Export and verification checklist<a class="headerlink" href="#8-export-and-verification-checklist" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Use the correct active material and UV layer for each exported mesh. Confirm enabled images are present.</li>
-<li>Export to a separate folder, then inspect the DRS and DDS files and any referenced resources.</li>
-<li>Reimport the exported model into a fresh scene and compare the material and mesh.</li>
-<li>Check animations, wind, flow, refraction, alpha edges and lighting in the Map Editor or game. Blender preview is not a pixel-match guarantee.</li>
-</ul>
-<p>For supported and unresolved material families, raw records and texture conversion, see the <a href="../material_artist_workflow/">Artist Material Workflow</a>. For the complete model workflow, start with the <a href="../model_artist_pipeline/">Artist Model Pipeline</a>.</p>
-<h2 id="soft-transparency-for-a-simple-surface">Soft transparency for a simple surface<a class="headerlink" href="#soft-transparency-for-a-simple-surface" title="Permanent link">&para;</a></h2>
-<p>For a simple transparent mesh, try <strong>SimpleTextured</strong>. Assign its Texture with
-a grayscale opacity gradient in the image alpha channel: white is visible,
-black is transparent, and gray gives partial visibility. Start with white
-Color, material Alpha <strong>1</strong>, and UseVertexColor disabled. Lower material
-Alpha for an additional fade across the whole surface. Use a texture format
-that retains alpha.</p>
-<p>Alpha Test is a cutout operation and does not enable smooth transparency by
-itself. Do not put the opacity gradient in Default's ParamMap alpha; that
-channel controls emissivity.</p>
-<p>If transparent surfaces overlap incorrectly, try DisableDepthWrite while
-keeping depth testing enabled, and check the result in the Map Editor.
-Changing to SimpleTextured also changes the shader: it does not preserve
-Default's normal/PAR lighting or FluidMap flow. Test a flowing waterfall
-separately before replacing its existing material. This recipe is supported
-by engine/shader analysis; it has not been visually checked on every model.</p>
-<h3 id="keep-flow-on-a-soft-edged-waterfall">Keep flow on a soft-edged waterfall<a class="headerlink" href="#keep-flow-on-a-soft-edged-waterfall" title="Permanent link">&para;</a></h3>
-<p>If a waterfall already uses Default's FluidMap, keep that material for the
-first test. The game supports flow together with its refraction screen lookup.
-Start with <strong>RefractionScale 0</strong>, a white <strong>RefractionColor</strong>, and a refraction
-map with neutral RG and black B. This brings in the background without adding
-distortion or an extra blur bias.</p>
-<p>For a soft bottom edge, reduce the water contribution while increasing the
-background contribution in the same area. Refraction-map alpha adds background;
-it does not automatically fade out the water. Use the ParamMap blue flow mask
-to fade flow locally, and make sure the underlying ColorMap and any glow or
-highlights do not leave a solid edge. Disable Alpha Test for this test.</p>
-<p>A readable moving body with a fade near the bottom is a useful starting point.
-Only add subtle distortion after the edge works. Review the actual model in
-the Map Editor: this setup follows the engine shader, but a finished visual
-match depends on the model's existing textures and lighting.</p>
+<h1 id="shading-recipes">Shading Recipes<a class="headerlink" href="#shading-recipes" title="Permanent link">&para;</a></h1>
+<p>For ordinary solid surfaces, start with the <a href="../material_artist_workflow/">Default Material Guide</a>.
+These recipes cover cutouts, smooth transparency, flowing surfaces and reflections.</p>
+<p>Select a mesh and open <strong>DRS Editor → Material Editor</strong>. Use <strong>Artist View</strong>.
+Keep an imported model's material type unless you intend to change its appearance.</p>
+<h2 id="cut-out-leaves-fences-and-fabric">Cut-out leaves, fences and fabric<a class="headerlink" href="#cut-out-leaves-fences-and-fabric" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Use <strong>Default</strong> and assign the ColorMap.</li>
+<li>Put the cutout mask in <strong>ColorMap alpha</strong>: white is visible; black is a hole.</li>
+<li>Enable <strong>Material Flags → EnableAlphaTest</strong>.</li>
+<li>Inspect the edges, export a copy and check it in the Map Editor.</li>
+</ol>
+<p>Alpha Test makes a visible-or-invisible cutout. Use the next recipe for a soft fade.
+Default's <strong>ParamMap alpha controls emissivity</strong>, so do not put the cutout mask there.</p>
+<h2 id="a-simple-surface-with-smooth-transparency">A simple surface with smooth transparency<a class="headerlink" href="#a-simple-surface-with-smooth-transparency" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Choose <strong>SimpleTextured</strong>.</li>
+<li>Assign its Texture with an opacity gradient in the image alpha channel.</li>
+<li>Start with white <strong>Color</strong>, material <strong>Alpha 1</strong> and <strong>UseVertexColor</strong> off.</li>
+<li>Use white alpha for visible areas, black for invisible areas and gray for partial opacity.</li>
+<li>Lower material <strong>Alpha</strong> to fade the whole surface further.</li>
+</ol>
+<p>Keep alpha when saving the texture. If overlapping surfaces look wrong, try
+<strong>DisableDepthWrite</strong> while keeping depth testing enabled, then test in the Map Editor.</p>
+<p>Switching to SimpleTextured changes the material's features. It does not keep
+Default's normal/PAR lighting or FluidMap flow. For a flowing waterfall, use
+the recipe below first.</p>
+<h2 id="lava-and-other-flowing-surfaces">Lava and other flowing surfaces<a class="headerlink" href="#lava-and-other-flowing-surfaces" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Keep <strong>Default</strong> and assign its <strong>FluidMap</strong>.</li>
+<li>Assign the <strong>ParamMap</strong>; use its blue channel to mask where flow appears.</li>
+<li>Open <strong>Flow — Speed and Direction</strong> and enable <strong>Custom Flow Settings</strong>.</li>
+<li>Set <strong>Minimum Speed</strong> and <strong>Maximum Speed</strong>. Use matching values for steady movement.</li>
+<li>Adjust <strong>Pattern Scale</strong>, then press <strong>Space</strong> to play.</li>
+</ol>
+<p>The body can stay still. Flow uses the timeline and continues across clip loops.
+Pause to hold it; scrub while paused to inspect a particular time.</p>
+<p>Leaving Custom Flow Settings off uses the default movement. It does not disable flow.</p>
+<p><a href="../../assets/images/guides/editors/material.png"><img alt="Default material with FluidMap enabled and editable flow controls" src="../../assets/images/guides/editors/material.png" /></a></p>
+<details class="tip">
+<summary>Flow while rendering</summary>
+<p>Render frames use timeline time. The same frame gives the same flow pattern.
+A continuously playing viewport can look different after several animation loops.</p>
+</details>
+<h2 id="reflections">Reflections<a class="headerlink" href="#reflections" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Enable <strong>UseEnvironmentMap</strong>.</li>
+<li>Assign an <strong>EnvironmentMap</strong>, or choose <strong>Use Bundled Environment</strong> when shown.</li>
+<li>Use <strong>Render Setup → Add Render</strong> and inspect the whole model in <strong>Rendered</strong> shading.</li>
+</ol>
+<p>The game's lighting and environment can differ. Check the final reflection in
+the intended map.</p>
+<h2 id="refraction-and-a-soft-edged-waterfall">Refraction and a soft-edged waterfall<a class="headerlink" href="#refraction-and-a-soft-edged-waterfall" title="Permanent link">&para;</a></h2>
+<p>For a waterfall that already flows, keep its <strong>Default</strong> material and FluidMap.</p>
+<ol>
+<li>Assign <strong>RefractionParamMap</strong>.</li>
+<li>Start with white <strong>RefractionColor</strong> and <strong>RefractionScale 0</strong>.</li>
+<li>Use neutral RG and black B in the refraction map for the first test.</li>
+<li>Increase its alpha near the soft edge to add the background there.</li>
+<li>Reduce the water contribution in that same area. Fade the ParamMap blue flow
+   mask and check that the ColorMap and glow do not leave a solid edge.</li>
+<li>Disable Alpha Test for this soft-edge test.</li>
+<li>Check the edge before adding subtle distortion with RefractionScale.</li>
+</ol>
+<p>Refraction-map alpha adds background; it does not automatically hide the water.
+Keep the rest of the material dark enough at the faded edge. Test the finished
+waterfall in the Map Editor.</p>
+<details class="info">
+<summary>Advanced: refraction texture channels</summary>
+<p>For this Default refraction setup, <strong>RG</strong> controls the background distortion,
+<strong>B</strong> contributes blur/mip bias, and <strong>alpha</strong> contributes filtered background.</p>
+<p>The Blender camera preview reproduces part of this. The B-channel blur,
+overlapping layers and viewport appearance still differ from the game.
+For effects containing refraction meshes, <strong>Update Preview → Add Render → F12</strong>
+gives the more complete supported preview. See the
+<a href="../advanced_effects_guide/">Effect Set Guide</a>.</p>
+</details>
+<h2 id="vertex-painted-color">Vertex-painted color<a class="headerlink" href="#vertex-painted-color" title="Permanent link">&para;</a></h2>
+<p>For a <strong>Textured</strong> or <strong>SimpleTextured</strong> material, use <strong>Create SR Vertex Colors</strong>.
+Paint the resulting <strong>SR Color0</strong> attribute and keep the material's vertex-color
+flag enabled. Check the exported result in the Map Editor before relying on it
+for a new material setup.</p>
+<details class="info">
+<summary>Other material types and preview limits</summary>
+<p>The selector includes specialized effect, terrain and render-pass materials.
+Do not switch an ordinary model to one of these just to enable a single
+feature. Keep an imported material's type and edit its named slots.</p>
+<table>
+<thead>
+<tr>
+<th>Material family</th>
+<th>Current Blender workflow</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Default</td>
+<td>Use the Default Material Guide for its maps, flow, wind and supported surface parameters.</td>
+</tr>
+<tr>
+<td>Textured / SimpleTextured</td>
+<td>Edit their Texture, Color and supported flags. The Default PAR channel recipe does not apply.</td>
+</tr>
+<tr>
+<td>DiffuseSpecular variants</td>
+<td>Use their DiffuseMap and SpecularMap. The preview covers basic color/specular inputs, with approximate lighting.</td>
+</tr>
+<tr>
+<td>Lava / Effect</td>
+<td>Keep the source setup. Some base inputs are previewed; specialized procedural layers and shader behaviour are not fully reproduced.</td>
+</tr>
+<tr>
+<td>Billboard / ParticleSystem / StatefulParticles / Trail</td>
+<td>For particle motion and effect-controlled animation, use the FX preview. A material on a static mesh does not create an emitter.</td>
+</tr>
+<tr>
+<td>Decal, cliff, terrain, sky and UI families</td>
+<td>Basic routed textures may be visible; the game's projection, layering and scene passes are not recreated as a complete shader.</td>
+</tr>
+<tr>
+<td>Remaining specialized handlers</td>
+<td>Preserve the imported setup. A readable/exportable parameter is not proof of a matching visual preview.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Billboard:</strong> its <strong>Texture</strong> alpha controls transparency. Enable
+<strong>UseAlphaMask</strong> to multiply it by <strong>MaskTexture</strong> alpha. Mask colors do not
+tint the result. On a mesh, these textures use its UVs; the FX preview
+supplies the effect's camera-facing quad and separate mask coordinates.</p>
+<p><strong>Default distortion:</strong> assign a <strong>DistortionParamMap</strong> with gradients in
+its alpha channel. <strong>DistortionMeshScale</strong> moves the separate distortion
+surface along its normals. Blender approximates the distortion with
+refraction.</p>
+<p><strong>MonoColor</strong> uses <strong>Alpha</strong> for opacity. In <strong>VolumetricFog</strong>, the red
+channel of <strong>DensityMap</strong> varies the density. <strong>DensityMapInfluence</strong>
+controls how much of that pattern is visible.</p>
+<p><strong>Export only</strong> settings are saved and have no live preview. Default
+<strong>DepthWriteThreshold</strong> is in Debug View and affects depth writes during
+an engine fade. <strong>Engine effect unverified</strong> means the flag is registered
+and its visual effect in the engine has yet to be established.</p>
+<p>Complete recipes and visual comparisons for every specialized material are
+still outstanding. The supported basic preview is useful for editing; it
+is not a replacement for the final engine check.</p>
+</details>
+<h2 id="before-sharing">Before sharing<a class="headerlink" href="#before-sharing" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Save painted images and your <code>.blend</code>.</li>
+<li>Export to a separate folder and review the log.</li>
+<li>Reimport the exported model and inspect its maps and transparency.</li>
+<li>Check the moving surface, reflections and edges in the Map Editor.</li>
+</ol>
+<details class="info">
+<summary>When the Blender preview differs</summary>
+<table>
+<thead>
+<tr>
+<th>Appearance</th>
+<th>Next check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A slider has no effect</td>
+<td>Its value may come from a texture. Edit that map instead.</td>
+</tr>
+<tr>
+<td>A map does nothing</td>
+<td>Check the selected material type, slot checkbox and feature flag.</td>
+</tr>
+<tr>
+<td>Flow is static</td>
+<td>Press Space; check FluidMap and the blue flow mask.</td>
+</tr>
+<tr>
+<td>Soft transparency has hard edges</td>
+<td>Disable Alpha Test and use a material setup supporting smooth transparency.</td>
+</tr>
+<tr>
+<td>Refraction differs</td>
+<td>Compare a camera render and the Map Editor; blur and layered distortion are incomplete in Blender.</td>
+</tr>
+<tr>
+<td>Reflections or glow look different</td>
+<td>Compare the intended game lighting and environment.</td>
+</tr>
+</tbody>
+</table>
+</details>
 
 
 
@@ -979,11 +1137,10 @@ match depends on the model's existing textures and lighting.</p>
     
     
       
-      
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "toc.integrate", "content.code.copy", "content.code.annotate", "content.tabs.link", "search.highlight", "search.suggest", "header.autohide"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "toc.integrate", "content.code.copy", "content.code.annotate", "content.tabs.link", "search.highlight", "search.suggest", "header.autohide"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
       
     
   </body>

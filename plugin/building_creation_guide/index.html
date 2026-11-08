@@ -18,25 +18,22 @@
         <link rel="prev" href="../unit_creation_buide/">
       
       
-        <link rel="next" href="../advanced_shading_guide/">
-      
-      
-        
+        <link rel="next" href="../external_resources_guide/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.22">
     
     
       
-        <title>Building Creation Guide - Skylords Reborn Blender Artist Guides</title>
+        <title>Building Guide - Skylords Reborn Blender Artist Guides</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -63,6 +60,7 @@
 
     
     
+    
   </head>
   
   
@@ -82,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#building-creation-guide" class="md-skip">
+        <a href="#building-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -117,7 +115,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Building Creation Guide
+              Building Guide
             
           </span>
         </div>
@@ -271,14 +269,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Overview
-  
-
     
   </span>
-  
   
 
       </a>
@@ -296,6 +289,10 @@
   
     
     
+      
+        
+      
+        
       
         
       
@@ -336,14 +333,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Plugin Guides
-  
-
     
   </span>
-  
   
 
             <span class="md-nav__icon md-icon"></span>
@@ -352,11 +344,7 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
-            
-  
-    Plugin Guides
-  
-
+            Plugin Guides
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -372,14 +360,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Artist Model Pipeline
-  
-
     
   </span>
-  
   
 
       </a>
@@ -400,14 +383,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Object Guide
-  
-
     
   </span>
-  
   
 
       </a>
@@ -428,14 +406,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Unit Creation Guide
-  
-
+    Unit Guide
     
   </span>
-  
   
 
       </a>
@@ -465,14 +438,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Building Creation Guide
-  
-
+    Building Guide
     
   </span>
-  
   
 
           <span class="md-nav__icon md-icon"></span>
@@ -483,14 +451,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Building Creation Guide
-  
-
+    Building Guide
     
   </span>
-  
   
 
       </a>
@@ -511,34 +474,37 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-start-from-an-existing-building" class="md-nav__link">
+  <a href="#cells-and-states" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        1. Start from an Existing Building
-      
+      Cells and states
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-understand-the-imported-structure" class="md-nav__link">
+  <a href="#1-start-a-building" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        2. Understand the Imported Structure
-      
+      1. Start a building
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="2. Understand the Imported Structure">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-edit-a-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Edit a state
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Edit a state">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#go-and-parenting" class="md-nav__link">
+  <a href="#state-effects" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        GO and parenting
-      
+      State effects
     </span>
   </a>
   
@@ -550,138 +516,27 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-inspect-states-in-the-bmg-editor" class="md-nav__link">
+  <a href="#3-check-the-grid-and-collisions" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        3. Inspect States in the BMG Editor
-      
+      3. Check the grid and collisions
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-inspect-or-fit-a-mesh-grid" class="md-nav__link">
+  <a href="#4-preview-damage" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        4. Inspect or Fit a Mesh Grid
-      
+      4. Preview damage
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-edit-materials-collision-and-optional-resources" class="md-nav__link">
+  <a href="#5-export" class="md-nav__link">
     <span class="md-ellipsis">
-      
-        5. Edit Materials, Collision, and Optional Resources
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="5. Edit Materials, Collision, and Optional Resources">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#visible-meshes-and-materials" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Visible meshes and materials
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#collision" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Collision
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#ground-decal" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Ground decal
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#construction-pieces-and-debris" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Construction pieces and debris
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#6-animated-buildings-and-visual-hooks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Animated Buildings and Visual Hooks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#7-author-states-and-grid-settings" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7. Author States and Grid Settings
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#preview-damage-and-destruction" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Preview Damage and Destruction
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#8-export-and-validate" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        8. Export and Validate
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-guides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Guides
-      
+      5. Export
     </span>
   </a>
   
@@ -703,19 +558,37 @@
   
   
     <li class="md-nav__item">
+      <a href="../external_resources_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Modules, Debris & Resources
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../advanced_shading_guide/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Shading Guide
-  
-
+    Shading Recipes
     
   </span>
-  
   
 
       </a>
@@ -736,14 +609,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
     Default Material Guide
-  
-
     
   </span>
-  
   
 
       </a>
@@ -764,14 +632,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Locators Guide
-  
-
+    Locator Guide
     
   </span>
-  
   
 
       </a>
@@ -792,14 +655,9 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Abilities Guide
-  
-
+    Animation Set Guide
     
   </span>
-  
   
 
       </a>
@@ -820,17 +678,139 @@
   
   
   <span class="md-ellipsis">
-    
-  
-    Advanced Effects Guide
-  
-
+    Effect Set Guide
     
   </span>
   
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_11" id="__nav_2_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Advanced Tutorials
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_11">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../animation_advanced_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Animation
+    
+  </span>
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../effects_advanced_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Effects
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ik_advanced_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    IK
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -853,7 +833,6 @@
           
           
             <div class="md-content" data-md-component="content">
-              
               <article class="md-content__inner md-typeset">
                 
                   
@@ -863,228 +842,237 @@
   
 
 
-<h1 id="building-creation-guide">Building Creation Guide<a class="headerlink" href="#building-creation-guide" title="Permanent link">&para;</a></h1>
-<p>Buildings add a mesh grid, mesh states, and referenced resources to the ordinary DRS mesh/material workflow. A <code>.bmg</code> is not simply a static <code>.drs</code> with a different filename.</p>
-<p>Start with the <a href="../object_creation_guide/">Object Creation Guide</a> for mesh, material, collision, and GO basics. Use the <a href="../unit_creation_buide/">Unit Creation Guide</a> for skeletons and SKA actions when the building is animated.</p>
-<blockquote>
-<p><strong>Current support:</strong> Blender 5 can export new static buildings and edited imported buildings, including skinned state resources and SKA actions. Export rebuilds hidden states too, preserves source metadata, and validates output in a temporary folder. New output still needs Map Editor/in-game validation. Debris XML and construction BMS graphs remain separate authoring work; their preview meshes are not rebuilt automatically.</p>
-</blockquote>
-<p>For skinned states, export operates on temporary mesh copies, ignores non-bone
-modifier groups, keeps the strongest four bone weights and normalizes them.
-Unweighted vertices stop a building-state export; assign appropriate deform
-weights and retry. Warnings about coincident positions with different weights
-need review as described in the <a href="../unit_creation_buide/">Unit Creation Guide</a>.</p>
-<p>To start a <strong>new static building</strong>, select its render meshes in Object Mode and choose <strong>N &gt; BMG Editor &gt; Building Authoring &amp; Export &gt; Building from Selected Meshes</strong>. This moves them into the central cell's undamaged S0 state. Use <strong>Create / Upgrade Selected Material</strong> for ordinary Blender materials, then configure the DRS material controls. New skinned buildings should start from a compatible animated BMG so the skeleton, animations and state relationships are available.</p>
-<h2 id="1-start-from-an-existing-building">1. Start from an Existing Building<a class="headerlink" href="#1-start-from-an-existing-building" title="Permanent link">&para;</a></h2>
-<p>For building work, importing a comparable building is more useful than starting with an empty object scene. It supplies the mesh-state relationships, resource names, and grid metadata that the simple scene generator does not create.</p>
-<ol>
-<li>Keep the source <code>.bmg</code>, its referenced state <code>.drs</code> files, textures, debris XML, and any <code>.ska</code> files together in their expected resource layout.</li>
-<li>Choose <strong>File &gt; Import &gt; Battleforge (.drs/.bmg)</strong> and select the building.</li>
-<li>Review the import options before confirming. <strong>Clear Scene</strong> is on by default; disable it if you need to keep the current scene.</li>
-<li>Save the imported setup to a new <code>.blend</code> file before editing it.</li>
-</ol>
-<p>Useful options:</p>
-<table>
-<thead>
-<tr>
-<th>Option</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Apply Transform</code></td>
-<td>Controls the import's GO display-axis conversion. Use the same setting when comparing two imports.</td>
-</tr>
-<tr>
-<td><code>Import Collision Shape</code></td>
-<td>Imports building-level collision and eligible state collision data.</td>
-</tr>
-<tr>
-<td><code>Import S0 Collision Shapes</code></td>
-<td>Also imports collision from undamaged state DRS files; off by default because building-level collision can already represent those states.</td>
-</tr>
-<tr>
-<td><code>Import Debris</code></td>
-<td>Imports the referenced debris setup where available.</td>
-</tr>
-<tr>
-<td><code>Import Construction</code></td>
-<td>Imports referenced construction pieces.</td>
-</tr>
-<tr>
-<td><code>Import Animation</code></td>
-<td>Enables animation import for a rigged building.</td>
-</tr>
-</tbody>
-</table>
-<p>A missing referenced file is a resource problem, not something that can be fixed by changing a collection's name.</p>
-<h2 id="2-understand-the-imported-structure">2. Understand the Imported Structure<a class="headerlink" href="#2-understand-the-imported-structure" title="Permanent link">&para;</a></h2>
-<p>A typical imported building contains the following collection structure. Optional resources and Blender numeric suffixes vary by asset:</p>
-<div class="highlight"><span class="filename">Text Only</span><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>DRSModel_&lt;building&gt;
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── GameOrientation                  (Empty object)
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── GroundDecal_Collection            (optional)
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── CollisionShapes_Collection        (building-level collision, if present)
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   ├── Boxes_Collection
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   ├── Spheres_Collection
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   └── Cylinders_Collection
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├── Armature_Collection              (if the building is rigged)
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├── SLocators_Collection              (construction helpers, if imported)
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>└── MeshSetGrid_0
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    ├── MeshSet_0
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    │   ├── Active_State_MeshSet_0    (Empty marker)
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    │   └── States_Collection_0
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    │       ├── S0_Undamaged
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    │       │   └── Meshes_Collection
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    │       ├── S2_Damaged
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    │       │   ├── Meshes_Collection
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    │       │   └── CollisionShapes_Collection (when imported)
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    │       └── Debris_Collection
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    │           ├── S2_Debris
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    │           └── S3_Debris
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    └── MeshSet_1 ...
-</code></pre></div>
-<p>A state can contain its own collision subcollections. The grid references individual mesh sets, and each mesh set groups its related states. Do not flatten all state meshes into the root or combine every state into one ordinary object export collection.</p>
-<h3 id="go-and-parenting">GO and parenting<a class="headerlink" href="#go-and-parenting" title="Permanent link">&para;</a></h3>
-<blockquote>
-<p><strong>Good practice:</strong> Use the building's GO coordinate convention consistently for new meshes, collision shapes, and non-bone helpers. Parenting a new primitive before fitting it is convenient, but not a required modeling order; correcting and applying a mesh rotation after parenting is also a supported workflow.</p>
-</blockquote>
-<p>Collection nesting is not object parenting. Inspect the actual parent relationship when adding a mesh to an imported state. Keep existing armature and bone-attached relationships intact rather than parenting every object directly to GO. Do not reset or apply GO itself to compensate for one misaligned state.</p>
-<p>The mesh-grid visualization expects the model's GO helper to exist. Keeping that helper for the editor is different from requiring every mesh to be parented before modeling.</p>
-<h2 id="3-inspect-states-in-the-bmg-editor">3. Inspect States in the BMG Editor<a class="headerlink" href="#3-inspect-states-in-the-bmg-editor" title="Permanent link">&para;</a></h2>
-<p>Open the 3D Viewport sidebar (<code>N</code>) and select <strong>BMG Editor &gt; BMG State Editor</strong>.</p>
-<table>
-<thead>
-<tr>
-<th>Button</th>
-<th>What to inspect</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Show undamaged</code></td>
-<td>The <code>S0_Undamaged</code> meshes.</td>
-</tr>
-<tr>
-<td><code>Show damaged</code></td>
-<td>The <code>S2_Damaged</code> meshes on their own.</td>
-</tr>
-<tr>
-<td><code>Show damaged + Debris (should look undamaged)</code></td>
-<td>Damaged geometry together with <code>S2_Debris</code>; useful for checking how pieces fit.</td>
-</tr>
-<tr>
-<td><code>Show Debris</code></td>
-<td>The imported debris collections.</td>
-</tr>
-<tr>
-<td><code>Show All Stages</code></td>
-<td>All state collections together for comparison. Overlapping geometry is expected in this view.</td>
-</tr>
-</tbody>
-</table>
-<p>These controls switch visibility; they do not create missing states, author debris physics, or define gameplay transitions. The <strong>Switch All States</strong> controls operate on mesh sets across the scene, so take care when several buildings are loaded.</p>
-<p>Use <strong>Show Collision Shapes</strong> and <strong>Show SLocators</strong> to reduce clutter. Hiding a helper for editing is not a substitute for removing unwanted resource references from an export setup.</p>
-<h2 id="4-inspect-or-fit-a-mesh-grid">4. Inspect or Fit a Mesh Grid<a class="headerlink" href="#4-inspect-or-fit-a-mesh-grid" title="Permanent link">&para;</a></h2>
-<p>Make the intended <code>DRSModel_...</code> root active before using the grid controls.</p>
+<h1 id="building-guide">Building Guide<a class="headerlink" href="#building-guide" title="Permanent link">&para;</a></h1>
+<p>Create or edit a building with intact, damaged and destroyed states. For ordinary
+props, use the <a href="../object_creation_guide/">Object Guide</a>.</p>
+<h2 id="cells-and-states">Cells and states<a class="headerlink" href="#cells-and-states" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Show Mesh Grid</strong> toggles the visualization.</li>
-<li><strong>Create Grid</strong> fits new grid metadata to eligible undamaged-state meshes. It uses a fixed cell size of <code>2.0</code> and currently creates a square grid with an odd number of cells along each axis.</li>
-<li><strong>Rotation</strong> changes the editor's grid/model orientation in degrees. It is not a reason to rotate GO manually.</li>
-<li><strong>Center Pivot At Origin (0,0,0)</strong> chooses whether the grid is centered at the origin or the detected model center.</li>
-<li><strong>Remove Grid</strong> removes stored grid data and its visualization, not the building's visible meshes.</li>
+<li>A <strong>cell</strong> is a building section that can be damaged separately, such as a wall
+  section. A small building can use one cell for the whole model. A cell can
+  contain several meshes.</li>
+<li>A <strong>state</strong> is a version of that section: intact, damaged or destroyed.
+  Choose a cell first, then the version you want to edit.</li>
 </ul>
-<blockquote>
-<p>Save before recreating a grid. <strong>Create Grid</strong> rebuilds metadata and resets the grid/model rotation to zero before fitting; it is not a harmless visibility toggle. Review the result instead of assuming an imported layout or cell assignment was preserved.</p>
-</blockquote>
-<p>The fitting code looks for meshes inside the undamaged-state <code>Meshes_Collection</code> hierarchy. An ordinary object scene with no <code>S0_Undamaged</code> meshes is not automatically a fully configured building just because the grid button is available. Empty or unexpectedly small grids are a reason to check the hierarchy and dimensions first.</p>
-<p>A visible grid is an authoring aid, not proof that the complete BMG state graph can currently be exported.</p>
-<h2 id="5-edit-materials-collision-and-optional-resources">5. Edit Materials, Collision, and Optional Resources<a class="headerlink" href="#5-edit-materials-collision-and-optional-resources" title="Permanent link">&para;</a></h2>
-<h3 id="visible-meshes-and-materials">Visible meshes and materials<a class="headerlink" href="#visible-meshes-and-materials" title="Permanent link">&para;</a></h3>
-<p>Edit each state's render meshes in its own <code>Meshes_Collection</code>. Apply the same UV, triangulation, material, and vertex-budget checks described in the <a href="../object_creation_guide/#4-model-the-object">Object Creation Guide</a>. Use the <a href="../advanced_shading_guide/">Advanced Shading Guide</a> for packed parameters, wind, refraction, and environment maps.</p>
-<h3 id="collision">Collision<a class="headerlink" href="#collision" title="Permanent link">&para;</a></h3>
-<p>Keep building-level collision separate from damage-state collision. A damaged state may need a different approximation than the undamaged building.</p>
-<p>When adding a shape, use its state's matching box/sphere/cylinder collection. As for visible meshes, using the correct model's GO is good practice; fitting the shape first and correcting its rotation after parenting is also possible. Preserve the primitive's geometry: boxes remain rectangular, spheres remain round, and cylinders remain circular and capped. See <a href="../object_creation_guide/#6-add-collision-shapes">Add collision shapes</a>.</p>
-<h3 id="ground-decal">Ground decal<a class="headerlink" href="#ground-decal" title="Permanent link">&para;</a></h3>
-<p><code>GroundDecal_Collection</code> is imported when the BMG references a ground decal DRS. It is optional and distinct from both building collision and the grid visualization. Its render meshes are rebuilt into <code>&lt;building&gt;_ground.drs</code>; the BMG reference and textures are updated automatically.</p>
-<h3 id="construction-pieces-and-debris">Construction pieces and debris<a class="headerlink" href="#construction-pieces-and-debris" title="Permanent link">&para;</a></h3>
-<p>Preserve their referenced assets and imported relationships. A construction helper or debris mesh is not equivalent to a finished building state. Export preserves their references and copies locally resolvable dependencies, but does not replace an external debris/resource authoring workflow.</p>
-<h2 id="6-animated-buildings-and-visual-hooks">6. Animated Buildings and Visual Hooks<a class="headerlink" href="#6-animated-buildings-and-visual-hooks" title="Permanent link">&para;</a></h2>
-<p>Use the building's deform skeleton, skin weights, and SKA actions as described in the <a href="../unit_creation_buide/">Unit Creation Guide</a>. A building is not limited to one idle animation: relevant assets may use spawn, attack, casting, channeling, or turret-related animation modes.</p>
-<p>Choose only the modes required by the target asset. A long list of available animation types is not a checklist that every building needs to implement. See the <a href="../advanced_abilities_guide/">Advanced Abilities Guide</a> for action/marker relationships and the <a href="../advanced_effects_guide/">Advanced Effects Guide</a> for sound metadata.</p>
-<p>Non-bone locators use the model's coordinate convention, while bone locators follow the armature. Use the <a href="../advanced_locators_guide/">Advanced Locators Guide</a> rather than manually forcing all helpers under GO.</p>
-<h2 id="7-author-states-and-grid-settings">7. Author States and Grid Settings<a class="headerlink" href="#7-author-states-and-grid-settings" title="Permanent link">&para;</a></h2>
-<p>Open <strong>N &gt; BMG Editor &gt; Building Authoring &amp; Export</strong>. Selecting a mesh or nested state collection identifies its building; the Outliner does not need to be focused on the root.</p>
+<p>You do not need to create the state collections or work out file links by hand.</p>
+<h2 id="1-start-a-building">1. Start a building<a class="headerlink" href="#1-start-a-building" title="Permanent link">&para;</a></h2>
+<p><strong>Existing building:</strong> use <strong>File → Import → Battleforge Model (.drs/.bmg)</strong>, then select one
+of its meshes. Enable collision or debris import if you intend to edit those parts.</p>
+<p>Enable <strong>Collision Shapes</strong> and <strong>Intact-State Collision Shapes</strong> to edit
+intact cells' collisions too. Disable <strong>Clear Existing Content</strong> to keep existing
+models and Actions, including those in other scenes. <strong>Building Parts</strong> contains Construction Geometry and Debris Geometry.</p>
+<p><a href="../../assets/images/guides/editors/building-import.png"><img alt="Building import with the additional Intact-State Collision Shapes option" src="../../assets/images/guides/editors/building-import.png" /></a></p>
+<p><strong>New building:</strong> select your meshes, open <strong>BMG Editor → Building Editor</strong>,
+and click <strong>Set Up Building</strong>. This creates the intact state from your selection.
+Use the <a href="../object_creation_guide/">Object Guide</a> for UVs and DRS materials.</p>
+<p>For a <strong>new animated building</strong>, prepare the rig and GameOrientation using the
+<a href="../unit_creation_buide/">Unit Guide</a>, then select its meshes and click <strong>Set Up
+Building</strong>. Use one armature, with its object transforms applied in
+GameOrientation. The plugin copies the skeleton and adds an Idle starter.
+Assign your Idle action in <strong>Animation Set Editor</strong>.</p>
+<p>The plugin creates GameOrientation, a <strong>3 × 3 grid</strong>, and an <strong>Intact</strong> state
+in the centre cell <code>(0, 0)</code> containing your selected meshes. The other cells
+start empty. You can use this setup for a complete small building.</p>
+<p><strong>Duplicate</strong> creates another state from an existing one. <strong>From Selection</strong>
+creates the chosen cell/state assignment from your selected meshes. Export
+writes the state resources and their references automatically.</p>
+<p>The plugin does not split your building into sections or sculpt damage for you.
+For separate damageable sections, prepare their meshes and add them to different
+cells with <strong>From Selection</strong>. For a damaged appearance, edit a duplicated state.</p>
+<div class="admonition info">
+<p class="admonition-title">GameOrientation</p>
+<p>Keep the building's <strong>GameOrientation</strong> unchanged. Keep imported meshes
+attached to their existing armature or parent. New meshes copied with
+<strong>From Selection</strong> keep their visible placement.</p>
+</div>
+<h2 id="2-edit-a-state">2. Edit a state<a class="headerlink" href="#2-edit-a-state" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Open <strong>States</strong>. For a building with several parts, choose a <strong>Cell</strong>.</li>
+<li>Choose a <strong>State</strong>, then click <strong>Show</strong>.</li>
+<li>Click <strong>Select Meshes</strong> and edit normally.</li>
+</ol>
+<p><a href="../../assets/images/guides/editors/building-states.png"><img alt="Building Editor with Intact state selection and state editing buttons" src="../../assets/images/guides/editors/building-states.png" /></a></p>
+<p><strong>Intact</strong> is state 0, <strong>Damaged</strong> is state 2, and <strong>Destroyed</strong> is state 3.
+Some assets also define <strong>Damage Stage 1</strong>. The picker lists the states that
+actually exist in the selected cell.</p>
+<p>For ordinary building damage, prepare <strong>Intact</strong> and <strong>Damaged</strong>. The game
+switches to Damaged when the cell reaches its damage threshold and to Destroyed
+when the building is crushed. <strong>Damage Stage 1</strong> is available for existing or
+special setups; adding it alone does not make the ordinary damage system switch
+through it. Test the building with its intended game setup.</p>
+<p>The creation dialog offers four named states per cell. Other state IDs can
+exist in imported files, but we have not established a universal engine limit
+or automatic damage behavior for them.</p>
+<p>To create damaged geometry, show <strong>Intact</strong>, click <strong>Duplicate</strong>, choose
+<strong>Damaged</strong>, and edit the copy. Its mesh data and collision shapes are independent.
+If no visible damage is needed, keep that Damaged copy unchanged.</p>
+<p>For a simple building, keep using cell <code>(0, 0)</code>: make <strong>Intact</strong>, duplicate it as
+<strong>Damaged</strong>, then remove or change parts of that copy. Add a <strong>Destroyed</strong> mesh
+only if something should remain visible, such as a ruined base.</p>
+<p>To use different meshes, select them and click <strong>From Selection</strong>. Choose the
+cell coordinates and the new state. The selected meshes are copied.</p>
+<p>Use <strong>Remove</strong> to remove the selected state from this building. Undo restores it.
+For multi-cell buildings, <strong>All Cells</strong> makes <strong>Show</strong> display that state in each
+cell that defines it. Other buildings are not changed.</p>
+<h3 id="state-effects">State effects<a class="headerlink" href="#state-effects" title="Permanent link">&para;</a></h3>
+<p>Click <strong>State Effects</strong>:</p>
+<p><a href="../../assets/images/guides/editors/building-effects.png"><img alt="Assign effects while in a building state or when entering it" src="../../assets/images/guides/editors/building-effects.png" /></a></p>
+<ul>
+<li><strong>While in State:</strong> the persistent effect for this state.</li>
+<li><strong>On Entering State:</strong> the effect that plays when the building enters it.</li>
+</ul>
+<p>For example, assign smoke to <strong>While in State</strong> for a damaged building, and a
+burst of debris to <strong>On Entering State</strong> for destruction. Leave a field blank
+if you do not want that assigned effect.</p>
+<p>Enter an existing FXB or supported destruction XML reference. A destroyed state
+can have a transition effect without a model. <strong>No imported mesh</strong> is normal for
+such a state. Create or modify effect assets in the external Effect Editor.</p>
+<h2 id="3-check-the-grid-and-collisions">3. Check the grid and collisions<a class="headerlink" href="#3-check-the-grid-and-collisions" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Grid &amp; Helpers</strong>:</p>
+<ul>
+<li><strong>Grid Overlay</strong> shows the building's cells on the ground. It is not rendered or exported.</li>
+<li><strong>Collision Shapes</strong> and <strong>Locators</strong> show or hide this building's helpers.</li>
+<li><strong>Edit Grid</strong> changes grid dimensions, spacing, rotation and building-level resources.</li>
+<li><strong>Building Size</strong> resizes the entire building, including its cells, states,
+  collisions, attachment positions and SKA animations. <code>0.5</code> is half size;
+  <code>2</code> is double. Export includes the resized clips automatically.</li>
+</ul>
+<p>A grid radius of <code>0</code> gives <strong>1 × 1 cells</strong>; <code>1</code> gives <strong>3 × 3</strong>; <code>2</code> gives <strong>5 × 5</strong>.
+Keep the imported settings unless you intend to change the building layout.</p>
+<p><a href="../../assets/images/guides/editors/building-grid.png"><img alt="Building Grid Settings with spacing, shared origin and resource fields" src="../../assets/images/guides/editors/building-grid.png" /></a></p>
+<details class="tip">
+<summary>What the Edit Grid settings mean</summary>
 <table>
 <thead>
 <tr>
-<th>Control</th>
-<th>Behavior</th>
+<th>Setting</th>
+<th>What you use it for</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Building Grid Settings</td>
-<td>Edit name, square half extent, spacing, yaw, pivot mode, ground resource and building effects.</td>
+<td>Resource name</td>
+<td>Name stored with this building. The export filename is chosen when exporting.</td>
 </tr>
 <tr>
-<td>State from Selected Meshes</td>
-<td>Copy selected render meshes into the chosen cell and state ID. Common IDs are 0 intact and 2 damaged.</td>
+<td>Grid radius</td>
+<td>Number of cells available around the centre cell. Enlarging the grid adds empty cells; it does not split the model.</td>
 </tr>
 <tr>
-<td>Show</td>
-<td>Display one state for that cell, including custom numeric state IDs.</td>
+<td>Cell spacing</td>
+<td>Distance between neighbouring cells, in game units. It does not resize your meshes.</td>
 </tr>
 <tr>
-<td>Effects</td>
-<td>Edit persistent state FX and the effect triggered on entering that state.</td>
+<td>Rotation</td>
+<td>Orientation of the whole building grid. Keep GameOrientation unchanged.</td>
 </tr>
 <tr>
-<td>X beside a state</td>
-<td>Remove that state from the exported grid and unlink its meshes from the building. Transition effects are separate records and are retained.</td>
+<td>Shared origin for all modules</td>
+<td>Enable when the sections are modeled together at one building origin. Keep the imported setting on existing assets.</td>
 </tr>
 <tr>
-<td>Export Building Package</td>
-<td>Rebuild the BMG, editable state DRS resources, ground decal and textures.</td>
+<td>Ground resource</td>
+<td>Optional DRS beneath the building, such as its ground decoration. It does not create terrain.</td>
+</tr>
+<tr>
+<td>Cell hit effect</td>
+<td>Building-level hit/debris effect used when an individual cell is damaged.</td>
+</tr>
+<tr>
+<td>Building crush effect</td>
+<td>Effect for destruction of the whole building.</td>
 </tr>
 </tbody>
 </table>
-<p>Grid half extent 1 means <strong>3 x 3</strong> cells, 2 means <strong>5 x 5</strong>, and so on. Resizing preserves cell coordinates around the origin and updates state collection indices. Shrinking across a populated cell is rejected. Grid display yaw is removed from state geometry during export and written once in MeshSetGrid. Preview rotation preserves artist object transforms.</p>
-<p>Each render mesh needs a UV map and a material. Multiple material slots become separate CDsp mesh records. Triangulation and UV/normal discontinuity splitting run on temporary copies. The engine's vertex budget still applies after splitting. Apply modeling modifiers before export; the add-on's WindEffect preview and Armature modifier are handled separately. Material types, flags, textures and parameter lists use the ordinary DRS workflow; Default flow still uses the parameter map's <strong>B channel as its mask</strong>.</p>
-<p>Keep each cell's state IDs unique. State IDs and cell indices are collection properties, independent of Blender's automatic numeric name suffixes. Deleting a collection does not necessarily delete its preserved source record: source-only records intentionally survive. Removing source-only records requires an explicit metadata edit.</p>
-<h2 id="preview-damage-and-destruction">Preview Damage and Destruction<a class="headerlink" href="#preview-damage-and-destruction" title="Permanent link">&para;</a></h2>
+<p><strong>Cell hit effect</strong> and <strong>Building crush effect</strong> are separate from the
+persistent and transition effects assigned with <strong>State Effects</strong>. Blank
+building-level hit/crush fields allow the engine's standard building effects.</p>
+<p>Additional cells do not make the ground walkable or create collision shapes.
+Place collisions separately where needed.</p>
+</details>
+<p>Edit collision shapes using the <a href="../object_creation_guide/#8-create-collision-shapes">Object Guide</a>.
+Use the selected state's collision collection for state-specific shapes and the
+building's root collision collection for building-wide shapes.</p>
+<p><span id="preview-damage-and-destruction"></span></p>
+<h2 id="4-preview-damage">4. Preview damage<a class="headerlink" href="#4-preview-damage" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Set your <strong>Skylords Reborn Folder</strong> in the add-on preferences.</li>
-<li>Select the building and open <strong>BMG Editor → Building Editor</strong>.</li>
-<li>Click <strong>Build Damage Preview</strong>, then drag <strong>Damage</strong> from 0% to 100%.</li>
-<li>Press <strong>Space</strong> to see debris fall and effects play. <strong>Replay Transition</strong> restarts them at the current frame.</li>
+<li>Open <strong>Damage Preview</strong> and click <strong>Build Preview</strong>.</li>
+<li>Drag <strong>Damage</strong> to inspect damaged geometry, scratch and destruction effects.</li>
+<li>Press <strong>Space</strong> to animate debris and FX. Use <strong>Replay</strong> to restart the transition.</li>
+<li>Use <strong>Update Preview</strong> after changing geometry, effects or terrain.</li>
+<li>Click <strong>Clear</strong> to return to editing.</li>
 </ol>
-<p>Damage changes cell meshes, their state effects and transition effects, and the building's scratch shading. At 100%, the preview selects the destroyed state and plays the building crush effect. A destroyed state can have no replacement mesh: the falling debris is a separate effect.</p>
-<p>Assets and physics are cached when you build the preview. Dragging Damage or scrubbing does not reload them. Use <strong>Update Damage Preview</strong> after changing geometry, materials, state effects or terrain. If playing near the end of your timeline, extend its end frame to leave time for the effect.</p>
-<p>This is a preview control, not an exported health setting. <strong>Clear Damage Preview</strong> restores the original materials and visibility. Manual <strong>Show</strong> state controls also clear the damage preview. After reopening a saved preview, rebuild it to animate, or clear it to return to editing.</p>
-<p>Scratch needs a scratch map with useful alpha; a white alpha mask causes no visible darkening. Buildings with several cells are damaged in a repeatable cell order. In game, the impact position changes that order. Native default inverse inertia is supported; collision/integration and engine-generated impact/crush impulses remain incomplete. Building damage preview audio is currently disabled. Create or change destruction effects in the external Effect Editor; assign their filenames through <strong>State Effects</strong> or <strong>Building Grid Settings</strong>.</p>
-<p>The preview automatically raises Cycles' transparency depth for overlapping smoke sprites. Clearing it restores the previous value, unless you changed it yourself. This prevents black rectangles caused by the renderer ending transparent rays too early; you do not need to change the smoke textures or alpha threshold.</p>
-<h2 id="8-export-and-validate">8. Export and Validate<a class="headerlink" href="#8-export-and-validate" title="Permanent link">&para;</a></h2>
+<p><a href="../../assets/images/guides/editors/building-damage.png"><img alt="Building damage preview controls with Damage, Replay and Clear" src="../../assets/images/guides/editors/building-damage.png" /></a></p>
+<p>The slider is a preview, not the building's exported health. Manual <strong>Show</strong>
+controls also leave the damage preview. After reopening a saved preview,
+rebuild it or clear it.</p>
+<p>Scratch requires a scratch map with useful alpha. A white mask produces no
+visible darkening. Missing states are not replaced with invented geometry.
+Build once, then use the slider: effects are cached across the building's states.
+Changing Damage within the same state keeps its current effects running.
+Use <strong>Replay</strong> when you want to restart them.</p>
+<h2 id="5-export">5. Export<a class="headerlink" href="#5-export" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Save the edited <code>.blend</code> as the working copy. Re-import buildings with this version to capture the new state/container snapshots.</li>
-<li>Choose an output folder outside the unpacked source assets. Source game files remain read only.</li>
-<li>Keep <strong>Model Type: Preserve / Auto</strong> for imported buildings. It keeps their node layout, including unknown chunks. Explicit layouts cannot discard source nodes silently.</li>
-<li>Enable <strong>Export All SKA Actions</strong> for edited animations. Prefix options update AnimationSet and EffectSet only for actions actually written. Referenced source SKAs remain dependencies when animations were not imported or exported.</li>
-<li>Inspect <code>&lt;building&gt;.bmg-export.json</code>. <code>external_references</code> lists references not copied into the package; these may be installed-game construction/FX resources or missing assets. Review this list before sharing the export.</li>
-<li>Re-import into a separate scene. Check S0/S2, ground decal, materials, animation references and building/state collision independently. Then verify placement, damage transitions, construction and playback in the Skylords Map Editor/in game.</li>
+<li>Save your working <code>.blend</code>.</li>
+<li>Open <strong>File → Export → BattleForge Building (.bmg)</strong> and choose a separate output folder.</li>
+<li>Keep <strong>Advanced Export Options → Model Type</strong> at <strong>Automatic (Keep Imported Setup)</strong>.</li>
+<li>Keep <strong>External Resources → Local + Custom</strong>. Include animation files if you changed animations.</li>
+<li>Reimport the exported copy, then test it in the Map Editor.</li>
 </ol>
-<p>Output contains <code>&lt;building&gt;.bmg</code>, <code>&lt;building&gt;_cellNNN_sID.drs</code>, optional <code>&lt;building&gt;_ground.drs</code>, DDS textures, available SKAs and local dependencies. This is an asset package for the installed game. It does not create a new database entity or a standalone map.</p>
-<p>Validation failure leaves previous output files intact. Temporary objects/meshes/collections are removed without globally purging the artist's unused data blocks. Imported collision data stays preserved when collision import was disabled; editing loaded shapes regenerates that payload in game coordinates.</p>
-<p><strong>Remaining preview boundary:</strong> metadata preserves the engine's cell rotation/spacing/pivot rules, but complete viewport placement for all modular/shared-armature cases remains unfinished. Independently authoring a construction BMS or changing a debris XML graph is also outside this exporter. Automated Blender checks cover a new two-state building, Heal Well and Bandits Artillery; live engine playback remains to be checked.</p>
-<h2 id="related-guides">Related Guides<a class="headerlink" href="#related-guides" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../object_creation_guide/">Object Creation Guide</a></li>
-<li><a href="../unit_creation_buide/">Unit Creation Guide</a></li>
-<li><a href="../advanced_shading_guide/">Advanced Shading Guide</a></li>
-<li><a href="../advanced_locators_guide/">Advanced Locators Guide</a></li>
-<li><a href="../advanced_abilities_guide/">Advanced Abilities Guide</a></li>
-<li><a href="../advanced_effects_guide/">Advanced Effects Guide</a></li>
-</ul>
+<p>Read <strong>Export Check</strong> before exporting. Fix errors such as missing materials,
+UVs or building states. Save pending changes in <strong>Animation Set Editor</strong> and
+<strong>Effect Set Editor</strong>. If an included clip is missing, load it or restore its
+source file. Review items do not block export.</p>
+<p><a href="../../assets/images/guides/editors/building-export.png"><img alt="Building export with animation files and filename settings" src="../../assets/images/guides/editors/building-export.png" /></a></p>
+<p>Export includes hidden states, state DRS files, textures, local destruction XML
+and its <code>meshes/</code> resources. Custom global dependencies go into <strong>AdditionalFiles</strong>.
+Review <code>&lt;building&gt;.assets.json</code> and <code>&lt;building&gt;.bmg-export.json</code> before sharing.</p>
+<p>To edit debris, destruction XML or module resources, follow
+<a href="../external_resources_guide/">Modules, Debris &amp; Resources</a>.</p>
+<details class="tip">
+<summary>Advanced: modular buildings and animations</summary>
+<p>Keep <strong>Shared origin</strong> enabled for sections modeled together at one building
+origin. Disable it for separate modules placed by the grid. Select a cell
+and use <strong>Cell Rotation</strong> to turn that module and all its states.</p>
+<p>Animate the building's main armature. The plugin keeps its cells in sync;
+you do not need to animate the hidden cell helpers. Imported states retain
+their individual skeleton bindings.</p>
+<p>Building Size leaves external FX assets at their own size. Adjust those
+resources in the external Effect Editor when they need different dimensions.</p>
+</details>
+<details class="tip">
+<summary>Advanced: standalone BMS state files</summary>
+<p>Use this for a separate state-resource module. Ordinary BMG editing uses
+<strong>States</strong> above and writes those links for you.</p>
+<ol>
+<li>Open <strong>BMG Editor → BMS Editor</strong> and choose <strong>Open BMS</strong> or <strong>New BMS</strong>.</li>
+<li>Set <strong>Resource directory</strong> to the folder containing the referenced files.</li>
+<li>For each state, enter its <strong>Resource DRS</strong> and optional <strong>FX reference</strong>.
+   The FX runs while that state is active.</li>
+<li>Use <strong>Add State</strong> for another version. Common building IDs are <code>0</code> Intact,
+   <code>2</code> Damaged and <code>3</code> Destroyed. Keep the imported IDs for other modules.</li>
+<li>For an effect when a state begins, use <strong>Add Transition</strong> and enter its
+   destination <strong>State ID</strong> and <strong>FX reference</strong>.</li>
+<li>Use <strong>Check State Resources</strong>. <strong>Import DRS Preview</strong> opens a referenced
+   model for editing; export that DRS separately after changing it.</li>
+<li>Open <strong>File → Export → BattleForge Mesh States (.bms)</strong> and keep the referenced DRS and FX assets available.</li>
+</ol>
+<p><a href="../../assets/images/guides/editors/building-bms.png"><img alt="Standalone BMS state resources and state-entry effect references" src="../../assets/images/guides/editors/building-bms.png" /></a></p>
+<p>Leave <strong>Advanced File Settings</strong> unchanged for an existing module. A BMS
+does not pack the models or effects into one file. Local resource checks
+need loose files; engine-resolved assets in archives may still be available
+in the game. Check the final module and FX in the Map Editor.</p>
+</details>
+<details class="tip">
+<summary>Advanced: construction and debris</summary>
+<p>BMS files describe state resources; they do not contain mesh geometry.
+Use <strong>BMG Editor → BMS Editor</strong> for standalone BMS references. Construction
+and destruction XML/FX graphs are separate assets and need their own editor.</p>
+<p>Blender previews use cached debris physics and bounded particles. Exact
+engine collision/inertia, gameplay impulses, spatial audio and all shader
+effects are not reproduced. Test the final result in the Map Editor.</p>
+</details>
+<p>For materials and animation events, see the <a href="../material_artist_workflow/">Material Guide</a>
+and <a href="../advanced_effects_guide/">Effects Guide</a>.</p>
 
 
 
@@ -1198,11 +1186,10 @@ need review as described in the <a href="../unit_creation_buide/">Unit Creation 
     
     
       
-      
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "toc.integrate", "content.code.copy", "content.code.annotate", "content.tabs.link", "search.highlight", "search.suggest", "header.autohide"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "toc.integrate", "content.code.copy", "content.code.annotate", "content.tabs.link", "search.highlight", "search.suggest", "header.autohide"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
       
     
   </body>

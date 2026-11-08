@@ -2,42 +2,58 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_abilities_guide/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_effects_guide/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_locators_guide/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/advanced_shading_guide/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/animation_advanced_tutorial/</loc>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/building_creation_guide/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/effects_advanced_tutorial/</loc>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/external_resources_guide/</loc>
+         <lastmod>2026-11-08</lastmod>
+    </url>
+    <url>
+         <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/ik_advanced_tutorial/</loc>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/material_artist_workflow/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/model_artist_pipeline/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/object_creation_guide/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
     <url>
          <loc>https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/unit_creation_buide/</loc>
-         <lastmod>2026-10-30</lastmod>
+         <lastmod>2026-11-08</lastmod>
     </url>
 </urlset>

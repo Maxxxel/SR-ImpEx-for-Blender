@@ -1,0 +1,1188 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Artist guides for creating, painting, animating and exporting Skylords Reborn models in Blender.">
+      
+      
+        <meta name="author" content="Maxxxel">
+      
+      
+        <link rel="canonical" href="https://maxxxel.github.io/SR-ImpEx-for-Blender/plugin/animation_advanced_tutorial/">
+      
+      
+        <link rel="prev" href="../advanced_effects_guide/">
+      
+      
+        <link rel="next" href="../effects_advanced_tutorial/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.22">
+    
+    
+      
+        <title>Animation - Skylords Reborn Blender Artist Guides</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#advanced-animation-tutorial" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-header__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
+      
+  <img src="../../assets/images/favicon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Skylords Reborn Blender Artist Guides
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Animation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    https://github.com/Maxxxel/SR-ImpEx-for-Blender/
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Skylords Reborn Blender Artist Guides" class="md-nav__button md-logo" aria-label="Skylords Reborn Blender Artist Guides" data-md-component="logo">
+      
+  <img src="../../assets/images/favicon.png" alt="logo">
+
+    </a>
+    Skylords Reborn Blender Artist Guides
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    https://github.com/Maxxxel/SR-ImpEx-for-Blender/
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Plugin Guides
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model_artist_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Artist Model Pipeline
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../object_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Object Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unit_creation_buide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Unit Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../building_creation_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Building Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../external_resources_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Modules, Debris & Resources
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_shading_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Shading Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../material_artist_workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Default Material Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_locators_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Locator Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_abilities_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Animation Set Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced_effects_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Effect Set Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_11" id="__nav_2_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Advanced Tutorials
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_11">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Animation
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Animation
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#one-action-for-a-cast-and-its-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      One Action for a cast and its recovery
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#separate-cast-and-resolve-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Separate Cast and Resolve Actions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#an-attack-with-two-hit-moments" class="md-nav__link">
+    <span class="md-ellipsis">
+      An attack with two hit moments
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start-loop-end-for-a-channelled-ability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Start / Loop / End for a channelled ability
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#alternative-motions-and-mode-banks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alternative motions and mode banks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clip-and-movement-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Clip and movement checks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      Final check
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../effects_advanced_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Effects
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ik_advanced_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    IK
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="advanced-animation-tutorial">Advanced Animation Tutorial<a class="headerlink" href="#advanced-animation-tutorial" title="Permanent link">&para;</a></h1>
+<p>Build a cast, a multi-hit attack or a channelled animation with the
+<strong>Animation Set Editor</strong>. Start with a model and working Actions on its deform
+armature. For the initial setup, use the <a href="../advanced_abilities_guide/">Animation Set Guide</a>.</p>
+<p>In a narrow sidebar, click the selected mapping's name to search the current
+mode's animations. Ground/Air casts and phase groups remain grouped; select
+their phase buttons to edit Cast, Resolve, Start, Loop or End.</p>
+<p><a href="../../assets/images/guides/editors/animation-search.png"><img alt="Searchable animation mapping picker in Blender" src="../../assets/images/guides/editors/animation-search.png" /></a></p>
+<h2 id="one-action-for-a-cast-and-its-recovery">One Action for a cast and its recovery<a class="headerlink" href="#one-action-for-a-cast-and-its-recovery" title="Permanent link">&para;</a></h2>
+<p>Example: a two-second Action raises a staff, releases a spell after half a
+second, then lowers the staff.</p>
+<ol>
+<li>Add the <strong>Cast</strong> ability used by the unit's game setup.</li>
+<li>Select its Cast entry and choose <strong>One Clip</strong>.</li>
+<li>Assign the complete Action.</li>
+<li>Set <strong>Cast→Resolve</strong> to <strong>0.25</strong>: the release is one quarter through the Action.</li>
+<li>Check <strong>Play Cast</strong>, then <strong>Play Resolve</strong>.</li>
+<li>Click <strong>Save</strong>.</li>
+</ol>
+<p><a href="../../assets/images/guides/editors/animation-cast.png"><img alt="One Clip cast setup with the release boundary and phase playback controls" src="../../assets/images/guides/editors/animation-cast.png" /></a></p>
+<p>The release occurs at 0.5 seconds; the recovery lasts 1.5 seconds. The editor
+calculates both phase ranges and gameplay timings. You do not need to enter
+milliseconds or duplicate the Action.</p>
+<p>For Ground &amp; Air versions of the same ability, keep the release and total
+duration matching. Assign the corresponding motions to both entries.</p>
+<div class="admonition note">
+<p class="admonition-title">The game needs the matching ability</p>
+<p>Adding a Cast entry supplies animation data. It does not create a spell,
+projectile, damage event or new gameplay job.</p>
+</div>
+<h2 id="separate-cast-and-resolve-actions">Separate Cast and Resolve Actions<a class="headerlink" href="#separate-cast-and-resolve-actions" title="Permanent link">&para;</a></h2>
+<p>Use this when preparation and recovery already exist as different Actions.</p>
+<ol>
+<li>Select the Cast entry and choose <strong>Separate Clips</strong>.</li>
+<li>Click <strong>Cast</strong> and assign the preparation Action.</li>
+<li>Click <strong>Resolve</strong> and assign the recovery Action.</li>
+<li>Keep <strong>Range Start / End</strong> at <strong>0 / 1</strong> to use each complete Action.</li>
+<li>Play each phase, then <strong>Save</strong>.</li>
+</ol>
+<p><a href="../../assets/images/guides/editors/animation-separate.png"><img alt="Separate Clips with Cast and Resolve selection and editable phase ranges" src="../../assets/images/guides/editors/animation-separate.png" /></a></p>
+<p>A 0.5-second Cast followed by a 1.5-second Resolve has the same release and
+total duration as the One Clip example. The chosen layout changes how you
+author the motion, not the ability's gameplay requirements.</p>
+<p>Trim the Actions themselves when possible. Switching clip layout resets the
+phase ranges. Imported separate clips remain separate until you change them.</p>
+<h2 id="an-attack-with-two-hit-moments">An attack with two hit moments<a class="headerlink" href="#an-attack-with-two-hit-moments" title="Permanent link">&para;</a></h2>
+<p>Example: one Action swings twice, with hits at 30% and 70% of the clip.</p>
+<ol>
+<li>Select the matching Attack entry and its Action variant.</li>
+<li>Open <strong>Edit Markers</strong>.</li>
+<li>Add two markers and set <strong>Time</strong> to <strong>0.3</strong> and <strong>0.7</strong>.</li>
+<li>Keep <strong>Direction</strong> at <strong>0, 0, 0</strong> for ordinary attacker-to-target pushback.</li>
+<li>Confirm with <strong>OK</strong>, then <strong>Save</strong>.</li>
+</ol>
+<p><a href="../../assets/images/guides/editors/markers.png"><img alt="Animation Events with marker time, position and hit direction" src="../../assets/images/guides/editors/markers.png" /></a></p>
+<p>The timings are generated from the markers and clip duration. The gameplay
+ability must support both hits. Extra markers alone do not add damage.</p>
+<p>After changing only clip length or FPS, check the timing readout. Unchanged
+imported timings may be preserved instead of recalculated; edit the marker and
+save again if an update is needed.</p>
+<p>For a deliberate directional hit, use <strong>Display Marker</strong>, rotate its arrow
+and click <strong>Save Placement</strong>. Keep an imported direction unless you intend to
+change the hit response. Marker Position is stored, but it is not a projectile
+spawn locator. Use the <a href="../advanced_locators_guide/">Locator Editor</a> for that.</p>
+<p>Add matching sounds and visuals separately in the Effect Set Editor, using
+the same Action and Time. Follow the <a href="../effects_advanced_tutorial/#time-a-sound-and-a-visual-together">Advanced Effects Tutorial</a>.</p>
+<h2 id="start-loop-end-for-a-channelled-ability">Start / Loop / End for a channelled ability<a class="headerlink" href="#start-loop-end-for-a-channelled-ability" title="Permanent link">&para;</a></h2>
+<p>Use this only for an ability whose game setup already supports these phases.</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Author this motion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Start</td>
+<td>Enter the channelled pose.</td>
+</tr>
+<tr>
+<td>Loop</td>
+<td>Repeat the sustained motion with a clean seam.</td>
+</tr>
+<tr>
+<td>End</td>
+<td>Leave the pose and recover.</td>
+</tr>
+</tbody>
+</table>
+<p>Choose <strong>One Clip</strong> and set the phase boundaries, or choose <strong>Separate Clips</strong>
+and assign an Action to each phase. Check the phase playback buttons and save.
+For separate clips, set the middle Action's <strong>Loop</strong> setting in <strong>Clip Settings</strong>.</p>
+<p>A Spawn Action with several visual stages can stay in one clip. Adding three
+Spawn variants creates three alternatives, not a three-part sequence.</p>
+<h2 id="alternative-motions-and-mode-banks">Alternative motions and mode banks<a class="headerlink" href="#alternative-motions-and-mode-banks" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Add Action variants for different ways to perform the same animation. Their
+  <strong>Weight</strong> values are percentage chances, such as <strong>80 / 20</strong>; keep the
+  assigned variants at <strong>100% total</strong>. Use <strong>Normalize to 100%</strong> to keep their
+  proportions and calculate those percentages automatically.</li>
+<li>Matching Cast/Resolve or Start/Loop/End variants are kept together. Changing
+  one phase's weight updates the corresponding phases.</li>
+<li><strong>Base</strong>, <strong>Mode 1</strong> and <strong>Mode 2</strong> are separate animation banks. Use the bank
+  selected by the unit's game setup; they do not mean Start / Loop / End.</li>
+<li>Keep a working <strong>Base Idle</strong> for units, including units with extra modes.</li>
+</ul>
+<p>A total below 100% can select no animation. A total above 100% can leave later
+variants unreachable. For example, <strong>4 / 3 / 3</strong> is not a 40 / 30 / 30 choice;
+normalize it before using it for an ordinary animation mapping. The editor
+does not silently change imported chances or deliberate edits.</p>
+<p><a href="../../assets/images/guides/editors/animation-chances.png"><img alt="Animation choices totaling 10 percent with the Normalize to 100 percent action" src="../../assets/images/guides/editors/animation-chances.png" /></a></p>
+<p>Animated props use Idle automatically. For another exported SKA, use the
+object's <strong>Scripted animations</strong> instructions. A map script must request it;
+adding an unsupported automatic action does not make a prop use that action.</p>
+<h2 id="clip-and-movement-checks">Clip and movement checks<a class="headerlink" href="#clip-and-movement-checks" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Change</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Loop seam</td>
+<td>Set Loop in Clip Settings; check the first and last poses and their curve tangents.</td>
+</tr>
+<tr>
+<td>Clip length</td>
+<td>Edit the Action's keys, then confirm Clip Settings with OK. Imported end padding is retained.</td>
+</tr>
+<tr>
+<td>Playback speed</td>
+<td>Edit clip FPS. It changes duration without moving the keys.</td>
+</tr>
+<tr>
+<td>Movement reference</td>
+<td>Set Walk / Run Reference Speed to the speed that clip was authored for. It does not set gameplay speed.</td>
+</tr>
+<tr>
+<td>Procedural look or walking limits</td>
+<td>Use the <a href="../ik_advanced_tutorial/">Advanced IK Tutorial</a>.</td>
+</tr>
+</tbody>
+</table>
+<p>For an in-place walk or run, the plugin cannot infer the intended travel speed
+from the keys. Start with a working equivalent unit's reference setting and
+check its motion in-game. Do not set the reference speed to zero.</p>
+<details class="tip">
+<summary>Custom gameplay timings</summary>
+<p>Use <strong>Edit Events → Custom Gameplay Timings</strong> only for a deliberate timing
+override. <strong>Event (ms)</strong> is the trigger offset; <strong>Total (ms)</strong> includes
+recovery. For a hit at 500 ms in a 2000 ms sequence, enter 500 / 2000.</p>
+<p>These values stay fixed when you change clip length or FPS. Disable the
+override to return to marker/phase-generated timings. Check overrides with
+the matching gameplay ability.</p>
+</details>
+<details class="info">
+<summary>SKA text events</summary>
+<p><strong>Advanced SKA Data</strong> on the selected animation contains text events such
+as <code>&lt;blink&gt;</code>. These are separate from attack/spawn markers and Effect Set
+events. In the engine's facial-animation path, <code>&lt;blink&gt;</code> restarts a separate
+eye animation when the necessary facial resources exist. It is not a
+general-purpose marker for ordinary Idle clips. Blender preserves these
+events but does not play them; practical use in Skylords needs testing.</p>
+</details>
+<details class="info">
+<summary>Set automatically; keep your attention on the motion</summary>
+<table>
+<thead>
+<tr>
+<th>Plugin handles</th>
+<th>You choose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Keyed clip range when confirming Clip Settings; scene range and FPS when pressing Play</td>
+<td>Keys, FPS, looping and interpolation</td>
+</tr>
+<tr>
+<td>Shared phase ranges and generated gameplay timings</td>
+<td>Release/phase boundaries and Actions</td>
+</tr>
+<tr>
+<td>Marker class for new ordinary attack/spawn markers; animation file CRCs</td>
+<td>Hit times and deliberate hit directions</td>
+</tr>
+<tr>
+<td>Corresponding phase weights</td>
+<td>Alternative motions and their weights</td>
+</tr>
+<tr>
+<td>Bone lookup IDs and serialized versions</td>
+<td>Bone names, rest pose and weighting</td>
+</tr>
+<tr>
+<td>Hovering timing attribute from Hovering Ground Unit</td>
+<td>Whether the model uses the hovering motion path</td>
+</tr>
+</tbody>
+</table>
+<p>CRCs, versions and internal timing selectors are hidden in Artist View.
+Existing imported records are preserved. The plugin does not invent
+gameplay abilities, target behaviour, movement speed or IK chain order.</p>
+</details>
+<h2 id="final-check">Final check<a class="headerlink" href="#final-check" title="Permanent link">&para;</a></h2>
+<p>Save the Animation Set and run <strong>Model Setup → Check Model</strong>. It reviews saved
+animation chances and clip ranges, along with mesh and material checks.
+Use <strong>Normalize to 100%</strong> for an ordinary mapping with a non-100 chance total.
+An unloaded external SKA reference is kept; load Animation Clips to preview it.</p>
+<p>Export the intended DRS and SKAs, then reimport a copy.
+Check Idle and every assigned variant. Check phase transitions, hits, pushback,
+movement and procedural IK with the game setup in the Map Editor or game.
+Blender's single-clip Play button does not simulate the complete gameplay state machine.</p>
+<details class="info">
+<summary>Switching models and recovering an edit</summary>
+<p>Pending animation edits stay with their model during the current Blender
+session, including the selected entry. They are not saved animation data
+until you click <strong>Save</strong> in the editor. Save each edited model before
+saving your <code>.blend</code> or exporting it.</p>
+<p>If saved settings changed while a draft was kept, the editor tells you.
+<strong>Save</strong> applies your draft; <strong>Reset</strong> loads the saved settings instead.
+Opening a <code>.blend</code> clears these session drafts and loads its saved settings.</p>
+<p>If settings cannot be loaded, keep your source files and reimport a working
+model copy. <strong>Check Model</strong> identifies unreadable saved records. A failed
+read does not replace another model's pending draft.</p>
+</details>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 8, 2026 16:54:16 UTC">November 8, 2026</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 8, 2026 16:54:16 UTC">November 8, 2026</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      © 2025 Maxxxel – Battleforge Blender Plugin
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Maxxxel/SR-ImpEx-for-Blender/" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/drs-plugin/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "toc.integrate", "content.code.copy", "content.code.annotate", "content.tabs.link", "search.highlight", "search.suggest", "header.autohide"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>
