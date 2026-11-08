@@ -1,159 +1,236 @@
-# Building Creation Guide
+# Building Guide
 
-Buildings add a mesh grid, mesh states, and referenced resources to the ordinary DRS mesh/material workflow. A `.bmg` is not simply a static `.drs` with a different filename.
+Create or edit a building with intact, damaged and destroyed states. For ordinary
+props, use the [Object Guide](object_creation_guide.md).
 
-Start with the [Object Creation Guide](object_creation_guide.md) for mesh, material, collision, and GO basics. Use the [Unit Creation Guide](unit_creation_buide.md) for skeletons and SKA actions when the building is animated.
+## Cells and states
 
-> **Current support boundary:** Building import, state visibility, and mesh-grid editing are available. Full building export is still incomplete: the current BMG writer does not assemble the complete state/resource graph, and several animation, effect, and collision export branches remain unimplemented. The export menu and a successful completion message do **not** guarantee a game-ready building. Work on copies and retain the original BMG and its referenced assets.
+- A **cell** is a building section that can be damaged separately, such as a wall
+  section. A small building can use one cell for the whole model. A cell can
+  contain several meshes.
+- A **state** is a version of that section: intact, damaged or destroyed.
+  Choose a cell first, then the version you want to edit.
 
-## 1. Start from an Existing Building
+You do not need to create the state collections or work out file links by hand.
 
-For building work, importing a comparable building is more useful than starting with an empty object scene. It supplies the mesh-state relationships, resource names, and grid metadata that the simple scene generator does not create.
+## 1. Start a building
 
-1. Keep the source `.bmg`, its referenced state `.drs` files, textures, debris XML, and any `.ska` files together in their expected resource layout.
-2. Choose **File > Import > Battleforge (.drs/.bmg)** and select the building.
-3. Review the import options before confirming. **Clear Scene** is on by default; disable it if you need to keep the current scene.
-4. Save the imported setup to a new `.blend` file before editing it.
+**Existing building:** use **File → Import → Battleforge Model (.drs/.bmg)**, then select one
+of its meshes. Enable collision or debris import if you intend to edit those parts.
 
-Useful options:
+Enable **Collision Shapes** and **Intact-State Collision Shapes** to edit
+intact cells' collisions too. Disable **Clear Existing Content** to keep existing
+models and Actions, including those in other scenes. **Building Parts** contains Construction Geometry and Debris Geometry.
 
-| Option | Purpose |
-|---|---|
-| `Apply Transform` | Controls the import's GO display-axis conversion. Use the same setting when comparing two imports. |
-| `Import Collision Shape` | Imports building-level collision and eligible state collision data. |
-| `Import S0 Collision Shapes` | Also imports collision from undamaged state DRS files; off by default because building-level collision can already represent those states. |
-| `Import Debris` | Imports the referenced debris setup where available. |
-| `Import Construction` | Imports referenced construction pieces. |
-| `Import Animation` | Enables animation import for a rigged building. |
+[![Building import with the additional Intact-State Collision Shapes option](../assets/images/guides/editors/building-import.png)](../assets/images/guides/editors/building-import.png)
 
-A missing referenced file is a resource problem, not something that can be fixed by changing a collection's name.
+**New building:** select your meshes, open **BMG Editor → Building Editor**,
+and click **Set Up Building**. This creates the intact state from your selection.
+Use the [Object Guide](object_creation_guide.md) for UVs and DRS materials.
 
-## 2. Understand the Imported Structure
+For a **new animated building**, prepare the rig and GameOrientation using the
+[Unit Guide](unit_creation_buide.md), then select its meshes and click **Set Up
+Building**. Use one armature, with its object transforms applied in
+GameOrientation. The plugin copies the skeleton and adds an Idle starter.
+Assign your Idle action in **Animation Set Editor**.
 
-A typical imported building contains the following collection structure. Optional resources and Blender numeric suffixes vary by asset:
+The plugin creates GameOrientation, a **3 × 3 grid**, and an **Intact** state
+in the centre cell `(0, 0)` containing your selected meshes. The other cells
+start empty. You can use this setup for a complete small building.
 
-```text
-DRSModel_<building>
-├── GameOrientation                  (Empty object)
-├── GroundDecal_Collection            (optional)
-├── CollisionShapes_Collection        (building-level collision, if present)
-│   ├── Boxes_Collection
-│   ├── Spheres_Collection
-│   └── Cylinders_Collection
-├── Armature_Collection              (if the building is rigged)
-├── SLocators_Collection              (construction helpers, if imported)
-└── MeshSetGrid_0
-    ├── MeshSet_0
-    │   ├── Active_State_MeshSet_0    (Empty marker)
-    │   └── States_Collection_0
-    │       ├── S0_Undamaged
-    │       │   └── Meshes_Collection
-    │       ├── S2_Damaged
-    │       │   ├── Meshes_Collection
-    │       │   └── CollisionShapes_Collection (when imported)
-    │       └── Debris_Collection
-    │           ├── S2_Debris
-    │           └── S3_Debris
-    └── MeshSet_1 ...
-```
+**Duplicate** creates another state from an existing one. **From Selection**
+creates the chosen cell/state assignment from your selected meshes. Export
+writes the state resources and their references automatically.
 
-A state can contain its own collision subcollections. The grid references individual mesh sets, and each mesh set groups its related states. Do not flatten all state meshes into the root or combine every state into one ordinary object export collection.
+The plugin does not split your building into sections or sculpt damage for you.
+For separate damageable sections, prepare their meshes and add them to different
+cells with **From Selection**. For a damaged appearance, edit a duplicated state.
 
-### GO and parenting
+!!! info "GameOrientation"
+    Keep the building's **GameOrientation** unchanged. Keep imported meshes
+    attached to their existing armature or parent. New meshes copied with
+    **From Selection** keep their visible placement.
 
-> **Good practice:** Use the building's GO coordinate convention consistently for new meshes, collision shapes, and non-bone helpers. Parenting a new primitive before fitting it is convenient, but not a required modeling order; correcting and applying a mesh rotation after parenting is also a supported workflow.
+## 2. Edit a state
 
-Collection nesting is not object parenting. Inspect the actual parent relationship when adding a mesh to an imported state. Keep existing armature and bone-attached relationships intact rather than parenting every object directly to GO. Do not reset or apply GO itself to compensate for one misaligned state.
+1. Open **States**. For a building with several parts, choose a **Cell**.
+2. Choose a **State**, then click **Show**.
+3. Click **Select Meshes** and edit normally.
 
-The mesh-grid visualization expects the model's GO helper to exist. Keeping that helper for the editor is different from requiring every mesh to be parented before modeling.
+[![Building Editor with Intact state selection and state editing buttons](../assets/images/guides/editors/building-states.png)](../assets/images/guides/editors/building-states.png)
 
-## 3. Inspect States in the BMG Editor
+**Intact** is state 0, **Damaged** is state 2, and **Destroyed** is state 3.
+Some assets also define **Damage Stage 1**. The picker lists the states that
+actually exist in the selected cell.
 
-Open the 3D Viewport sidebar (`N`) and select **BMG Editor > BMG Mesh State Editor**.
+For ordinary building damage, prepare **Intact** and **Damaged**. The game
+switches to Damaged when the cell reaches its damage threshold and to Destroyed
+when the building is crushed. **Damage Stage 1** is available for existing or
+special setups; adding it alone does not make the ordinary damage system switch
+through it. Test the building with its intended game setup.
 
-| Button | What to inspect |
-|---|---|
-| `Show undamaged` | The `S0_Undamaged` meshes. |
-| `Show damaged` | The `S2_Damaged` meshes on their own. |
-| `Show damaged + Debris (should look undamaged)` | Damaged geometry together with `S2_Debris`; useful for checking how pieces fit. |
-| `Show Debris` | The imported debris collections. |
-| `Show All Stages` | All state collections together for comparison. Overlapping geometry is expected in this view. |
+The creation dialog offers four named states per cell. Other state IDs can
+exist in imported files, but we have not established a universal engine limit
+or automatic damage behavior for them.
 
-These controls switch visibility; they do not create missing states, author debris physics, or define gameplay transitions. The **Switch All States** controls operate on mesh sets across the scene, so take care when several buildings are loaded.
+To create damaged geometry, show **Intact**, click **Duplicate**, choose
+**Damaged**, and edit the copy. Its mesh data and collision shapes are independent.
+If no visible damage is needed, keep that Damaged copy unchanged.
 
-Use **Show Collision Shapes** and **Show SLocators** to reduce clutter. Hiding a helper for editing is not a substitute for removing unwanted resource references from an export setup.
+For a simple building, keep using cell `(0, 0)`: make **Intact**, duplicate it as
+**Damaged**, then remove or change parts of that copy. Add a **Destroyed** mesh
+only if something should remain visible, such as a ruined base.
 
-## 4. Inspect or Fit a Mesh Grid
+To use different meshes, select them and click **From Selection**. Choose the
+cell coordinates and the new state. The selected meshes are copied.
 
-Make the intended `DRSModel_...` root active before using the grid controls.
+Use **Remove** to remove the selected state from this building. Undo restores it.
+For multi-cell buildings, **All Cells** makes **Show** display that state in each
+cell that defines it. Other buildings are not changed.
 
-- **Show Mesh Grid** toggles the visualization.
-- **Create Grid** fits new grid metadata to eligible undamaged-state meshes. It uses a fixed cell size of `2.0` and currently creates a square grid with an odd number of cells along each axis.
-- **Rotation** changes the editor's grid/model orientation in degrees. It is not a reason to rotate GO manually.
-- **Center Pivot At Origin (0,0,0)** chooses whether the grid is centered at the origin or the detected model center.
-- **Remove Grid** removes stored grid data and its visualization, not the building's visible meshes.
+### State effects
 
-> Save before recreating a grid. **Create Grid** rebuilds metadata and resets the grid/model rotation to zero before fitting; it is not a harmless visibility toggle. Review the result instead of assuming an imported layout or cell assignment was preserved.
+Click **State Effects**:
 
-The fitting code looks for meshes inside the undamaged-state `Meshes_Collection` hierarchy. An ordinary object scene with no `S0_Undamaged` meshes is not automatically a fully configured building just because the grid button is available. Empty or unexpectedly small grids are a reason to check the hierarchy and dimensions first.
+[![Assign effects while in a building state or when entering it](../assets/images/guides/editors/building-effects.png)](../assets/images/guides/editors/building-effects.png)
 
-A visible grid is an authoring aid, not proof that the complete BMG state graph can currently be exported.
+- **While in State:** the persistent effect for this state.
+- **On Entering State:** the effect that plays when the building enters it.
 
-## 5. Edit Materials, Collision, and Optional Resources
+For example, assign smoke to **While in State** for a damaged building, and a
+burst of debris to **On Entering State** for destruction. Leave a field blank
+if you do not want that assigned effect.
 
-### Visible meshes and materials
+Enter an existing FXB or supported destruction XML reference. A destroyed state
+can have a transition effect without a model. **No imported mesh** is normal for
+such a state. Create or modify effect assets in the external Effect Editor.
 
-Edit each state's render meshes in its own `Meshes_Collection`. Apply the same UV, triangulation, material, and vertex-budget checks described in the [Object Creation Guide](object_creation_guide.md#4-model-the-object). Use the [Advanced Shading Guide](advanced_shading_guide.md) for packed parameters, wind, refraction, and environment maps.
+## 3. Check the grid and collisions
 
-### Collision
+Open **Grid & Helpers**:
 
-Keep building-level collision separate from damage-state collision. A damaged state may need a different approximation than the undamaged building.
+- **Grid Overlay** shows the building's cells on the ground. It is not rendered or exported.
+- **Collision Shapes** and **Locators** show or hide this building's helpers.
+- **Edit Grid** changes grid dimensions, spacing, rotation and building-level resources.
+- **Building Size** resizes the entire building, including its cells, states,
+  collisions, attachment positions and SKA animations. `0.5` is half size;
+  `2` is double. Export includes the resized clips automatically.
 
-When adding a shape, use its state's matching box/sphere/cylinder collection. As for visible meshes, using the correct model's GO is good practice; fitting the shape first and correcting its rotation after parenting is also possible. Preserve the primitive's geometry: boxes remain rectangular, spheres remain round, and cylinders remain circular and capped. See [Object Creation Guide, step 8](object_creation_guide.md#8-create-collision-shapes).
+A grid radius of `0` gives **1 × 1 cells**; `1` gives **3 × 3**; `2` gives **5 × 5**.
+Keep the imported settings unless you intend to change the building layout.
 
-### Ground decal
+[![Building Grid Settings with spacing, shared origin and resource fields](../assets/images/guides/editors/building-grid.png)](../assets/images/guides/editors/building-grid.png)
 
-`GroundDecal_Collection` is imported when the BMG references a ground decal DRS. It is optional and distinct from both building collision and the grid visualization. A new mesh placed in this collection is not automatically wired into a complete exported building resource graph.
+??? tip "What the Edit Grid settings mean"
+    | Setting | What you use it for |
+    | --- | --- |
+    | Resource name | Name stored with this building. The export filename is chosen when exporting. |
+    | Grid radius | Number of cells available around the centre cell. Enlarging the grid adds empty cells; it does not split the model. |
+    | Cell spacing | Distance between neighbouring cells, in game units. It does not resize your meshes. |
+    | Rotation | Orientation of the whole building grid. Keep GameOrientation unchanged. |
+    | Shared origin for all modules | Enable when the sections are modeled together at one building origin. Keep the imported setting on existing assets. |
+    | Ground resource | Optional DRS beneath the building, such as its ground decoration. It does not create terrain. |
+    | Cell hit effect | Building-level hit/debris effect used when an individual cell is damaged. |
+    | Building crush effect | Effect for destruction of the whole building. |
 
-### Construction pieces and debris
+    **Cell hit effect** and **Building crush effect** are separate from the
+    persistent and transition effects assigned with **State Effects**. Blank
+    building-level hit/crush fields allow the engine's standard building effects.
 
-Preserve their referenced assets and the imported relationships. A construction helper or debris mesh is not equivalent to a finished building state. The current UI can inspect these resources, but it does not replace an external debris/resource authoring workflow.
+    Additional cells do not make the ground walkable or create collision shapes.
+    Place collisions separately where needed.
 
-## 6. Animated Buildings and Visual Hooks
+Edit collision shapes using the [Object Guide](object_creation_guide.md#8-create-collision-shapes).
+Use the selected state's collision collection for state-specific shapes and the
+building's root collision collection for building-wide shapes.
 
-Use the building's deform skeleton, skin weights, and SKA actions as described in the [Unit Creation Guide](unit_creation_buide.md). A building is not limited to one idle animation: relevant assets may use spawn, attack, casting, channeling, or turret-related animation modes.
+<span id="preview-damage-and-destruction"></span>
 
-Choose only the modes required by the target asset. A long list of available animation types is not a checklist that every building needs to implement. See the [Advanced Abilities Guide](advanced_abilities_guide.md) for action/marker relationships and the [Advanced Effects Guide](advanced_effects_guide.md) for sound metadata.
+## 4. Preview damage
 
-Non-bone locators use the model's coordinate convention, while bone locators follow the armature. Use the [Advanced Locators Guide](advanced_locators_guide.md) rather than manually forcing all helpers under GO.
+1. Open **Damage Preview** and click **Build Preview**.
+2. Drag **Damage** to inspect damaged geometry, scratch and destruction effects.
+3. Press **Space** to animate debris and FX. Use **Replay** to restart the transition.
+4. Use **Update Preview** after changing geometry, effects or terrain.
+5. Click **Clear** to return to editing.
 
-## 7. Save, Export Cautiously, and Validate
+[![Building damage preview controls with Damage, Replay and Clear](../assets/images/guides/editors/building-damage.png)](../assets/images/guides/editors/building-damage.png)
 
-The menu **File > Export > Battleforge Building (.bmg)** offers static and animated building model types, mesh options, and SKA naming controls. Those UI options do not mean every corresponding BMG export branch is complete.
+The slider is a preview, not the building's exported health. Manual **Show**
+controls also leave the damage preview. After reopening a saved preview,
+rebuild it or clear it.
 
-For now:
+Scratch requires a scratch map with useful alpha. A white mask produces no
+visible darkening. Missing states are not replaced with invented geometry.
+Build once, then use the slider: effects are cached across the building's states.
+Changing Damage within the same state keeps its current effects running.
+Use **Replay** when you want to restart them.
 
-1. Save the edited `.blend` file as the authoritative working copy.
-2. Keep the source BMG and every referenced resource unchanged in a separate location.
-3. If testing BMG export, use a disposable folder and inspect the actual files produced. The current save path can produce a `.drs`-suffixed file despite the BMG menu; renaming it alone does not implement the missing building data.
-4. If exporting a component DRS separately, prepare a proper standalone `DRSModel_...` hierarchy and follow the object/unit export guide. A nested state collection is not automatically a standalone export root.
-5. Re-import tests into a separate scene, compare matching states with the same display-axis settings, and verify resources and behavior in game before distributing anything.
+## 5. Export
 
-### Building checklist
+1. Save your working `.blend`.
+2. Open **File → Export → BattleForge Building (.bmg)** and choose a separate output folder.
+3. Keep **Advanced Export Options → Model Type** at **Automatic (Keep Imported Setup)**.
+4. Keep **External Resources → Local + Custom**. Include animation files if you changed animations.
+5. Reimport the exported copy, then test it in the Map Editor.
 
-- [ ] The original BMG and referenced DRS/XML/DDS/SKA files are backed up.
-- [ ] Each mesh remains in the correct mesh set and state.
-- [ ] New geometry follows the intended GO convention without breaking existing rig/bone parents.
-- [ ] Undamaged, damaged, and debris views were checked separately.
-- [ ] Building-level and state-level collision were not accidentally confused or duplicated.
-- [ ] Grid rotation, pivot, and cell layout were checked after any rebuild.
-- [ ] Export limitations are understood; no completion message was treated as proof of a full building round trip.
+Read **Export Check** before exporting. Fix errors such as missing materials,
+UVs or building states. Save pending changes in **Animation Set Editor** and
+**Effect Set Editor**. If an included clip is missing, load it or restore its
+source file. Review items do not block export.
 
-## Related Guides
+[![Building export with animation files and filename settings](../assets/images/guides/editors/building-export.png)](../assets/images/guides/editors/building-export.png)
 
-- [Object Creation Guide](object_creation_guide.md)
-- [Unit Creation Guide](unit_creation_buide.md)
-- [Advanced Shading Guide](advanced_shading_guide.md)
-- [Advanced Locators Guide](advanced_locators_guide.md)
-- [Advanced Abilities Guide](advanced_abilities_guide.md)
-- [Advanced Effects Guide](advanced_effects_guide.md)
+Export includes hidden states, state DRS files, textures, local destruction XML
+and its `meshes/` resources. Custom global dependencies go into **AdditionalFiles**.
+Review `<building>.assets.json` and `<building>.bmg-export.json` before sharing.
+
+To edit debris, destruction XML or module resources, follow
+[Modules, Debris & Resources](external_resources_guide.md).
+
+??? tip "Advanced: modular buildings and animations"
+    Keep **Shared origin** enabled for sections modeled together at one building
+    origin. Disable it for separate modules placed by the grid. Select a cell
+    and use **Cell Rotation** to turn that module and all its states.
+
+    Animate the building's main armature. The plugin keeps its cells in sync;
+    you do not need to animate the hidden cell helpers. Imported states retain
+    their individual skeleton bindings.
+
+    Building Size leaves external FX assets at their own size. Adjust those
+    resources in the external Effect Editor when they need different dimensions.
+
+??? tip "Advanced: standalone BMS state files"
+    Use this for a separate state-resource module. Ordinary BMG editing uses
+    **States** above and writes those links for you.
+
+    1. Open **BMG Editor → BMS Editor** and choose **Open BMS** or **New BMS**.
+    2. Set **Resource directory** to the folder containing the referenced files.
+    3. For each state, enter its **Resource DRS** and optional **FX reference**.
+       The FX runs while that state is active.
+    4. Use **Add State** for another version. Common building IDs are `0` Intact,
+       `2` Damaged and `3` Destroyed. Keep the imported IDs for other modules.
+    5. For an effect when a state begins, use **Add Transition** and enter its
+       destination **State ID** and **FX reference**.
+    6. Use **Check State Resources**. **Import DRS Preview** opens a referenced
+       model for editing; export that DRS separately after changing it.
+    7. Open **File → Export → BattleForge Mesh States (.bms)** and keep the referenced DRS and FX assets available.
+
+    [![Standalone BMS state resources and state-entry effect references](../assets/images/guides/editors/building-bms.png)](../assets/images/guides/editors/building-bms.png)
+
+    Leave **Advanced File Settings** unchanged for an existing module. A BMS
+    does not pack the models or effects into one file. Local resource checks
+    need loose files; engine-resolved assets in archives may still be available
+    in the game. Check the final module and FX in the Map Editor.
+
+??? tip "Advanced: construction and debris"
+    BMS files describe state resources; they do not contain mesh geometry.
+    Use **BMG Editor → BMS Editor** for standalone BMS references. Construction
+    and destruction XML/FX graphs are separate assets and need their own editor.
+
+    Blender previews use cached debris physics and bounded particles. Exact
+    engine collision/inertia, gameplay impulses, spatial audio and all shader
+    effects are not reproduced. Test the final result in the Map Editor.
+
+For materials and animation events, see the [Material Guide](material_artist_workflow.md)
+and [Effects Guide](advanced_effects_guide.md).

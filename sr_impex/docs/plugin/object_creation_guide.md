@@ -1,234 +1,276 @@
-# Object Creation Guide
+# Object Guide: from Blender to DRS
 
-This guide walks through creating a new object from scratch for the SR-ImpEx Blender plugin.
+Create and export **static or animated props**, such as rocks, gates and moving machinery.
 
-## Before You Start
+## 1. Choose your starting point
 
-1. Install and enable the add-on in Blender, then save a working `.blend` file.
-2. Decide whether to modify an imported model or start from scratch. This guide covers a new **static object**; importing a similar existing asset is useful when you need a reference for size, materials, or collision.
-3. For a rigged object or unit, continue with the [Unit Creation Guide](unit_creation_buide.md). For building states and mesh grids, use the [Building Creation Guide](building_creation_guide.md).
-4. Keep original game assets separate from your export folder. Test exports should never overwrite your only source copy.
+### A. Edit an existing DRS
 
-> **Two different hierarchies:** Collections determine what the exporter includes. Object parents determine coordinate space. Moving a mesh into a collection does **not** parent it to `GameOrientation` (GO). Using the model's GO is recommended for consistent viewport authoring, but parenting before modeling is a convenience, not a required order of operations.
+1. Put the `.drs`, its textures and any referenced `.ska` clips in the same folder.
+2. Choose **File → Import → Battleforge Model (.drs/.bmg)** and open the `.drs`.
+3. Select the visible model mesh and make your changes.
 
-## 1. Create a New BattleForge Scene
+Disable **Clear Existing Content** in the import options to keep objects already
+in the file, including other scenes. **Animation Clips** loads the model's referenced animations.
 
-Go to `File > Import > New Battleforge Scene`.
+[![Model import options with animations, collision and advanced settings](../assets/images/guides/editors/import-model.png)](../assets/images/guides/editors/import-model.png)
 
-![New Battleforge Scene menu](https://i.gyazo.com/7a12d05f3036e9e530b126c40f79a620.png)
+Continue at [step 3](#3-check-your-model). Skip Set Up Model.
 
-A file browser window will open. You can ignore that part for now and instead use the options in the right-hand sidebar.
+### B. Make a model from scratch
 
-Select the object type you want to generate. For this tutorial, choose `Static Object`.
+Create your model in Blender. Select its meshes, then follow step 2.
 
-Enable **Collision Support** if you plan to export a collision-enabled object type. This creates the collision **collections**, not fitted collision meshes; those are added in [step 8](#8-create-collision-shapes).
+### C. Use a model from another program
 
-For this tutorial, enable it so the full workflow is covered. Use a comparable game asset to decide whether collision is appropriate for your object. Adding collision volumes is not, by itself, a complete definition of game-side interaction or pathing behavior.
+Import the model with Blender. Select its meshes, then follow step 2.
 
-![New scene settings](https://i.gyazo.com/72fb110174d2554689b44fafe3b81af0.png)
+??? tip "Using a rigged model as a static object"
+    Duplicate the meshes and convert the copies to meshes in the desired pose.
+    Continue with these copies.
 
-## 2. Understand the Collection Hierarchy
+## 2. Set up a new model
 
-This creates a full collection hierarchy in the Blender Outliner.
+Skip this step for an imported DRS.
 
-![Generated collection hierarchy](https://i.gyazo.com/295777e47296cb85568f5f83c6853ef2.png)
+1. Select your model meshes.
+2. Open **DRS Editor → Model Setup → Set Up Model**.
+3. Choose **Static Object** or **Animated Object**, enter a name such as `object_stone_block`, and keep
+   **Include Selected Meshes** enabled.
+4. Enable **Collision Support** if your object needs collision; otherwise leave it off.
+   Click **OK**.
 
-The most important collections are:
+[![Set up a static model from selected meshes](../assets/images/guides/static/setup.png)](../assets/images/guides/static/setup.png)
 
-| Collection | What belongs here |
-|---|---|
-| `DRSModel_object_CHANGENAME` | Model root. Replace `CHANGENAME` with your model name, keeping the `DRSModel_` prefix. |
-| `Meshes_Collection` | Visible model meshes, directly in this collection. |
-| `CollisionShapes_Collection` | Container for the three collision subcollections. |
-| `Boxes_Collection` | Rectangular box collision meshes. |
-| `Spheres_Collection` | Sphere collision meshes. |
-| `Cylinders_Collection` | Circular cylinder collision meshes. |
+<span id="where-to-put-your-meshes"></span>
 
-`GameOrientation` is an **Empty object** in the model root, not another collection. The exporter uses the collection hierarchy to find meshes and collision shapes; do not replace the named collections with arbitrary folders.
+!!! info "GameOrientation — your model's parent object"
+    **GameOrientation** converts between Blender and game coordinates. Import and
+    Set Up Model create it for you.
 
-> Tip: You can delete the default Blender collection with the camera and light, or leave it outside the model root. Keep helper objects and unrelated test meshes out of the export collections.
+    - Move, rotate and resize your **meshes**. Leave GameOrientation unchanged.
+    - Keep visible meshes in **Meshes_Collection**. For a static object, parent them to GameOrientation.
+    - For an animated object, parent the deform armature to GameOrientation and keep skinned meshes attached to their armature.
+    - Moving a mesh into the collection does not parent it.
+    - Parenting without preserving transforms can rotate or mirror a mesh.
+      Use **Object (Keep Transform)** to keep its current placement.
 
-## 3. Understand GameOrientation (Recommended Practice)
+??? tip "Advanced: add another mesh"
+    Move the new mesh into this model's **Meshes_Collection** and parent it to
+    **GameOrientation** using **Object (Keep Transform)**.
 
-The game and Blender use different coordinate conventions. `GameOrientation` (GO) is the model's coordinate-conversion helper; its transform includes a rotation **and a mirror**. It is not a second mesh or an ordinary placement control.
+    Use the GameOrientation from the same model. Keep existing rigged meshes
+    attached to their armature.
 
-> **Good practice, not a mandatory modeling order:** For a fresh primitive, parenting to the model's GO before fitting it makes the viewport workflow easier. You can also model first, parent later, correct the visible rotation, and apply the mesh rotation. The important check is the exported result, not when you created the parent relationship.
+### Resize the whole model
 
-For the recommended workflow:
+Select a model mesh and change **DRS Editor → Model Setup → Model Size**.
+`1` is the original size, `0.5` is half size and `2` is double size.
+This also works for animated DRS objects and units. No changes to keyframes
+or bone sizes are needed. Set it back to `1` to restore the original size.
 
-1. Add a mesh and place it directly in `Meshes_Collection`.
-2. In **Object Properties > Relations > Parent**, choose this model's `GameOrientation` Empty. With multiple models loaded, check the model root rather than choosing another model's similarly named helper.
-3. Shape and position the geometry in Edit Mode. Object Mode rotation/scale can also be baked into a standalone mesh with `Ctrl+A > Rotation & Scale` when needed.
+Export normally. The plugin includes appropriately sized animation files,
+even for clips you did not load into Blender. Collision shapes and attachment
+positions follow the model. External effect files keep their own size.
+Save the `.blend` to keep the editable size setting.
 
-If you parent an already modeled object, its viewport orientation can change. Correct the **mesh**, not GO. Blender's **Keep Transform** parenting also creates a parent-inverse transform, so it is not identical to simply selecting a parent in Relations. Applying object rotation does not remove a parent inverse.
+For an entire BMG building, use **Building Editor → Grid & Helpers → Building Size**.
 
-For ordinary render meshes, baked rotation is part of the exported vertex data; do not assume every unapplied Object Mode transform or arbitrary parent chain is exported just because it looks correct in Blender. See the round-trip check in [step 10](#10-final-export-result-and-round-trip-check).
+<span id="4-model-the-object"></span>
 
-Leave an imported model's existing hierarchy intact unless you intentionally need to change it. In particular, do not reset GO or apply its transform to every child to make its transform fields look tidy. Rigged meshes and bone-attached locators follow their existing armature relationships; see the [Unit Creation Guide](unit_creation_buide.md) and [Advanced Locators Guide](advanced_locators_guide.md).
+## 3. Check your model
 
-![Parent to GameOrientation](https://i.gyazo.com/2329989dfc1ed6674796ccbd2dd35479.png)
+- Use UV-mapped meshes. Apply modeling modifiers such as Mirror and Subdivision
+  on an export copy; keep **Armature** and the plugin's wind preview modifier.
+- Use one DRS material per mesh. Separate multi-material meshes by material.
+- Check size and facing against an imported game object if you have one available.
 
-## 4. Model the Object
+Click **Model Setup → Check Model**. Select a message and click **Select Object**
+to find the mesh that needs attention. Fix errors, then run the check again.
 
-Create and sculpt your object as needed. The artistic modeling process is outside this guide, but these export requirements matter:
+Already imported a DRS and only changed its shape? Keep its existing material and go to step 6.
 
-- **Use real mesh data.** Convert non-mesh objects and bake geometry-changing modifiers on a working copy when their result needs to be exported. Do not assume the viewport's evaluated modifier result is the stored mesh.
-- **Create a UV map.** The exporter reads the active UV layer and calculates tangents. A textured material alone is not a substitute for UVs.
-- **Keep the render geometry triangulated.** `Auto-fix Quad Faces` can triangulate the export copy; clean up problematic faces before export rather than relying on a visual preview alone.
-- **Watch vertex counts.** Validation rejects a mesh with more than `32,767` vertices, and also checks the combined, welded render mesh against that limit. UV splitting can duplicate vertices, so leave headroom.
-- **Use the intended material on each exported mesh.** Do not assume several material slots on one object become separate game materials; use separate mesh objects for independently configured materials.
-- **Check scale and forward direction against an existing asset.** A correctly shaded Blender viewport does not establish the model's in-game scale or orientation.
+??? tip "Advanced: large models and export errors"
+    - Keep each mesh and the combined model below **32,767 exported vertices**.
+      Leave room for extra vertices at UV seams.
+    - If you reach the limit, reduce the geometry or export smaller, separate DRS objects.
+    - Apply geometry modifiers on a copy before exporting. Keep the editable original.
+    - If export fails, read the add-on log and fix the reported object first.
 
-## 5. Assign the DRS Material
+## 4. Create a DRS material
 
-Once you are happy with the shape, the next step is setting up the material.
+Select a mesh and open **DRS Editor → Material Editor**.
+Click **Create DRS Material**, or **Create / Upgrade DRS Material** for a mesh that already has a material.
+Choose **Default** as the material type and keep **Artist View**.
 
-Change an editor area's type to **Asset Browser**. Choose the **Battleforge Assets** library (registered by scene initialization), or **All Libraries**, then open the **DRS_Material** catalog and drag **DRS Material** onto the mesh.
+[![Replace an ordinary Blender material](../assets/images/guides/static/foreign-material.png)](../assets/images/guides/static/foreign-material.png)
 
-Make it the mesh's **active material**. Use one intended exported material per mesh, and preserve the generated node names/labels: the exporter reads supported parts of this layout rather than baking any arbitrary Blender shader. A loaded **Color Map (_col)** image and a valid active UV map are part of the basic export setup.
+## 5. Load your textures
 
-If the asset library is missing, check **Edit > Preferences > File Paths > Asset Libraries** for the bundled library, or start from an imported DRS material. See the [Advanced Shading Guide](advanced_shading_guide.md#1-start-with-the-drs-material-layout) for the supported node layout and material-sharing caveats.
+1. Open **Textures**.
+2. Click the **folder icon** beside **ColorMap** and choose your PNG or DDS color texture.
+3. If you have a normal map, load it into **NormalMap**.
+4. Leave **Auto map flags** enabled.
 
-![Assign the DRS Material asset](https://i.gyazo.com/5d47abf2d2eb795a46e6172283df3c34.png)
+For an imported DRS, keep the assigned textures or replace the ones you want to change.
+For a foreign model, load its textures here.
 
-## 6. Set Up Textures
+[![Default material with a color texture assigned](../assets/images/guides/static/material.png)](../assets/images/guides/static/material.png)
 
-Open the `Shading` workspace, select your model, and use the shader editor to assign the textures.
+Check the result in **Material Preview**.
+For a lit preview, use **DRS Editor → Render Setup → Add Render**.
+Keep **Environment: Forge** to use the installed Forge's lighting and ground.
+**Forge Props** is optional. Click **Update Render** after changing the setup.
+**Sun Rays** adds the Forge light shafts; press **Space** to animate their cloud mask.
 
-Start with the supported texture roles:
+[![The static object in a lit render setup](../assets/images/guides/static/render.png)](../assets/images/guides/static/render.png)
 
-| Role | Usual suffix | Important distinction |
-|---|---|---|
-| Color | `_col` | Required color image; alpha is used by supported transparency modes. |
-| Normal | `_nor` | Use a data/non-color image and enable its material flag. |
-| Packed parameters | `_par` | **R metallic, G roughness, B flu mask, A emission strength**. Alpha here is not color-map opacity. |
-| Flu color | `_flu` | Used with the `_par` mask and optional Flow metadata. |
-| Refraction | `_ref` | Has its own preview/flag setup and RGB refraction value. |
-| Environment | `_env` | Model-level cubemap helper, not an ordinary per-mesh color slot. |
+For cut-out leaves or fences, enable **EnableAlphaTest** under **Material Flags**.
+See the [Default Material Guide](material_artist_workflow.md) for more material options.
 
-A matching filename suffix alone does not enable a map: assign it to the supported node and check the corresponding material controls. For packing rules, separate-map overrides, color spaces, flu animation, and environment/refraction caveats, use the [Advanced Shading Guide](advanced_shading_guide.md).
+<span id="8-create-collision-shapes"></span>
 
-![Texture setup in the shader editor](https://i.gyazo.com/4631e2b1bec4bcf3521a9698a083b32a.png)
+## 6. Add collision shapes
 
-## 7. Open the DRS Editor Panel
+Skip this step if your object does not need collision.
 
-Select the **render mesh** to edit its material properties, open the 3D Viewport sidebar (`N`), and choose **DRS Editor > Material**. The material panels are object-level controls; selecting only a root collection or collision helper is not the same context.
+If you did not enable **Collision Support** during setup, create
+**CollisionShapes_Collection** inside your model, with **Boxes_Collection**,
+**Spheres_Collection** and **Cylinders_Collection** inside it.
 
-For this tutorial, the most important sections are:
+1. Add cubes, spheres or cylinders and fit them around your model. Use several shapes if needed.
+2. Move cubes into **Boxes_Collection**, spheres into **Spheres_Collection**,
+   and cylinders into **Cylinders_Collection** under this model's **CollisionShapes_Collection**.
+3. Parent the shapes to **GameOrientation** using **Object (Keep Transform)**.
+4. Set them to **Wire** display and disable rendering for these helper objects.
 
-- `Flags (bool_parameter)`
-- `Wind`
+Keep boxes rectangular, spheres round and cylinders circular. Avoid bevels and shear.
 
-Other metadata editors and export selection use the active `DRSModel_...` root collection. If several models are loaded, check both the active mesh and model root before editing.
+[![A wireframe collision box fitted around the model, stored in Boxes Collection](../assets/images/guides/editors/collision.png)](../assets/images/guides/editors/collision.png)
 
-![DRS Editor panel](https://i.gyazo.com/5a0ed6083341350722c55ad18b4a79fa.png)
+## 7. Animate your object
 
-### Material Flags
+For a static object, continue to [export](#8-export).
 
-This section lets you enable important material features such as:
+### Prepare the rig
 
-- Alpha test
-- Parameter map usage for metallic, roughness, and emission
-- Normal map usage
+For an imported animated DRS, keep its existing rig. For a new rig:
 
-If you use any of those texture maps, make sure the corresponding flags are enabled.
+1. Put the deform armature in **Armature_Collection**, directly under your **DRSModel_…** collection.
+   Create that collection if it is missing.
+2. Before weighting or animating, parent the new armature to **GameOrientation** using
+   **Object (Without Inverse)**. Set its local location and rotation to **0**, and scale to **1**.
+3. Rig and weight your meshes. Keep them in **Meshes_Collection**, parented to the
+   armature using **Object (Keep Transform)**.
+4. Check that each mesh's **Armature** modifier points to that rig. Use no more than
+   **four bone weights per vertex**. Run **Animation Set Editor → Skinning → Check Skin Weights**.
 
-### Wind
+Use **Quaternion (WXYZ)** rotation on deform bones before animating. SKA stores
+bone location and quaternion rotation; animated bone scale is not exported.
+Animate the deform bones, keeping the armature object and GameOrientation still.
 
-These object properties are exported as wind material values; the Geometry Nodes modifier supplies a Blender preview.
+### Assign the Idle animation
 
-- `Wind Height`: Lower threshold for the preview's height falloff; defaults to `0`.
-- `Wind Response`: Defaults to `0`, with a UI range of `0` to `0.1`.
+1. Create your repeating motion as an Action on the deform armature.
+2. Select a model mesh and open **DRS Editor → Animation Set Editor**.
+3. Click **Initialize Animation Set** (or **Init**), choose **Animated Object**,
+   leave **Replace Existing Mappings** off and confirm.
+4. Select **Idle** in **Base** mode and assign your Action to its variant, or keep the imported Action.
+5. Open **Clip Settings → Edit Settings**. Set the clip timing and **Time addressing → Loop**, then confirm with **OK**.
+6. Use **Play** to check the loop, then click **Save** in Animation Set Editor.
 
-If the mesh has no generated wind modifier, click **Add Wind Modifier** first. Play the timeline to preview it. The current preview uses the mesh's **local Y** for its height calculation, not world Z, so review it after changing mesh orientation or dimensions.
+[![Idle clip settings with Time addressing set to Loop](../assets/images/guides/animated/clip-settings.png)](../assets/images/guides/animated/clip-settings.png)
 
-The preview does not guarantee identical game wind behavior, and its modifier is not exported as an engine node graph. See [Advanced Shading Guide > Wind](advanced_shading_guide.md#7-wind).
+Animated objects automatically play **Base Idle**. Other action types are greyed out.
 
-## 8. Create Collision Shapes
+??? tip "Advanced: rig controls and IK"
+    Bake the evaluated motion onto the deform bones of an export copy.
+    Export keyed bone location and quaternion rotation. Keep the original control rig.
+    Check the exported SKA after reimport.
 
-If your object needs collision, this is the final setup step before export.
+??? tip "Advanced: a rig from another program"
+    Use a compatible imported DRS rig or prepare a new rig as above. Transfer the
+    mesh and retarget the animation to that deform rig. Bake control-rig motion
+    onto the deform bones of an export copy, then check a DRS/SKA reimport.
+    Keep your original foreign rig intact.
 
-Use simple meshes in the matching subcollection; the **collection**, not the object's name, selects the exported primitive type:
+??? tip "Advanced: play another animation from a map script"
+    **Gate setup:**
 
-| Primitive | Collection | Keep this geometry |
-|---|---|---|
-| Cube/box | `Boxes_Collection` | A rectangular box with perpendicular axes and planar faces. |
-| Sphere | `Spheres_Collection` | A round sphere. An ellipsoid cannot be represented exactly by a single sphere. |
-| Cylinder | `Cylinders_Collection` | A circular cylinder with two parallel planar caps. Caps may be n-gons or triangles. |
+    - **Decorative gate:** keep the frame and door in one model.
+    - **Gate that opens a passage:** export the frame and door as separate models,
+      each with its own collision shape. Place them separately in the map.
 
-> **GO reminder:** As with visible meshes in [step 3](#3-understand-gameorientation-recommended-practice), using the same model's GO is good practice when fitting new collision shapes. Collection membership alone does not establish that relationship. Parenting before modeling is optional: you can create and fit a shape first, parent it later, correct its viewport rotation, and apply that rotation to the collision mesh. Do not rotate GO to correct only one shape.
+    To control the door:
 
-A practical workflow is:
+    1. Create the opening motion as a separate Action.
+    2. Select a model mesh or its rig, then use **File → Export → BattleForge Animation (.ska)**.
+       Choose the opening Action under **Animation** and export it.
+    3. Give the SKA filename to the map author. Their script plays it on the door
+       and switches the door's blocking when opening or closing the passage.
 
-1. Add the primitive and move it into its matching collision collection.
-2. If using GO, choose this model's helper under **Object Properties > Relations > Parent**.
-3. Position and size the shape against the visible model. If parenting changed its appearance, correct the mesh's rotation; `Ctrl+A > Rotation` can bake that correction.
-4. Set **Object Properties > Viewport Display > Display As > Wire** to make fitting easier.
-5. Repeat with additional shapes only where they improve the approximation.
+    [![Export a chosen Action as a separate SKA animation](../assets/images/guides/editors/export-ska.png)](../assets/images/guides/editors/export-ska.png)
 
-One to five shapes is often a useful starting point, not a format limit. These are collision volumes, not extra render meshes: keep them out of `Meshes_Collection` and avoid bevels, sculpted surfaces, or sheared shapes that no longer describe the selected primitive. A sphere has only one radius, and a cylinder has one radius plus a height; non-uniform scaling must not turn them into ellipsoids or elliptical cylinders if you expect an exact fit.
+    Keep Idle in AnimationSet. Do not add an Attack or Walk mapping for this clip.
 
-Export and re-import a test after fitting. Check the collision shape's **position, tilt, height, and radius**, not just whether it is present. See the [collision format notes](../drs/collisionshape.md) for representation limits.
+<span id="7-export"></span>
 
-![Box collision example](https://i.gyazo.com/d7360e19510ed4d43be6cdddb4493d1d.png)
+## 8. Export
 
-![Sphere collision example](https://i.gyazo.com/4902c0ed50dc313ec54a29ad8925ca39.png)
+1. Select a mesh belonging to the model.
+2. Open **File → Export → BattleForge Model (.drs)**.
+3. Choose a separate output folder and a filename such as `object_stone_block.drs`.
+4. Choose the matching **Model Type**:
 
-![Cylinder collision example](https://i.gyazo.com/3b020102c078e4db5276e7db9474c375.png)
+    | Object | Without collision | With collision |
+    | --- | --- | --- |
+    | Static | Static Object (no collision) | Static Object (with collision) |
+    | Animated | Animated Object (no collision) | Animated Object (with collision) |
 
-## 9. Export the Object
+5. For an animated object, enable **Include Animation Files** to include the clips
+   assigned in your saved AnimationSet. Keep **No Prefix** unless you need a different naming scheme.
+6. Keep the other defaults and click **Export DRS**. **Advanced Export Options**
+   contains texture mipmaps and mesh preparation settings.
 
-Make the **root `DRSModel_...` collection active** in the Outliner, not just a mesh, collision subcollection, or `Meshes_Collection`. Then choose **File > Export > Battleforge Object/Unit (.drs)**. Menu text also includes the add-on version.
+Check **Export Check** in the export window. Fix any errors before exporting:
+assign a DRS material, add missing UVs, or choose a Model Type that matches
+your skeleton and collision shapes. Items marked for review do not block export.
 
-Before exporting, save the `.blend` file and place the 3D cursor at world origin (`Shift+S > Cursor to World Origin`); the export preparation uses the cursor when setting mesh origins. Choose a separate test folder.
+Keep **External Resources → Local + Custom** if the object uses modules or custom
+effects. See [Modules, Debris & Resources](external_resources_guide.md) to edit and
+package those files.
 
-| Setting | For this static-object example |
-|---|---|
-| `Model Type` | Choose `Static Object (with collision)` when you populated the collision collections, otherwise `Static Object (no collision)`. Collision-enabled export requires collision data. |
-| `Split Mesh by UV Islands` | Enabled by default. Keep it on unless you have a specific reason to manage UV splits yourself. |
-| `Flip Normals` | Off by default. Use it for a confirmed winding/normal problem, not as a fix for a misplaced or rotated object. |
-| `Auto-fix Quad Faces` | Enabled by default; triangulates the export copy. |
-| `Mip Maps` | `Auto` is the default. Numeric choices cap the mip count per image; see the [Advanced Shading Guide](advanced_shading_guide.md). |
-| `Export All SKA Actions` | Not needed for this static object; disable it. |
-| `Model Name Prefix` | Affects SKA names, not static mesh orientation. Not needed here. |
-| `[DEBUG] Export SKA Tangents` | Not relevant to a static object. |
-| `Keep Debug Collection` | Leave off for normal export; keeps the export copy for diagnosis when enabled. |
+For animated objects, save pending changes in **Animation Set Editor** and
+**Effect Set Editor** first. If an included animation file is missing, load
+the clip or restore its source file. You can review the full report with
+**Model Setup → Check Model** after the export check.
 
-The importer's `Apply Transform` option and Blender's `Ctrl+A` are different operations. There is no general DRS export checkbox that promises to bake every object's parent hierarchy.
+[![Static-object export with advanced options collapsed](../assets/images/guides/editors/export-static.png)](../assets/images/guides/editors/export-static.png)
 
-![Export settings](https://i.gyazo.com/a25ba88c9b08f6078542dda31ece4f7e.png)
+??? tip "Advanced: export options"
+    For extra mesh controls, open **Advanced Export Options** in the export window.
 
-## 10. Final Export Result and Round-Trip Check
+    | Option | Setting |
+    | --- | --- |
+    | Split UV Seams | Keep enabled unless you have prepared the splits yourself. |
+    | Flip Face Normals | Use only to correct confirmed inside-out faces. |
+    | Triangulate Faces | Keep enabled to export quads as triangles. |
+    | Texture Mipmaps | Keep **Full Chain**. Change only to limit the exported mip levels. |
+    | Debug Export → Keep Export Copy | Enable to inspect the prepared export copy. |
 
-After exporting, you should find the final `.drs` file together with the generated `.dds` textures for the maps you used. Read the add-on's message log if export fails; a Blender preview alone does not establish a successful file export.
+    **Texture Mipmaps** controls which image levels are saved in the DDS.
+    It does not force the game to choose a sharper level at a given distance.
 
-![Export result files](https://i.gyazo.com/adfbae27fbe9fd4379b5feb1ad45d9c4.png)
+    [![Advanced texture mipmaps and mesh preparation options](../assets/images/guides/editors/export-model-advanced.png)](../assets/images/guides/editors/export-model-advanced.png)
 
-### Before considering the object finished
+<span id="8-check-the-exported-copy"></span>
 
-- [ ] The root retains its `DRSModel_` prefix, and render meshes/collision meshes are in their correct collections.
-- [ ] Render meshes have an active UV map and a supported DRS material.
-- [ ] The selected model type matches the presence or absence of collision shapes.
-- [ ] The exported file and referenced textures exist in the test folder.
-- [ ] A fresh import matches the source model's scale and orientation, and all collision shapes fit correctly.
+## 9. Check the exported copy
 
-To check a round trip:
+1. Keep the exported `.drs`, `.dds` textures and any `.ska` clips together in the output folder.
+2. Import the DRS into a fresh Blender scene. Enable **Collision Shapes** if used.
+   Check orientation, size, textures and collision fit. For an animated object,
+   also enable **Animation Clips** and check the full Idle loop.
+3. Test it in the Skylords Map Editor.
 
-1. Open a separate Blender file, or explicitly disable **Clear Scene** when importing into the current scene; that import option is enabled by default.
-2. Import the exported `.drs` with **Import Collision Shape** enabled.
-3. Use the **same `Apply Transform` import setting** for both sides of a comparison. Different display-axis settings can make identical data look rotated.
-4. Compare mesh silhouette, textures, collision position, and primitive dimensions. Avoid rotating only a GO helper just to line up two test copies.
-5. If the first round trip matches, export/import the test again to check that rotations or offsets do not accumulate.
-6. Validate the result in game as well. Blender previews do not reproduce every shader or gameplay behavior.
-
-### Common problems
-
-| Symptom | Check first |
-|---|---|
-| Export says the selected collection is invalid | Make the `DRSModel_...` root active, not a child collection. |
-| A mesh does not export | Put the mesh directly in `Meshes_Collection`; check its UVs, material, and vertex count. |
-| A mesh looks right in Blender but exports rotated | Check baked mesh data, unapplied object transforms, parent inverses, and the import display-axis setting; do not change GO blindly. |
-| Collision is missing or has the wrong type | Check `Model Type` and the box/sphere/cylinder subcollection, not just object names or viewport visibility. |
-| A cylinder changes size or tilt | Keep it circular and capped, and compare a fresh round trip before adding more shape edits. |
-| Surface looks inside-out | Inspect face orientation and normals; use `Flip Normals` only after confirming the issue. |
-| Textures or packed channels look wrong | Check the [Advanced Shading Guide](advanced_shading_guide.md). |
+If a texture is missing, check its slot in Material Editor and the export folder.
